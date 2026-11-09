@@ -335,12 +335,12 @@ export function barChart(
     partial?: boolean[];
     /** #297: per bucket, a caveat under the tooltip title. */
     notes?: (string | null)[];
-    /** A reference line (subscribed power, alert threshold), dashed, labelled on the line. */
-    mark?: { value: number; label: string };
     /** #311: a dashed line on a right axis, in its own unit (outdoor temperature over the kWh). */
     line?: Series & { unit: string };
     /** #311: false when the card draws its own legend (series, hatching, line). */
     legend?: boolean;
+    /** A reference line (subscribed power, alert threshold), dashed, labelled on the line. */
+    mark?: { value: number; label: string };
   },
 ) {
   const surface = cssVar('--surface-card');
@@ -360,17 +360,18 @@ export function barChart(
   const unit = opts.unit ?? 'kWh';
   const chart = instance(el);
   const all = opts.line ? [...opts.series, opts.line] : opts.series;
-  const line = opts.line;
   describe(el, opts.labels, all, unit);
   const leg = legendLayout(
     all.map((s) => s.name),
     el,
   );
-  const ax = axes(opts.labels, el, unit, opts.legend === false ? 0 : leg.height, { zero: true, ...(line ? { ends: 48 } : {}) });
+  const ax = axes(opts.labels, el, unit, opts.legend === false ? 0 : leg.height, { zero: true });
+  const line = opts.line;
   chart.setOption(
     {
       animationDuration: 300,
       ...ax,
+      ...(opts.legend === false ? { grid: { ...ax.grid, top: 12 } } : {}),
       ...(line
         ? {
             yAxis: [
