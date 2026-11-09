@@ -9,6 +9,10 @@ on:
         description: "Tester la profondeur d'historique (jour / semaine / mois)"
         type: boolean
         default: false
+      probe_history:
+        description: "Chercher un historique des fenêtres / boost (types de mesure candidats, S-13.1)"
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -27,4 +31,4 @@ jobs:
         with:
           python-version: "3.12"
       - run: pip install .
-      - run: python -m collector diagnose ${{ inputs.history && '--history' || '' }}
+      - run: python -m collector diagnose ${{ inputs.history && '--history' || '' }} ${{ inputs.probe_history && '--probe-history' || '' }}

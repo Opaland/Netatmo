@@ -56,9 +56,11 @@ class Syncer:
         self.tariff_days = 0
         self.temp_days = 0
         self.last_home: Home | None = None
+        self.last_homesdata: dict = {}  # raw, for the module -> room map of the room states (E13)
 
     def home(self) -> Home:
-        homes = parse_homes(self.client.homesdata(), self.overrides)
+        self.last_homesdata = self.client.homesdata()
+        homes = parse_homes(self.last_homesdata, self.overrides)
         if not homes:
             raise ApiError("Aucune maison trouvée sur ce compte")
         if len(homes) > 1:

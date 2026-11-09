@@ -1,0 +1,57 @@
+name: Relevé horaire des pièces
+
+# S-13.2: one homestatus request per hour (window open, boost, setpoint mode, radiator heating,
+# load shedding). The snapshot is ENCRYPTED with DATA_PASSPHRASE (same key as data/) and kept as
+# an Actions artifact for 3 days; the nightly collection turns the snapshots into daily hours per
+# room. This workflow never commits and never writes to the repository.
+# Off by default: set the repository variable ROOM_STATE_HOURLY to true to turn it on.
+on:
+  schedule:
+    # Minute 23: away from the top of the hour, when GitHub delays scheduled runs the most.
+    - cron: "23 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: releve-horaire
+  cancel-in-progress: false
+
+jobs:
+  releve:
+    if: vars.ROOM_STATE_HOURLY == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      INTUIS_USERNAME: ${{ secrets.INTUIS_USERNAME }}
+      INTUIS_PASSWORD: ${{ secrets.INTUIS_PASSWORD }}
+      INTUIS_CLIENT_ID: ${{ secrets.INTUIS_CLIENT_ID }}
+      INTUIS_CLIENT_SECRET: ${{ secrets.INTUIS_CLIENT_SECRET }}
+      DATA_PASSPHRASE: ${{ secrets.DATA_PASSPHRASE }}
+      # S-13.5: presence is read only with this opt-in, and only daily hours are ever kept.
+      ROOM_STATE_PRESENCE: ${{ vars.ROOM_STATE_PRESENCE }}
+      MAX_CALLS_INTUIS_HOURLY: ${{ vars.MAX_CALLS_INTUIS_HOURLY }}
+    steps:
+      # Only the collector, the salt and the encrypted meta (home id): no data history.
+      - uses: actions/checkout@v5
+        with:
+          sparse-checkout: |
+            collector
+            pyproject.toml
+            data/keyinfo.json
+            data/meta.enc.json
+          sparse-checkout-cone-mode: false
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install .
+      - name: Relevé
+        run: python -m collector snapshot --out "$RUNNER_TEMP/etat"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: etat-pieces-${{ github.run_id }}
+          path: ${{ runner.temp }}/etat/
+          retention-days: 3
+          if-no-files-found: error

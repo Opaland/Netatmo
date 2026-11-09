@@ -9,6 +9,7 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from .model import HEATING, WATER_HEATER
+from .roomstate import merge_snapshots, snapshot
 from .station import aggregate_days
 from .storage import Store
 
@@ -100,6 +101,63 @@ def _curve_day(store: Store, rnd: random.Random, d: date, hours_wh: list[float],
     return round(total, 1)
 
 
+ROOMSTATE_DAYS = 365
+# Demo absence (mode « absence » on every radiator, contactor off): a week, a month and a half ago.
+ABSENCE = (45, 39)  # days before today
+
+
+def _room_states(store: Store, today: date) -> None:
+    """S-13.2: the hourly homestatus snapshots of the last 365 days, as the hourly workflow
+    would have taken them (about 4 % of runs missed), aggregated by the real code."""
+    rnd = random.Random(13)  # separate stream: the rest of the demo stays identical
+    tz = ZoneInfo("Europe/Paris")
+    heated = [r for r, _n, c, _w, _s in ROOMS if c == HEATING]
+    mod_room = {f"m-{r}": r for r, *_ in ROOMS}
+    snaps = []
+    for back in range(ROOMSTATE_DAYS, 0, -1):
+        d = today - timedelta(days=back)
+        doy = d.timetuple().tm_yday
+        cold = max(0.0, min(1.0, (15 - (11.5 - 8.5 * math.cos((doy - 20) / 365 * 2 * math.pi))) / 12))
+        away = ABSENCE[1] <= back <= ABSENCE[0]
+        weekend = d.weekday() >= 5
+        long_open = rnd.random() < 0.07  # the office aired for a whole morning
+        for h in range(24):
+            if rnd.random() < 0.04:
+                continue  # GitHub skipped the scheduled run
+            rooms, modules = [], []
+            for rid in heated:
+                window = {
+                    "r-ch1": h in (7, 8) and rnd.random() < 0.6,
+                    "r-ch2": h == 8 and rnd.random() < 0.4,
+                    "r-cuisine": h == 19 and rnd.random() < 0.25,
+                    "r-bureau": long_open and 9 <= h <= 12 and not weekend,
+                    "r-salon": h == 14 and rnd.random() < 0.05,
+                }.get(rid, False)
+                boost = not away and (
+                    (rid == "r-sdb" and h == 7 and not weekend and rnd.random() < 0.5)
+                    or (rid == "r-salon" and h == 20 and rnd.random() < 0.08)
+                )
+                mode = "away" if away else ("manual" if rid == "r-bureau" and weekend and h > 9 else "schedule")
+                rooms.append(
+                    {
+                        "id": rid,
+                        "open_window": window,
+                        "boost_status": "enabled" if boost else "disabled",
+                        "therm_setpoint_mode": mode,
+                    }
+                )
+                p = HEAT_SHAPE[h] / 10 * cold * (0.3 if away else 1.0)
+                heating = not window and rnd.random() < p
+                offload = heating and cold > 0.75 and 18 <= h <= 20 and rnd.random() < 0.3
+                modules.append(
+                    {"id": f"m-{rid}", "radiator_state": "heating" if heating else "idle", "offload": offload}
+                )
+            modules.append({"id": "m-r-ce", "contactor_mode": "off" if away else "auto"})
+            ts = int(datetime(d.year, d.month, d.day, h, 23, tzinfo=tz).timestamp())
+            snaps.append(snapshot({"body": {"home": {"rooms": rooms, "modules": modules}}}, ts, calls=2))
+    merge_snapshots(store, snaps, "Europe/Paris", mod_room, today=today.isoformat())
+
+
 def _sources(today: date) -> dict:
     """State of the sources (S-1.7, S-1.12) as the settings screen shows it."""
     ok = f"{today.isoformat()}T04:12:00+00:00"
@@ -115,6 +173,7 @@ def _sources(today: date) -> dict:
             "expires_estimated": True,
         },
         "linky-30min": {"ok": ok},
+        "releve-horaire": {"ok": ok, "note": "161 relevés sur 168 heures (7 derniers jours)"},
         "ia": {"ok": ok},
     }
 
@@ -223,6 +282,7 @@ def generate(out_dir: Path, passphrase: str = "demo", start_year: int = 2022) ->
             store.merge(rid, day, share)
             store.put(day[:4], "estimated", rid, day, 1)
     store.update_coverage()
+    _room_states(store, today)
     for key in ("m0", "m1", "m2", "m3"):
         aggregate_days(store, key, key != "m1", hourly_from, today)
     store.set_top("weather", "source", "open-meteo")
@@ -245,6 +305,7 @@ def generate(out_dir: Path, passphrase: str = "demo", start_year: int = 2022) ->
         "has_temps": True,
         "has_linky": True,
         "has_station": True,
+        "has_roomstate": True,
         "weather_source": "open-meteo",
         "contract": CONTRACT,
         "sources": _sources(today),
