@@ -3,6 +3,7 @@ import { type Category, type DayRecord, MONTHS_SHORT, minusYears, monthlyByYear,
 import { djuBetween, fitSeason, roomDeltas, signaturePoints } from '../analysis';
 import { ds, setState, state } from '../app';
 import { barChart } from '../charts';
+import { CO2_DEFAULT, CO2_SOURCE, co2Factor, fmtCo2, fmtFactor } from '../money';
 import {
   activeRooms,
   avgPrice,
@@ -72,6 +73,7 @@ export function renderReport(view: HTMLElement) {
     </div>
     <h3>Faits marquants</h3>
     <ul class="facts">
+      <li>Empreinte carbone : <strong>≈ ${fmtCo2(tot * co2Factor())}</strong> (${fmtKwh(tot)} × ${fmtFactor(co2Factor())}, ${co2Factor() === CO2_DEFAULT ? esc(CO2_SOURCE) : 'facteur choisi par le foyer'}).</li>
       ${peak.d ? `<li>Jour le plus consommateur : <strong>${longDate(peak.d)}</strong> (${fmtKwh(peak.v)}).</li>` : ''}
       ${roomsSorted[0] ? `<li>Pièce la plus consommatrice : <strong>${esc(roomsSorted[0].name)}</strong> (${fmtKwh(deltas.get(roomsSorted[0].id)!.now)}).</li>` : ''}
       ${w && wPrev && sum(prev) > 0 ? `<li>À climat égal, le chauffage a évolué de <strong>${pct(((sum(yr, 'heating') / Math.max(w.dju, 1)) / (sum(prev, 'heating') / Math.max(wPrev.dju, 1)) - 1) * 100)}</strong> par degré-jour par rapport à ${year - 1}.</li>` : ''}

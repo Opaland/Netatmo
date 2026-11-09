@@ -4,7 +4,7 @@ import { spawn } from 'node:child_process';
 import { mkdirSync } from 'node:fs';
 import { chromium, devices } from 'playwright';
 
-const PORT = 4179;
+const PORT = Number(process.env.E2E_PORT ?? 4179);
 const OUT = process.env.E2E_OUT ?? 'e2e/screenshots';
 mkdirSync(OUT, { recursive: true });
 const server = spawn('npx', ['vite', 'preview', '--port', String(PORT), '--strictPort'], { stdio: 'ignore' });
