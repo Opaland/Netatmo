@@ -1,18 +1,21 @@
-// "Autres usages en détail" card (S-4.12, S-1.17): the Linky rest (total − heating − water
-// heater) split into Shelly plugs, appliances declared by hand, the standby base load (talon)
-// and what stays unexplained. Loaded on demand by the overview (no weight on first paint).
+// "Autres usages en détail" page of the Compteur tab (S-4.12, S-1.17): the meter rest (total −
+// heating − water heater) split into Shelly plugs, appliances declared by hand, the standby
+// (« Veille ») and what stays unexplained, over the tab's period (#301: said on the card).
+// Loaded on demand (no weight on first paint).
 // Declared appliances stay on this device, encrypted with the data key (like absences).
 import type { Hourly } from '../analysis';
 import { datasetDoc, ds, onDatasetLoaded } from '../app';
-import { type Breakdown, type Declared, breakdown, kwhPerYear, parseDeclared, plugsFrom, windowDays } from '../breakdown';
-import { cssVar, hbarChart } from '../charts';
+import { addDays, minusYears } from '../aggregate';
+import { type Breakdown, type Declared, breakdown, kwhPerYear, parseDeclared, plugsFrom } from '../breakdown';
+import { list } from '../components';
 import { openLocal, sealLocal } from '../crypto';
 import { type Curve, lastCurveDay, measuredWattsCached, talon } from '../curve';
 import { type Dataset, loadCurve, loadHourly } from '../data';
 import { memo } from '../memo';
 import { readPref, writePref } from '../money';
 import { html } from '../trusted';
-import { activeRooms, avgPrice, esc, fmtEur, lastDay, longDate, nf0, series, table } from '../ui';
+import { coverage, coveredText } from '../meter';
+import { activeRooms, avgPrice, esc, fmtEur, lastDay, nf0, series, table, tableToggle } from '../ui';
 import { NS } from '../scope';
 
 // #247: what the card needs, loaded for the dataset shown (a late result of another one is dropped).
@@ -20,8 +23,8 @@ const doc = datasetDoc((d) =>
   Promise.all([
     loadDeclared(d),
     curveYears() ? loadCurve(d) : Promise.resolve(new Map<string, number>()),
-    // #251: only the hourly years of the 30-day window, not the whole history.
-    cardDays().length ? loadHourly(d, cardDays()[0]).catch(() => null) : Promise.resolve(null),
+    // #251: only the hourly years the tab's periods reach (12 months), not the whole history.
+    d.linky.size ? loadHourly(d, addDays(minusYears(d.meta.last_day ?? lastDay()), 1)).catch(() => null) : Promise.resolve(null),
   ]),
 );
 // Set from `doc` at each render; `declared` also by the form (until the dataset changes).
@@ -29,6 +32,7 @@ let curve: Curve | null = null;
 let hourly: Hourly | null = null;
 let declared: Declared[] | null = null;
 let formMsg = '';
+let range = { from: '', to: '' }; // period of the last render (the form redraws with it)
 onDatasetLoaded(() => {
   curve = hourly = declared = null;
   formMsg = '';
@@ -57,7 +61,7 @@ async function saveDeclared(list: Declared[], card: HTMLElement) {
   } catch {
     formMsg = 'Enregistré jusqu’au verrouillage seulement (clé non exportable).';
   }
-  renderBreakdownCard(card);
+  renderBreakdownCard(card, range);
 }
 
 /** kWh per day of one category, from the radiator records (once per dataset). */
@@ -69,8 +73,8 @@ function perDay(cat: 'heating' | 'water_heater'): Map<string, number> {
   });
 }
 
-/** The 30 Linky days of the card (once per dataset). */
-const cardDays = () => memo(ds!.linky, `days|${lastDay()}`, () => windowDays(ds!.linky, lastDay()));
+/** The meter days of the period, in order (once per dataset and period). */
+const cardDays = (from: string, to: string) => memo(ds!.linky, `days|${from}|${to}`, () => [...ds!.linky.keys()].filter((d) => d >= from && d <= to).sort());
 
 /** Standby base load (W) over [from, to], radiators and water heater taken out when possible. */
 function talonWatts(from: string, to: string): number | null {
@@ -88,22 +92,24 @@ function talonWatts(from: string, to: string): number | null {
 
 const curveYears = () => !!(ds!.meta as { linky_curve_years?: number[] }).linky_curve_years?.length;
 
-export function renderBreakdownCard(card: HTMLElement) {
+export function renderBreakdownCard(card: HTMLElement, r: { from: string; to: string }) {
   if (!ds) return;
-  const v = doc.get(ds, () => card.isConnected && renderBreakdownCard(card));
+  range = r;
+  const v = doc.get(ds, () => card.isConnected && renderBreakdownCard(card, r));
   if (!v) {
     if (doc.status(ds) === 'failed') {
       card.hidden = false;
-      card.innerHTML = html`<div class="card-head"><h2>Autres usages en détail</h2></div><p class="hint muted">${
+      card.innerHTML = html`<div class="card-head"><h2>Ce qui compose les autres usages</h2></div><p class="hint muted">${
         navigator.onLine ? 'Courbe de charge indisponible.' : 'Courbe de charge : disponible au prochain accès réseau.'
       }</p>`;
     }
     return;
   }
   [declared, curve, hourly] = [declared ?? v[0], v[1], v[2]];
-  const days = cardDays();
+  const days = cardDays(r.from, r.to);
   if (days.length < 7) {
-    card.hidden = true;
+    card.hidden = false;
+    card.innerHTML = html`<div class="card-head"><h2>Ce qui compose les autres usages</h2></div><p class="hint muted">Moins de 7 jours relevés par le compteur sur la période : choisissez une période plus longue.</p>`;
     return;
   }
   const { plugs, unusable } = memo(ds, 'plugs', () => plugsFrom(ds!.shelly));
@@ -118,10 +124,10 @@ export function renderBreakdownCard(card: HTMLElement) {
   });
   card.hidden = false;
   card.innerHTML = html`
-    <div class="card-head"><h2>Autres usages en détail <small class="muted">Linky − chauffage − chauffe-eau</small></h2></div>
-    <p class="hint muted" id="bd-summary">${summary(b)}</p>
-    <div class="chart" id="bd-chart" role="img" aria-label="${esc(ariaLabel(b))}"></div>
-    ${partsTable(b)}
+    <div class="card-head"><h2>Ce qui compose les autres usages</h2></div>
+    <p class="hint" id="bd-summary">${summary(b)}</p>
+    <div id="bd-parts">${partsList(b)}</div>
+    ${tableToggle(partsTable(b))}
     ${notes(b, unusable, plugs.length > 0)}
     <h3>Postes saisis <small class="muted">gardés sur cet appareil, chiffrés</small></h3>
     ${declaredList()}
@@ -131,8 +137,8 @@ export function renderBreakdownCard(card: HTMLElement) {
       <label>Heures par jour<input name="hours" inputmode="decimal" autocomplete="off" placeholder="24"></label>
       <button class="primary small" type="submit">Ajouter</button>
     </form>
-    <p class="hint muted" role="status" id="bd-msg">${esc(formMsg)}</p>`;
-  drawChart(b);
+    <p class="hint muted" role="status" id="bd-msg">${esc(formMsg)}</p>
+    ${counted(b, plugs.length > 0)}`;
   card.querySelector<HTMLFormElement>('#bd-form')!.addEventListener('submit', (e) => {
     e.preventDefault();
     const f = new FormData(e.target as HTMLFormElement);
@@ -152,23 +158,20 @@ export function renderBreakdownCard(card: HTMLElement) {
 }
 
 function summary(b: Breakdown): string {
-  const from = b.days[0];
-  const to = b.days[b.days.length - 1];
-  return `Du ${longDate(from)} au ${longDate(to)} (${b.days.length} jours) : le compteur a relevé ${kwh(b.linky)}, dont chauffage ${kwh(
-    b.heating,
-  )} et chauffe-eau ${kwh(b.water)}. Il reste <strong>${kwh(b.rest)}</strong> d'autres usages, soit ≈ ${nf0.format(
-    (b.rest * 1000) / (b.days.length * 24),
-  )} W en moyenne, décomposés ci-dessous.`;
+  return `Le compteur a relevé ${kwh(b.linky)}, dont chauffage ${kwh(b.heating)} et eau chaude ${kwh(b.water)}. Il reste <strong>${kwh(
+    b.rest,
+  )}</strong> d'autres usages, soit ≈ ${nf0.format((b.rest * 1000) / (b.days.length * 24))} W en moyenne, décomposés ci-dessous.`;
 }
 
-function ariaLabel(b: Breakdown): string {
-  return `Décomposition des autres usages sur ${b.days.length} jours : ${b.parts
-    .filter((p) => p.kwh > 0)
-    .map((p) => `${p.name} ${nf0.format(p.kwh)} kWh`)
-    .join(', ')}.`;
+/** #301: what the card counts, on the days of the tab's period that the meter covers. */
+function counted(b: Breakdown, hasPlugs: boolean): string {
+  const cov = coverage(b.days, range.from, range.to);
+  return `<p class="counted"><span class="counted-k">Compté :</span> le compteur moins les radiateurs et le chauffe-eau, ${cov ? esc(coveredText(cov)) : ''}${
+    hasPlugs ? ' ; une prise mesurée moins longtemps compte à sa moyenne les autres jours' : ''
+  } ; les appareils saisis, à leur rythme.</p>`;
 }
 
-const KIND_LABEL = { plug: 'mesuré (prise Shelly)', declared: 'saisi', talon: 'courbe de charge', unexplained: 'différence' };
+const KIND_LABEL = { plug: 'mesuré (prise Shelly)', declared: 'saisi', talon: 'nuits, hors appareils permanents', unexplained: 'différence' };
 
 function partsTable(b: Breakdown): string {
   const price = avgPrice();
@@ -187,12 +190,12 @@ function notes(b: Breakdown, unusable: string[], hasPlugs: boolean): string {
   const out: string[] = [];
   if (b.talonWatts !== null) {
     out.push(
-      `Talon de nuit (10<sup>e</sup> centile des demi-heures de 1 h à 5 h) : <strong>${nf0.format(b.talonWatts)} W</strong>, soit ${nf0.format(
+      `Veille (niveau bas des nuits, de 1 h à 5 h) : <strong>${nf0.format(b.talonWatts)} W</strong>, soit ${nf0.format(
         kwhPerYear(b.talonWatts),
       )} kWh par an. Les appareils permanents (débit régulier mesuré, ou saisis à 24 h par jour) en sont déduits pour ne pas les compter deux fois ; c'est approximatif (un réfrigérateur fonctionne par cycles).`,
     );
   } else {
-    out.push('Sans courbe de charge 30 min, le talon de nuit n’est pas estimé : il reste dans « Non attribué ».');
+    out.push('Sans courbe de charge du compteur, la veille n’est pas estimée : elle reste dans « Non attribué ».');
   }
   if (b.over > 0.05) {
     out.push(`<span class="ko-red">Les postes dépassent le reste de ${kwh(b.over)} : vérifiez les puissances et durées saisies.</span>`);
@@ -215,14 +218,20 @@ function declaredList(): string {
     .join('')}</ul>`;
 }
 
-function drawChart(b: Breakdown) {
-  const el = document.getElementById('bd-chart');
-  if (!el) return;
-  const color = (k: string, i: number) =>
-    k === 'talon' ? cssVar('--usage-standby') : k === 'unexplained' ? cssVar('--usage-other') : series(i + 2);
-  hbarChart(el, {
-    labels: b.parts.map((p) => p.name),
-    series: [{ name: `kWh sur ${b.days.length} jours`, color: series(2), data: b.parts.map((p) => Math.round(p.kwh * 10) / 10), colors: b.parts.map((p, i) => color(p.kind, i)) }],
-    price: avgPrice(),
-  });
+/**
+ * The parts as a list with share bars (#310 component), not a canvas: long names (« Tableau
+ * électrique · canal 1 », « Veille ») wrap on one or two lines at 360 px and 200 % text.
+ */
+function partsList(b: Breakdown): string {
+  const color = (k: string, i: number) => (k === 'talon' ? '--usage-standby' : k === 'unexplained' ? '--usage-other' : series(i + 2));
+  return list(
+    b.parts.map((p, i) => ({
+      title: p.name,
+      sub: `${KIND_LABEL[p.kind]} · ≈ ${nf0.format(p.watts)} W`,
+      value: kwh(p.kwh),
+      color: color(p.kind, i),
+      share: b.rest ? Math.min(100, (p.kwh / b.rest) * 100) : 0,
+    })),
+    `Décomposition des autres usages, ${b.days.length} jours`,
+  );
 }

@@ -70,7 +70,12 @@ const DESTINATIONS = {
   accueil: ['.periodbar [data-set=home]', '.periodbar .scope', '.verdict .gauge', '.home-tiles .kpi', '#grid-card .alert', '#counted-card .list .row', '#home-chart canvas', '#insight-card .md', 'a[href="#historique"]'],
   pieces: ['.rooms-picker', '#rooms-chart canvas', 'a[href="#confort"]', 'a[href="#chauffe-eau"]'],
   historique: ['.kpis-one .kpi', '#explore-card #main-chart canvas', '#explore-card [data-set=cat]', '#explore-card [data-set=gran]', '#cmp-chart canvas', 'text:Totaux annuels', '#rooms-waterfall canvas', '#sig-chart canvas', '#indoor-sig-chart canvas', '#unusual-card', '#cal-chart canvas', '#station-chart canvas'],
-  compteur: ['#linky-chart canvas', '#pmax-chart canvas', '#offload-zone table', '#curve-day-chart canvas', '#bd-chart canvas', '#hour-grid canvas', 'text:Heures pleines / heures creuses'],
+  // #301: part of the usages, maximum power (shedding in « Voir les valeurs »), then the detail pages
+  compteur: ['#linky-chart canvas', '#pmax-chart canvas', '#offload-zone table', '#share-card .counted', '#power-card .counted', 'a[href="#compteur-veille"]', 'a[href="#compteur-heures-creuses"]'],
+  'compteur-journee': ['#curve-typical canvas', '#curve-day-chart canvas', '#hour-grid canvas', '#curve-card .counted'],
+  'compteur-veille': ['#standby-card .counted', 'text:en permanence'],
+  'compteur-autres': ['#bd-parts .row', '#breakdown-card .counted'],
+  'compteur-heures-creuses': ['#offpeak-chart canvas', '#offpeak-card .counted', 'text:Heures pleines / creuses'],
   confort: ['#cold-chart canvas', '#windows-chart canvas', '#ha-card table', '#cellar-0 canvas', '#probe-0 canvas'],
   'chauffe-eau': ['#wh-month-chart canvas', '#contactor-line:not([hidden])'],
   etat: ['#quality[open]', '.status-list', '#devices-card [data-shelly-role]'],

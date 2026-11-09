@@ -119,7 +119,7 @@ export function breakdown(opts: {
   if (opts.talonWatts !== null && n) {
     const always = parts.filter((p) => p.permanent).reduce((s, p) => s + p.watts, 0);
     const watts = Math.max(0, opts.talonWatts - always);
-    parts.push({ name: 'Veille non attribuée (talon)', kind: 'talon', watts, kwh: (watts * hours) / 1000, permanent: true });
+    parts.push({ name: 'Veille', kind: 'talon', watts, kwh: (watts * hours) / 1000, permanent: true });
   }
   const explained = parts.reduce((s, p) => s + p.kwh, 0);
   const left = rest - explained;

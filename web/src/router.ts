@@ -42,11 +42,21 @@ export const SETTINGS = {
 } as const;
 export type SettingsPage = keyof typeof SETTINGS;
 
+/** The detail pages of the Compteur tab (« #compteur-veille »), in the order of its list. */
+export const METER_PAGES = {
+  journee: 'Journée type',
+  veille: 'Veille',
+  autres: 'Autres usages en détail',
+  'heures-creuses': 'Heures pleines / creuses',
+} as const;
+export type MeterPage = keyof typeof METER_PAGES;
+
 export type Route =
   | { page: Tab }
   | { page: 'piece'; room: string }
   | { page: 'confort' | 'chauffe-eau' | 'etat' | 'rapport' | 'aide' }
   | { page: 'outil'; tool: Tool }
+  | { page: 'compteur-detail'; sub: MeterPage }
   | { page: 'parametres'; section: SettingsPage | null };
 
 const SIMPLE_PAGES = new Set(['confort', 'chauffe-eau', 'etat', 'rapport', 'aide']);
@@ -60,6 +70,8 @@ export function parseRoute(hash: string): Route | null {
   if (h === 'parametres') return { page: 'parametres', section: null };
   let m = /^parametres-(.+)$/.exec(h);
   if (m) return m[1] in SETTINGS ? { page: 'parametres', section: m[1] as SettingsPage } : null;
+  m = /^compteur-(.+)$/.exec(h);
+  if (m) return m[1] in METER_PAGES ? { page: 'compteur-detail', sub: m[1] as MeterPage } : null;
   m = /^outils-(.+)$/.exec(h);
   if (m) return m[1] in TOOLS ? { page: 'outil', tool: m[1] as Tool } : null;
   m = /^piece-(.+)$/.exec(h);
@@ -80,6 +92,8 @@ export function routeKey(r: Route): string {
       return `piece-${encodeURIComponent(r.room)}`;
     case 'outil':
       return `outils-${r.tool}`;
+    case 'compteur-detail':
+      return `compteur-${r.sub}`;
     case 'parametres':
       return r.section ? `parametres-${r.section}` : 'parametres';
     default:
@@ -94,6 +108,8 @@ export function tabOf(r: Route): Tab | null {
     case 'confort':
     case 'chauffe-eau':
       return 'pieces';
+    case 'compteur-detail':
+      return 'compteur';
     case 'outil':
     case 'etat':
     case 'rapport':
@@ -113,6 +129,8 @@ export function parentOf(r: Route): string | null {
     case 'confort':
     case 'chauffe-eau':
       return 'pieces';
+    case 'compteur-detail':
+      return 'compteur';
     case 'outil':
     case 'etat':
     case 'rapport':
@@ -143,6 +161,8 @@ export function titleOf(r: Route, roomName: (id: string) => string = (id) => id)
       return 'Aide';
     case 'outil':
       return TOOLS[r.tool];
+    case 'compteur-detail':
+      return METER_PAGES[r.sub];
     case 'parametres':
       return r.section ? SETTINGS[r.section] : 'Paramètres';
     default:
@@ -169,6 +189,6 @@ export function visibleTabs(tenant: boolean): [Tab, string][] {
 
 /** A route the page can show: the meter pages fall back to Accueil in tenant mode. */
 export function allowed(r: Route, tenant: boolean): Route {
-  if (tenant && r.page === 'compteur') return { page: 'outils' };
+  if (tenant && (r.page === 'compteur' || r.page === 'compteur-detail')) return { page: 'outils' };
   return r;
 }
