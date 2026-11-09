@@ -829,3 +829,73 @@ fieldset.prices input {
   justify-self: end;
   color: var(--bad);
 }
+
+.status-list {
+  list-style: none;
+  padding: 0;
+  margin: 8px 0;
+  display: grid;
+  gap: 6px;
+}
+.ok {
+  color: var(--good);
+  font-weight: 600;
+}
+.ko {
+  color: var(--text-muted);
+}
+fieldset.secrets {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 10px 12px 12px;
+  margin: 12px 0;
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+fieldset.secrets legend {
+  font-weight: 600;
+  padding: 0 4px;
+}
+fieldset.secrets label,
+.inline-form label {
+  display: grid;
+  gap: 4px;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+fieldset.secrets input,
+.inline-form input {
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-1);
+  width: 100%;
+  box-sizing: border-box;
+}
+.inline-form {
+  display: grid;
+  gap: 10px;
+}
+.settings-msg {
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+}
+.settings-msg.ko {
+  color: var(--bad);
+}
+.card a {
+  color: var(--accent);
+}
+
+.stale {
+  margin: 0 0 12px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--bad);
+  color: var(--text-primary);
+  background: var(--surface-1);
+  font-size: 0.9rem;
+}

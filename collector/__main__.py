@@ -118,6 +118,32 @@ def cmd_sync(s: Settings, args: argparse.Namespace, backfill: bool = False) -> N
     changed = syncer.save(home, extra)
     print("Fichiers modifiés : " + (", ".join(changed) if changed else "aucun"))
     print(f"Couverture : {store.first_day()} → {store.last_day()}")
+    _job_summary(store, syncer, changed)
+
+
+def _job_summary(store: Store, syncer: Syncer, changed: list[str]) -> None:
+    """GitHub job summary: sources and counts only, never names or values (public log)."""
+    path = os.environ.get("GITHUB_STEP_SUMMARY")
+    if not path:
+        return
+    m = store.meta
+    yes = lambda b: "✅" if b else "—"  # noqa: E731
+    lines = [
+        "## Collecte",
+        "",
+        "| Élément | État |",
+        "|---|---|",
+        f"| Méthode de mesure | `{' '.join(syncer.strategy or ('?', '?'))}` |",
+        f"| Couverture | {m.get('first_day')} → {m.get('last_day')} |",
+        f"| Pièces suivies | {len([r for r in m.get('rooms', []) if r.get('category') != 'ignore'])} |",
+        f"| Météo | {m.get('weather_source') or '—'} |",
+        f"| Station Netatmo (tous modules) | {yes(m.get('has_station'))} |",
+        f"| Linky | {yes(m.get('has_linky'))} |",
+        f"| Analyse IA | {yes(store.doc('insights').get('period'))} |",
+        f"| Fichiers chiffrés modifiés | {len(changed)} |",
+    ]
+    with open(path, "a", encoding="utf-8") as fh:
+        fh.write("\n".join(lines) + "\n")
 
 
 def cmd_insights(s: Settings, args: argparse.Namespace) -> None:
@@ -132,6 +158,29 @@ def cmd_insights(s: Settings, args: argparse.Namespace) -> None:
             {k: v for k, v in store.meta.items() if k.startswith("has_") or k == "weather_source"},
         )
         print(store.doc("insights")["markdown"])
+
+
+def cmd_rekey(s: Settings, args: argparse.Namespace) -> None:
+    from .rekey import rekey, strength_bits, verdict
+
+    s.require("passphrase")
+    new = os.environ.get("NEW_DATA_PASSPHRASE", "")
+    if not new:
+        raise SystemExit("Variable manquante : NEW_DATA_PASSPHRASE")
+    bits = strength_bits(new)
+    print(f"Robustesse estimée de la nouvelle phrase : {bits:.0f} bits — {verdict(bits)}")
+    if bits < 50 and not args.force:
+        raise SystemExit("Phrase trop faible : choisissez-en une plus longue (ou --force).")
+    files = rekey(s.data_dir, s.passphrase, new)
+    print(f"{len(files)} fichiers rechiffrés. Mettez maintenant la nouvelle phrase dans le secret DATA_PASSPHRASE.")
+
+
+def cmd_strength(s: Settings, args: argparse.Namespace) -> None:
+    from .rekey import strength_bits, verdict
+
+    s.require("passphrase")
+    bits = strength_bits(s.passphrase)
+    print(f"Robustesse estimée : {bits:.0f} bits — {verdict(bits)}")
 
 
 def cmd_verify(s: Settings, args: argparse.Namespace) -> None:
@@ -187,6 +236,9 @@ def main(argv: list[str] | None = None) -> None:
         sp = sub.add_parser(name)
         sp.add_argument("--days", type=int, default=35, help="jours re-téléchargés à chaque sync (défaut 35)")
     sub.add_parser("verify")
+    rk = sub.add_parser("rekey", help="changer la phrase de passe (NEW_DATA_PASSPHRASE)")
+    rk.add_argument("--force", action="store_true")
+    sub.add_parser("strength", help="robustesse estimée de DATA_PASSPHRASE")
     ins = sub.add_parser("insights", help="analyse du mois rédigée par Claude (ANTHROPIC_API_KEY)")
     ins.add_argument("--force", action="store_true")
     e = sub.add_parser("export-csv")
@@ -203,6 +255,8 @@ def main(argv: list[str] | None = None) -> None:
         "sync": cmd_sync,
         "backfill": lambda s, a: cmd_sync(s, a, backfill=True),
         "verify": cmd_verify,
+        "rekey": cmd_rekey,
+        "strength": cmd_strength,
         "insights": cmd_insights,
         "export-csv": cmd_export,
         "demo": cmd_demo,

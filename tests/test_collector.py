@@ -392,3 +392,18 @@ def test_insights_use_only_computed_numbers(tmp_path):
     doc = store.doc("insights")
     assert doc["period"] == "2024-01" and doc["verified"]
     assert not generate(store, today=date(2024, 2, 11), client=client)  # once per month
+
+
+def test_rekey_reencrypts_everything_and_rates_strength(tmp_path):
+    from collector.rekey import rekey, strength_bits
+
+    store = Store(tmp_path, "ancienne phrase")
+    store.merge("100", "2024-01-01", 1200.0)
+    store.save({"id": "h"}, [])
+    old_salt = (tmp_path / "keyinfo.json").read_text()
+    files = rekey(tmp_path, "ancienne phrase", "pivoine tracteur lagune moustache onze")
+    assert "2024.enc.json" in files and (tmp_path / "keyinfo.json").read_text() != old_salt
+    assert Store(tmp_path, "pivoine tracteur lagune moustache onze").year(2024) == {"100": {"2024-01-01": 1200.0}}
+    with pytest.raises(DecryptError):
+        Store(tmp_path, "ancienne phrase")
+    assert strength_bits("motdepasse") < 50 <= strength_bits("pivoine tracteur lagune moustache onze")

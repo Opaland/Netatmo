@@ -9,6 +9,12 @@
 - Puissance maximale appelée (Linky) comparée à la puissance souscrite.
 - Études : volets Wiser (no-go passerelle, mesure d'abord) et plateforme domotique ouverte
   (Home Assistant, matériel manquant).
+- **Paramètres dans l'application** : saisie des identifiants, chiffrés dans le navigateur puis écrits en
+  secrets GitHub ; lancement de la collecte. Jeton GitHub jamais stocké ; CSP stricte.
+- Bandeau « données arrêtées » ; résumé de chaque collecte dans GitHub ; Dependabot.
+- `rekey` (changer la phrase de passe, workflow dédié) et estimation de robustesse (`strength`).
+- Dépendances : ECharts 6.1 (correctif XSS), Vitest 5, actions GitHub à jour.
+- Revue 50 personas de la v1.2 (`docs/bmad/revues/v1.2.md`).
 
 ## v1.1 — novembre 2026 : comprendre sa consommation
 

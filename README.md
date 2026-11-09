@@ -93,6 +93,25 @@ L'adresse du site s'affiche dans **Settings → Pages** (de la forme
 Entrez votre phrase de passe une fois ; « Rester connecté sur cet appareil » garde une clé
 non exportable dans le navigateur (le menu ⋮ → Verrouiller l'efface).
 
+### Le plus simple : l'écran Paramètres
+
+Une fois l'application ouverte (menu ⋮ → **Paramètres et connexions**), vous pouvez saisir vos
+identifiants directement : l'application les **chiffre dans votre navigateur** avec la clé publique du
+dépôt (le procédé imposé par GitHub) et les enregistre comme secrets, puis peut lancer la collecte.
+
+Il faut pour cela un [jeton GitHub « fine-grained »](https://github.com/settings/personal-access-tokens/new) :
+accès au seul dépôt, permissions **Secrets : lecture et écriture** et **Actions : lecture et écriture**,
+rien d'autre, expiration courte. Le jeton reste en mémoire le temps de la visite et n'est jamais
+enregistré. La phrase de passe des données ne se change pas ici (voir plus bas).
+
+### Changer de phrase de passe
+
+1. Ajoutez le secret `NEW_DATA_PASSPHRASE` (la nouvelle phrase, 5 mots ou plus).
+2. Lancez **Actions → Changer la phrase de passe** : tout est rechiffré et la robustesse vérifiée.
+3. Remplacez la valeur de `DATA_PASSPHRASE` par la nouvelle phrase, puis supprimez `NEW_DATA_PASSPHRASE`.
+
+En local : `python -m collector strength` estime la robustesse de la phrase actuelle.
+
 ### Options (facultatives)
 
 Chaque option s'active en ajoutant des secrets. Sans eux, l'application fonctionne normalement.
