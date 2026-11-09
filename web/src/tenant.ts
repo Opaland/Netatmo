@@ -3,6 +3,7 @@
 // comparator and the shared contract are hidden with a sentence, and the anonymised report
 // can cover the lease only. Kept in its own storage key (not in State): tiny, entry chunk.
 // No import of the app: the caller re-renders after setTenant().
+import { lsKey } from './scope';
 
 export interface Tenant {
   on: boolean;
@@ -10,7 +11,7 @@ export interface Tenant {
   leaseTo: string | null; // YYYY-MM-DD, end of the lease (null = still running)
 }
 
-const KEY = 'intuis-history:tenant';
+const KEY = lsKey('tenant');
 const OFF: Tenant = { on: false, leaseFrom: null, leaseTo: null };
 const isDay = (v: unknown): v is string => typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v);
 

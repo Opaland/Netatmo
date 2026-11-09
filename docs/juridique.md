@@ -31,6 +31,8 @@ chaque service et on met à jour la date de lecture ci-dessous. Une date de plus
 | [Open-Meteo](https://open-meteo.com/en/terms) (météo de la commune) | API gratuite, sans compte | Usage **non commercial** uniquement (la domotique personnelle est citée comme admise) ; moins de 10 000 appels par jour ; données sous licence **CC BY 4.0** (attribution) | 9 nov. 2026 | Faible |
 | CRE, via [data.gouv.fr](https://www.data.gouv.fr/datasets/historique-des-tarifs-reglementes-de-vente-delectricite-pour-les-consommateurs-residentiels) (tarifs réglementés) | Données publiques ouvertes | Licence indiquée sur la fiche du jeu de données (Licence Ouverte Etalab pour la plupart des jeux publics : **à confirmer sur la fiche**) | 9 nov. 2026 | Faible |
 | [api-couleur-tempo.fr](https://www.api-couleur-tempo.fr) (couleurs Tempo) | API gratuite, sans compte | Pas de conditions trouvées ; à défaut, la couleur Tempo manque et seul le comparateur Tempo est touché | 9 nov. 2026 | Moyen |
+| [Shelly Cloud](https://shelly-api-docs.shelly.cloud/cloud-control-api/) (prises, facultatif, S-1.17) | API officielle « Cloud Control », clé cloud du foyer (*Paramètres utilisateur* → *Clé d'autorisation cloud*) ; **deux points d'accès non documentés** pour lister les appareils (voir ci-dessous) | Documentation de l'API : ouverte à « tout utilisateur enregistré » pour **ses propres appareils**, 1 appel par seconde, clé à ne partager avec personne, serveur susceptible de changer. Pas de CGU propres à l'API ; conditions du compte Shelly acceptées dans l'application. Les conditions de l'[Integrator API](https://shelly-api-docs.shelly.cloud/integrator-api/terms-and-conditions) (offre réservée aux entreprises) **ne s'appliquent pas** ici | 9 nov. 2026 | Moyen |
+| Home Assistant (import manuel, facultatif, S-1.18) | Logiciel libre installé **chez le foyer** ; aucun service tiers : export local, import par le collecteur sur l'ordinateur du foyer | Licence Apache 2.0 du logiciel ; pas de conditions de service. Le [jeton longue durée](https://www.home-assistant.io/docs/authentication/) sert seulement à l'export, sur le réseau local ; il n'est ni dans le dépôt ni dans les secrets GitHub | 9 nov. 2026 | Faible |
 | Anthropic (analyse IA, facultative) | API payante, clé du foyer | Conditions commerciales d'Anthropic, acceptées à la création de la clé sur console.anthropic.com ; non relues en détail pour cette page | 9 nov. 2026 | Faible |
 | GitHub (dépôt, Actions, Pages) | Compte du foyer | Conditions de GitHub (non relues en détail pour cette page) ; un dépôt public expose le code et les fichiers **chiffrés**, jamais les secrets | 9 nov. 2026 | Faible |
 
@@ -53,6 +55,73 @@ chaque service et on met à jour la date de lecture ci-dessous. Une date de plus
 - **Si l'accès est coupé** : l'historique déjà collecté reste dans le dépôt, et la
   [sauvegarde chiffrée](../README.md#sauvegarde-chiffrée-hors-github) permet de le garder hors de
   GitHub. L'application continue d'afficher ce qui a été archivé.
+
+### Shelly Cloud : ce qui est appelé, ce qui est gardé, où
+
+- **Appelé** (une collecte par nuit, au plus `MAX_CALLS_SHELLY` = 30 appels, 2 pour 10 prises) :
+  la liste des appareils, puis l'état de 10 appareils au plus par appel
+  (`POST /v2/devices/api/get`, **documenté**, « v2.0-beta »). Seul l'hôte `*.shelly.cloud` donné
+  dans `SHELLY_SERVER` reçoit la clé. Aucune commande n'est envoyée aux prises (lecture seule).
+- **Points d'accès non documentés** : la liste des appareils passe par `/interface/device/list`,
+  puis, en repli, par `/device/all_status` ; ni l'un ni l'autre n'est dans la documentation
+  officielle (« utilisé par la communauté, à vérifier », [api-notes.md](api-notes.md#prises-shelly-shelly-cloud-control-api-s-117)).
+  Ils peuvent disparaître sans préavis. **Conduite à tenir** : si les deux répondent une erreur ou
+  un format inconnu, la source Shelly est marquée en échec dans l'état des sources (les autres
+  sources continuent), sans nouvel essai ni contournement ; l'historique déjà gardé reste lisible.
+  On relit alors la documentation officielle : si elle propose une liste des appareils, le
+  collecteur passe dessus ; sinon on ajoute une variable listant les identifiants des prises (lus
+  dans l'application Shelly), pour ne garder que le point d'accès documenté. `/statistics/relay/consumption`
+  (historique, non documenté) n'est pas utilisé.
+- **Gardé** : dans `data/shelly.enc.json`, **chiffré** : par prise, un pseudonyme (`p0`, `p1`…), son
+  identifiant Shelly, son nom tel que saisi dans l'application, le modèle, le dernier relevé du
+  compteur et des **Wh par jour**. Ni puissance instantanée, ni adresse IP, ni réseau Wi-Fi, ni
+  localisation, ni courbe intra-journalière.
+- **Secret** : `SHELLY_AUTH_KEY` et `SHELLY_SERVER` dans les secrets GitHub. La clé change si le mot
+  de passe Shelly change (issue « 🔑 Jeton à renouveler »). Elle n'apparaît jamais dans les journaux
+  (les URL qui la portent ne sont pas journalisées).
+- **Minimisation** : une prise révèle l'usage d'un appareil (lave-linge, bouilloire…), donc des
+  habitudes. Le pas journalier suffit à l'usage (« Autres usages en détail ») ; rien n'est envoyé à
+  l'IA. Nommer les prises d'après l'appareil (« Réfrigérateur ») et non d'après une personne.
+- **Consentement** : les prises mesurent un usage commun du foyer ; informer les membres du foyer
+  avant d'en équiper une pièce privée (chambre, bureau d'un colocataire).
+
+### Home Assistant : ce qui est importé, ce qui est gardé, où
+
+- **Appelé** : rien par le collecteur. Le foyer exporte lui-même, sur son réseau local (API REST
+  `/api/history/period`, panneau « Historique » en CSV, ou statistiques long terme du
+  [recorder](https://www.home-assistant.io/integrations/recorder/)), puis lance
+  `python -m collector import-ha` sur son ordinateur ([import-ha.md](import-ha.md)). GitHub n'atteint
+  jamais Home Assistant (aucun port ouvert, aucun jeton HA dans les secrets).
+- **Gardé** : dans `data/ha.enc.json`, **chiffré** : par capteur, un pseudonyme (`h0`…), l'identifiant
+  d'entité, le nom affiché, le type reconnu, l'unité, et **un agrégat par jour local** (durée ouverte
+  et nombre d'ouvertures ; kWh ; min / max / moyenne). Les horodatages des états, les attributs et
+  les autres entités de l'export ne sont **pas** gardés ([schéma](import-ha.schema.json)).
+- **Fichier d'export** : en clair, il contient l'historique détaillé. À **ne pas commiter** et à
+  supprimer après l'import (rappelé par [import-ha.md](import-ha.md)). Le collecteur n'en affiche
+  que des comptes et des positions, jamais un nom ni une valeur.
+- **Minimisation** : capteurs d'ouverture des chambres soumis à la règle des chambres (détail
+  masqué, S-13.5) ; comparaison avec le radiateur au jour, pas à l'heure ; rien n'est envoyé à l'IA.
+  N'exporter que les entités utiles (`filter_entity_id`) : un capteur de présence ou une serrure n'a
+  rien à faire dans l'import.
+- **Consentement** : un capteur d'ouverture ou de présence décrit les allées et venues ; informer le
+  foyer de ce qui est importé, comme pour le relevé horaire (section 3).
+
+### Suites de l'audit des données (#214 à #219, #224)
+
+L'audit ([audit-donnees.md](audit-donnees.md)) propose de garder des champs déjà reçus des mêmes
+services ; aucun nouveau service n'est appelé. Chacune de ces issues, quand elle ajoute un champ,
+**met à jour cette page** (ligne du service, ce qui est gardé) dans la même PR. État au 9 novembre 2026 :
+toutes ouvertes.
+
+| Issue | Service | Champ ajouté | Point d'attention (minimisation) |
+|---|---|---|---|
+| #214 (S-1.20) | Intuis | `reachable`, `connection_status`, `last_seen` | heures hors ligne par pièce, pas de suivi plus fin |
+| #215 (S-1.21) | Netatmo | batterie et radio des modules | technique, sans lien avec les habitudes |
+| #216 (S-1.22) | Intuis, Netatmo | firmware, `setup_date` | technique |
+| #217 (S-1.23) | Intuis | température et consigne **horaires** des pièces | révèle les horaires de présence : chambres regroupées, chiffré |
+| #218 (S-13.8) | Intuis | heures d'anticipation et d'abaissement | heures par pièce et par jour, comme S-13.5 |
+| #219 (S-1.25) | Enedis (Conso API) | heure du pic de puissance | une heure par jour, chiffrée |
+| #224 (S-1.26) | Intuis | énergie et température au pas 30 min, 4 ans | la plus révélatrice : relire l'analyse d'impact (S-13.5) avant de l'activer |
 
 ## 3. Vie privée des membres du foyer (RGPD)
 
@@ -107,3 +176,14 @@ chaque service et on met à jour la date de lecture ci-dessous. Une date de plus
 - Contourner une limite technique (quota, blocage) : un blocage arrête la collecte de la source,
   qui reprend la nuit suivante.
 - Proposer le collecteur comme service hébergé pour d'autres foyers.
+
+## Sources (lues le 9 novembre 2026)
+
+- Shelly : [Cloud Control API](https://shelly-api-docs.shelly.cloud/cloud-control-api/),
+  [communication v2](https://shelly-api-docs.shelly.cloud/cloud-control-api/communication-v2),
+  [conditions de l'Integrator API](https://shelly-api-docs.shelly.cloud/integrator-api/terms-and-conditions)
+  (offre distincte, pour comparaison), [EU Data Act chez Shelly](https://www.shelly.com/fr/blogs/documentation/eu-data-act).
+- Home Assistant : [authentification et jetons longue durée](https://www.home-assistant.io/docs/authentication/),
+  [recorder (durée de conservation, statistiques)](https://www.home-assistant.io/integrations/recorder/),
+  [licence Apache 2.0](https://github.com/home-assistant/core/blob/dev/LICENSE.md).
+- RGPD, exemption domestique : [règlement (UE) 2016/679, article 2.2.c](https://eur-lex.europa.eu/eli/reg/2016/679/oj).

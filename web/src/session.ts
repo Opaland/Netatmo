@@ -5,6 +5,7 @@
 //   foreground), the app locks: decrypted data, the remembered key and the GitHub token
 //   are forgotten. The last interaction is also saved, so closing the tab or reloading
 //   the page does not get around the timer.
+import { lsKey } from './scope';
 
 export const REMEMBER_DAYS = 30;
 const DAY_MS = 86_400_000;
@@ -25,7 +26,7 @@ export function freshKey(entry: unknown, now = Date.now()): CryptoKey | null {
   return key;
 }
 
-const ACTIVITY_KEY = 'intuis-history:activity';
+const ACTIVITY_KEY = lsKey('activity');
 const EVENTS = ['pointerdown', 'keydown', 'wheel', 'touchstart'] as const;
 
 function storedActivity(): number | null {

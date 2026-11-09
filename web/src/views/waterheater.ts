@@ -8,9 +8,10 @@ import { barChart, cssVar, gridHeatmap } from '../charts';
 import { belowThreshold, hcVerdict, hourByMonth, peakExtraCost, waterHeaterHc } from '../checks';
 import { activeRooms, esc, fmtEur, fmtKwh, hcHpAt, lastDay, nf0, offCol, series, table, tableToggle } from '../ui';
 import { html } from '../trusted';
+import { lsKey } from '../scope';
 import { lazyCard } from '../lazy';
 
-const LS_THRESHOLD = 'intuis-history:hc-threshold';
+const LS_THRESHOLD = lsKey('hc-threshold');
 function threshold(): number {
   try {
     const v = Number(localStorage.getItem(LS_THRESHOLD));

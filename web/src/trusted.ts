@@ -11,7 +11,7 @@
 // A second policy, `default`, covers third-party code only, as narrowly as possible:
 // - HTML: the empty string (ECharts empties its tooltip with `innerHTML = ''`, harmless)
 //   and nothing else, so a forgotten `innerHTML = '<…>'` is still refused and reported;
-// - script URL: the service worker of this site (workbox-window registers `sw.js`).
+// - script URL: the service worker of this app, at its exact path (workbox-window registers `sw.js`).
 // No script policy at all: eval and `new Function` stay blocked.
 
 type Policy = { createHTML(s: string): unknown };
@@ -152,11 +152,15 @@ export function guard(s: string): string {
 
 const tt = (globalThis as { trustedTypes?: TT }).trustedTypes;
 const policy: Policy | null = tt ? tt.createPolicy('energie', { createHTML: guard }) : null;
-/** Exported for the unit tests: only this site's service worker script. */
-export function serviceWorkerUrl(s: string, base = globalThis.location?.href): string | null {
+/**
+ * Exported for the unit tests: only this app's service worker script, at its exact path
+ * (#229: on <compte>.github.io every Pages site of the account shares the origin, so
+ * « same origin + /sw.js » would also accept another site's worker).
+ */
+export function serviceWorkerUrl(s: string, base = globalThis.document?.baseURI ?? globalThis.location?.href): string | null {
   try {
     const u = new URL(s, base);
-    return u.origin === new URL(base).origin && /\/sw\.js$/.test(u.pathname) && !u.search ? s : null;
+    return u.href === new URL('sw.js', base).href && !u.search && !u.hash ? s : null;
   } catch {
     return null;
   }

@@ -6,7 +6,9 @@
 import type { Dataset } from './data';
 import { html } from './trusted';
 
-export const DATA_CACHE = 'energy-data';
+// #229: name scoped to the repository at build time (vite.config.ts).
+import { DATA_CACHE } from './scope';
+export { DATA_CACHE };
 
 const dayLabel = (day: string) =>
   new Date(`${day}T12:00:00Z`).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' });

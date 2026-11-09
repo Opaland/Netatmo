@@ -6,6 +6,7 @@ import { type Coverage, computeCoverage, gapMonths, uncertainDays } from '../che
 import { bucketMarks, countIn, shortDate, uncertainText } from '../periods';
 import { activeRooms, esc, lastDay, roomName, table } from '../ui';
 import { html } from '../trusted';
+import { lsKey } from '../scope';
 import { lazyCard } from '../lazy';
 
 let cached: Coverage | null = null;
@@ -22,7 +23,7 @@ export function coverage(): Coverage {
 export { uncertainDays };
 
 // S-1.10: rebuilding lost days is opt-in (remembered on this device) and lazily loaded.
-const RECON_KEY = 'intuis-history:recon';
+const RECON_KEY = lsKey('recon');
 let reconOn = (() => {
   try {
     return localStorage.getItem(RECON_KEY) === '1';
