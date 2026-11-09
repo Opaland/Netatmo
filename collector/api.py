@@ -3,7 +3,7 @@
 This is the backend used by the official "Intuitiv with Netatmo" / "Intuis Connect"
 mobile app. It is not a documented public API: endpoints may change without notice.
 The client stays gentle with it: one call per second at most, honours Retry-After
-and backs off on 429.
+(capped at MAX_RETRY_AFTER seconds) and backs off on 429, 5xx and network errors.
 """
 
 from __future__ import annotations
@@ -15,9 +15,9 @@ from typing import Any
 import httpx
 
 from . import schema
-from .budget import METER
 from .config import Settings
-from .errors import SourceError, error_code, guarded
+from .errors import SourceError, error_code
+from .http import Paced
 
 log = logging.getLogger(__name__)
 
@@ -25,6 +25,8 @@ log = logging.getLogger(__name__)
 MAX_POINTS = 1024
 SCALE_SECONDS = {"30min": 1800, "1hour": 3600, "3hours": 10800, "1day": 86400, "1week": 604800, "1month": 2678400}
 FALLBACK_API_BASE = "https://app-prod.intuis-sas.com"
+ATTEMPTS = 5  # per call; every attempt counts in the call budget (MAX_CALLS_INTUIS)
+MAX_RETRY_AFTER = 120  # seconds: a larger Retry-After would hold the nightly runner for hours (#270)
 
 
 class ApiError(SourceError):
@@ -38,8 +40,7 @@ class IntuisClient:
         self.s = settings
         self.http = http or httpx.Client(timeout=30.0)
         self.base = settings.api_base
-        self.min_interval = min_interval
-        self._last_call = 0.0
+        self.api = Paced(self.http, "intuis", min_interval)
         self._access_token: str | None = None
         self._refresh_token: str | None = None
         self._expires_at = 0.0
@@ -53,8 +54,7 @@ class IntuisClient:
             **data,
         }
         try:
-            with METER.call("intuis"):
-                resp = self.http.post(f"{self.base}/oauth2/token", data=payload)
+            resp = self.api.post(f"{self.base}/oauth2/token", data=payload)
         except httpx.TransportError as exc:
             if self.base != FALLBACK_API_BASE:
                 log.warning("%s injoignable (%s), essai de %s", self.base, type(exc).__name__, FALLBACK_API_BASE)
@@ -93,26 +93,40 @@ class IntuisClient:
         return self._access_token  # type: ignore[return-value]
 
     # ---------------------------------------------------------------- calls
-    def _throttle(self) -> None:
-        wait = self._last_call + self.min_interval - time.monotonic()
-        if wait > 0:
-            time.sleep(wait)
-        self._last_call = time.monotonic()
+    @staticmethod
+    def _delay(resp: httpx.Response | None, attempt: int) -> int:
+        """Wait before the next attempt: Retry-After when given (capped), else a growing backoff."""
+        retry_after = resp.headers.get("Retry-After", "").strip() if resp is not None else ""
+        if retry_after.isdigit():
+            return min(int(retry_after), MAX_RETRY_AFTER)
+        return min(15 * (attempt + 1), MAX_RETRY_AFTER)
 
     def _call(self, method: str, path: str, *, json: Any = None, data: Any = None) -> Any:
-        for attempt in range(5):
-            self._throttle()
+        relogged = False
+        for attempt in range(ATTEMPTS):
+            last = attempt == ATTEMPTS - 1
             headers = {"Authorization": f"Bearer {self._ensure_token()}"}
-            with guarded(ApiError, path), METER.call("intuis"):
-                resp = self.http.request(method, f"{self.base}{path}", headers=headers, json=json, data=data)
-            if resp.status_code in (401, 403) and attempt == 0:
-                # Token invalidated server-side: force a fresh login once.
+            try:
+                resp = self.api.request(method, f"{self.base}{path}", headers=headers, json=json, data=data)
+            except httpx.TransportError as exc:
+                # Timeout, reset connection…: transient, retried like a 5xx (#270).
+                if last:
+                    category = "timeout" if isinstance(exc, httpx.TimeoutException) else "network"
+                    raise ApiError(endpoint=path, category=category, code=type(exc).__name__) from None
+                delay = self._delay(None, attempt)
+                log.warning("%s → erreur réseau (%s), nouvelle tentative dans %ss", path, type(exc).__name__, delay)
+                time.sleep(delay)
+                continue
+            if resp.status_code in (401, 403) and not relogged:
+                # Token invalidated server-side: force a fresh login, once per call.
+                relogged = True
                 self._access_token = None
                 self._refresh_token = None
                 continue
             if resp.status_code == 429 or resp.status_code >= 500:
-                retry_after = resp.headers.get("Retry-After", "")
-                delay = int(retry_after) if retry_after.isdigit() else 15 * (attempt + 1)
+                if last:
+                    break
+                delay = self._delay(resp, attempt)
                 log.warning("%s → HTTP %s, nouvelle tentative dans %ss", path, resp.status_code, delay)
                 time.sleep(delay)
                 continue
@@ -122,7 +136,7 @@ class IntuisClient:
             if isinstance(body, dict) and "error" in body:
                 raise ApiError(endpoint=path, category="api", code=error_code(resp))
             return body
-        raise ApiError(endpoint=path, status=resp.status_code, hint="échec après plusieurs tentatives")
+        raise ApiError(endpoint=path, hint=f"échec après {ATTEMPTS} tentatives")
 
     def _checked(self, spec: Any, method: str, path: str, **kw: Any) -> Any:
         """S-1.13: a response whose shape changed raises schema.FormatError (never ApiError,

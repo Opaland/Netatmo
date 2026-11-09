@@ -21,9 +21,10 @@ from zoneinfo import ZoneInfo
 import httpx
 
 from . import schema
-from .budget import METER
-from .errors import SourceError, error_code, guarded, raise_for_status
+from .errors import SourceError, error_code, raise_for_status
+from .http import Paced
 from .model import parse_measure_columns
+from .schema import FormatError
 from .storage import Store
 
 log = logging.getLogger(__name__)
@@ -71,8 +72,8 @@ class Station:
         self.seed_token = seed_token
         self.http = http or httpx.Client(timeout=30.0)
         self.access = ""
-        self.min_interval = min_interval
-        self._last_call = 0.0
+        # Gentle with the public API (50 requests / 10 s, 500 / h per user).
+        self.api = Paced(self.http, "netatmo", min_interval, StationError)
 
     # ------------------------------------------------------------ auth (rotating refresh token)
     def _refresh_token(self) -> str:
@@ -84,16 +85,15 @@ class Station:
         return self.seed_token
 
     def login(self) -> None:
-        with guarded(StationError, "/oauth2/token"), METER.call("netatmo"):
-            resp = self.http.post(
-                f"{API}/oauth2/token",
-                data={
-                    "grant_type": "refresh_token",
-                    "refresh_token": self._refresh_token(),
-                    "client_id": self.client_id,
-                    "client_secret": self.client_secret,
-                },
-            )
+        resp = self.api.post(
+            f"{API}/oauth2/token",
+            data={
+                "grant_type": "refresh_token",
+                "refresh_token": self._refresh_token(),
+                "client_id": self.client_id,
+                "client_secret": self.client_secret,
+            },
+        )
         if resp.status_code != 200:
             code = error_code(resp)
             hint = {
@@ -109,21 +109,25 @@ class Station:
                 hint=hint,
                 auth=code == "invalid_grant" or resp.status_code in (401, 403),
             )
-        body = schema.check("Station Netatmo", "/oauth2/token", schema.NETATMO_TOKEN, resp.json())
+        try:
+            raw = resp.json()
+        except ValueError:
+            raise FormatError("Station Netatmo", "/oauth2/token", "(réponse)", "n'est plus du JSON") from None
+        body = schema.check("Station Netatmo", "/oauth2/token", schema.NETATMO_TOKEN, raw)
         self.access = body["access_token"]
         seed_hash = hashlib.sha256(self.seed_token.encode()).hexdigest()[:16]
         self.store.replace(TOKEN_DOC, {"seed": seed_hash, "refresh_token": body["refresh_token"]})
+        # The previous refresh token is now consumed: write the new one to disk at once, so that
+        # a failure later in the collection cannot lose it (#262; the workflow commits it anyway).
+        self.store.flush(TOKEN_DOC)
 
     def _get(self, path: str, params: dict, spec: object = None) -> dict:
-        # Gentle with the public API (50 requests / 10 s, 500 / h per user).
-        wait = self._last_call + self.min_interval - time.monotonic()
-        if wait > 0:
-            time.sleep(wait)
-        self._last_call = time.monotonic()
-        with guarded(StationError, path), METER.call("netatmo"):
-            resp = self.http.get(f"{API}{path}", params=params, headers={"Authorization": f"Bearer {self.access}"})
+        resp = self.api.get(f"{API}{path}", params=params, headers={"Authorization": f"Bearer {self.access}"})
         raise_for_status(resp, StationError, path)
-        body = resp.json()
+        try:
+            body = resp.json()
+        except ValueError:
+            raise FormatError("Station Netatmo", path, "(réponse)", "n'est plus du JSON") from None
         return schema.check("Station Netatmo", path, spec, body) if spec is not None else body
 
     # ------------------------------------------------------------ data

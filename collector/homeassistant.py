@@ -20,7 +20,9 @@ Stored (decrypted) document, published as docs/import-ha.schema.json:
    "imported": "YYYY-MM-DDTHH:MM:SS+00:00"}
 
 From history files only whole local days are kept (the first and last days of an export are
-partial). Messages and logs give counts only, never an entity, a name or a value.
+partial). From statistics, a partial first or last day is kept only when nothing was imported
+for that day before: it never replaces a value already stored. Messages and logs give counts
+only, never an entity, a name or a value.
 """
 
 from __future__ import annotations
@@ -269,15 +271,30 @@ def _numeric_days(points: list[tuple[float, float]], tz: str) -> dict[str, dict]
     }
 
 
-def _stat_days(s: Series, k: str, tz: str) -> dict[str, dict]:
+def _day_seconds(day: str, zone: ZoneInfo) -> float:
+    """Length of a local day (23 or 25 h on the DST changes)."""
+    d = datetime.fromisoformat(day).date()
+    start = datetime.combine(d, datetime.min.time(), zone)
+    end = datetime.combine(d + timedelta(days=1), datetime.min.time(), zone)
+    return end.timestamp() - start.timestamp()
+
+
+def _stat_days(s: Series, k: str, tz: str) -> tuple[dict[str, dict], set[str]]:
+    """(daily aggregates, days only partly covered by the export). A statistics row covers
+    `step` seconds (an hour, a day…: the smallest gap between two rows; a single row counts as
+    covering its day); a day whose rows cover less than the whole day is partial (#272)."""
     zone = ZoneInfo(tz)
     rows = sorted(s.stats, key=lambda r: _ts(r["start"]) or 0)
+    starts = [_ts(r["start"]) or 0 for r in rows]
+    gaps = [b - a for a, b in zip(starts, starts[1:], strict=False) if b > a]
+    step = min(gaps) if gaps else None
     out: dict[str, dict] = {}
+    covered: dict[str, float] = defaultdict(float)
     if k == "energy":
         factor = ENERGY_UNITS.get(s.unit.lower(), 1.0)
         prev_sum = None
-        for r in rows:
-            day = datetime.fromtimestamp(_ts(r["start"]) or 0, zone).date().isoformat()
+        for r, t in zip(rows, starts, strict=True):
+            day = datetime.fromtimestamp(t, zone).date().isoformat()
             change = _float(r.get("change"))
             total = _float(r.get("sum"))
             if change is None and total is not None and prev_sum is not None:
@@ -286,25 +303,32 @@ def _stat_days(s: Series, k: str, tz: str) -> dict[str, dict]:
             if change is not None:
                 cell = out.setdefault(day, {"kwh": 0.0})
                 cell["kwh"] = round(cell["kwh"] + change * factor, 3)
-        return out
-    acc: dict[str, list[tuple[float | None, float | None, float | None]]] = defaultdict(list)
-    for r in rows:
-        day = datetime.fromtimestamp(_ts(r["start"]) or 0, zone).date().isoformat()
-        acc[day].append((_float(r.get("min")), _float(r.get("max")), _float(r.get("mean"))))
-    for day, vals in acc.items():
-        means = [m for _a, _b, m in vals if m is not None]
-        if not means:
-            continue
-        mins = [a for a, _b, _m in vals if a is not None] or means
-        maxs = [b for _a, b, _m in vals if b is not None] or means
-        out[day] = {"min": round(min(mins), 2), "max": round(max(maxs), 2), "mean": round(sum(means) / len(means), 2)}
-    return out
+                covered[day] += step or 0
+    else:
+        acc: dict[str, list[tuple[float | None, float | None, float | None]]] = defaultdict(list)
+        for r, t in zip(rows, starts, strict=True):
+            day = datetime.fromtimestamp(t, zone).date().isoformat()
+            acc[day].append((_float(r.get("min")), _float(r.get("max")), _float(r.get("mean"))))
+        for day, vals in acc.items():
+            means = [m for _a, _b, m in vals if m is not None]
+            if not means:
+                continue
+            mins = [a for a, _b, _m in vals if a is not None] or means
+            maxs = [b for _a, b, _m in vals if b is not None] or means
+            out[day] = {
+                "min": round(min(mins), 2),
+                "max": round(max(maxs), 2),
+                "mean": round(sum(means) / len(means), 2),
+            }
+            covered[day] = len(means) * (step or 0)
+    partial = set() if step is None else {d for d in out if covered[d] < _day_seconds(d, zone) - 1}
+    return out, partial
 
 
 def aggregate(s: Series, tz: str) -> tuple[str, dict[str, dict]]:
     k = kind(s)
     if s.stats:
-        return k, _stat_days(s, k, tz)
+        return k, _stat_days(s, k, tz)[0]
     if k in ("opening", "binary"):
         return k, _binary_days(s.points, tz)
     nums = [(t, f) for t, v in s.points if (f := _float(v)) is not None]
@@ -317,7 +341,8 @@ def aggregate(s: Series, tz: str) -> tuple[str, dict[str, dict]]:
 # ---------------------------------------------------------------- storing
 def import_file(store: Store, path: Path, tz: str) -> dict[str, int]:
     """Merge the file's daily aggregates into ha.enc.json (in memory; the caller saves).
-    Returns counts only: sensors, days, skipped (sensors without a whole day)."""
+    Returns counts only: sensors, days, skipped (sensors without a whole day), partial_kept
+    (partial statistics days that left a value already imported in place)."""
     return import_bytes(store, path.read_bytes(), tz)
 
 
@@ -326,10 +351,11 @@ def import_bytes(store: Store, raw: bytes, tz: str) -> dict[str, int]:
     series = parse(raw)
     doc = store.doc(DOC)
     known = {v.get("entity"): k for k, v in doc.get("sensors", {}).items()}
-    counts = {"sensors": 0, "days": 0, "skipped": 0}
+    counts = {"sensors": 0, "days": 0, "skipped": 0, "partial_kept": 0}
     for entity in sorted(series):
         s = series[entity]
-        k, days = aggregate(s, tz)
+        k = kind(s)
+        days, partial = _stat_days(s, k, tz) if s.stats else (aggregate(s, tz)[1], set())
         if not days:
             counts["skipped"] += 1
             continue
@@ -339,7 +365,13 @@ def import_bytes(store: Store, raw: bytes, tz: str) -> dict[str, int]:
         name = s.name or old.get("name") or entity
         sensor = {"entity": entity, "name": name, "kind": k, "unit": s.unit or old.get("unit", "")}
         store.put(DOC, "sensors", key, None, sensor)
+        stored = doc.get("daily", {}).get(key, {})
         for day, value in days.items():
+            # Statistics may start or end in the middle of a day: such a partial day never
+            # replaces a value already imported, which may be a complete day (#272).
+            if day in partial and day in stored:
+                counts["partial_kept"] += 1
+                continue
             store.put(DOC, "daily", key, day, value)
         counts["sensors"] += 1
         counts["days"] += len(days)

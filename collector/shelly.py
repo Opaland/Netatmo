@@ -35,8 +35,8 @@ from zoneinfo import ZoneInfo
 import httpx
 
 from . import schema
-from .budget import METER
-from .errors import SourceError, guarded, raise_for_status
+from .errors import SourceError, raise_for_status
+from .http import Paced
 from .schema import FormatError
 from .storage import Store
 
@@ -162,20 +162,12 @@ def add_reading(store: Store, key: str, ts: float, total: float, tz: str) -> int
 # ---------------------------------------------------------------- API
 class _Api:
     def __init__(self, http: httpx.Client, base: str, key: str, min_interval: float | None) -> None:
-        self.http, self.base, self.key = http, base, key
-        self.min_interval = MIN_INTERVAL if min_interval is None else min_interval
-        self.last = 0.0
+        self.base, self.key = base, key
+        self.api = Paced(http, "shelly", MIN_INTERVAL if min_interval is None else min_interval, ShellyError)
 
     def post(self, path: str, endpoint: str, **kw: Any) -> Any:
-        wait = self.last + self.min_interval - time.monotonic()
-        if wait > 0:
-            time.sleep(wait)
-        try:
-            # httpx messages carry the URL, hence the key: guarded() never prints them.
-            with guarded(ShellyError, endpoint), METER.call("shelly"):
-                resp = self.http.post(f"{self.base}{path}", **kw)
-        finally:
-            self.last = time.monotonic()
+        # httpx messages carry the URL, hence the key: Paced(error=ShellyError) never prints them.
+        resp = self.api.post(f"{self.base}{path}", **kw)
         if resp.status_code in (401, 403):
             raise ShellyError(
                 endpoint=endpoint,
