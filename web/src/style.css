@@ -918,3 +918,30 @@ body.is-simple .kpi-value {
 body.is-simple .kpis {
   grid-template-columns: 1fr;
 }
+
+.ko-red {
+  color: var(--bad);
+}
+
+.skeleton {
+  padding-top: 20px;
+  display: grid;
+  gap: 12px;
+}
+.sk {
+  border-radius: var(--radius);
+  background: linear-gradient(90deg, var(--surface-1), var(--grid), var(--surface-1));
+  background-size: 200% 100%;
+  animation: sk 1.2s ease-in-out infinite;
+}
+.sk-title { height: 28px; width: 50%; }
+.sk-card { height: 72px; }
+.sk-kpi { height: 96px; }
+.sk-chart { height: 300px; }
+@keyframes sk {
+  from { background-position: 100% 0; }
+  to { background-position: -100% 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sk { animation: none; }
+}

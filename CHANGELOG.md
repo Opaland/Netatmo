@@ -20,6 +20,11 @@
 - « Jours inhabituels » : écarts nets à la signature énergétique (règle déterministe, sans IA).
 - Mode simple : verdict et chiffres clés en grands caractères.
 - Paramètres : ce qui est public, ce qui part chez des tiers.
+- Changement de puissance souscrite déduit du Linky (premier dépassement de l'ancienne puissance),
+  ajouté au contrat d'un clic. Linky : lecture du format Enedis 2026.
+- État de chaque source (dernier succès, dernier échec) dans Paramètres et le résumé de collecte.
+- Accessibilité : résumé textuel de chaque graphique pour les lecteurs d'écran ; écran de chargement.
+- Tests visuels automatiques de la démo (Playwright, 3 appareils, 5 vues) dans la CI.
 
 ## v1.1 — novembre 2026 : comprendre sa consommation
 
