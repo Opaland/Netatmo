@@ -1,0 +1,74 @@
+name: Collecte quotidienne
+
+on:
+  schedule:
+    # 04:17 UTC (≈ 5-6 h à Paris) : les données de la veille sont disponibles après 2 h.
+    - cron: "17 4 * * *"
+  workflow_dispatch:
+    inputs:
+      backfill:
+        description: "Récupérer tout l'historique disponible"
+        type: boolean
+        default: false
+
+concurrency:
+  group: collect
+  cancel-in-progress: false
+
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      configured: ${{ steps.check.outputs.configured }}
+    env:
+      INTUIS_USERNAME: ${{ secrets.INTUIS_USERNAME }}
+      INTUIS_PASSWORD: ${{ secrets.INTUIS_PASSWORD }}
+      INTUIS_CLIENT_ID: ${{ secrets.INTUIS_CLIENT_ID }}
+      INTUIS_CLIENT_SECRET: ${{ secrets.INTUIS_CLIENT_SECRET }}
+      DATA_PASSPHRASE: ${{ secrets.DATA_PASSPHRASE }}
+      INTUIS_ROOM_CATEGORIES: ${{ vars.INTUIS_ROOM_CATEGORIES }}
+    steps:
+      - id: check
+        run: |
+          if [ -z "$INTUIS_USERNAME" ] || [ -z "$DATA_PASSPHRASE" ]; then
+            echo "::notice::Secrets non configurés : voir le README (section Installation). Collecte ignorée."
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/checkout@v4
+        if: steps.check.outputs.configured == 'true'
+      - uses: actions/setup-python@v5
+        if: steps.check.outputs.configured == 'true'
+        with:
+          python-version: "3.12"
+          cache: pip
+      - if: steps.check.outputs.configured == 'true'
+        run: pip install .
+      - name: Collecte
+        if: steps.check.outputs.configured == 'true'
+        run: python -m collector -v ${{ inputs.backfill && 'backfill' || 'sync' }}
+      - name: Commit des données chiffrées
+        if: steps.check.outputs.configured == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/
+          if git diff --cached --quiet; then
+            echo "Aucune nouvelle donnée."
+          else
+            git commit -m "data: collecte du $(date -u +%Y-%m-%d)"
+            git push
+          fi
+
+  # A push made with GITHUB_TOKEN does not trigger other workflows: deploy explicitly.
+  deploy:
+    needs: collect
+    if: needs.collect.outputs.configured == 'true'
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    uses: ./.github/workflows/deploy.yml

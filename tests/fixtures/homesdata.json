@@ -1,0 +1,13 @@
+{"body": {"homes": [{"id": "home1", "name": "Maison", "timezone": "Europe/Paris",
+  "rooms": [
+    {"id": "100", "name": "Salon", "type": "livingroom", "module_ids": ["m1", "m2"]},
+    {"id": "200", "name": "Chambre", "type": "bedroom", "module_ids": ["m3"]},
+    {"id": "300", "name": "Chauffe-eau", "type": "custom", "module_ids": ["m4"]}
+  ],
+  "modules": [
+    {"id": "gw", "type": "NMG", "name": "Passerelle"},
+    {"id": "m1", "type": "NMH", "bridge": "gw", "room_id": "100"},
+    {"id": "m2", "type": "NMH", "bridge": "gw", "room_id": "100"},
+    {"id": "m3", "type": "NMH", "bridge": "gw", "room_id": "200"},
+    {"id": "m4", "type": "NMW", "bridge": "gw", "room_id": "300"}
+  ]}]}, "status": "ok"}

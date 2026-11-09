@@ -1,0 +1,5 @@
+{"body": {"home": {"id": "home1", "rooms": [
+  {"id": "100", "measures": [{"beg_time": 1704063600, "step_time": 86400, "value": [[1000, 200, null], [1500, null, null]]}]},
+  {"id": "200", "measures": [{"beg_time": 1704063600, "step_time": 86400, "value": [[300], [400]]}]},
+  {"id": "300", "measures": []}
+]}}, "status": "ok"}
