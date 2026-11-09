@@ -104,10 +104,13 @@ documenté pour Intuis. La sortie ne donne, par type et par point d'accès, que 
 
 | Type | `gethomemeasure` | `getroommeasure` |
 |---|---|---|
-| (à compléter après le diagnostic réel) | | |
+| les 20 types candidats | acceptés, **0 point** sur 7 jours | acceptés, **0 point** sur 7 jours |
+| `temperature` (témoin) | des points | des points |
 
-**Décision** (à noter aussi dans #162) : si un type répond avec des points, une collecte nocturne de
-ce type remplace le relevé horaire ; sinon le relevé horaire ci-dessous est activé.
+Résultat du diagnostic réel du 9 novembre 2026 (#172, #162).
+
+**Décision** (notée dans #162) : aucun historique n'est servi, donc le relevé horaire ci-dessous
+(S-13.2) est la seule source ; il s'active avec la variable `ROOM_STATE_HOURLY`.
 
 ### Relevé horaire de `homestatus` (S-13.2 à S-13.6)
 

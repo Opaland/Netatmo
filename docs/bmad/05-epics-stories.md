@@ -8,19 +8,19 @@ dans les [issues GitHub](https://github.com/Opaland/Netatmo/issues) (une par ré
 
 | Épopée | Objectif | Version | Statut global |
 |---|---|---|---|
-| E1 | Collecte fiable et observable | 1.0-1.4 | Fait ; Shelly, revues par agents en v1.4 |
+| E1 | Collecte fiable et observable | 1.0-1.5 | Fait ; suites de l'audit des données en v1.5 |
 | E2 | Coût réel en euros | 1.1 | Fait (tarif réglementé EDF, open data CRE) |
 | E3 | Météo, DJU, signature, station Netatmo complète | 1.1-1.2 | Fait / En cours |
 | E4 | Visualisations « comprendre » | 1.1 | Fait |
 | E5 | Synthèse IA | 1.1-2 | Fait / conditionnel |
-| E6 | Rapport annuel | 1.1-1.4 | Fait ; surfaces et travaux en v1.4 |
-| E7 | Accessibilité, performance, UX famille | 1.2-1.6 | Fait ; langage clair en v1.4, design system en v1.6 |
-| E8 | Sécurité et confidentialité | 1.2-1.3 | Fait ; branche `data` en v1.4 |
-| E9 | Domotique : volets Wiser (étude), pont local, Home Assistant | 1.2-1.4 | Mesure d'hiver ; étude HA + Zigbee en v1.4 |
+| E6 | Rapport annuel | 1.1-1.4 | Fait |
+| E7 | Accessibilité, performance, UX famille | 1.2-1.6 | Fait ; budget de taille en v1.5, design system en v1.6 |
+| E8 | Sécurité et confidentialité | 1.2-2 | Fait ; branche `data` en v2 |
+| E9 | Domotique : volets Wiser (étude), pont local, Home Assistant | 1.2-1.6 | Étude HA + Zigbee faite (no-go cet hiver) ; mesure des volets en v1.6 |
 | E10 | Diffusion | 2 | À faire |
 | E11 | Confort et santé de l'air (station Netatmo) | 1.3 | Fait |
-| E12 | Partage et famille | 1.3-2 | Fait ; alerte froid, mode locataire en v1.4 |
-| E13 | Fenêtres ouvertes et états des radiateurs (`homestatus`) | 1.4 | À faire |
+| E12 | Partage et famille | 1.3-2 | Fait |
+| E13 | Fenêtres ouvertes et états des radiateurs (`homestatus`) | 1.4-1.5 | Fait en v1.4 (relevé horaire à activer) ; anticipation et abaissement en v1.5 |
 
 ## E1 · Collecte fiable et observable
 
@@ -42,7 +42,7 @@ dans les [issues GitHub](https://github.com/Opaland/Netatmo/issues) (une par ré
 |---|---|---|---|---|---|
 | S-2.1 | En tant que propriétaire, je veux conserver `$1` et `$2` séparément, afin de calculer HP et HC | G une réponse avec `$1`/`$2` · Q la collecte tourne · A `tariffs[room][jour] = [Wh $0, Wh $1, Wh $2]` | M | M | Fait (v1.1) |
 | S-2.2 | En tant que gestionnaire du budget, je veux le prix HP/HC et l'abonnement en vigueur chaque jour (tarif réglementé EDF, open data CRE, ou prix saisis), afin d'avoir un coût juste sur plusieurs années | G deux grilles de prix datées · Q j'affiche 2024 et 2025 · A chaque jour utilise la grille en vigueur ; l'abonnement est réparti au prorata | M | M | Fait (v1.1) |
-| S-2.3 | En tant que gestionnaire du budget, je veux recouper le coût avec une facture, afin d'avoir confiance | G une facture réelle · Q je compare la période · A l'écart est expliqué (périmètre : chauffage + eau chaude seulement) | S | S | À faire |
+| S-2.3 | En tant que gestionnaire du budget, je veux recouper le coût avec une facture, afin d'avoir confiance | G une facture réelle · Q je compare la période · A l'écart est expliqué (périmètre : chauffage + eau chaude seulement) | S | S | Fait, v1.4 (#11) |
 
 ## E3 · Météo, DJU et signature énergétique
 
@@ -89,7 +89,7 @@ dans les [issues GitHub](https://github.com/Opaland/Netatmo/issues) (une par ré
 |---|---|---|---|---|---|
 | S-6.1 | En tant que propriétaire, je veux un rapport annuel imprimable, afin de garder une trace et le partager | G une année complète · Q j'imprime (A4) · A bilan, faits marquants, comparatif N-1, sans contrôles d'interface, lisible en noir et blanc | M | S | Fait (v1.1) |
 | S-6.3 | En tant que propriétaire, je veux le comparateur d'offres et le pic de puissance dans le rapport annuel, afin d'avoir le bilan complet | G une année · Q j'imprime | A les deux sections apparaissent | S | C | Fait (v1.3) |
-| S-6.2 | En tant qu'auditeur, je veux saisir surfaces et marqueurs « travaux », afin de comparer avant / après | G un marqueur daté · Q j'ouvre la signature · A deux droites (avant / après) et kWh/m² | M | C | À faire |
+| S-6.2 | En tant qu'auditeur, je veux saisir surfaces et marqueurs « travaux », afin de comparer avant / après | G un marqueur daté · Q j'ouvre la signature · A deux droites (avant / après) et kWh/m² | M | C | Fait, v1.4 (#15) |
 
 ## E7 · Accessibilité, performance, UX famille
 
@@ -153,12 +153,12 @@ Le diagnostic de #162 a confirmé que `homestatus` expose, **en instantané**, `
 
 | ID | Récit (abrégé) | T | P | Statut |
 |---|---|---|---|---|
-| S-13.1 | Chercher un historique déjà servi par `getroommeasure` (étude) | S | M | À faire (#172) |
-| S-13.2 | Relevé horaire léger de `homestatus`, agrégé chaque nuit, sans commit horaire | M | M | À faire, conditionnel (#173) |
-| S-13.3 | Heures de fenêtre ouverte par pièce et leur effet (pièce froide, jours inhabituels, signature) | M | S | À faire (#174) |
-| S-13.4 | Boost et mode de consigne par pièce | S | C | À faire (#175) |
-| S-13.5 | Minimiser les données d'occupation (présence jamais conservée) | S | M | À faire (#176) |
-| S-13.6 | Délestage et contacteur | S | C | À faire (#177) |
+| S-13.1 | Chercher un historique déjà servi par `getroommeasure` (étude) | S | M | Fait, v1.4 (#172) |
+| S-13.2 | Relevé horaire léger de `homestatus`, agrégé chaque nuit, sans commit horaire | M | M | Fait, v1.4 (#173) |
+| S-13.3 | Heures de fenêtre ouverte par pièce et leur effet (pièce froide, jours inhabituels, signature) | M | S | Fait, v1.4 (#174) |
+| S-13.4 | Boost et mode de consigne par pièce | S | C | Fait, v1.4 (#175) |
+| S-13.5 | Minimiser les données d'occupation (présence jamais conservée) | S | M | Fait, v1.4 (#176) |
+| S-13.6 | Délestage et contacteur | S | C | Fait, v1.4 (#177) |
 
 ### Autres récits v1.4
 
@@ -180,3 +180,24 @@ Le diagnostic de #162 a confirmé que `homestatus` expose, **en instantané**, `
 
 Repris des versions précédentes dans le jalon v1.4 : S-2.3, S-4.12, S-6.2, S-7.9, S-8.3, S-9.0 à S-9.2,
 S-12.3. S-7.5 passe en v1.6 (design system).
+
+**Bilan (fin de v1.4)** : tous les récits ci-dessus sont livrés, ainsi que S-2.3, S-4.12, S-6.2, S-7.9,
+S-12.3 et S-1.19 (audit des données). S-9.0 et S-9.2 passent en v1.6, S-8.3 et S-9.1 en v2. Revue :
+[`revues/v1.4.md`](revues/v1.4.md).
+
+## Backlog v1.5 (qualité du code et suites de l'audit des données)
+
+Détail et ordre dans [`revues/v1.5-cadrage.md`](revues/v1.5-cadrage.md). Les constats de la revue de
+code complète sont des issues `revue-code` du jalon v1.5.
+
+| ID | Épopée | Récit (abrégé) | Issue |
+|---|---|---|---|
+| S-1.26 | E1 | Énergie et températures des pièces au pas 30 min, sur 4 ans | #224 |
+| S-1.23 | E1 | Température et consigne horaires des pièces (recouvert par S-1.26) | #217 |
+| S-1.20 | E1 | Radiateur ou chauffe-eau qui ne répond plus | #214 |
+| S-13.8 | E13 | Heures d'anticipation et d'abaissement par pièce | #218 |
+| S-1.21 | E1 | Piles et signal radio des modules de la station | #215 |
+| S-1.22 | E1 | Mises à jour de firmware | #216 |
+| S-1.25 | E1 | Heure du pic de puissance Linky | #219 |
+| — | E7 | Budget de taille honnête | #227 |
+| — | E8 | Cadre juridique : Shelly Cloud et Home Assistant | #228 |
