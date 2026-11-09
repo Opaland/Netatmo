@@ -402,23 +402,145 @@ def test_insights_use_only_computed_numbers(tmp_path):
     store.save({"id": "h"}, [{"id": "100", "name": "Salon", "category": HEATING}])
     facts = compute_facts(store, "2024-01")
     assert facts["chauffage_kwh"] == 310.0 and facts["chauffage_kwh_annee_precedente"] == 372.0
-    assert unknown_numbers("Salon : 310 kWh contre 372 kWh", facts) == []
+    assert unknown_numbers("Pièce A : 310 kWh contre 372 kWh", facts) == []
     assert unknown_numbers("soit 999 kWh", facts) == [999.0]
 
     calls = []
 
     def create(**kw):
         calls.append(kw)
-        text = "### Bien\n310 kWh, 999 kWh" if len(calls) == 1 else "### Bien\nSalon : 310 kWh contre 372 kWh."
-        return SimpleNamespace(stop_reason="end_turn", content=[SimpleNamespace(type="text", text=text)])
+        text = "### Bien\n310 kWh, 999 kWh" if len(calls) == 1 else "### Bien\nPièce A : 310 kWh contre 372 kWh."
+        usage = SimpleNamespace(input_tokens=1000, output_tokens=500, cache_read_input_tokens=None)
+        return SimpleNamespace(
+            stop_reason="end_turn",
+            model="claude-opus-5-5",
+            usage=usage,
+            content=[SimpleNamespace(type="text", text=text)],
+        )
 
     client = SimpleNamespace(beta=SimpleNamespace(messages=SimpleNamespace(create=create)))
     assert generate(store, today=date(2024, 2, 10), client=client)
     assert len(calls) == 2  # invented number → one rewrite
     assert calls[0]["model"] == "claude-opus-5-5" and calls[0]["fallbacks"] == "default"
+    assert calls[0]["betas"] == ["server-side-fallback-2026-07-01"]
+    assert calls[0]["output_config"] == {"effort": "medium"}
     doc = store.doc("insights")
     assert doc["period"] == "2024-01" and doc["verified"]
+    assert doc["markdown"] == "### Bien\nSalon : 310 kWh contre 372 kWh."  # real name restored locally
+    assert doc["pseudonyms"] == {"Pièce A": "Salon"}
+    # S-5.8: 2 requests × (1000 in × $4 + 500 out × $20) / 1e6 = $0.028
+    u = doc["usage"]
+    assert u["requests"] == 2 and u["input_tokens"] == 2000 and u["output_tokens"] == 1000
+    assert u["cost_usd"] == pytest.approx(0.028) and u["served_by"] == ["claude-opus-5-5"]
+    assert u["cost_eur"] == pytest.approx(0.028 * u["eur_per_usd"], abs=1e-4)
     assert not generate(store, today=date(2024, 2, 11), client=client)  # once per month
+
+
+def test_insights_never_send_room_or_module_names(tmp_path):
+    """S-5.7: pseudonyms in everything sent; real names only in the stored text."""
+    from datetime import date
+    from types import SimpleNamespace
+
+    from collector.insights import generate, restore_names
+
+    store = Store(tmp_path, "pw")
+    for d in range(1, 32):
+        store.merge("id-kids", f"2024-01-{d:02d}", 8000.0)
+        store.merge("id-kids", f"2023-01-{d:02d}", 6000.0)
+        store.merge("id-ce", f"2024-01-{d:02d}", 3000.0)
+        store.put("2024", "temps", "id-kids", f"2024-01-{d:02d}", [19.5, 19.0])
+        store.put("station", "daily", "m2", f"2024-01-{d:02d}", [18.0, 20.0, 19.0, 55, 1100 if d < 10 else 800])
+        store.put("station", "nightly", "m2", f"2024-01-{d:02d}", {"n": 9, "co2_max": 1500, "h_co2_1000": 2})
+        store.put("station", "hours", "m2", f"2024-01-{d:02d}", {"n": 24, "humid": 1, "cold": 3})
+    store.set_top(
+        "station",
+        "modules",
+        {
+            "m1": {"name": "Jardin", "type": "NAModule1", "indoor": False},
+            "m2": {"name": "Chambre des enfants", "type": "NAModule4", "indoor": True},
+        },
+    )
+    store.save(
+        {"id": "home-xyz", "name": "Villa Rose"},
+        [
+            {"id": "id-kids", "name": "Chambre des enfants", "category": HEATING},
+            {"id": "id-ce", "name": "Chauffe-eau", "category": WATER_HEATER},
+        ],
+    )
+    sent = []
+
+    def create(**kw):
+        sent.append(json.dumps(kw["messages"], ensure_ascii=False) + kw["system"])
+        text = "### Bilan\nLa pièce A a consommé 248 kWh ; Capteur A : 1500 ppm au plus fort."
+        return SimpleNamespace(stop_reason="end_turn", content=[SimpleNamespace(type="text", text=text)])
+
+    client = SimpleNamespace(beta=SimpleNamespace(messages=SimpleNamespace(create=create)))
+    assert generate(store, today=date(2024, 2, 3), client=client)
+    blob = "".join(sent)
+    for secret in ("Chambre des enfants", "Chauffe-eau", "id-kids", "id-ce", "Villa Rose", "home-xyz", "Jardin", "m2"):
+        assert secret not in blob
+    assert "Pièce A" in blob and "Pièce B" in blob and "Capteur A" in blob
+    doc = store.doc("insights")
+    facts = doc["facts"]
+    comfort = facts["station_confort"]["Capteur A"]
+    assert comfort["co2_moyen_ppm"] == 887 and comfort["jours_co2_moyen_sup_1000_ppm"] == 9
+    assert comfort["heures_nuit_co2_sup_1000_ppm"] == 62 and comfort["heures_sous_19_degres"] == 93
+    assert facts["temperatures_pieces_moyenne_et_consigne"] == {"Pièce A": [19.5, 19.0]}
+    assert "Chambre des enfants" not in json.dumps(facts, ensure_ascii=False)
+    assert (
+        doc["markdown"]
+        == "### Bilan\nLa Chambre des enfants a consommé 248 kWh ; Chambre des enfants : 1500 ppm au plus fort."
+    )
+    assert doc["verified"]  # checked on the text as received
+    assert "usage" in doc and doc["usage"]["requests"] == 1  # no usage in the response: counted, no tokens
+    # "Pièce AB" is not "Pièce A" + "B"
+    assert restore_names("Pièce AB et Pièce A.", {"Pièce A": "Salon", "Pièce AB": "Cave"}) == "Cave et Salon."
+
+
+def test_insights_facts_cost_unusual_days_linky_and_quality(tmp_path):
+    """S-5.6: euros under the shared contract, unusual days, Linky baseload, coverage."""
+    from collector.insights import compute_facts, unknown_numbers
+
+    store = Store(tmp_path, "pw")
+    for d in range(1, 32):
+        day = f"2025-01-{d:02d}"
+        tmean = -2 + d % 10  # varied outdoor temperatures for the signature
+        store.put("weather", "outdoor", day, None, [tmean - 3, tmean + 3, tmean])
+        kwh = 40 - 2 * tmean + (25 if d == 15 else 0)  # the 15th: 25 kWh more than the signature
+        store.merge("h", day, kwh * 1000)
+        store.merge("w", day, 4000.0)
+        store.put("2025", "tariffs", "w", day, [0, 1000, 3000])  # water heater mostly in $2 → $2 is off-peak
+        store.put("linky", "daily", day, None, 60000)
+        store.put("linky", "pmax", day, None, 7.5 if d == 20 else 5.0)
+        for h in range(48):
+            store.put("2025.linky30", "curve", f"{day}T{h // 2:02d}:{30 * (h % 2):02d}", None, 150 if h == 8 else 400)
+    for d in range(1, 32):
+        store.merge("h", f"2024-01-{d:02d}", 30000.0)
+    store.put("2025", "coverage", "h", "2025-01", [29, 2, 0])
+    store.put("2025", "coverage", "w", "2025-01", [31, 0, 0])
+    store.save(
+        {"id": "x"},
+        [{"id": "h", "name": "Séjour", "category": HEATING}, {"id": "w", "name": "Cumulus", "category": WATER_HEATER}],
+        {"contract": [{"from": "2020-01-01", "offer": "edf-trv-hphc", "kva": 9}]},
+    )
+    facts = compute_facts(store, "2025-01")
+    assert facts["cout_energie_estime_eur"] > 0 and facts["cout_energie_estime_eur_annee_precedente"] > 0
+    assert facts["prix_kwh_heures_creuses_eur"] < facts["prix_kwh_heures_pleines_eur"]
+    assert facts["abonnement_eur_par_mois"] > 0
+    assert [u["jour"] for u in facts["jours_inhabituels"]] == ["15 janvier"]
+    assert facts["talon_logement_w"] == 300 and facts["puissance_max_appelee_kva"] == 7.5
+    assert facts["qualite_donnees"] == {
+        "jours_pieces_reels": 60,
+        "jours_pieces_estimes": 2,
+        "jours_pieces_manquants": 0,
+    }
+    # the new numbers are verified like the others
+    cost = facts["cout_energie_estime_eur"]
+    assert unknown_numbers(f"environ {cost} € ce mois-ci, talon de 300 W", facts) == []
+    assert unknown_numbers(f"environ {cost + 57} €", facts) == [float(cost + 57)]
+    # no shared contract → no euros (never a made-up price)
+    store.meta.pop("contract")
+    assert "cout_energie_estime_eur" not in compute_facts(store, "2025-01")
 
 
 def test_rekey_reencrypts_everything_and_rates_strength(tmp_path):
@@ -878,3 +1000,24 @@ def test_renew_file_lists_only_what_must_be_renewed(tmp_path, monkeypatch):
     assert path.read_text() == ""
     monkeypatch.delenv("RENEW_FILE")
     write_renew_file(["x"])  # no file asked: nothing written, no error
+
+
+def test_demo_shows_every_data_quality_case_and_the_contract(tmp_path):
+    """S-1.8 / S-1.10: the demo has lost, estimated and suspect days, a contract and Linky."""
+    from collector.__main__ import parse_contract
+    from collector.demo import generate
+
+    generate(tmp_path)
+    s = Store(tmp_path, "demo")
+    cov = s.doc("2024")["coverage"]
+    assert cov["r-salon"]["2024-02"][2] == 18  # lost at Intuis, every room
+    assert cov["r-ch1"]["2024-11"] == [30, 0, 0]  # the second gap touches two rooms only
+    assert cov["r-salon"]["2024-11"][2] == 14
+    assert "2024-02-20" not in s.year(2024)["r-salon"]
+    assert s.doc("linky")["daily"]["2024-02-20"] > 20000  # the meter saw the lost day
+    est = s.doc("2023")["estimated"]["r-salon"]
+    assert sorted(est) == [f"2023-12-0{d}" for d in range(4, 9)]
+    assert len({s.year(2023)["r-salon"][d] for d in est}) == 1  # spread evenly
+    assert s.year(2025)["r-salon"]["2025-01-14"] < 0.3 * s.year(2025)["r-salon"]["2025-01-13"]
+    assert parse_contract(json.dumps(s.meta["contract"])) == s.meta["contract"]
+    assert s.meta["sources"]["linky"]["expires_estimated"] is True

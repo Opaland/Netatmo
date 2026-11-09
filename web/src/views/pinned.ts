@@ -18,11 +18,12 @@ export function meanTemp(days: Map<string, [number, number | null]> | undefined,
   return n ? sum / n : null;
 }
 
-/** S-11.3 (light): days of the month whose mean measured temperature stayed under 19 °C. */
+/** S-11.3 (light): days of the month whose mean measured temperature stayed under the comfort threshold. */
 function coldDays(days: Map<string, [number, number | null]> | undefined, from: string, to: string): string {
   let n = 0;
-  for (const [d, [t]] of days ?? []) if (d >= from && d <= to && typeof t === 'number' && t < 19) n++;
-  return n ? `${n} jour${n > 1 ? 's' : ''} sous 19 °C (moyenne du jour)` : 'Aucun jour sous 19 °C';
+  for (const [d, [t]] of days ?? []) if (d >= from && d <= to && typeof t === 'number' && t < state.comfortThreshold) n++;
+  const thr = `${nfTemp.format(state.comfortThreshold)} °C`;
+  return n ? `${n} jour${n > 1 ? 's' : ''} sous ${thr} (moyenne du jour)` : `Aucun jour sous ${thr}`;
 }
 
 /** Selector for the menu: which room to pin. */

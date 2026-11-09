@@ -8,7 +8,7 @@ import { sameContract, validContract } from './contract';
 import type { ContractPeriod } from './offers';
 import { DEFAULT_LOCK_MINUTES } from './session';
 
-export type View = 'overview' | 'compare' | 'rooms' | 'analyse' | 'report' | 'settings';
+export type View = 'overview' | 'compare' | 'rooms' | 'analyse' | 'comfort' | 'report' | 'settings';
 export type CatFilter = 'all' | Category;
 
 export interface State {
@@ -37,6 +37,9 @@ export interface State {
   showTables: boolean;
   lockAfter: number; // S-8.11: minutes without interaction before locking, 0 = never
   pinnedRoom: string | null; // S-7.8: room shown first in simple mode
+  comfortThreshold: number; // °C, hours below it count as cold (S-11.3)
+  /** S-3.8: Intuis room id -> station module key ('' = deliberately not linked). Shared later by S-12.1. */
+  roomModuleMap: Record<string, string>;
 }
 
 export const DEFAULT: State = {
@@ -65,6 +68,8 @@ export const DEFAULT: State = {
   showTables: false,
   lockAfter: DEFAULT_LOCK_MINUTES,
   pinnedRoom: null,
+  comfortThreshold: 19,
+  roomModuleMap: {},
 };
 
 const LS_KEY = 'intuis-history:state';
