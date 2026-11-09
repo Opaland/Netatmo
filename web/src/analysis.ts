@@ -477,3 +477,35 @@ export function compareOffers(
   }
   return out;
 }
+
+// ------------------------------------------------------------------ anomalies (deterministic, S-4.8)
+export interface Anomaly {
+  day: string;
+  kwh: number;
+  expected: number;
+  z: number; // residual / σ of the season
+}
+
+/** Heating days far from the season's energy signature (|residual| > 2σ and > 3 kWh). */
+export function anomalies(records: DayRecord[], weather: Weather): Anomaly[] {
+  const out: Anomaly[] = [];
+  for (const pts of signaturePoints(records, weather).values()) {
+    const fit = fitSeason(pts);
+    if (!fit) continue;
+    const heating = pts.filter(([t, k]) => t < 15 && k > 0.2);
+    const res = heating.map(([t, k]) => k - (fit.slope * t + fit.intercept));
+    const sigma = Math.sqrt(res.reduce((s, r) => s + r * r, 0) / Math.max(1, res.length - 2));
+    heating.forEach(([t, k, day], i) => {
+      const r = res[i];
+      if (Math.abs(r) > 2 * sigma && Math.abs(r) > 3) out.push({ day, kwh: k, expected: fit.slope * t + fit.intercept, z: r / sigma });
+    });
+  }
+  return out.sort((a, b) => (a.day < b.day ? 1 : -1));
+}
+
+/** Days above a threshold, per module, over [from, to] (S-3.6). */
+export function daysAbove(daily: Record<string, (number | null)[]>, col: number, threshold: number, from: string, to: string): number {
+  let n = 0;
+  for (const [d, v] of Object.entries(daily)) if (d >= from && d <= to && (v[col] ?? -Infinity) > threshold) n++;
+  return n;
+}
