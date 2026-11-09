@@ -5,7 +5,7 @@
 > dépassée : en cas de doute, lisez les textes eux-mêmes ou consultez un professionnel du droit.
 
 Dernière revue : **9 novembre 2026** (S-8.14). La même information est résumée dans l'application,
-menu ⋮ → Paramètres et connexions → **Cadre juridique** (fichier source : `web/src/legal.ts`, à mettre
+⚙ Paramètres → À propos et confidentialité → **Cadre juridique** (fichier source : `web/src/legal.ts`, à mettre
 à jour en même temps que cette page).
 
 **Règle de revue** : à chaque revue de version (`docs/bmad/revues/vX.Y.md`), on relit les conditions de
@@ -133,7 +133,7 @@ toutes ouvertes.
   coucher, présence, chambre occupée. Le projet en tient compte :
   - **vue foyer** (S-12.2) : les chambres sont regroupées en « Chambres » sur tous les écrans
     (consommation, profils horaires, températures, CO₂ de la station) ; le détail s'affiche seulement
-    sur un geste volontaire (menu ⋮), jusqu'au verrouillage suivant ;
+    sur un geste volontaire (⚙ Affichage), jusqu'au verrouillage suivant ;
   - **verrouillage** après inactivité et clé mémorisée 30 jours au plus (S-8.11) ;
   - **fenêtres ouvertes, boost, modes de consigne** (S-13.5) : seulement des heures **par pièce et
     par jour**, chiffrées ; les relevés horaires, chiffrés eux aussi, expirent après 3 jours et ne

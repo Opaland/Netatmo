@@ -55,10 +55,10 @@ export function leaseWindow(t: Tenant, first: string, last: string): { from: str
 
 /** The sentence that replaces a card hidden in tenant mode. */
 export function tenantNote(what: string): string {
-  return `<section class="card tenant-note"><p class="hint"><span class="badge">locataire</span> ${what} en mode locataire : ce calcul suppose le compteur Linky et le contrat du titulaire. Vos coûts utilisent votre prix moyen au kWh (menu ⋮ → Prix). Réglage : Paramètres → Mode locataire.</p></section>`;
+  return `<section class="card tenant-note"><p class="hint"><span class="badge">locataire</span> ${what} en mode locataire : ce calcul suppose le compteur Linky et le contrat du titulaire. Vos coûts utilisent votre prix moyen au kWh (⚙ Paramètres → Contrat et prix). Réglage : ⚙ Paramètres → Foyer et partage.</p></section>`;
 }
 
-/** Menu ⋮ → Prix in tenant mode: one average price (and an optional subscription). */
+/** ⚙ Contrat et prix in tenant mode: one average price (and an optional subscription). */
 export function tenantPricesForm(base: number | null, sub: number | null): string {
   return `<fieldset class="prices"><legend>Prix</legend>
     <p class="hint muted"><span class="badge">locataire</span> Un prix moyen, abonnement compris ou non, tiré de vos factures.</p>

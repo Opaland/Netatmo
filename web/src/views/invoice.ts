@@ -1,4 +1,4 @@
-// Synthèse, loaded on demand: reconcile the cost with a real invoice (S-2.3).
+// Outils → Une facture, loaded on demand: reconcile the cost with a real invoice (S-2.3).
 // Fills the placeholder #invoice-zone left by overview.ts. The invoices typed here stay on
 // this device, encrypted with the data key (local-store.ts), and are never sent anywhere.
 import type { DayRecord } from '../aggregate';
@@ -8,6 +8,7 @@ import { type Invoice, type Reconciliation, invoiceKey, reconcile, validInvoice 
 import { loadNote, saveNote } from '../local-store';
 import { costAvailable, costOf, dayPrices, esc, fmtKwh, firstDay, lastDay, longDate, nf0, offCol } from '../ui';
 import { html } from '../trusted';
+import { onCard } from '../events';
 
 const NOTE = 'invoices';
 let invoices: Invoice[] | null = null;
@@ -40,7 +41,6 @@ function draw() {
   const el = document.getElementById('invoice-zone') ?? document.getElementById('invoice-card');
   if (!el || !ds) return;
   el.outerHTML = html(card());
-  bind();
 }
 
 function compute(inv: Invoice): Reconciliation {
@@ -106,7 +106,7 @@ function card(): string {
     <div class="card-head"><h2>Recouper avec une facture <small class="muted">écart expliqué</small></h2></div>
     ${
       !costAvailable()
-        ? '<p class="hint">Renseignez votre contrat ou vos prix (menu ⋮) pour comparer une facture.</p>'
+        ? '<p class="hint">Renseignez votre contrat ou vos prix (⚙ Paramètres → Contrat et prix) pour comparer une facture.</p>'
         : `<p class="hint muted">Recopiez la période de consommation et le montant TTC d'une facture d'électricité : l'appli calcule ce qu'elle aurait facturé avec ${ds!.linky.size ? 'le compteur Linky' : 'les radiateurs et le chauffe-eau'} et le tarif de votre contrat, puis explique l'écart.</p>
     ${current ? result(current) : ''}
     <div class="absence-add invoice-form">
@@ -143,12 +143,12 @@ async function save(list: Invoice[]) {
   draw();
 }
 
-function bind() {
-  const val = (id: string) => (document.getElementById(id) as HTMLInputElement | null)?.value ?? '';
-  const checked = (id: string) => !!(document.getElementById(id) as HTMLInputElement | null)?.checked;
-  const add = document.getElementById('inv-add');
-  if (add) {
-    add.onclick = () => {
+// #257: the controls of the card, dispatched by main.ts (no `onclick =` on the elements).
+onCard({
+  click(el) {
+    const val = (id: string) => (document.getElementById(id) as HTMLInputElement | null)?.value ?? '';
+    const checked = (id: string) => !!(document.getElementById(id) as HTMLInputElement | null)?.checked;
+    if (el.id === 'inv-add') {
       const kwh = val('inv-kwh');
       const inv = validInvoice({
         from: val('inv-from'),
@@ -160,24 +160,24 @@ function bind() {
       });
       if (!inv || !val('inv-amount')) {
         document.getElementById('inv-msg')!.textContent = 'Indiquez les deux dates (la fin après le début) et le montant.';
-        return;
+        return true;
       }
       selected = invoiceKey(inv);
       const list = (invoices ?? []).filter((i) => invoiceKey(i) !== selected);
-      void save([...list, inv].sort((a, b) => (a.from < b.from ? -1 : 1)));
-    };
-  }
-  document.querySelectorAll<HTMLButtonElement>('[data-inv-show]').forEach((b) => {
-    b.onclick = () => {
-      const i = invoices?.[Number(b.dataset.invShow)];
+      void save([...list, inv].sort((x, y) => (x.from < y.from ? -1 : 1)));
+      return true;
+    }
+    if (el.dataset.invShow !== undefined) {
+      const i = invoices?.[Number(el.dataset.invShow)];
       if (i) selected = invoiceKey(i);
       draw();
-    };
-  });
-  document.querySelectorAll<HTMLButtonElement>('[data-inv-del]').forEach((b) => {
-    b.onclick = () => {
-      const n = Number(b.dataset.invDel);
+      return true;
+    }
+    if (el.dataset.invDel !== undefined) {
+      const n = Number(el.dataset.invDel);
       void save((invoices ?? []).filter((_, i) => i !== n));
-    };
-  });
-}
+      return true;
+    }
+    return false;
+  },
+});

@@ -7,9 +7,24 @@ import { esc, longDate } from '../ui';
 import { localDateTime } from '../glossary';
 import { html } from '../trusted';
 
-export function mountInsight(el: HTMLElement | null) {
+/** Summary for Accueil (#308): the first heading of the text and its first sentence block. */
+function summaryOf(md: string): string {
+  const lines = md.split('\n').map((l) => l.trim()).filter(Boolean);
+  const title = lines.find((l) => l.startsWith('#'))?.replace(/^#+\s*/, '');
+  const text = lines.find((l) => !/^(#|[-*] |\d+\. |\|)/.test(l));
+  return [title ? `**${title}**` : '', text ?? ''].filter(Boolean).join('\n\n');
+}
+
+export function mountInsight(el: HTMLElement | null, summary = false) {
   const ins = ds?.insights;
   if (!el || !ins) return;
+  if (summary) {
+    el.removeAttribute('aria-busy');
+    el.innerHTML = html`<div class="card-head"><h2>Analyse du mois</h2><span class="tag">rédigée par l'IA</span></div>
+    <div class="md">${renderMarkdown(summaryOf(ins.markdown))}</div>
+    <a class="link" href="#outils-analyse">Lire l'analyse complète</a>`;
+    return;
+  }
   const vote = loadVotes()[ins.period];
   const legend = pseudonymLegend(ins.pseudonyms);
   const btn = (v: Vote, label: string, icon: string) =>
@@ -41,7 +56,7 @@ export function mountInsight(el: HTMLElement | null) {
     b.addEventListener('click', () => {
       const v = b.dataset.insightVote as Vote;
       saveVote(ins.period, vote === v ? null : v); // a second click withdraws the vote
-      mountInsight(el);
+      mountInsight(el, summary);
     }),
   );
 }

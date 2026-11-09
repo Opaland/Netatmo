@@ -26,6 +26,7 @@ import {
   signatureEffect,
   totals,
 } from '../windows';
+import { fmt1 as f1 } from '../glossary';
 
 const BEDROOMS = BEDROOMS_ID;
 const EXCLUDE_HOURS = 2;
@@ -52,7 +53,7 @@ function ensureDrops(last: string) {
   Promise.all([loadRoom30(ds!, from), import('../room30')])
     .then(([r30, m]) => {
       drops = m.tempDrops(r30, from, last);
-      if (state.view === 'comfort') rerender();
+      if (state.view === 'confort') rerender();
     })
     .catch(() => {
       drops = null; // the snapshots alone, as before
@@ -62,11 +63,10 @@ function ensureDrops(last: string) {
     });
 }
 
-const f1 = (v: number) => v.toFixed(1).replace('.', ',').replace('-', '−');
 const h1 = (v: number) => `${f1(v)} h`;
 
 function ensure() {
-  doc = stateDoc.get(ds, () => state.view === 'comfort' && rerender()) ?? null;
+  doc = stateDoc.get(ds, () => state.view === 'confort' && rerender()) ?? null;
   failed = stateDoc.status(ds) === 'failed';
 }
 

@@ -85,7 +85,7 @@ export function renderReport(view: HTMLElement) {
           .join('')}</select></label>
         <button type="button" class="primary small" id="print">Imprimer / PDF</button>
         <button type="button" class="small" id="report-anon" data-year-anon="${year}">Rapport anonymisé</button>
-        <button type="button" class="link" data-view="overview">Fermer</button>
+        
       </div>
     </div>
     <h1 class="report-title">${esc(ds!.meta.home.name)} — bilan énergie ${year}${end < `${year}-12-31` ? ` <small>(au ${longDate(end)})</small>` : ''}</h1>
@@ -125,8 +125,7 @@ export function renderReport(view: HTMLElement) {
     )}
     <div id="report-extras"></div>
     <p class="hint muted">Rapport généré le ${longDate(localDay())} par l'application Historique énergie. Données Intuis${ds!.weather ? ', météo ' + (ds!.meta.weather_source === 'netatmo' ? 'station Netatmo' : 'Open-Meteo') : ''}${ds!.linky.size ? ', compteur Linky' : ''}.</p>
-  </section>
-  <section class="card no-print" id="questions-card" aria-busy="true"><h2>Questions types</h2></section>`;
+  </section>`;
   const m = monthlyByYear(all);
   barChart(document.getElementById('report-chart')!, {
     labels: MONTHS_SHORT,
@@ -150,8 +149,6 @@ export function renderReport(view: HTMLElement) {
   drawWaterfall(document.getElementById('report-waterfall')!, deltas, year, windowSuffix(win));
   // S-6.3: offer comparator and maximum power, lazy module (entry chunk budget)
   void lazyCard(() => import('./annual-share'), (m) => m.renderReportExtras(document.getElementById('report-extras'), year), { zone: 'report-extras', what: 'Comparateur d’offres' });
-  // S-5.9: canned questions answered by code, loaded on demand
-  void lazyCard(() => import('./questions'), (m) => m.mountQuestions(document.getElementById('questions-card')), { zone: 'questions-card', what: 'Questions types' });
 }
 
 // ------------------------------------------------------------------ events

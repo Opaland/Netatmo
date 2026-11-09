@@ -8,10 +8,10 @@ import { displayId } from '../household';
 import { activeRooms, esc, fmtEur, fmtKwh, lastDay, nf0, offCol, table } from '../ui';
 import { currentHcHp } from './waterheater';
 import { html } from '../trusted';
+import { fmt1 as num1 } from '../glossary';
 
 let dT = -1; // °C, negative = lower setpoint (kept while the app is open)
 
-const num1 = (v: number) => v.toFixed(1).replace('.', ',');
 const signed = (v: number) => `${v > 0 ? '+' : v < 0 ? '−' : ''}${num1(Math.abs(v))}`;
 
 function reference(records: DayRecord[]) {
@@ -23,8 +23,8 @@ export function setpointCard(records: DayRecord[]): string {
   const ref = reference(records);
   if (!ref) return '';
   return `<section class="card" id="setpoint-card">
-    <div class="card-head"><h2>Et si je baissais la consigne de 1 °C ? <small class="muted">estimation</small></h2></div>
-    <label class="setpoint-slider">Changer toutes les consignes de <strong id="sp-value">${signed(dT)} °C</strong>
+    <div class="card-head"><h2>Et si je demandais 1 °C de moins aux radiateurs ? <small class="muted">estimation, toutes les pièces</small></h2></div>
+    <label class="setpoint-slider">Changer la température demandée aux radiateurs (consigne) de toutes les pièces de <strong id="sp-value">${signed(dT)} °C</strong>
       <input type="range" id="sp-range" min="-2" max="2" step="0.5" value="${dT}" aria-describedby="sp-result" style="width:100%"></label>
     <div id="sp-result" aria-live="polite"></div>
     <details class="table-details"><summary>Méthode</summary>
@@ -48,7 +48,7 @@ export function drawSetpoint(records: DayRecord[]) {
   const show = () => {
     document.getElementById('sp-value')!.textContent = `${signed(dT)} °C`;
     if (dT === 0) {
-      zone.innerHTML = html('<p class="hint muted">Déplacez le curseur pour simuler une consigne plus basse (à gauche) ou plus haute (à droite).</p>');
+      zone.innerHTML = html('<p class="hint muted">Déplacez le curseur pour simuler une température demandée plus basse (à gauche) ou plus haute (à droite).</p>');
       return;
     }
     const sim = simulateSetpoint(ds!.weather!, ref.from, ref.to, ref.fit, dT, ref.season);

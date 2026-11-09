@@ -1,4 +1,5 @@
-// Settings view ("Paramètres et connexions"): sources status, GitHub secrets, manual collection.
+// #309: settings pages « Sources de données », « Contrat et prix » (shared contract), « Foyer et partage »,
+// « Objectifs et alertes » (cold alert), « À propos » and the sources of « État des données ».
 // The GitHub API logic lives in ../settings.ts; this module only renders and handles the forms.
 import { ds, rerender, setState } from '../app';
 import { contractJson } from '../contract';
@@ -31,7 +32,17 @@ let settingsRepo = repoFromLocation() ?? 'Opaland/Netatmo';
 let configured: Set<string> | null = null;
 let settingsMsg: { ok: boolean; text: string } | null = null;
 
-export function renderSettings(view: HTMLElement) {
+/** #309: the settings pages that come from this module (État des données reuses the sources). */
+export type SettingsSection = 'sources' | 'etat' | 'contrat' | 'foyer' | 'objectifs' | 'apropos';
+
+/** « foyer » (written in the repository, every device) or « ce téléphone » (this device only). */
+export function scopeTag(kind: 'foyer' | 'appareil'): string {
+  return kind === 'foyer'
+    ? '<span class="tag scope" title="Tout le foyer : enregistré dans le dépôt, valable sur tous les appareils">foyer</span>'
+    : '<span class="tag scope" title="Cet appareil : gardé dans ce navigateur seulement">ce téléphone</span>';
+}
+
+export function renderSettings(view: HTMLElement, section: SettingsSection) {
   const m = ds!.meta;
   const src = ((m as { sources?: Record<string, SourceStatus> }).sources ?? {}) as Record<string, SourceStatus>;
   const today = new Date().toISOString().slice(0, 10);
@@ -68,9 +79,10 @@ export function renderSettings(view: HTMLElement) {
         .join('')}
     </fieldset>`,
   ).join('');
-  view.innerHTML = html`
+  const demo = ds!.source === 'demo';
+  const statusCard = `
   <section class="card">
-    <div class="card-head"><h2>Paramètres et connexions</h2><button type="button" class="link" data-view="overview">Fermer</button></div>
+    <div class="card-head"><h2>État des sources</h2>${scopeTag('foyer')}</div>
     <ul class="status-list">
       ${status(true, 'Radiateurs et chauffe-eau Intuis', 'intuis')}
       ${status(!!m.weather_source, `Météo (${m.weather_source === 'netatmo' ? 'station Netatmo' : 'Open-Meteo'})`, m.weather_source === 'netatmo' ? 'netatmo' : 'open-meteo', false)}
@@ -83,16 +95,10 @@ export function renderSettings(view: HTMLElement) {
       ${status(!!m.has_roomstate, `Relevé horaire de l'état des pièces${src['releve-horaire']?.note ? ` (${esc(src['releve-horaire'].note)})` : ''}`, 'releve-horaire', false)}
     </ul>
     ${iaRateLine()}
-    <p class="hint muted">Dernière collecte : ${m.updated ? esc(m.updated.replace('T', ' à ').slice(0, 21)) + ' (UTC)' : '—'}.</p>
-  </section>
-  <section class="card" id="tenant-card" hidden></section>
-  <section class="card" id="cold-card" hidden></section>
-  <section class="card" id="devices-card" hidden></section>
-  ${
-    ds!.source === 'demo'
-      ? '<section class="card"><p class="notice">Mode démonstration : les paramètres sont désactivés.</p></section>'
-      : `<section class="card">
-    <h2>1. Autoriser l'application à écrire vos secrets</h2>
+    <p class="hint muted">Dernière collecte : ${m.updated ? esc(localDateTime(m.updated)) : '—'}.</p>
+  </section>`;
+  const loginCard = `<section class="card">
+    <div class="card-head"><h2>1. Autoriser l'application à écrire vos secrets</h2>${scopeTag('foyer')}</div>
     <p class="hint muted">Créez un <a href="${TOKEN_HELP_URL}" target="_blank" rel="noopener">jeton GitHub « fine-grained »</a> :
       accès au seul dépôt <strong>${esc(settingsRepo)}</strong>, permissions <strong>Secrets : lecture et écriture</strong>,
       <strong>Variables : lecture et écriture</strong> (contrat partagé) et
@@ -100,12 +106,12 @@ export function renderSettings(view: HTMLElement) {
       l'application ne l'enregistre jamais, ni sur l'appareil, ni ailleurs. Les champs du jeton et des identifiants sont marqués pour que
       le navigateur ne propose pas de les mémoriser ; si votre navigateur ou votre gestionnaire de mots de passe le propose quand même, refusez.</p>
     <div id="gh-login" class="inline-form" role="group" aria-label="Connexion à GitHub">
-      <label>Dépôt<input name="repo" value="${esc(settingsRepo)}" ${noSaveAttrs(false)}></label>
-      <label>Jeton GitHub<input name="token" ${noSaveAttrs(true)} placeholder="github_pat_…" ${hasToken() ? 'value="••••••••" disabled' : ''}></label>
-      ${hasToken() ? '<button type="button" id="gh-logout" class="link">Oublier le jeton</button>' : '<button class="primary small" type="button" id="gh-login-btn">Se connecter</button>'}
+      <label>Dépôt<input name="repo" value="${esc(settingsRepo)}" ${noSaveAttrs(false)}${demo ? ' disabled' : ''}></label>
+      <label>Jeton GitHub<input name="token" ${noSaveAttrs(true)} placeholder="github_pat_…" ${hasToken() ? 'value="••••••••" disabled' : demo ? 'disabled' : ''}></label>
+      ${hasToken() ? '<button type="button" id="gh-logout" class="link">Oublier le jeton</button>' : `<button class="primary small" type="button" id="gh-login-btn"${demo ? ' disabled' : ''}>Se connecter</button>`}
     </div>
-  </section>
-  <section class="card" id="secrets-form" aria-labelledby="secrets-title">
+  </section>`;
+  const secretsCard = `<section class="card" id="secrets-form" aria-labelledby="secrets-title">
     <h2 id="secrets-title">2. Vos identifiants</h2>
     <p class="hint muted">Chaque valeur est <strong>chiffrée dans votre navigateur</strong> avec la clé publique du dépôt avant l'envoi :
       seul GitHub peut la déchiffrer, pour la collecte. Seuls les champs remplis sont envoyés ; GitHub ne permet pas de relire une valeur.
@@ -113,19 +119,18 @@ export function renderSettings(view: HTMLElement) {
     ${groups}
     <button class="primary" type="button" id="secrets-save" ${hasToken() ? '' : 'disabled'}>Chiffrer et enregistrer dans GitHub</button>
     <p class="settings-msg ko" id="secrets-msg" role="alert"></p>
-  </section>
-  ${tenant().on ? tenantNote('Le contrat partagé est masqué') : contractSection()}
-  <section class="card">
-    <h2>4. Lancer la collecte</h2>
+  </section>`;
+  const collectCard = `<section class="card">
+    <h2>3. Lancer la collecte</h2>
     <p class="hint muted">Utile après avoir ajouté une connexion. La collecte prend quelques minutes, puis le site se met à jour.</p>
     <div class="controls">
       <button type="button" class="primary small" id="run-collect" ${hasToken() ? '' : 'disabled'}>Collecter maintenant</button>
       <label class="toggle"><input type="checkbox" id="run-backfill"> Tout l'historique</label>
     </div>
-  </section>`
-  }
+  </section>`;
+  const publicCard = `
   <section class="card">
-    <h2>Ce qui est public, ce qui part chez des tiers</h2>
+    <div class="card-head"><h2>Ce qui est public, ce qui part chez des tiers</h2></div>
     ${table(
       ['Donnée', 'Où', 'Qui peut la lire'],
       [
@@ -159,25 +164,44 @@ export function renderSettings(view: HTMLElement) {
       ],
       99,
     )}
-  </section>
+  </section>`;
+  const inviteCard = `
   <section class="card" id="invite-card">
-    <div class="card-head"><h2>Inviter un membre du foyer</h2></div>
+    <div class="card-head"><h2>Inviter un membre du foyer</h2>${scopeTag('foyer')}</div>
     <p class="hint muted">Un QR code de l'adresse de l'appli et un mode d'emploi en 3 étapes, pour l'installer sur le téléphone d'un proche. Il ne contient ni phrase de passe ni jeton : la phrase se dit de vive voix.</p>
     <button type="button" class="primary small" id="invite-open">Inviter</button>
-  </section>
-  <section class="card" id="build-info" aria-live="polite"></section>
+  </section>`;
+  const legalCard = `
   <section class="card" id="legal-card">
     <div class="card-head"><h2>Cadre juridique</h2></div>
     <p class="hint muted">Conditions d'utilisation de chaque service (Intuis, Netatmo, Conso API…), date de lecture et risque d'arrêt ; usage domestique et vie privée du foyer.</p>
     <button type="button" class="primary small" id="legal-open">Ouvrir « Cadre juridique »</button>
-  </section>
-  ${settingsMsg ? `<p class="settings-msg ${settingsMsg.ok ? 'ok' : 'ko'}" role="status">${esc(settingsMsg.text)}</p>` : ''}`;
-  void showBuild(document.getElementById('build-info'));
+  </section>`;
+  const msg = settingsMsg ? `<p class="settings-msg ${settingsMsg.ok ? 'ok' : 'ko'}" role="status">${esc(settingsMsg.text)}</p>` : '';
+  const body: Record<SettingsSection, string> = {
+    sources: `${statusCard}
+  <section class="card" id="devices-card" hidden></section>
+  <section class="card"><div class="card-head"><h2>Home Assistant, liaison des pièces</h2></div>
+    <p class="hint muted">L'état des capteurs Home Assistant importés et l'accord fenêtre / radiateur se lisent dans <a href="#confort">Pièces → Air et confort</a>, comme la liaison entre pièces et modules de la station.</p></section>
+  ${loginCard}${demo ? '' : secretsCard + collectCard}${msg}`,
+    etat: `${statusCard}<section class="card" id="devices-card" hidden></section>`,
+    contrat: `${tenant().on ? tenantNote('Le contrat partagé est masqué') : contractSection()}${demo || hasToken() ? '' : '<p class="hint muted">Pour partager le contrat, connectez-vous à GitHub dans <a href="#parametres-sources">Sources de données</a>.</p>'}${msg}`,
+    foyer: `${inviteCard}
+  <section class="card" id="tenant-card" hidden></section>${msg}`,
+    objectifs: '<section class="card" id="cold-card" hidden></section>',
+    apropos: `${publicCard}
+  <section class="card" id="build-info" aria-live="polite"></section>
+  ${legalCard}`,
+  };
+  view.innerHTML = html(body[section]);
+  const has = (id: string) => !!document.getElementById(id);
+  if (has('build-info')) void showBuild(document.getElementById('build-info'));
   // S-12.6 tenant mode, S-12.5 prolonged cold alert: lazy modules
-  void lazyCard(() => import('./tenant-card'), (x) => x.mountTenant(document.getElementById('tenant-card')), { zone: 'tenant-card', what: 'Mode locataire' });
-  void lazyCard(() => import('./devices-card'), (x) => x.mountDevices(document.getElementById('devices-card')), { zone: 'devices-card', what: 'État des appareils' });
-  void lazyCard(() => import('./coldalert'), (x) => x.mountColdSettings(document.getElementById('cold-card'), () => settingsRepo), { zone: 'cold-card', what: 'Alerte froid prolongé' });
+  if (has('tenant-card')) void lazyCard(() => import('./tenant-card'), (x) => x.mountTenant(document.getElementById('tenant-card')), { zone: 'tenant-card', what: 'Mode locataire' });
+  if (has('devices-card')) void lazyCard(() => import('./devices-card'), (x) => x.mountDevices(document.getElementById('devices-card')), { zone: 'devices-card', what: 'État des appareils' });
+  if (has('cold-card')) void lazyCard(() => import('./coldalert'), (x) => x.mountColdSettings(document.getElementById('cold-card'), () => settingsRepo), { zone: 'cold-card', what: 'Alerte froid prolongé' });
 }
+
 
 /** Informative note of a source (counts only, written by the collector), e.g. plugs without a counter. */
 function noteLine(s?: SourceStatus) {
@@ -193,13 +217,13 @@ function contractSection() {
   const state =
     info.source === 'shared'
       ? `<p><span class="badge">partagé</span> Ce contrat (${n} période${n > 1 ? 's' : ''}) s'applique sur tous les appareils.${
-          info.differs ? ' Le contrat saisi sur cet appareil en diffère : il est ignoré (voir le menu Prix).' : ''
+          info.differs ? ' Le contrat saisi sur cet appareil en diffère : il est ignoré (voir « Mon contrat » ci-dessus).' : ''
         }</p>`
       : info.shared
         ? '<p class="notice"><strong>Modifié sur cet appareil, non partagé</strong> : les autres appareils utilisent encore le contrat partagé.</p>'
         : `<p class="notice">${info.source === 'default' ? 'Aucun contrat saisi : 9 kVA, heures pleines / creuses par défaut.' : 'Ce contrat est enregistré sur cet appareil seulement.'} Les autres appareils ne le connaissent pas.</p>`;
   return `<section class="card" id="contract-share">
-    <h2>3. Contrat partagé</h2>
+    <div class="card-head"><h2>Contrat partagé</h2>${scopeTag('foyer')}</div>
     <p class="hint muted">Le contrat (dates de changement, offre, puissance souscrite) sert au calcul des coûts. Partagé, il est enregistré
       dans la <strong>variable</strong> GitHub <code>CONTRACT_JSON</code> (ce n'est pas un secret), puis recopié chiffré par la collecte :
       tous les appareils affichent alors le même coût. Il n'apparaît jamais dans les journaux publics.</p>
@@ -207,7 +231,7 @@ function contractSection() {
     ${table(['À partir du', 'Offre', 'Puissance'], rows, 99)}
     ${intuisContractLine()}
     <button type="button" class="primary small" id="contract-share-btn" ${hasToken() && info.source !== 'shared' ? '' : 'disabled'}>Partager ce contrat</button>
-    <p class="hint muted">Modifiable dans le menu ⋮ → Prix. Le partage s'applique sur les autres appareils après la prochaine collecte.</p>
+    <p class="hint muted">Modifiable ci-dessus (« Mon contrat »). Le partage s'applique sur les autres appareils après la prochaine collecte. Bouton actif une fois connecté à GitHub (Sources de données).</p>
   </section>`;
 }
 
@@ -323,7 +347,7 @@ export function handleClick(btn: HTMLElement): boolean {
     rerender();
     return true;
   }
-  if (btn.id === 'contract-share-btn') {
+  if (btn.id === 'contract-share-btn' || btn.dataset.shareContract !== undefined) {
     const periods = contractInfo().periods;
     void settingsAction(async () => {
       await putVariable(settingsRepo, 'CONTRACT_JSON', contractJson(periods));
@@ -370,5 +394,5 @@ function iaRateLine() {
   const r = usefulRate(loadVotes(), new Date().toISOString().slice(0, 10));
   return `<p class="hint muted">Analyse IA jugée utile sur cet appareil : ${
     r.rated ? `<strong>${r.useful} sur ${r.rated}</strong> analyse${r.rated > 1 ? 's' : ''} notée${r.rated > 1 ? 's' : ''} des 3 derniers mois` : 'aucune analyse notée sur les 3 derniers mois'
-  } (règle ADR-5 : la garder si elle est utile au moins 2 mois sur 3 ; notez-la dans l'onglet Analyse).</p>`;
+  } (règle ADR-5 : la garder si elle est utile au moins 2 mois sur 3 ; notez-la dans Outils → Analyse du mois).</p>`;
 }

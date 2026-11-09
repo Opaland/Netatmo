@@ -1,7 +1,8 @@
 // S-1.10: data quality per month. Days estimated from a monthly total (Intuis kept the
 // month but lost the days) vs days lost at Intuis (neither the day nor the month).
 import { type DayRecord, type Granularity, MONTHS_LONG, minusYears } from '../aggregate';
-import { app, ds, onDatasetLoaded, state } from '../app';
+import { ds, onDatasetLoaded, state } from '../app';
+import type { Handlers } from '../events';
 import { type Coverage, computeCoverage, gapMonths, uncertainDays } from '../checks';
 import { bucketMarks, countIn, shortDate, uncertainText } from '../periods';
 import { activeRooms, esc, lastDay, roomName, table } from '../ui';
@@ -32,17 +33,20 @@ let reconOn = (() => {
     return false;
   }
 })();
-app.addEventListener('change', (e) => {
-  const t = e.target as HTMLInputElement;
-  if (t.dataset.recon === undefined) return;
-  reconOn = t.checked;
-  try {
-    localStorage.setItem(RECON_KEY, reconOn ? '1' : '0');
-  } catch {
-    /* storage unavailable */
-  }
-  drawReconstitution();
-});
+/** #257: the « reconstituer » switch of the card, dispatched by main.ts (État des données). */
+export const qualityHandlers: Handlers = {
+  change(t) {
+    if (t.dataset.recon === undefined) return false;
+    reconOn = (t as HTMLInputElement).checked;
+    try {
+      localStorage.setItem(RECON_KEY, reconOn ? '1' : '0');
+    } catch {
+      /* storage unavailable */
+    }
+    drawReconstitution();
+    return true;
+  },
+};
 
 /** Fills (or empties) the rebuilt-days zone of the quality card. */
 export function drawReconstitution() {
@@ -53,20 +57,10 @@ export function drawReconstitution() {
   void lazyCard(() => import('./reconstitution'), (m) => zone.isConnected && m.renderReconstitution(zone), { zone, what: 'Reconstitution' });
 }
 
-// The "N jours estimés" link of the period total opens the card.
-app.addEventListener('click', (e) => {
-  const link = (e.target as HTMLElement).closest('a[href="#quality"]');
-  const card = document.getElementById('quality') as HTMLDetailsElement | null;
-  if (!link || !card) return;
-  e.preventDefault();
-  card.open = true;
-  card.scrollIntoView({ behavior: 'smooth', block: 'start' });
-});
-
 const monthLabel = (m: string) => `${MONTHS_LONG[Number(m.slice(5, 7)) - 1]} ${m.slice(0, 4)}`;
 
 /** Collapsible card under the main chart; empty when every month is complete and no device event is known. */
-export function qualityCard(): string {
+export function qualityCard(open = false): string {
   const rooms = new Set(activeRooms().map((r) => r.id));
   const gaps = gapMonths(coverage(), rooms);
   const devices = devicesQualityHtml(); // v1.5: firmware, restarts, modules offline, Tempo, Linky index
@@ -76,7 +70,7 @@ export function qualityCard(): string {
   // The card is inserted by the caller in this same task: draw once it is in the page.
   if (lost && reconOn) queueMicrotask(drawReconstitution);
   const summary = gaps.length ? `${gaps.length} mois incomplet${gaps.length > 1 ? 's' : ''} (${years.join(', ')})` : 'appareils et compteurs';
-  return `<details class="card quality" id="quality">
+  return `<details class="card quality" id="quality"${open ? ' open' : ''}>
     <summary><strong>Qualité des données</strong> · ${summary}</summary>
     ${gaps.length ? gapsHtml(gaps, lost) : ''}
     ${devices}

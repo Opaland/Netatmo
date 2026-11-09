@@ -1,6 +1,7 @@
 // S-1.15: one-file backup of every encrypted document, still encrypted.
 // The bundle is built from the files as served (the envelopes), never from decrypted
 // content: it can be stored anywhere, and restored with `python -m collector restore-backup`.
+import { downloadBlob } from './download';
 import type { Meta } from './aggregate';
 import type { Envelope, KeyInfo } from './crypto';
 
@@ -77,10 +78,6 @@ export async function downloadBackup(source: string, meta: BackupMeta): Promise<
     return resp.json();
   }, meta);
   const blob = new Blob([JSON.stringify(bundle)], { type: 'application/json' });
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = backupFileName();
-  a.click();
-  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  downloadBlob(blob, backupFileName());
   return Object.keys(bundle.files).length;
 }

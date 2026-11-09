@@ -22,6 +22,7 @@ import { esc, lastDay, longDate, table } from '../ui';
 import { html } from '../trusted';
 import '../simulators.css';
 import { lsKey } from '../scope';
+import { fmt1 as num1 } from '../glossary';
 
 export const COLD_VARIABLE = 'COLD_ALERT_JSON';
 const LS = lsKey('cold-draft');
@@ -30,7 +31,6 @@ const LS = lsKey('cold-draft');
 const sensors = (): Sensor[] => coldSensors(rawDataset() ?? ds!);
 
 const shared = () => parseColdConfig((ds!.meta as { cold_alert?: unknown }).cold_alert);
-const num1 = (v: number) => v.toFixed(1).replace('.', ',');
 
 function draft(): ColdConfig {
   try {

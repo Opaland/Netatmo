@@ -84,7 +84,7 @@ export function lockNotice(): string {
   const m = Number((v as { minutes?: unknown }).minutes);
   if (!Number.isFinite(m) || m <= 0) return '';
   const delay = m < 60 ? `${m} min` : `${m / 60} h`;
-  return `Verrouillé après ${delay} sans activité sur cet appareil : ressaisissez la phrase de passe. Vos données sont intactes. Le délai se règle dans le menu (« Verrouiller sans activité »).`;
+  return `Verrouillé après ${delay} sans activité sur cet appareil : ressaisissez la phrase de passe. Vos données sont intactes. Le délai se règle dans Paramètres, Sécurité (« Verrouiller sans activité »).`;
 }
 
 /** Locks after `minutes` without interaction. Call start() once unlocked, stop() once locked. */

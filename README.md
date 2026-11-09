@@ -117,10 +117,10 @@ voix**. Voir [Inviter un membre du foyer](#inviter-un-membre-du-foyer-s-123) pou
 QR code (et ce qu'il ne contient jamais).
 
 Entrez votre phrase de passe une fois ; « Rester connecté sur cet appareil » garde une clé
-non exportable dans le navigateur, **30 jours au plus** (le menu ⋮ → Verrouiller l'efface).
+non exportable dans le navigateur, **30 jours au plus** (⚙ Paramètres → Verrouiller maintenant l'efface).
 Sans activité (toucher, clavier) pendant **15 minutes**, l'application se verrouille d'elle-même :
 les données déchiffrées, la clé mémorisée et le jeton GitHub sont oubliés, la phrase est redemandée.
-Le délai se règle dans le menu ⋮ (5 min, 15 min, 1 h, ou jamais sur cet appareil) ; il compte aussi
+Le délai se règle dans ⚙ Paramètres → Sécurité (5 min, 15 min, 1 h, ou jamais sur cet appareil) ; il compte aussi
 quand l'onglet est fermé, si bien qu'un téléphone volé ne livre pas l'historique.
 
 Sur iPhone, iOS peut **effacer la clé mémorisée** (quelques jours sans ouvrir l'appli dans Safari, ou
@@ -132,7 +132,7 @@ sont, elles, perdues avec le stockage. Chaque version est testée sur WebKit (mo
 
 ### Le plus simple : l'écran Paramètres
 
-Une fois l'application ouverte (menu ⋮ → **Paramètres et connexions**), vous pouvez saisir vos
+Une fois l'application ouverte (⚙ Paramètres → **Sources de données**), vous pouvez saisir vos
 identifiants directement : l'application les **chiffre dans votre navigateur** avec la clé publique du
 dépôt (le procédé imposé par GitHub) et les enregistre comme secrets, puis peut lancer la collecte.
 
@@ -154,7 +154,7 @@ En local : `python -m collector strength` estime la robustesse de la phrase actu
 
 ### Sauvegarde chiffrée (hors GitHub)
 
-Tout l'historique tient dans le dépôt. Pour ne pas dépendre d'un seul compte, menu ⋮ →
+Tout l'historique tient dans le dépôt. Pour ne pas dépendre d'un seul compte, Outils → Exporter mes données (ou ⚙ Sécurité) →
 **Télécharger une sauvegarde chiffrée** : un seul fichier `sauvegarde-energie-AAAA-MM-JJ.json`
 contient `keyinfo.json` et tous les fichiers `*.enc.json` connus (années, horaires, station,
 courbe Linky, météo, analyse…), **toujours chiffrés** : rien n'est déchiffré pour le construire.
@@ -285,7 +285,7 @@ part des analyses des 3 derniers mois jugées utiles (règle ADR-5). Le rapport 
 **questions types** (« ce mois est-il normal ? », « quelle pièce a le plus augmenté ? »…) répondues
 par le code, sans IA ni réseau.
 
-**Prix et contrat.** Dans le menu ⋮, décrivez votre contrat période par période (date de début, offre,
+**Prix et contrat.** Dans ⚙ Paramètres → Contrat et prix, décrivez votre contrat période par période (date de début, offre,
 puissance souscrite, par exemple 9 kVA puis 12 kVA). Pour que **tous les appareils du foyer**
 utilisent le même contrat, ouvrez Paramètres → **Contrat partagé** → *Partager ce contrat* : il est
 écrit dans la **variable** du dépôt `CONTRACT_JSON` (ce n'est pas un secret : dates, offre et
@@ -333,11 +333,11 @@ gardées. Analyse d'impact courte dans [docs/api-notes.md](docs/api-notes.md#don
 ### Vue foyer : chambres regroupées
 
 Les consommations, profils horaires, températures et le CO₂ par chambre disent beaucoup des
-habitudes de chacun. La case **« Vue foyer »** du menu ⋮ (désactivée par défaut depuis la v1.5, sur
+habitudes de chacun. La case **« Vue foyer »** de ⚙ Paramètres → Affichage (désactivée par défaut depuis la v1.5, sur
 cet appareil seulement) regroupe sur tous les écrans les pièces dont le nom contient « chambre »,
 « bedroom », « dortoir » ou « suite parentale » en une seule pièce **« Chambres »** : totaux
 additionnés, températures et CO₂ moyennés, modules de la station compris ; dans l'analyse IA, leurs
-noms sont remplacés par « Chambres ». Le détail s'affiche alors par un geste volontaire, menu ⋮ →
+noms sont remplacés par « Chambres ». Le détail s'affiche alors par un geste volontaire, ⚙ Affichage →
 **Afficher le détail des chambres**, et seulement jusqu'au verrouillage suivant. C'est une
 protection d'affichage : toute personne qui connaît la phrase de passe peut voir le détail.
 
@@ -389,7 +389,7 @@ seulement, jamais un nom). Le détail est dans Paramètres → État des apparei
 ### Mode locataire
 
 Paramètres → **Mode locataire** (réglage propre à l'appareil) : sans le Linky ni le contrat du
-titulaire, les coûts utilisent **votre prix moyen au kWh** (menu ⋮ → Prix) ; les cartes Linky, le
+titulaire, les coûts utilisent **votre prix moyen au kWh** (⚙ Paramètres → Contrat et prix) ; les cartes Linky, le
 comparateur d'offres, la simulation de recharge et le contrat partagé sont masqués avec une phrase
 d'explication. Avec la date de début (et de fin) du bail, le **rapport anonymisé** couvre la seule
 période du bail, sans comparaison avec l'année d'avant.
@@ -491,6 +491,7 @@ python -m collector discover
 | `python -m collector diagnose [--history]` | Diagnostic anonyme de l'API (modules, types de mesure, profondeur, noms des champs de `homestatus`) |
 | `python -m collector diagnose --status` | Seulement les noms des champs des pièces et modules de `homestatus` (fenêtre ouverte ?) |
 | `python -m collector diagnose --probe-history` | Types de mesure candidats pour un historique des fenêtres / du boost : accepté ou refusé, nombre de points (S-13.1) |
+| `python -m collector diagnose --qualite` | Bilan qualité de l'archive chiffrée (`DATA_PASSPHRASE`), par année et par mois : jours réels / estimés / manquants / suspects (chauffage en pièces-jours, chauffe-eau), Linky jour, couverture des demi-heures (Linky, pièces) et du relevé horaire, jours de station par module, recoupement Linky / Intuis, plus long trou de l'année. Nombres seulement, aucune valeur ni nom (S-1.32). Workflow **Diagnostic**, case « Bilan qualité des données » |
 | `python -m collector snapshot --out DOSSIER` | Un relevé chiffré de l'état des pièces (utilisé par le workflow « Relevé horaire ») |
 | `python -m collector restore-backup FICHIER [--dry-run]` | Restaure dans `data/` une sauvegarde chiffrée téléchargée depuis l'appli |
 | `python -m collector demo` | Régénère les données de démonstration |

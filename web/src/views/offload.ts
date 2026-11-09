@@ -7,8 +7,8 @@ import { loadRoomState } from '../data';
 import { html } from '../trusted';
 import { esc, lastDay, longDate, nf0, table } from '../ui';
 import { bedroomGrouping, contactor, lastStateDay, offloadByRoom, offloadDays, peakVsOffload } from '../windows';
+import { fmt1 as f1 } from '../glossary';
 
-const f1 = (v: number) => v.toFixed(1).replace('.', ',');
 const DAYS = 365; // load shedding happens on the coldest days: a whole year
 
 export async function fillOffload(el: HTMLElement) {

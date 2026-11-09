@@ -1,5 +1,5 @@
 // v1.4 checks, on Chromium (job e2e) and on WebKit (job e2e-webkit, S-7.9: Safari iOS):
-// - S-7.9: the five views of the demo render on an iPhone; a remembered key erased by the
+// - S-7.9: the five tabs of the demo render on an iPhone; a remembered key erased by the
 //   browser is explained on the lock screen (« … a effacé la clé, vos données sont intactes »);
 // - S-2.3: an invoice is reconciled and the gap explained (Synthèse);
 // - S-6.2: a works marker gives the signature before / after and kWh/m² (Analyse);
@@ -49,6 +49,51 @@ const progress = (s) => console.log(`[${Math.round((Date.now() - t0) / 1000)} s]
  * checking that something is ABSENT (a lazy card that would come late must fail the test).
  */
 const ready = (page, timeout = 30000) => page.waitForSelector('#view[data-ready]', { state: 'attached', timeout });
+
+/**
+ * #308: open a page by its address: a click on its tab when it has one, else the address bar
+ * (as a shared link or the Back button would). Waits for that page to be drawn and settled.
+ */
+async function go(page, key) {
+  const tab = page.locator(`.tabs [data-view="${key}"]`);
+  if (await tab.count()) await tab.click();
+  else await page.evaluate((k) => (location.hash = `#${k}`), key);
+  await page.waitForSelector(`#view[data-page="${key}"][data-ready]`, { state: 'attached', timeout: 30000 });
+}
+
+/**
+ * #308: every card of v1.5 at its new place (docs/design/architecture-cible.md § 3): each page is
+ * opened and must show the listed elements. « text: » checks a sentence of the page instead.
+ */
+const DESTINATIONS = {
+  accueil: ['.verdict', '#grid-card', '.kpis .kpi', '#main-chart canvas', '[data-set=cat]', '#insight-card .md'],
+  pieces: ['.rooms-picker', '#rooms-chart canvas', 'a[href="#confort"]', 'a[href="#chauffe-eau"]'],
+  historique: ['.kpis-one .kpi', '#cmp-chart canvas', 'text:Totaux annuels', '#rooms-waterfall canvas', '#sig-chart canvas', '#indoor-sig-chart canvas', '#unusual-card', '#cal-chart canvas', '#station-chart canvas'],
+  compteur: ['#linky-chart canvas', '#pmax-chart canvas', '#offload-zone table', '#curve-day-chart canvas', '#bd-chart canvas', '#hour-grid canvas', 'text:Heures pleines / heures creuses'],
+  confort: ['#cold-chart canvas', '#windows-chart canvas', '#ha-card table', '#cellar-0 canvas', '#probe-0 canvas'],
+  'chauffe-eau': ['#wh-month-chart canvas', '#contactor-line:not([hidden])'],
+  etat: ['#quality[open]', '.status-list', '#devices-card [data-shelly-role]'],
+  rapport: ['.report .kpis', '#report-offers table'],
+  'outils-offres': ['#offers-chart canvas'],
+  'outils-voiture': ['#ev-card #ev-result table'],
+  'outils-pac': ['#hp-card #hp-result table'],
+  'outils-consigne': ['#setpoint-card #sp-result'],
+  'outils-teletravail': ['#telework-card'],
+  'outils-facture': ['#invoice-card #inv-add'],
+  'outils-absences': ['#absence-card'],
+  'outils-volets': ['#shutters-card'],
+  'outils-analyse': ['#insight-card .insight-usage'],
+  'outils-questions': ['#questions-card [data-question]'],
+  'outils-exports': ['#export', '[data-export-long=csv]', '[data-export-long=json]', '[data-research]', '#backup'],
+  'parametres-contrat': ['[data-pmode]', '#contract-share'],
+  'parametres-logement': ['#works-card [data-works-surface]', 'a[href="#compteur"]'],
+  'parametres-sources': ['.status-list', '#gh-login', '#devices-card'],
+  'parametres-objectifs': ['#money-card #budget-input', '#co2-input', '[data-threshold]', '#cold-card [data-cold-room]'],
+  'parametres-affichage': ['[data-set=theme]', '[data-toggle=simple]', 'select[data-pin]', '[data-toggle=household]'],
+  'parametres-foyer': ['#invite-open', '#tenant-card #tenant-on'],
+  'parametres-securite': ['select[data-lock-after]', '#backup', '#lock'],
+  'parametres-apropos': ['#legal-open', '#build-info', 'text:Ce qui est public'],
+};
 
 async function audit(page, where) {
   progress(`axe ${where}`);
@@ -116,16 +161,17 @@ try {
   await page.goto(base);
   await page.click('#demo');
   await page.waitForSelector('.kpi', { timeout: 30000 });
+  await go(page, 'pieces');
   const roomNames = (await page.locator('.rooms-panel label').allInnerTexts()).map((t) => t.split('\n')[0].replace(/\s*(Chauffage|Chauffe-eau)\s*$/, '').trim());
   const homeName = (await page.locator('.top h1').innerText()).replace(/\s*démo$/i, '').trim();
   check(roomNames.length >= 3, `pièces introuvables (${roomNames.join(', ')})`);
 
   // S-7.9: the five views
-  for (const view of ['overview', 'compare', 'rooms', 'analyse', 'comfort']) {
-    progress(`vue ${view}`);
-    await page.click(`[data-view=${view}]`);
+  for (const view of ['accueil', 'pieces', 'historique', 'compteur', 'confort']) {
+    progress(`page ${view}`);
+    await go(page, view);
     try {
-      await page.waitForSelector(view === 'comfort' ? '#cold-chart canvas' : '#view .chart canvas', { timeout: 20000 });
+      await page.waitForSelector(view === 'confort' ? '#cold-chart canvas' : '#view .chart canvas', { timeout: 20000 });
     } catch {
       errors.push(`${BROWSER}/${view}: aucun graphique rendu`);
     }
@@ -138,7 +184,7 @@ try {
   progress('chiffres v1.5');
   {
     const label = () => page.locator('#cmp-chart').getAttribute('aria-label');
-    await page.click('[data-view=compare]');
+    await go(page, 'historique');
     await page.waitForSelector('#cmp-chart canvas');
     const totals = await page.locator('table', { hasText: 'Évolution' }).first().innerText();
     check(/jours? estimés? ou manquants?/.test(totals), '#297 : évolution annuelle sans mention des jours perdus');
@@ -151,24 +197,24 @@ try {
     check((await page.locator('[data-season]', { hasText: 'en cours' }).count()) === 1, '#298 : pas de puce pour la saison en cours');
     check(/\(en cours\) : [\d\s ]+ kWh au \d+/.test((await label()) ?? ''), '#298 : saison en cours absente du graphique');
     await page.click('[data-set=compareMode][data-value=monthly]');
-    await page.click('[data-view=rooms]');
+    await go(page, 'pieces');
     await page.waitForSelector('#rooms-chart canvas');
     const head = await page.locator('#view table thead').first().innerText();
     check(/Jours à moyenne sous/.test(head) && /hiver \d{4}–\d{4}/.test(head), `#294 : colonne des jours froids sans définition ni hiver (« ${head.replace(/\s+/g, ' ')} »)`);
-    await page.click('.menu summary');
-    await page.click('.menu-panel [data-view=report]');
+    await go(page, 'outils');
+    await page.click('#view a[href="#rapport"]');
     await page.waitForSelector('.report .kpis');
     const yr = await page.locator('select[data-set=reportYear] option').first().getAttribute('value');
     await page.selectOption('select[data-set=reportYear]', yr);
     await ready(page);
     const kpis = await page.locator('.report .kpis').innerText();
     check(!/par mois en moyenne/.test(kpis) || /par mois en moyenne sur [\d,]+ mois/.test(kpis), `#246 : moyenne mensuelle de l'année en cours sans période (« ${kpis.replace(/\s+/g, ' ')} »)`);
-    await page.click('[data-view=overview]');
+    await go(page, 'accueil');
   }
 
   // S-2.3: invoice
   progress('facture');
-  await page.click('[data-view=overview]');
+  await go(page, 'outils-facture');
   await page.waitForSelector('#invoice-card #inv-add', { timeout: 15000 });
   const max = await page.getAttribute('#inv-to', 'max');
   const [from, to] = previousMonth(max);
@@ -183,11 +229,11 @@ try {
   check(/D'où vient l'écart/.test(inv) && /Part du chauffage et de l'eau chaude/.test(inv), 'facture : explication ou périmètre absents');
   check(/Retirer/.test(inv), 'facture : non enregistrée dans la liste');
   await page.locator('#invoice-card').screenshot({ path: `${OUT}/${BROWSER}-facture.png` });
-  await audit(page, 'synthese-facture');
+  await audit(page, 'outils-facture');
 
   // S-6.2: works marker and surfaces
   progress('travaux');
-  await page.click('[data-view=analyse]');
+  await go(page, 'parametres-logement');
   await page.waitForSelector('#works-card #works-add', { timeout: 15000 });
   const y = Number(max.slice(0, 4)) - 1;
   await page.fill('#works-day', `${y}-${max.slice(5, 7)}-01`);
@@ -211,12 +257,34 @@ try {
   works = await page.locator('#works-card').innerText();
   check(/kWh\/m²/.test(works), 'travaux : kWh/m² absent après saisie des surfaces');
   await page.locator('#works-card').screenshot({ path: `${OUT}/${BROWSER}-travaux.png` });
-  await audit(page, 'analyse-travaux');
-  await checkViolations(page, 'analyse-travaux');
+  await audit(page, 'parametres-logement');
+  await checkViolations(page, 'parametres-logement');
+
+  // #308: no card lost, each one at its new place; #309: every setting in ⚙ (one page each)
+  progress('destinations des cartes');
+  for (const [key, wants] of Object.entries(DESTINATIONS)) {
+    await go(page, key);
+    for (const want of wants) {
+      if (want.startsWith('text:')) {
+        if (!(await page.locator('#view').innerText()).includes(want.slice(5))) errors.push(`${BROWSER} #${key} : « ${want.slice(5)} » absent`);
+        continue;
+      }
+      await page.waitForSelector(want, { state: 'attached', timeout: 15000 }).catch(() => errors.push(`${BROWSER} #${key} : ${want} absent`));
+    }
+    await checkViolations(page, key);
+  }
+  // a room page from the list, and the Back button of the system comes back to the list
+  await go(page, 'pieces');
+  await page.locator('#view a[data-room-link]').first().click();
+  await page.waitForSelector('#view[data-page^="piece-"] #room-detail canvas', { timeout: 15000 }).catch(() => errors.push(`${BROWSER} page Pièce : détail mois par mois absent`));
+  check(await page.evaluate(() => document.activeElement?.id === 'page-title'), 'page Pièce : le titre ne reçoit pas le focus');
+  await page.goBack();
+  await page.waitForSelector('#view[data-page=pieces]', { state: 'attached', timeout: 10000 }).catch(() => errors.push(`${BROWSER} retour du système : la liste des pièces ne revient pas`));
+  await audit(page, 'pieces');
 
   // S-6.6: research export
   progress('export recherche');
-  await page.click('.menu summary');
+  await go(page, 'outils-exports');
   await page.click('[data-research]');
   await page.waitForSelector('#research-dialog[open] #research-go');
   await page.click('#research-go');

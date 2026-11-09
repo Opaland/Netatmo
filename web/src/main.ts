@@ -1,59 +1,80 @@
-// Shell: header, tabs, menu and filters; view router; delegated events; boot.
+// Shell (#308): header (home name, data-status pill, ⚙), tab bar, sub-page bar with its back
+// arrow; hash routing (router.ts) and Back; one event delegation (#257) that calls the handlers
+// of the page shown (pages.ts) then those of the cards loaded on demand (events.ts); boot.
 // Each view lives in src/views/, shared helpers in src/ui.ts, state in src/app.ts.
-import { CATEGORY_LABEL, toCsv } from './aggregate';
-import { type State, type View, activeRooms, app, ds, onDatasetOpened, onLock, setDataset, setRenderer, setState, state } from './app';
+import { toCsv } from './aggregate';
+import { type State, activeRooms, app, ds, onDatasetOpened, onLock, setDataset, setRenderer, setState, state } from './app';
 import { disposeAll } from './charts';
 import { BadEnvelope, WrongPassphrase } from './crypto';
 import { type Dataset, NoData, clearDataCaches, forgetKeys, load, recallKey } from './data';
-import { lazyAction, lazyCard } from './lazy';
+import { type Ctl, cardHandlers, dispatch } from './events';
+import { lazyAction } from './lazy';
 import { clearMemo } from './memo';
 import { viewRendered } from './ready';
 import { framedHtml, isFramed } from './frame';
 import { prefetchForOffline, unavailable, updateNetStatus } from './offline';
-import { IdleLock, LOCK_CHOICES, REMEMBER_DAYS, idleSince, clearLockNotice, lockNotice, markIdleLock } from './session';
+import { PAGES, dataStatus } from './pages';
+import { type Route, allowed, parentOf, parseRoute, routeKey, simpleTabs, tabOf, titleOf, visibleTabs } from './router';
+import { IdleLock, REMEMBER_DAYS, clearLockNotice, idleSince, lockNotice, markIdleLock } from './session';
 import { isIos, keyLoss, lossMessage, readMark, writeMark } from './storage';
 import { type SwipeDir, onSwipe, step } from './swipe';
-import { esc, filtered, keepMenuOpen, lastDay, longDate, roomColor, seg } from './ui';
-import * as analyse from './views/analyse';
-import * as compare from './views/compare';
-import * as household from './views/household';
+import { tenant } from './tenant';
+import { downloadBlob, esc, filtered, lastDay, roomName } from './ui';
 import { renderLoading, renderLock, showApp } from './views/lock';
-import * as overview from './views/overview';
-import { pinSelect, pinnedTiles } from './views/pinned';
 import { toggleTerm } from './plain';
-import * as prices from './views/prices';
-import * as report from './views/report';
-import * as rooms from './views/rooms';
 import * as settings from './views/settings';
 import { html } from './trusted';
 import './style.css';
 
-// ------------------------------------------------------------------ shell
-const ICONS = {
-  overview: '<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>',
-  compare: '<path d="M3 17l5-5 4 3 8-8"/><path d="M3 21h18"/>',
-  rooms: '<path d="M3 10l9-7 9 7v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1z"/><path d="M9 21v-7h6v7"/>',
-  comfort: '<path d="M14 14.8V4.5a2.5 2.5 0 0 0-5 0v10.3a4.5 4.5 0 1 0 5 0z"/><path d="M11.5 9v8"/>',
-  analyse: '<circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3M8 13l2-3 2 2 2-4"/>',
-  report: '<path d="M6 2h9l5 5v15H6z"/><path d="M14 2v6h6M9 13h8M9 17h8"/>',
+// ------------------------------------------------------------------ icons
+const ICONS: Record<string, string> = {
+  accueil: '<path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/>',
+  pieces: '<rect x="3" y="3" width="8" height="8" rx="1"/><rect x="13" y="3" width="8" height="8" rx="1"/><rect x="3" y="13" width="8" height="8" rx="1"/><rect x="13" y="13" width="8" height="8" rx="1"/>',
+  historique: '<path d="M3 17l5-5 4 3 8-8"/><path d="M3 21h18"/>',
+  compteur: '<circle cx="12" cy="13" r="8"/><path d="M12 13l4-4M8 5l-1-2M16 5l1-2"/>',
+  outils: '<path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18l3 3 6.3-6.3a4 4 0 0 0 5.4-5.4l-2.5 2.5-2.4-.6-.6-2.4z"/>',
+  piece: '<path d="M3 21V8l9-5 9 5v13"/><path d="M9 21v-7h6v7"/>',
+  aide: '<circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .9-1 1.6V14M12 17.5v.01"/>',
   settings:
     '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>',
-  menu: '<circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="19" r="1.5"/>',
+  back: '<path d="M15 18l-6-6 6-6"/>',
 };
-const icon = (name: keyof typeof ICONS) =>
-  `<svg class="icon" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${ICONS[name]}</svg>`;
+const icon = (name: string) =>
+  `<svg class="icon" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${ICONS[name] ?? ''}</svg>`;
 
-const TABS: [View, string][] = [
-  ['overview', 'Synthèse'],
-  ['compare', 'Comparer'],
-  ['rooms', 'Pièces'],
-  ['analyse', 'Analyse'],
-  ['comfort', 'Confort'],
-];
+// ------------------------------------------------------------------ routing (#308)
+/** Current route: the address bar first, else the last page shown (remembered), else Accueil. */
+function currentRoute(): Route {
+  const r = parseRoute(state.view) ?? { page: 'accueil' };
+  return allowed(r, tenant().on);
+}
+
+/** History depth of the entry shown: the back arrow goes back only to a page of the app. */
+const depth = () => (history.state as { depth?: number } | null)?.depth ?? 0;
+
+/** Go to a page: a new history entry (Back returns), the page remembered. */
+export function navigate(key: string, replace = false) {
+  const r = parseRoute(key);
+  if (!r) return;
+  const k = routeKey(allowed(r, tenant().on));
+  if (replace) history.replaceState({ depth: depth() }, '', `#${k}`);
+  else if (`#${k}` !== location.hash) history.pushState({ depth: depth() + 1 }, '', `#${k}`);
+  if (k !== state.view) setState({ view: k });
+}
+
+/** The address changed (Back, Forward, a typed or shared address): show its page. */
+function syncRoute() {
+  if (!ds) return;
+  const r = parseRoute(location.hash);
+  if (!r) return; // an anchor of the page, not a route
+  const k = routeKey(allowed(r, tenant().on));
+  if (k !== state.view) setState({ view: k });
+}
+window.addEventListener('popstate', syncRoute);
+window.addEventListener('hashchange', syncRoute);
 
 let slide: SwipeDir | null = null;
-/** #256: set while a menu setting that only the view uses is applied (prices, lock delay, pinned room). */
-let viewOnly = false;
+let shownRoute: string | null = null;
 
 /** Selector finding the focused control again after a re-render: its id, else its data-* attributes. */
 function focusSelector(el: Element | null): string | null {
@@ -64,73 +85,68 @@ function focusSelector(el: Element | null): string | null {
   return `${el.tagName.toLowerCase()}${data.map((a) => `[${a.name}="${CSS.escape(a.value)}"]`).join('')}`;
 }
 
+/** #309: theme of this device ([data-theme] on <html>, read by styles/tokens.css). */
+function applyTheme() {
+  const root = document.documentElement;
+  if (state.theme === 'light' || state.theme === 'dark') root.dataset.theme = state.theme;
+  else delete root.dataset.theme;
+}
+
+// ------------------------------------------------------------------ shell
 function render() {
   if (!ds) return;
-  const view = document.getElementById('view');
-  if (viewOnly && view) {
-    // The header, the menu and the filters stay as they are: the focus and the field being
-    // typed in are kept, and Tab goes on to the next field of the menu.
-    viewOnly = false;
-    disposeAll(view);
-    return renderView(view);
-  }
-  viewOnly = false;
-  const focus = focusSelector(document.activeElement);
+  applyTheme();
+  const route = currentRoute();
+  const key = routeKey(route);
+  // the address bar follows the page (first render, or a page reached without a link)
+  if (location.hash !== `#${key}`) history.replaceState({ depth: depth() }, '', `#${key}`);
+  const changed = shownRoute !== null && shownRoute !== key;
+  const focus = changed ? null : focusSelector(document.activeElement);
+  const keepTab = changed && (document.activeElement as HTMLElement | null)?.closest?.('.tabs') ? focusSelector(document.activeElement) : null;
   disposeAll(app);
   const { meta } = ds;
-  const tabs = TABS;
-  const roomsCount = state.rooms ? state.rooms.length : activeRooms().length;
+  const tab = tabOf(route);
+  const parent = parentOf(route);
+  const tabs = state.simple ? simpleTabs(state.pinnedRoom) : visibleTabs(tenant().on);
+  const s = dataStatus();
+  const title = titleOf(route, roomName);
+  const sub = parent !== null && !(state.simple && route.page === 'piece' && route.room === state.pinnedRoom);
+  const isOn = (k: string) => (state.simple ? k === key || (k === 'pieces' && route.page === 'piece') : k === tab);
   app.innerHTML = html`
-  <header class="top" data-swipe="${state.view === 'overview' ? 'period' : 'tab'}">
+  <header class="top" data-swipe="${route.page === 'accueil' ? 'period' : 'tab'}">
     <div class="title">
       <h1>${esc(meta.home.name)}${ds.source === 'demo' ? ' <span class="badge">démo</span>' : ''}</h1>
-      <p class="muted">Données jusqu'au ${meta.last_day ? longDate(meta.last_day) : '—'}</p>
     </div>
-    <nav class="tabs" aria-label="Vues" data-swipe="tab">
-      ${tabs.map(([v, l]) => `<button type="button" data-view="${v}" aria-current="${state.view === v ? 'page' : 'false'}">${icon(v)}<span>${l}</span></button>`).join('')}
-    </nav>
-    <details class="menu">
-      <summary aria-label="Menu">${icon('menu')}</summary>
-      <div class="menu-panel">
-        ${prices.pricesForm()}
-        <button type="button" data-view="report">${icon('report')} Rapport annuel imprimable</button>
-        <button type="button" data-view="settings">${icon('settings')} Paramètres et connexions</button>
-        ${household.householdMenu()}
-        <label class="check"><input type="checkbox" data-toggle="simple" ${state.simple ? 'checked' : ''}> Mode simple (grands caractères, phrases courtes)</label>
-        ${pinSelect()}
-        <label class="lock-after">Verrouiller sans activité
-          <select data-lock-after>${LOCK_CHOICES.map((m) => `<option value="${m}" ${m === state.lockAfter ? 'selected' : ''}>${m ? (m < 60 ? `après ${m} min` : `après ${m / 60} h`) : 'jamais sur cet appareil'}</option>`).join('')}</select>
-        </label>
-        <button type="button" id="export">Exporter en CSV (filtres appliqués)</button>
-        <button type="button" data-export-long="csv" title="Format long documenté (docs/export-long.md), tout l'historique, préparé sur cet appareil">Export long (CSV)</button>
-        <button type="button" data-export-long="json" title="Même contenu en JSON, conforme au schéma docs/export-long.schema.json">Export long (JSON)</button>
-        <button type="button" data-research title="Horaire, pièces pseudonymisées, dates décalées, licence au choix (docs/export-recherche.md)">Export recherche (anonymisé)</button>
-        <button type="button" id="backup" title="Tous les fichiers chiffrés en un seul, toujours chiffrés : à garder hors de GitHub">Télécharger une sauvegarde chiffrée</button>
-        <button type="button" id="lock">${ds.source === 'demo' ? 'Quitter la démo' : 'Verrouiller'}</button>
-      </div>
-    </details>
+    <a class="status-pill ${s.level}" href="#etat" data-view="etat" title="État des données"><span class="dot" aria-hidden="true"></span>${esc(s.label)}<span class="sr-only"> : ${s.level === 'ok' ? 'à jour' : 'en retard'}, voir l'état des données</span></a>
+    <a class="icon-btn" href="#parametres" data-view="parametres" aria-label="Paramètres"${route.page === 'parametres' ? ' aria-current="page"' : ''}>${icon('settings')}</a>
   </header>
-  ${staleBanner()}
+  <nav class="tabs${tabs.length === 3 ? ' three' : ''}" aria-label="Onglets" data-swipe="tab">
+    ${tabs
+      .map(
+        ([k, l]) =>
+          `<a href="#${k}" data-view="${k}"${isOn(k) ? ' aria-current="page"' : ''}>${icon(state.simple && k.startsWith('piece') ? 'piece' : state.simple && k === 'aide' ? 'aide' : k)}<span>${esc(l)}</span></a>`,
+      )
+      .join('')}
+  </nav>
+  ${s.level !== 'ok' ? `<p class="stale" role="alert"><span aria-hidden="true">⚠️</span> Données arrêtées au ${esc(s.label.replace('Données du ', ''))} (il y a ${s.days} jours) : la collecte est peut-être en panne. <a href="#etat">Voir pourquoi</a></p>` : ''}
   <p class="offline" id="net-status" role="status" hidden></p>
-  <section class="filters" aria-label="Filtres">
-    ${seg('cat', state.cat, [['all', 'Tout'], ['heating', 'Chauffage'], ['water_heater', 'Chauffe-eau']], 'Catégorie')}
-    <details class="rooms-picker">
-      <summary>Pièces <span class="count">${roomsCount}/${activeRooms().length}</span></summary>
-      <div class="rooms-panel">
-        <div class="rooms-actions"><button type="button" data-rooms="all">Toutes</button><button type="button" data-rooms="none">Aucune</button></div>
-        ${activeRooms()
-          .map(
-            (r) => `<label class="check"><input type="checkbox" data-room="${esc(r.id)}" ${!state.rooms || state.rooms.includes(r.id) ? 'checked' : ''}>
-            <span class="swatch" style="background:${roomColor(r.id)}"></span>${esc(r.name)} <small class="muted">${CATEGORY_LABEL[r.category]}</small></label>`,
-          )
-          .join('')}
-      </div>
-    </details>
-  </section>
-  <main id="view"></main>`;
-  renderView(document.getElementById('view')!);
-  // #256: give the focus back to the control that had it (after the handler reopened its menu).
-  if (focus) {
+  ${
+    sub
+      ? `<div class="subhead"><a class="back" href="#${parent}" data-back aria-label="Retour">${icon('back')}</a><h2 id="page-title" tabindex="-1">${esc(title)}</h2></div>`
+      : ''
+  }
+  <main id="view" data-page="${esc(key)}"></main>`;
+  renderView(document.getElementById('view')!, route);
+  shownRoute = key;
+  if (changed) {
+    window.scrollTo(0, 0);
+    // a sub-page announces itself: its title takes the focus; a tab keeps it on the tab bar
+    queueMicrotask(() => {
+      const t = keepTab ? app.querySelector<HTMLElement>(keepTab) : app.querySelector<HTMLElement>('#page-title');
+      t?.focus({ preventScroll: true });
+    });
+  } else if (focus) {
+    // #256: give the focus back to the control that had it (the page was redrawn around it).
     queueMicrotask(() => {
       if (document.activeElement && document.activeElement !== document.body) return;
       app.querySelector<HTMLElement>(focus)?.focus({ preventScroll: true });
@@ -138,144 +154,181 @@ function render() {
   }
 }
 
-function renderView(view: HTMLElement) {
-  const records = filtered();
-  if (!records.length && state.view !== 'settings' && state.view !== 'comfort') {
-    view.innerHTML = html`<p class="empty">Aucune donnée pour cette sélection.</p>`;
-  } else if (state.view === 'overview') overview.renderOverview(view, records);
-  else if (state.view === 'compare') compare.renderCompare(view, records);
-  else if (state.view === 'analyse') analyse.renderAnalyse(view, records);
-  else if (state.view === 'comfort') renderComfort(view);
-  else if (state.view === 'report') report.renderReport(view);
-  else if (state.view === 'settings') settings.renderSettings(view);
-  else rooms.renderRooms(view, records);
-  // S-7.8: the pinned room comes first among the key figures of the simple mode.
-  if (state.simple && state.view === 'overview') view.querySelector('.kpis')?.insertAdjacentHTML('afterbegin', html(pinnedTiles()));
+function renderView(view: HTMLElement, route: Route) {
+  const page = PAGES[route.page];
+  if (page.needsData && !filtered().length) view.innerHTML = html`<p class="empty">Aucune donnée pour cette sélection. <button type="button" class="link" data-filter-reset>Tout afficher</button></p>`;
+  else page.render(view, route);
   if (slide) view.classList.add(`slide-${slide}`);
   slide = null;
   void updateNetStatus(ds);
-  document.body.classList.toggle('is-report', state.view === 'report' || state.view === 'settings');
-  document.body.classList.toggle('is-comfort', state.view === 'comfort');
-  document.body.classList.toggle('is-simple', state.simple && state.view === 'overview');
+  document.body.classList.toggle('is-report', route.page === 'rapport' || route.page === 'parametres');
+  document.body.classList.toggle('is-simple', state.simple && route.page === 'accueil');
+  document.body.classList.toggle('simple-nav', state.simple);
   viewRendered(); // #260: #view[data-ready] once its lazy cards and documents have settled
 }
-setRenderer(render);
 
-// Comfort (S-11, S-3.8) is loaded on demand: its code stays out of the entry chunk.
-let comfort: typeof import('./views/comfort') | null = null;
-function renderComfort(view: HTMLElement) {
-  if (comfort) return comfort.renderComfort(view);
-  view.innerHTML = html('<p class="empty">Chargement…</p>');
-  void lazyCard(
-    () => import('./views/comfort'),
-    (m) => {
-      comfort = m;
-      if (state.view === 'comfort') render();
-    },
-    { zone: view, what: 'Vue Confort' },
-  );
-}
+// #256: a value typed in a field is saved on change (Tab, Enter): the page is redrawn once the
+// focus has moved on, so that it lands on the next field again (found by its id or data-*).
+let deferred = false;
+let pending = false;
+setRenderer(() => {
+  if (!deferred) return render();
+  if (pending) return;
+  pending = true;
+  setTimeout(() => {
+    pending = false;
+    render();
+  });
+});
 
-/** S-1.5: warn when the archive stopped moving (collection broken or Intuis late). */
-function staleBanner() {
-  const last = ds!.meta.last_day;
-  if (!last || ds!.source === 'demo') return '';
-  const days = Math.floor((Date.now() - Date.parse(`${last}T12:00:00Z`)) / 86400000);
-  if (days <= 3) return '';
-  return `<p class="stale" role="alert"><span aria-hidden="true">⚠️</span> Données arrêtées au ${longDate(last)} (il y a ${days} jours) : la collecte est peut-être en panne. Une alerte est ouverte dans les issues GitHub du dépôt ; vous pouvez aussi la relancer depuis Paramètres.</p>`;
-}
+// ------------------------------------------------------------------ events (#257: one delegation)
+const pageHandlers = () => PAGES[currentRoute().page].handlers ?? [];
 
-// ------------------------------------------------------------------ events (delegated)
-/** View-specific handlers: each returns true when the event was its own. */
-const comfortClick = (btn: HTMLElement) => comfort?.handleClick(btn) ?? false;
-const comfortChange = (t: HTMLInputElement | HTMLSelectElement) => comfort?.handleChange(t) ?? false;
-const clickHandlers = [compare.handleClick, rooms.handleClick, report.handleClick, settings.handleClick, prices.handleClick, comfortClick, household.handleClick];
-const changeHandlers = [overview.handleChange, rooms.handleChange, prices.handleChange, compare.handleChange, analyse.handleChange, report.handleChange, comfortChange, household.handleChange];
-
-app.addEventListener('keydown', (e) => settings.handleKeydown(e));
-
-app.addEventListener('click', async (e) => {
-  const t = e.target as HTMLElement;
-  const btn = t.closest<HTMLElement>('button, [data-view]');
-  if (!btn || !ds) return;
-  if (btn.dataset.view) return setState({ view: btn.dataset.view as View });
-  if (btn.dataset.set) return setState({ [btn.dataset.set]: btn.dataset.value } as Partial<State>);
-  if (btn.dataset.rooms) {
-    return setState({ rooms: btn.dataset.rooms === 'all' ? null : [] });
+/** Clicks of the shell itself: navigation, segments, filters, glossary, exports, lock. */
+async function shellClick(el: HTMLElement, e: MouseEvent): Promise<boolean> {
+  // a link to a page of the app: a history entry of its own (Back returns here)
+  const a = el.closest<HTMLAnchorElement>('a[href^="#"]');
+  if (a) {
+    const href = a.getAttribute('href')!;
+    if (!parseRoute(href)) return false; // an anchor in the page
+    e.preventDefault();
+    if (a.dataset.back !== undefined && depth() > 0) history.back();
+    else navigate(href.slice(1), a.dataset.back !== undefined);
+    return true;
+  }
+  if (el.dataset.view) {
+    navigate(el.dataset.view);
+    return true;
+  }
+  if (el.dataset.set) {
+    setState({ [el.dataset.set]: el.dataset.value } as Partial<State>);
+    return true;
+  }
+  if (el.dataset.rooms) {
+    setState({ rooms: el.dataset.rooms === 'all' ? null : [] });
+    document.querySelector<HTMLDetailsElement>('.rooms-picker')?.setAttribute('open', '');
+    return true;
+  }
+  if (el.dataset.filterReset !== undefined) {
+    setState({ cat: 'all', rooms: null });
+    return true;
+  }
+  if (el.dataset.simpleExit) {
+    // #316: leaving the simple view is confirmed in the page (no blocking dialog)
+    const box = el.closest('.simple-exit');
+    const confirm = box?.querySelector<HTMLElement>('.simple-confirm');
+    if (el.dataset.simpleExit === 'ask' && confirm) {
+      confirm.hidden = false;
+      confirm.querySelector<HTMLElement>('[data-simple-exit=yes]')?.focus();
+    } else if (el.dataset.simpleExit === 'no' && confirm) {
+      confirm.hidden = true;
+      box?.querySelector<HTMLElement>('[data-simple-exit=ask]')?.focus();
+    } else if (el.dataset.simpleExit === 'yes') {
+      setState({ simple: false });
+      navigate('accueil');
+    }
+    return true;
   }
   // S-7.13: a glossary term of the simple mode shows its definition (and reads it aloud).
-  if (btn.dataset.term) {
-    const def = toggleTerm(btn);
+  if (el.dataset.term) {
+    const def = toggleTerm(el);
     if (def) announce(def);
-    return;
+    return true;
   }
-  if (clickHandlers.some((h) => h(btn))) return;
+  if (!ds) return false;
   // S-9.7: long export, built locally from the decrypted data (lazy module)
   // S-6.6: anonymised research dataset (lazy dialog)
-  if (btn.dataset.research !== undefined) return void lazyAction(btn, () => import('./views/research'), (m) => m.openResearch(), 'Export recherche');
-  if (btn.dataset.exportLong) {
+  if (el.dataset.research !== undefined) {
+    void lazyAction(el, () => import('./views/research'), (m) => m.openResearch(), 'Export recherche');
+    return true;
+  }
+  if (el.dataset.exportLong) {
     const d = ds;
-    return void lazyAction(btn, () => import('./export'), (m) => m.downloadLong(d, btn.dataset.exportLong as 'csv' | 'json'), 'Export long');
+    void lazyAction(el, () => import('./export'), (m) => m.downloadLong(d, el.dataset.exportLong as 'csv' | 'json'), 'Export long');
+    return true;
   }
-  if (btn.id === 'export') {
-    const blob = new Blob(['﻿' + toCsv(filtered(), ds.meta.rooms)], { type: 'text/csv;charset=utf-8' });
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = `consommation-${lastDay()}.csv`;
-    a.click();
-    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  if (el.id === 'export') {
+    downloadBlob(new Blob(['﻿' + toCsv(filtered(), ds.meta.rooms)], { type: 'text/csv;charset=utf-8' }), `consommation-${lastDay()}.csv`);
+    return true;
   }
-  if (btn.id === 'backup') {
+  if (el.id === 'backup') {
     // S-1.15: lazy module, the envelopes are copied as served (never decrypted).
-    const label = btn.textContent;
-    btn.textContent = 'Sauvegarde en cours…';
+    const label = el.textContent;
+    el.textContent = 'Sauvegarde en cours…';
     try {
       const { downloadBackup } = await import('./backup');
       const n = await downloadBackup(ds.source, ds.meta);
-      btn.textContent = `Sauvegarde téléchargée (${n} fichiers)`;
+      el.textContent = `Sauvegarde téléchargée (${n} fichiers)`;
     } catch (err) {
-      btn.textContent = `Sauvegarde impossible : ${err instanceof Error ? err.message : err}`;
+      el.textContent = `Sauvegarde impossible : ${err instanceof Error ? err.message : err}`;
     }
-    setTimeout(() => (btn.textContent = label), 4000);
+    setTimeout(() => (el.textContent = label), 4000);
+    return true;
   }
-  if (btn.id === 'lock') await lockApp();
-});
-
-app.addEventListener('change', (e) => {
-  const t = e.target as HTMLInputElement | HTMLSelectElement;
-  if (!ds) return;
-  // #256: a price, the lock delay or the pinned room leave the menu as it is (only the view is redrawn).
-  viewOnly = !!t.closest('.menu') && (t.dataset.price !== undefined || t.dataset.lockAfter !== undefined || t.dataset.pin !== undefined);
-  try {
-    onChange(t);
-  } finally {
-    viewOnly = false;
+  if (el.id === 'lock') {
+    await lockApp();
+    return true;
   }
-});
+  return false;
+}
 
-function onChange(t: HTMLInputElement | HTMLSelectElement) {
-  if (changeHandlers.some((h) => h(t))) return;
+/** Changes of the shell: room selection, simple view, lock delay, pinned room, threshold. */
+function shellChange(t: Ctl): boolean {
   if (t.dataset.lockAfter !== undefined) {
     setState({ lockAfter: Number(t.value) });
     idle.configure(state.lockAfter);
-    return keepMenuOpen();
+    return true;
   }
   if (t.dataset.pin !== undefined) {
     setState({ pinnedRoom: t.value || null });
-    return keepMenuOpen();
+    return true;
   }
-  if (t.dataset.toggle === 'simple') return setState({ simple: (t as HTMLInputElement).checked, view: 'overview' });
+  if (t.dataset.threshold !== undefined) {
+    setState({ comfortThreshold: Number(t.value) });
+    return true;
+  }
+  if (t.dataset.toggle === 'simple') {
+    setState({ simple: (t as HTMLInputElement).checked });
+    return true;
+  }
   if (t instanceof HTMLInputElement && t.dataset.room) {
     const all = activeRooms().map((r) => r.id);
     const cur = new Set(state.rooms ?? all);
     if (t.checked) cur.add(t.dataset.room);
     else cur.delete(t.dataset.room);
     const rooms = all.filter((r) => cur.has(r));
-    // keep the picker open across the re-render
     setState({ rooms: rooms.length === all.length ? null : rooms });
+    // keep the picker open across the re-render
     document.querySelector<HTMLDetailsElement>('.rooms-picker')?.setAttribute('open', '');
+    return true;
   }
+  return false;
 }
+
+app.addEventListener('click', async (e) => {
+  const el = (e.target as HTMLElement).closest<HTMLElement>('button, a, [data-view]');
+  if (!el || !ds) return;
+  if (await shellClick(el, e)) return;
+  dispatch([...pageHandlers(), ...cardHandlers()], 'click', el, e);
+});
+
+/** A text-like field (not a box, a radio or a list): its change comes with a move of the focus. */
+const typed = (t: Ctl) => t instanceof HTMLTextAreaElement || (t instanceof HTMLInputElement && !['checkbox', 'radio', 'range', 'file'].includes(t.type));
+
+app.addEventListener('change', (e) => {
+  const t = e.target as Ctl;
+  if (!ds) return;
+  deferred = typed(t);
+  if (deferred) viewRendered(); // not ready until the deferred redraw (#260)
+  try {
+    if (shellChange(t)) return;
+    dispatch([...pageHandlers(), ...cardHandlers()], 'change', t, e);
+  } finally {
+    deferred = false;
+  }
+});
+app.addEventListener('input', (e) => ds && dispatch([...pageHandlers(), ...cardHandlers()], 'input', e.target, e));
+app.addEventListener('submit', (e) => ds && dispatch([...pageHandlers(), ...cardHandlers()], 'submit', e.target, e));
 
 app.addEventListener('toggle', (e) => {
   const t = e.target as HTMLElement;
@@ -287,19 +340,23 @@ for (const q of ['(prefers-color-scheme: dark)', '(prefers-contrast: more)', '(f
   window.matchMedia(q).addEventListener('change', () => ds && render());
 }
 
-// S-7.6: Escape closes an open menu or room picker and gives the focus back to its button.
 app.addEventListener('keydown', (e) => {
+  if (dispatch([...pageHandlers(), ...cardHandlers()], 'keydown', e)) return;
+  // S-7.6: Escape closes an open fold (room picker…) and gives the focus back to its summary;
+  // on a sub-page with nothing open, it goes back (#308).
   if (e.key !== 'Escape') return;
-  const open =
-    (e.target as HTMLElement).closest<HTMLDetailsElement>('details[open]') ??
-    app.querySelector<HTMLDetailsElement>('details.menu[open], details.rooms-picker[open]');
-  if (!open) return;
-  open.open = false;
-  open.querySelector<HTMLElement>('summary')?.focus();
+  const open = (e.target as HTMLElement).closest<HTMLDetailsElement>('details[open]') ?? app.querySelector<HTMLDetailsElement>('details.rooms-picker[open]');
+  if (open) {
+    open.open = false;
+    open.querySelector<HTMLElement>('summary')?.focus();
+    return;
+  }
+  if ((e.target as HTMLElement).closest('input, select, textarea')) return;
+  app.querySelector<HTMLElement>('.subhead .back')?.click();
 });
 
 // ------------------------------------------------------------------ swipe (S-7.11)
-/** Period choices of the overview, in the order of its select: recent → older → all. */
+/** Period choices of Accueil, in the order of its select: recent → older → all. */
 function periods(): string[] {
   return ['30d', '12m', ...ds!.meta.years.map(String).reverse(), 'all'];
 }
@@ -313,7 +370,8 @@ function announce(msg: string) {
 
 onSwipe(app, (zone, dir) => {
   if (!ds || state.simple) return;
-  if (zone === 'period' && state.view === 'overview') {
+  const route = currentRoute();
+  if (zone === 'period' && route.page === 'accueil') {
     // Swipe right goes back in time (older period), swipe left towards the present.
     const next = step(periods(), state.period, dir === 'right' ? 1 : -1);
     if (!next) return;
@@ -322,15 +380,17 @@ onSwipe(app, (zone, dir) => {
     return announce(`Période : ${PERIOD_LABEL[next] ?? next}`);
   }
   if (zone === 'tab') {
+    const tabs = visibleTabs(tenant().on);
+    const cur = tabOf(route) ?? 'accueil';
     const next = step(
-      TABS.map(([v]) => v),
-      state.view,
+      tabs.map(([v]) => v),
+      cur,
       dir === 'left' ? 1 : -1,
     );
     if (!next) return;
     slide = dir;
-    setState({ view: next });
-    announce(`Vue : ${TABS.find(([v]) => v === next)![1]}`);
+    navigate(next);
+    announce(`Onglet : ${tabs.find(([v]) => v === next)![1]}`);
   }
 });
 
@@ -346,18 +406,26 @@ async function lockApp(idleFor = 0) {
   settings.forgetToken();
   if (ds?.source !== 'demo') await forgetKeys();
   setDataset(null);
+  shownRoute = null;
   await start();
 }
 const idle = new IdleLock(() => void lockApp(state.lockAfter));
 // #255: once per decrypted dataset, not when the household view is toggled.
 onDatasetOpened(() => idle.start(state.lockAfter));
 onDatasetOpened(() => prefetchForOffline(ds!));
+// #308: an address opened directly (shared link, Back after a reload) wins over the last page.
+onDatasetOpened(() => {
+  const r = parseRoute(location.hash);
+  if (r) state.view = routeKey(r);
+  history.replaceState({ depth: 0 }, '', location.href);
+});
 // #232: the decrypted documents and what was computed from them are forgotten on lock.
 onLock(clearDataCaches);
 onLock(clearMemo);
 
 // ------------------------------------------------------------------ boot
 async function start() {
+  applyTheme();
   // #237: inside another page's frame, no screen at all (clickjacking), only a way out.
   if (isFramed()) {
     app.innerHTML = html(framedHtml(location.href));

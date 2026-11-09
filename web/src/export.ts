@@ -2,6 +2,7 @@
 // Node-RED or a spreadsheet. Built in the browser from the decrypted dataset: nothing is sent
 // anywhere. Format documented in docs/export-long.md, JSON Schema in docs/export-long.schema.json.
 // Loaded with import() from the menu, so it does not weigh on the entry chunk.
+import { downloadBlob } from './download';
 import type { Dataset } from './data';
 import { textCell, untextCell } from './csv';
 
@@ -140,10 +141,6 @@ export function downloadLong(ds: LongInput, kind: 'csv' | 'json'): number {
     kind === 'csv'
       ? new Blob([toLongCsv(doc.rows)], { type: 'text/csv;charset=utf-8' })
       : new Blob([JSON.stringify(doc)], { type: 'application/json' });
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = longFileName(kind);
-  a.click();
-  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  downloadBlob(blob, longFileName(kind));
   return doc.rows.length;
 }

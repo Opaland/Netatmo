@@ -16,6 +16,16 @@ export const PERIOD = {
   projection: "Fin d'année estimée",
   all: 'Tout l’historique',
 } as const;
+/**
+ * Owner feedback (v1.6): « consigne » alone is unclear. The setpoint is always written out, and
+ * temperatures always say what was measured, where.
+ */
+export const TEMP = {
+  setpoint: 'température demandée aux radiateurs (consigne)',
+  setpointShort: 'Température demandée (consigne)',
+  measured: 'Température mesurée dans la pièce',
+  outdoor: 'Température extérieure',
+} as const;
 /** The definition said once, in the interface and in the help. */
 export const SEASON_DEFINITION = 'du 1er septembre au 31 août';
 
@@ -37,6 +47,15 @@ const nf0 = new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 0 });
 export function signedPct(p: number): string {
   const r = Math.round(p);
   return `${r > 0 ? '+' : r < 0 ? '−' : ''}${nf0.format(Math.abs(r))} %`;
+}
+/**
+ * #258: one decimal, French style, typographic minus: « 19,5 », « −2,5 », « 0,0 » (never « -0,0 »).
+ * The one copy of the app (temperatures, kWh/°C, hours, kVA).
+ */
+export function fmt1(v: number): string {
+  const r = Math.round(v * 10) / 10;
+  const s = Math.abs(r).toFixed(1).replace('.', ',');
+  return r < 0 ? `−${s}` : s;
 }
 // CO₂: money.ts fmtCo2() writes « 274 kg CO₂e » with the unit above.
 

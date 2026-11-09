@@ -31,8 +31,8 @@ import { type Station, loadStationHourly } from '../data';
 import { activeRooms, esc, lastDay, longDate, nf0, series, table, tableToggle, measureColor } from '../ui';
 import { html } from '../trusted';
 import * as windows from './windows';
-import { lazyCard } from '../lazy';
 import * as ha from './ha';
+import { fmt1 as f1 } from '../glossary';
 
 // #247: station hourly readings of the dataset shown; `hourly` / `hourlyFailed` refreshed from it.
 const stationDoc = datasetDoc((d) => loadStationHourly(d));
@@ -49,7 +49,6 @@ onDatasetLoaded(() => {
 export const THRESHOLDS = [17, 17.5, 18, 18.5, 19, 19.5, 20, 20.5, 21];
 const HUMID_HOURS = 65; // % — threshold of the collected `hours.humid`
 const HUMID_DAYS = 70; // % daily mean, more than 7 days in a row (S-11.2, to be confirmed)
-const f1 = (v: number) => v.toFixed(1).replace('.', ',').replace('-', '−');
 const days = (from: string, to: string) => {
   const out: string[] = [];
   for (let d = from; d <= to; d = addDays(d, 1)) out.push(d);
@@ -78,7 +77,6 @@ export function renderComfort(view: HTMLElement) {
         : 'Aucune station Netatmo n\'est reliée : seules les températures mesurées par les radiateurs sont utilisées (moyennes par jour). Ajoutez la station dans Paramètres pour le CO₂ de la nuit et l\'humidité de la cave.'
     }</p>
   </section>
-  <div id="cold-alert-zone"></div>
   ${st ? co2Cards(st) : ''}
   ${st ? cellarCards(st) : ''}
   ${coldCard(st, map)}
@@ -92,8 +90,6 @@ export function renderComfort(view: HTMLElement) {
   }
   drawCold(st, map);
   windows.drawWindows(showBedrooms);
-  // S-12.5: prolonged cold alert of the rooms followed (lazy module)
-  void lazyCard(() => import('./coldalert'), (m) => m.mountColdBanner(document.getElementById('cold-alert-zone')), { zone: 'cold-alert-zone', what: 'Alerte froid prolongé' });
 }
 
 // ------------------------------------------------------------------ S-11.1 night CO₂
@@ -223,7 +219,7 @@ function cellarCards(st: Station) {
       <div class="chart" id="cellar-${i}" role="img" aria-label="Humidité et point de rosée, ${esc(name)}"></div>
       ${tableToggle(
         table(
-          ['Jour', `Heures > ${HUMID_HOURS} %`, 'Humidité moy.', 'Température moy.', 'Point de rosée', 'Écart'],
+          ['Jour', `Heures > ${HUMID_HOURS} %`, 'Humidité moyenne', 'Température moyenne', 'Point de rosée', 'Écart'],
           days(from, last)
             .reverse()
             .filter((d) => daily[d] || hrs[d])
@@ -308,7 +304,7 @@ function coldPerDay(st: Station, k: string, thr: number): Map<string, { n: numbe
 
 function ensureHourly() {
   if (!(ds!.meta.station_hourly_years ?? []).length) return;
-  hourly = stationDoc.get(ds, () => state.view === 'comfort' && rerender()) ?? null;
+  hourly = stationDoc.get(ds, () => state.view === 'confort' && rerender()) ?? null;
   hourlyFailed = stationDoc.status(ds) === 'failed';
 }
 

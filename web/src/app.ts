@@ -12,7 +12,22 @@ import { lsKey } from './scope';
 import { DatasetDoc, DatasetHooks } from './loader';
 import { track } from './ready';
 
-export type View = 'overview' | 'compare' | 'rooms' | 'analyse' | 'comfort' | 'report' | 'settings';
+/**
+ * #308: the page shown, as its address without « # » (router.ts): « accueil », « piece-r-salon »,
+ * « parametres-contrat »… The last one is remembered and reopened.
+ */
+export type View = string;
+/** #308: v1.5 view names, mapped to the page that took their place. */
+export const LEGACY_VIEWS: Record<string, string> = {
+  overview: 'accueil',
+  compare: 'historique',
+  rooms: 'pieces',
+  analyse: 'historique',
+  comfort: 'confort',
+  report: 'rapport',
+  settings: 'parametres',
+};
+export type Theme = 'system' | 'light' | 'dark';
 export type CatFilter = 'all' | Category;
 
 export interface State {
@@ -51,10 +66,12 @@ export interface State {
    * `household`, on by default: renamed so that every device starts with the real per-room figures).
    */
   groupBedrooms: boolean;
+  /** #309: colour theme of this device (system preference, or forced light / dark). */
+  theme: Theme;
 }
 
 export const DEFAULT: State = {
-  view: 'overview',
+  view: 'accueil',
   cat: 'all',
   rooms: null,
   period: '12m',
@@ -83,6 +100,7 @@ export const DEFAULT: State = {
   comfortThreshold: 19,
   roomModuleMap: {},
   groupBedrooms: false,
+  theme: 'system',
 };
 
 const LS_KEY = lsKey('state');
@@ -94,6 +112,8 @@ export function loadState(): State {
     delete saved.price;
     // v1.4 persisted the household view as `household: true` by default: dropped, the view is opt-in
     delete saved.household;
+    // v1.6 (#308): the five v1.5 views became pages of the new navigation
+    if (typeof saved.view === 'string' && LEGACY_VIEWS[saved.view]) saved.view = LEGACY_VIEWS[saved.view];
     return { ...DEFAULT, ...saved, prices: { ...NO_PRICES, ...(saved.prices ?? {}) } };
   } catch {
     return { ...DEFAULT };
