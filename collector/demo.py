@@ -9,6 +9,7 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from .model import HEATING, WATER_HEATER
+from .station import aggregate_days
 from .storage import Store
 
 ROOMS = [
@@ -23,10 +24,38 @@ ROOMS = [
 # Hourly shape of heating (relances matin / soir) and water heater (heures creuses la nuit).
 HEAT_SHAPE = [3, 3, 3, 3, 3, 4, 9, 10, 7, 5, 4, 4, 4, 4, 4, 4, 5, 7, 9, 9, 8, 6, 4, 3]
 WATER_SHAPE = [14, 16, 16, 15, 12, 6, 0, 0, 0, 0, 0, 0, 2, 3, 0, 0, 0, 0, 0, 0, 0, 0, 6, 10]
+# Kids' bedroom CO₂ (ppm above the day level), door closed from 21 h, window opened at 7 h.
+KIDS_CO2 = [700, 780, 840, 890, 930, 960, 980, 900, 250, 80, 0, 0, 0, 0, 0, 0, 50, 80, 100, 120, 150, 300, 450, 600]
+
+
+def _station_hours(store: Store, rnd: random.Random, d: date, tmean: float, tmin: float, tmax: float) -> None:
+    """Hourly readings of the four station modules for one day (S-11): living room (m0),
+    outdoor (m1), kids' bedroom (m2, CO₂ rising at night), cellar (m3, humid)."""
+    cold = max(0.0, 15 - tmean) / 15  # windows stay closed when it is cold
+    cellar_hum = 70 + 3 * cold + rnd.gauss(0, 1.5)
+    for h in range(24):
+        hour = f"{d.isoformat()}T{h:02d}"
+        wave = -math.cos((h - 4) / 24 * 2 * math.pi)  # coldest around 4 h
+        out_t = tmean + (tmax - tmin) / 2 * wave
+        night = h < 7 or h >= 22
+        salon_t = (18.6 if night else 20.2) - 0.6 * cold * night + rnd.gauss(0, 0.25)
+        salon_co2 = 550 + (350 if 18 <= h <= 22 else 0) + 250 * cold + rnd.gauss(0, 60)
+        kids_t = (18.8 if night else 19.6) - 0.5 * cold + rnd.gauss(0, 0.25)
+        kids_co2 = 520 + KIDS_CO2[h] * (0.75 + 0.6 * cold) + rnd.gauss(0, 50)
+        rows = {
+            "m0": [salon_t, 48 + 4 * wave + rnd.gauss(0, 2), salon_co2],
+            "m1": [out_t, min(98, 80 - 8 * wave + rnd.gauss(0, 4)), None],
+            "m2": [kids_t, 52 + KIDS_CO2[h] / 100 + rnd.gauss(0, 2), kids_co2],
+            "m3": [11 + 0.35 * tmean + rnd.gauss(0, 0.15), cellar_hum + rnd.gauss(0, 1), 470 + rnd.gauss(0, 25)],
+        }
+        for key, (t, hum, co2) in rows.items():
+            value = [round(t, 1), round(hum), None if co2 is None else round(co2)]
+            store.put(f"{d.year}.station_h", "hourly", key, hour, value)
 
 
 def generate(out_dir: Path, passphrase: str = "demo", start_year: int = 2022) -> list[str]:
     rnd = random.Random(42)
+    rnd_hours = random.Random(11)  # separate stream: the rest of the demo stays identical
     store = Store(out_dir, passphrase)
     today = datetime.now(ZoneInfo("Europe/Paris")).date()
     d = date(start_year, 1, 1)
@@ -63,6 +92,8 @@ def generate(out_dir: Path, passphrase: str = "demo", start_year: int = 2022) ->
             d.isoformat(),
             [round(tmin, 1), round(tmax, 1), round(tmean, 1), round(78 - tmean + rnd.gauss(0, 6)), None],
         )
+        if d >= hourly_from:
+            _station_hours(store, rnd_hours, d, tmean, tmin, tmax)
         dju = max(0.0, 18 - tmean)
         weekend = d.weekday() >= 5
         day_total = 0.0
@@ -101,6 +132,8 @@ def generate(out_dir: Path, passphrase: str = "demo", start_year: int = 2022) ->
             store.put("linky", "daily", d.isoformat(), None, round(day_total + max(other, 2500), 1))
             store.put("linky", "pmax", d.isoformat(), None, round(min(11.8, 3.2 + 0.28 * dju + rnd.uniform(0, 2.5)), 2))
         d += timedelta(days=1)
+    for key in ("m0", "m1", "m2", "m3"):
+        aggregate_days(store, key, key != "m1", hourly_from, today)
     store.set_top("weather", "source", "open-meteo")
     store.set_top(
         "station",

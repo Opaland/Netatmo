@@ -71,6 +71,70 @@ une colonne par type demandé ; ou forme simple `{"<timestamp>": [v, ...]}`. Les
   API publique). Le collecteur fait au plus un appel par seconde, respecte `Retry-After` et ralentit
   sur les réponses 429. Une collecte quotidienne coûte une poignée d'appels.
 
+## Station météo Netatmo (API publique)
+
+Indépendante d'Intuis : `api.netatmo.com`, application créée sur dev.netatmo.com, scope
+`read_station`, jeton de rafraîchissement renouvelé à chaque usage (`collector/station.py`).
+
+- `getstationsdata` : le module principal (`NAMain`, intérieur) puis ses modules radio, dans
+  l'ordre renvoyé. Ils deviennent les clés `m0`, `m1`, … (`m0` = module principal). Seuls
+  `NAMain` et `NAModule4` (intérieurs) mesurent le CO₂ ; `NAModule1` est l'extérieur ; `NAModule2`
+  (vent) et `NAModule3` (pluie) n'ont pas de température.
+- `getmeasure` : au plus **1024 points par appel**. Débit documenté : 50 requêtes / 10 s et
+  500 / h par utilisateur ; le collecteur espace ses appels d'au moins 0,5 s.
+  - Échelle `1day`, types `min_temp,max_temp,temperature,humidity[,co2]` : séries quotidiennes.
+  - Échelle `1hour`, types `temperature,humidity,co2` (`NAMain`, `NAModule4`) ou
+    `temperature,humidity` (`NAModule1`), par tranches de 40 jours (960 points). Premier passage :
+    les 365 derniers jours ; ensuite depuis la dernière heure gardée, au moins les 3 derniers jours.
+    L'horodatage d'un point horaire (début ou milieu de l'heure, à vérifier) est rangé dans l'heure
+    locale qui le contient.
+
+### Documents produits
+
+Tous chiffrés comme les autres (`data/*.enc.json`). Heures et jours en **heure locale de la
+maison** (`meta.home.timezone`).
+
+`station.enc.json` (chargé au démarrage de l'appli) :
+
+```jsonc
+{
+  "modules": {"m0": {"name": "Salon", "type": "NAMain", "indoor": true}, ...},
+  "daily":   {"m0": {"YYYY-MM-DD": [min °C, max °C, moyenne °C, humidité %, CO₂ ppm | null]}},
+  // Nuit du jour D = D 22:00 → D+1 07:00 (7 h exclue), rangée sous D. Modules intérieurs seulement.
+  "nightly": {"m2": {"YYYY-MM-DD": {"n": 9,             // heures de la nuit avec un CO₂ (9 = complète)
+                                    "co2_max": 1640,    // ppm, maximum horaire de la nuit
+                                    "h_co2_1000": 7,    // heures > 1000 ppm
+                                    "h_co2_1400": 4,    // heures > 1400 ppm (seuil du récit S-11.1)
+                                    "h_co2_1500": 3}}}, // heures > 1500 ppm
+  // Heures du jour D (0 h → 23 h). « cold » seulement pour les modules intérieurs.
+  "hours":   {"m0": {"YYYY-MM-DD": {"n": 24,      // heures avec un relevé
+                                    "humid": 2,   // heures avec humidité > 65 %
+                                    "cold": 5}}}  // heures avec température < 19 °C
+}
+```
+
+`YYYY.station_h.enc.json` (un par année, chargé à la demande ; années listées dans
+`meta.station_hourly_years`) :
+
+```jsonc
+{"hourly": {"m0": {"YYYY-MM-DDTHH": [température °C (0,1), humidité % (entier), CO₂ ppm (entier) | null]}}}
+```
+
+Règles utiles à l'affichage :
+
+- Les seuils sont **stricts** (`>` 1000 ppm, `>` 65 %, `<` 19 °C). Pour un autre seuil (S-11.3,
+  « seuil réglable »), recalculer à partir des documents `station_h`.
+- `n` dit si le jour ou la nuit est complet : la nuit en cours ou une panne donnent `n` < 9 (nuit)
+  ou < 24 (jour). Une journée ou une nuit sans relevé est absente, pas à zéro.
+- Changement d'heure : au printemps l'heure `02` n'existe pas (23 heures) ; à l'automne les deux
+  relevés de `02` sont moyennés (24 clés au lieu de 25 heures).
+- Le module extérieur a `null` en CO₂, ni `nightly` ni `cold`.
+- Une cave est un module intérieur : elle a `cold` (presque toujours 24) ; c'est à l'appli de ne pas
+  la compter comme pièce chauffée. Le point de rosée (S-11.2) se calcule à partir de la température
+  et de l'humidité (horaires ou moyennes quotidiennes de `daily`).
+- Les jours sont recalculés à chaque collecte sur la fenêtre téléchargée (plus la veille, pour la
+  nuit à cheval) : une nuit incomplète le matin est complétée le lendemain.
+
 ## Sources
 
 - [antoine-pyre/intuis-connect](https://github.com/antoine-pyre/intuis-connect) : intégration Home Assistant la plus complète (docs `02-api-reference.md`, `06-energy-consumption.md`)
