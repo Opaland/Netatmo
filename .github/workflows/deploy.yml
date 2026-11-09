@@ -46,7 +46,7 @@ jobs:
         run: |
           if [ -f data/keyinfo.json ]; then cp -r data web/dist/data; fi
       - uses: actions/configure-pages@v6
-      - uses: actions/upload-pages-artifact@v3
+      - uses: actions/upload-pages-artifact@v5
         with:
           path: web/dist
 
