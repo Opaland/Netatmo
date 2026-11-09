@@ -19,10 +19,13 @@ several measuring channels gives ONE SERIES PER CHANNEL ("p2c0", "p2c1", named �
 instead of their sum, which would mean nothing (water heater + main supply). A one-channel device
 keeps its key pN, so existing plugs keep their history.
 
-Document `shelly.enc.json` (plugs are keyed p0, p1… so device ids never leave `plugs`):
-  {"plugs":     {"p0": {"id": "...", "name": "Réfrigérateur", "model": "...", "gen": "G2", "usable": true},
+Document `shelly.enc.json` (plugs are keyed p0, p1…; the Shelly device id, derived from its MAC
+address, is never stored: only a salted hash in "plug_keys", collector/storage.py KeyMap. The "id"
+of each plug written by v1.4/v1.5 is hashed once and removed):
+  {"plug_keys": {"salt": "<hex>", "keys": {"<sha256(salt:id)[:16]>": "p0"}},
+   "plugs":     {"p0": {"name": "Réfrigérateur", "model": "...", "gen": "G2", "usable": true},
                  "p2": {..., "channels": 2},                       a multi-channel device
-                 "p2c0": {"id": "...", "parent": "p2", "channel": "em1data:0", "name": "Pinces · canal 1", ...}},
+                 "p2c0": {"parent": "p2", "channel": "em1data:0", "name": "Pinces · canal 1", ...}},
    "last":      {"p0": {"ts": 1731130000, "total": 123456.7}},   reading kept for the next run
    "daily":     {"p0": {"YYYY-MM-DD": Wh}},
    "estimated": {"p0": {"YYYY-MM-DD": 1}},
@@ -46,7 +49,7 @@ from . import schema
 from .errors import SourceError, raise_for_status
 from .http import Paced
 from .schema import FormatError
-from .storage import Store
+from .storage import KeyMap, Store
 
 log = logging.getLogger(__name__)
 
@@ -242,13 +245,17 @@ def _inventory(api: _Api) -> dict[str, dict]:
     return {str(i): {} for i in statuses}
 
 
-def _next_key(doc: dict) -> str:
-    """Next free device key pN (channel keys "pNcM" are not devices)."""
-    used = {k for k in doc.get("plugs", {}) if re.fullmatch(r"p\d+", k)}
-    n = 0
-    while f"p{n}" in used:
-        n += 1
-    return f"p{n}"
+def plug_keys(store: Store) -> KeyMap:
+    """Stable key pN per device. Plugs written by an earlier version kept their Shelly id in
+    clear ("id"): it is hashed into "plug_keys" and removed from every plug, channels included."""
+    plugs = store.doc(DOC).get("plugs", {})
+    legacy = {str(p["id"]): k for k, p in plugs.items() if "parent" not in p and p.get("id")}
+    keys = KeyMap(store, DOC, "p", field="plug_keys", legacy=legacy, reserved=set(plugs))
+    for k, p in list(plugs.items()):
+        if "id" in p:
+            store.put(DOC, "plugs", k, None, {f: v for f, v in p.items() if f != "id"})
+    keys.save()
+    return keys
 
 
 def collect(
@@ -264,7 +271,7 @@ def collect(
     api = _Api(http or httpx.Client(timeout=30.0, headers={"User-Agent": USER_AGENT}), base, auth_key, min_interval)
     inventory = _inventory(api)
     doc = store.doc(DOC)
-    known = {p.get("id"): k for k, p in doc.get("plugs", {}).items() if "parent" not in p}
+    keys = plug_keys(store)
     counts = {"plugs": 0, "readings": 0, "offline": 0, "unusable": 0, "channels": 0}
     ids = sorted(inventory)
     for i in range(0, len(ids), BATCH):
@@ -285,12 +292,10 @@ def collect(
             if not measures:
                 continue  # not a plug or meter (sensor, button…)
             did = st["id"]
-            key = known.get(did) or _next_key(doc)
-            known[did] = key
+            key = keys.key(str(did))
             meta = inventory.get(did, {})
             name = meta.get("name") if isinstance(meta.get("name"), str) and meta["name"].strip() else None
             plug = {
-                "id": did,
                 "name": (name or _settings_name(st.get("settings")) or f"Prise {key[1:]}").strip()[:60],
                 "model": str(meta.get("type") or st.get("code") or "")[:40],
                 "gen": str(st.get("gen") or meta.get("gen") or "")[:8],
@@ -319,7 +324,6 @@ def collect(
                         ckey,
                         None,
                         {
-                            "id": did,
                             "parent": key,
                             "channel": channel,
                             "name": f"{plug['name'][:48]} · canal {i + 1}",
@@ -330,6 +334,7 @@ def collect(
                     )
                     add_reading(store, ckey, ts, wh, tz)
             counts["readings"] += 1
+    keys.save()
     log.info(
         "Shelly : %d prises, %d relevés, %d hors ligne, %d sans compteur, %d canaux de pinces",
         counts["plugs"],

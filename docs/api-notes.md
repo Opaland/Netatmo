@@ -272,7 +272,8 @@ nouveau jeton est écrit, chiffré, dans `data/netatmo-token.enc.json` dès la c
 ensuite (#262).
 
 - `getstationsdata` : le module principal (`NAMain`, intérieur) puis ses modules radio, dans
-  l'ordre renvoyé. Ils deviennent les clés `m0`, `m1`, … (`m0` = module principal). Seuls
+  l'ordre renvoyé. Chacun reçoit une clé `m0`, `m1`, … **stable** (`m0` = module principal) : elle ne
+  dépend pas de la place du module dans la liste (voir « Clés des modules » plus bas). Seuls
   `NAMain` et `NAModule4` (intérieurs) mesurent le CO₂ ; `NAModule1` est l'extérieur ; `NAModule2`
   (vent) et `NAModule3` (pluie) n'ont pas de température.
 - `getmeasure` : au plus **1024 points par appel**. Débit documenté : 50 requêtes / 10 s et
@@ -293,7 +294,12 @@ maison** (`meta.home.timezone`).
 
 ```jsonc
 {
+  // Modules présents au dernier passage. Un module retiré n'y est plus, mais son historique
+  // (daily, nightly, hours, health, station_h) reste sous sa clé.
   "modules": {"m0": {"name": "Salon", "type": "NAMain", "indoor": true}, ...},
+  // Identifiant du module → clé. Jamais l'identifiant (adresse MAC) en clair : une empreinte
+  // SHA-256 tronquée (16 hex) de "<salt>:<_id>", sel aléatoire tiré une fois.
+  "module_keys": {"salt": "9f3c…", "keys": {"5d41402abc4b2a76": "m0", ...}},
   "daily":   {"m0": {"YYYY-MM-DD": [min °C, max °C, moyenne °C, humidité %, CO₂ ppm | null]}},
   // Nuit du jour D = D 22:00 → D+1 07:00 (7 h exclue), rangée sous D. Modules intérieurs seulement.
   "nightly": {"m2": {"YYYY-MM-DD": {"n": 9,             // heures de la nuit avec un CO₂ (9 = complète)
@@ -307,6 +313,23 @@ maison** (`meta.home.timezone`).
                                     "cold": 5}}}  // heures avec température < 19 °C
 }
 ```
+
+#### Clés des modules
+
+Les clés sont des chaînes opaques : l'appli, les exports et les pseudonymes (« Capteur A… ») ne
+s'appuient que sur elles, et la correspondance pièce ↔ module enregistrée sur l'appareil
+(`roomModuleMap`) les garde telles quelles. Même mécanisme (`KeyMap`, `collector/storage.py`) pour
+les modules Intuis de `devices.enc.json` (`i0`…) et les prises Shelly (`p0`…).
+
+- **Premier passage** (ou document sans `module_keys`) : les clés suivent l'ordre actuel de l'API,
+  comme avant (`m0` = module principal). La table `ids` de la v1.5 (identifiant en clair → clé) est
+  convertie en empreintes **une fois** puis supprimée : les clés ne changent pas.
+- **Module ajouté** : il prend la première clé libre (`m4` après `m0`…`m3`), quelle que soit sa
+  place dans la liste. Il est relevé depuis le premier jour connu du logement.
+- **Module retiré** : les autres gardent leur clé ; la sienne n'est jamais réattribuée. S'il revient,
+  il retrouve sa clé et son historique.
+- Chaque module reprend ses relevés quotidiens depuis **son** dernier jour (moins 10 jours) : un
+  module retiré ne ramène pas les autres en arrière.
 
 `YYYY.station_h.enc.json` (un par année, chargé à la demande ; années listées dans
 `meta.station_hourly_years`) :
@@ -369,7 +392,9 @@ relevé horaire (S-13.2) garde en plus, par liste blanche : `reachable`, `connec
 
 ```jsonc
 {
-  "ids":      {"<id API du module>": "i0"},                   // jamais journalisé
+  // Empreintes salées des ids API (adresses MAC), jamais les ids : voir « Clés des modules ».
+  // La table "ids" de la v1.5 (id en clair → clé) est convertie une fois puis supprimée.
+  "module_keys": {"salt": "<hex>", "keys": {"<sha256(sel:id)[:16]>": "i0"}},
   "modules":  {"i0": {"type": "NMH", "room": "<id pièce>", "setup": "YYYY-MM-DD", "fw": "105"},
                "m1": {"type": "NAModule1", "fw": "50"}},      // modules de la station : clés de station.enc.json
   "reach":    {"i0": {"YYYY-MM-DD": 1}},                      // 1 répond, 0 injoignable (lecture nocturne)
@@ -438,9 +463,12 @@ Document `data/shelly.enc.json` (chiffré, chargé au démarrage de l'appli, pet
 
 ```jsonc
 {
-  "plugs":     {"p0": {"id": "<id Shelly>", "name": "Réfrigérateur", "model": "SNPL-00112EU", "gen": "G2", "usable": true},
-                "p2": {"id": "<id>", "name": "Tableau", "channels": 2, ...},       // compteur à pinces
-                "p2c0": {"id": "<id>", "parent": "p2", "channel": "em1data:0", "name": "Tableau · canal 1", ...}},
+  // Empreintes salées des ids Shelly (tirés de l'adresse MAC), jamais les ids ; le champ "id"
+  // de chaque prise écrit par la v1.5 est converti une fois puis supprimé (v1.6).
+  "plug_keys": {"salt": "<hex>", "keys": {"<sha256(sel:id)[:16]>": "p0"}},
+  "plugs":     {"p0": {"name": "Réfrigérateur", "model": "SNPL-00112EU", "gen": "G2", "usable": true},
+                "p2": {"name": "Tableau", "channels": 2, ...},       // compteur à pinces
+                "p2c0": {"parent": "p2", "channel": "em1data:0", "name": "Tableau · canal 1", ...}},
   "last":      {"p0": {"ts": 1731130000, "total": 123456.7}},  // dernier relevé (s, Wh)
   "daily":     {"p0": {"YYYY-MM-DD": 1012.4}},                // Wh par jour local
   "estimated": {"p0": {"YYYY-MM-DD": 1}},

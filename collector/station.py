@@ -28,7 +28,7 @@ from .errors import SourceError, error_code, raise_for_status
 from .http import Paced
 from .model import parse_measure_columns
 from .schema import FormatError
-from .storage import Store
+from .storage import KeyMap, Store
 
 log = logging.getLogger(__name__)
 
@@ -167,25 +167,19 @@ class Station:
         return out
 
     def module_keys(self, modules: list[dict]) -> list[str]:
-        """Stable storage key ("m0", "m1"…) per module, kept in the encrypted station document
-        under "ids" (module id → key). The first time, keys follow the current API order, which
-        is how they were assigned before; a module added later gets the next free key, so it
-        never takes over the history of another one, whatever its place in the API list."""
-        station = self.store.doc("station")
-        ids: dict[str, str] = dict(station.get("ids") or {})
-        uid = lambda m: m["module"] or m["id"]  # noqa: E731
-        if not ids:
-            ids = {uid(m): f"m{i}" for i, m in enumerate(modules)}
-        used = set(ids.values())
-        n = 0
-        for m in modules:
-            if uid(m) not in ids:
-                while f"m{n}" in used:
-                    n += 1
-                ids[uid(m)] = f"m{n}"
-                used.add(f"m{n}")
-        self.store.set_top("station", "ids", ids)
-        return [ids[uid(m)] for m in modules]
+        """Stable storage key ("m0", "m1"…) per module. The station document keeps, under
+        "module_keys", a random salt and a map from a salted hash of each module id to its key:
+        the module id (a MAC address) is never stored. The first time, keys follow the current
+        API order, which is how they were assigned before; a module added later gets the next
+        free key, whatever its place in the list, and a removed module keeps its key (and its
+        history) without shifting the others. The "ids" table of v1.4/v1.5 (id in clear → key)
+        is hashed once and removed."""
+        legacy = self.store.doc("station").get("ids") or {}
+        keys = KeyMap(self.store, "station", "m", legacy=legacy)
+        out = [keys.key(m["module"] or m["id"]) for m in modules]
+        keys.save()
+        self.store.drop_top("station", "ids")
+        return out
 
     def _daily(self, device: str, module: str | None, types: str, begin: int, end: int) -> list[tuple[int, list]]:
         out = []
@@ -212,16 +206,18 @@ class Station:
         Stored in station.enc.json; the outdoor module also feeds weather.outdoor (DJU)."""
         self.login()
         zone = ZoneInfo(tz)
-        station = self.store.doc("station")
-        known = station.get("daily", {})
-        last_days = [max(d) for d in known.values() if d]
-        begin_day = min(last_days) if last_days else first_day
-        begin = int((datetime.fromisoformat(begin_day).replace(tzinfo=zone) - timedelta(days=10)).timestamp())
+        known = self.store.doc("station").get("daily", {})
         end = int(datetime.now(zone).timestamp())
         outdoor_days = 0
         names = {}
         modules = self.modules()
-        for key, m in zip(self.module_keys(modules), modules, strict=True):
+        keys = self.module_keys(modules)
+        for key, m in zip(keys, modules, strict=True):
+            # Per module: each one resumes from ITS last day (minus 10 days), so a removed module,
+            # frozen on an old day, never drags the others back; a new module starts from the
+            # first day of the home.
+            begin_day = max(known[key]) if known.get(key) else first_day
+            begin = int((datetime.fromisoformat(begin_day).replace(tzinfo=zone) - timedelta(days=10)).timestamp())
             indoor = m["type"] in ("NAMain", "NAModule4")
             names[key] = {"name": m["name"], "type": m["type"], "indoor": indoor}
             types = "min_temp,max_temp,temperature,humidity" + (",co2" if indoor else "")
@@ -246,7 +242,7 @@ class Station:
                 elif m["type"] == "NAMain":
                     self.store.put("weather", "indoor", day, None, r(mean))
         self.store.set_top("station", "modules", names)
-        self.health = store_health(self.store, modules, self.module_keys(modules), tz)
+        self.health = store_health(self.store, modules, keys, tz)
         self.collect_hourly(tz, modules)
         if outdoor_days:
             self.store.set_top("weather", "source", "netatmo")

@@ -155,7 +155,8 @@ def test_nightly_status_daily_reach_firmware_changes_and_alert_lines(tmp_path):
     c1 = devices.collect_status(store, homesdata(), homestatus(uptime=night1 - start), TZ, MOD_ROOM, now=night1)
     assert c1["unreachable"] == 0 and c1["firmware"] == 0 and c1["alerts"] == []
     doc = store.doc("devices")
-    key = doc["ids"]["m1"]
+    key = devices.module_keys(store, ["m1"])["m1"]
+    assert "ids" not in doc and "m1" not in json.dumps(doc["module_keys"])
     assert doc["modules"][key] == {"type": "NMH", "room": "100", "setup": "2022-10-03", "fw": "105"}
     assert doc["reach"][key] == {"2025-01-10": 1}
     # Next night: firmware updated, the radiator stopped answering; the night after, silent too.
@@ -465,15 +466,17 @@ def test_clamp_meter_channels_are_separate_series_and_returned_energy_is_ignored
     )
     doc = store.doc("shelly")
     assert counts["channels"] == 2 and counts["readings"] == 3
-    assert doc["plugs"]["p0"]["id"] == "plug"  # the existing plug keeps its key
-    em = next(k for k, p in doc["plugs"].items() if p["id"] == "emg3" and "parent" not in p)
+    keys = shelly.plug_keys(store)
+    assert keys.get("plug") == "p0"  # the existing plug keeps its key, its id is no longer stored
+    assert not any("id" in p for p in doc["plugs"].values())
+    em = keys.get("emg3")
     assert doc["plugs"][em]["channels"] == 2
     assert doc["plugs"][f"{em}c0"]["name"] == "Tableau · canal 1"
     assert doc["plugs"][f"{em}c1"]["channel"] == "em1data:1"
     total = lambda key: round(sum(doc["daily"][key].values()))  # noqa: E731
     assert total(f"{em}c0") == 3000 and total(f"{em}c1") == 12_000  # never summed together
     assert em not in doc.get("daily", {})
-    pro = next(k for k, p in doc["plugs"].items() if p["id"] == "pro3em")
+    pro = keys.get("pro3em")
     assert total(pro) == 2000 and "channels" not in doc["plugs"][pro]
     assert total("p0") == 1000
 
