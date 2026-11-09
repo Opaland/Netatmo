@@ -9,6 +9,7 @@ from datetime import date, datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
+from .devices import collect_status
 from .homeassistant import import_bytes
 from .model import HEATING, WATER_HEATER
 from .roomstate import merge_snapshots, snapshot
@@ -113,6 +114,9 @@ SHELLY_PLUGS = [
     ("p2", "Lave-linge", "SHPLG-S", 0.0),
     ("p3", "Box TV", "SNPL-00112EU", None),
 ]
+# S-1.30 (#279): a Shelly EM Gen3 with two clamps (water heater circuit, kitchen), one series per
+# channel. Last 30 days only (installed recently).
+CLAMP_DAYS = 30
 
 
 def _shelly(store: Store, today: date) -> None:
@@ -148,6 +152,21 @@ def _shelly(store: Store, today: date) -> None:
             d += timedelta(days=1)
         store.put("shelly", "until", key, None, today.isoformat())
         store.put("shelly", "last", key, None, {"ts": 0, "total": round(total, 2)})
+    clamp = random.Random(279)  # separate stream
+    base = {"id": "demop4", "model": "S1EM-001PCEU", "gen": "G3", "usable": True}
+    store.put("shelly", "plugs", "p4", None, {**base, "name": "Tableau électrique", "channels": 2})
+    for i, label in enumerate(("Tableau électrique · canal 1", "Tableau électrique · canal 2")):
+        key = f"p4c{i}"
+        channel = {**base, "parent": "p4", "channel": f"em1data:{i}", "name": label}
+        store.put("shelly", "plugs", key, None, channel)
+        total = 0.0
+        for back in range(CLAMP_DAYS, 0, -1):
+            d = today - timedelta(days=back)
+            wh = clamp.uniform(3800, 5200) if i == 0 else clamp.uniform(1200, 2600)
+            store.put("shelly", "daily", key, d.isoformat(), round(wh, 1))
+            total += wh
+        store.put("shelly", "until", key, None, today.isoformat())
+        store.put("shelly", "last", key, None, {"ts": 0, "total": round(total, 2)})
 
 
 ROOMSTATE_DAYS = 365
@@ -164,6 +183,7 @@ def _room_states(store: Store, today: date) -> dict[date, list[int]]:
     tz = ZoneInfo("Europe/Paris")
     heated = [r for r, _n, c, _w, _s in ROOMS if c == HEATING]
     mod_room = {f"m-{r}": r for r, *_ in ROOMS}
+    rnd15 = random.Random(1520)  # v1.5 fields: separate stream, the rest of the demo stays identical
     snaps = []
     for back in range(ROOMSTATE_DAYS, 0, -1):
         d = today - timedelta(days=back)
@@ -207,9 +227,140 @@ def _room_states(store: Store, today: date) -> dict[date, list[int]]:
                 )
             modules.append({"id": "m-r-ce", "contactor_mode": "off" if away else "auto"})
             ts = int(datetime(d.year, d.month, d.day, h, 23, tzinfo=tz).timestamp())
+            _v15_snapshot(rnd15, back, h, ts, rooms, modules, away)
             snaps.append(snapshot({"body": {"home": {"rooms": rooms, "modules": modules}}}, ts, calls=2))
     merge_snapshots(store, snaps, "Europe/Paris", mod_room, today=today.isoformat())
     return office
+
+
+# v1.5 (#214, #218, #276, #278): the kids' bedroom radiator lost its radio link for a day, three
+# weeks ago (OFFLINE_BACK); the gateway restarted after two power cuts (BOOTS_BACK, local time);
+# rooms anticipate the morning schedule and lower the setpoint at night.
+OFFLINE_BACK = 21
+BOOTS_BACK = ((80, 3, 12), (26, 14, 7))  # (days before today, hour, minute) of each restart
+GATEWAY_SINCE = 400  # days: the gateway runs since then (first start)
+TEMPO_FILE = Path(__file__).resolve().parent.parent / "web" / "public" / "tarifs" / "tempo_jours.json"
+TEMPO_NAMES = {1: "blue", 2: "white", 3: "red"}
+
+
+def _tempo_days() -> dict[str, int]:
+    try:
+        return {k: v for k, v in json.loads(TEMPO_FILE.read_text()).items() if v in TEMPO_NAMES}
+    except (OSError, ValueError):
+        return {}
+
+
+_TEMPO = _tempo_days()
+
+
+def _v15_snapshot(rnd: random.Random, back: int, h: int, ts: int, rooms: list, modules: list, away: bool) -> None:
+    """Fields the v1.5 snapshots keep, added to the demo snapshot of hour h, `back` days ago."""
+    for r in rooms:
+        r["anticipating"] = not away and h in (5, 6) and r["id"] in ("r-salon", "r-sdb", "r-ch2") and rnd.random() < 0.8
+        r["lowering"] = not away and (h >= 22 or h < 5) and r["id"] != "r-sdb"
+    for m in modules:
+        m["reachable"] = not (m["id"] == "m-r-ch2" and back == OFFLINE_BACK)
+    start = GATEWAY_SINCE
+    boot_ts = None
+    for b_back, b_h, b_m in BOOTS_BACK:
+        if back < b_back or (back == b_back and h > b_h):
+            start, boot_ts = b_back, (b_h, b_m)
+    d = datetime.fromtimestamp(ts, ZoneInfo("Europe/Paris"))
+    origin = (d - timedelta(days=start - back)).replace(hour=0, minute=0)
+    if boot_ts:
+        origin = origin.replace(hour=boot_ts[0], minute=boot_ts[1])
+    tempo_day = (d - timedelta(hours=6)).date().isoformat()
+    color = TEMPO_NAMES.get(_TEMPO.get(tempo_day, 1), "blue")
+    if back == 33:
+        color = "white"  # one day where the gateway disagrees with api-couleur-tempo.fr (if blue there)
+    modules.append(
+        {
+            "id": "m-gw",
+            "type": "NMG",
+            "uptime": int(ts - origin.timestamp()),
+            "wifi_strength": round(58 + 6 * rnd.random() + (14 if back in (12, 13) else 0)),
+            "therm_setpoint_day_color_type": color,
+        }
+    )
+
+
+def _devices(store: Store, today: date) -> None:
+    """v1.5 nightly reads of the last 60 nights, through the real code (#214, #216): radiator
+    firmware updated 18 days ago, the kids' bedroom radiator silent 3 weeks ago; station health
+    (#215): the outdoor module's battery runs low."""
+    tz = ZoneInfo("Europe/Paris")
+    rnd = random.Random(2150)  # separate stream
+    mod_room = {f"m-{r}": r for r, *_ in ROOMS}
+    types = {r: ("NMW" if c == WATER_HEATER else "NMH") for r, _n, c, _w, _s in ROOMS}
+    setup = int(datetime(2021, 11, 15, 10, tzinfo=tz).timestamp())
+    homesdata = {
+        "body": {
+            "homes": [
+                {
+                    "id": "demo",
+                    "modules": [{"id": "m-gw", "type": "NMG", "setup_date": setup}]
+                    + [{"id": f"m-{r}", "type": t, "setup_date": setup + 3600} for r, t in types.items()],
+                }
+            ]
+        }
+    }
+    for back in range(60, 0, -1):
+        d = today - timedelta(days=back)
+        now = datetime(d.year, d.month, d.day, 5, 12, tzinfo=tz).timestamp()
+        mods = [
+            {
+                "id": f"m-{r}",
+                "type": t,
+                "reachable": not (r == "r-ch2" and back == OFFLINE_BACK),
+                "firmware_revision": 104 if back > 18 else 106,
+                "last_seen": int(now) - 600,
+            }
+            for r, t in types.items()
+        ]
+        rooms_: list = []
+        gw_mods: list = []
+        _v15_snapshot(random.Random(back), back, 5, int(now), rooms_, gw_mods, False)
+        gw = {**gw_mods[0], "firmware_revision": 312 if back > 45 else 318}
+        collect_status(store, homesdata, {"body": {"home": {"modules": [gw, *mods]}}}, "Europe/Paris", mod_room, now)
+    # Station health: m0 main (Wi-Fi), m1 outdoor (battery running low), m2 / m3 indoor modules.
+    for back in range(90, 0, -1):
+        day = (today - timedelta(days=back)).isoformat()
+        store.put("station", "health", "m0", day, [None, 52 + rnd.randint(0, 6), 1])
+        store.put("station", "health", "m1", day, [max(9, 34 - (90 - back) // 3), 74 + rnd.randint(0, 8), 1])
+        store.put("station", "health", "m2", day, [88 - (90 - back) // 15, 66 + rnd.randint(0, 6), 1])
+        store.put("station", "health", "m3", day, [71 - (90 - back) // 15, 81 + rnd.randint(0, 6), int(back != 40)])
+    station = (("m0", "NAMain", "181"), ("m1", "NAModule1", "50"), ("m2", "NAModule4", "50"), ("m3", "NAModule4", "50"))
+    for key, t, fw in station:
+        store.put("devices", "modules", key, None, {"type": t, "fw": fw})
+    store.put("devices", "firmware", "m0", None, [[(today - timedelta(days=52)).isoformat(), "178", "181"]])
+
+
+# Intuis's view of the contract (#278): set to Base 9 kVA in the Intuis app while the shared contract
+# says HP/HC 12 kVA: the demo shows the warning.
+INTUIS_CONTRACT = {"tariff": "edf", "tariff_option": "base", "price_type": "base", "power_unit": "kva", "kva": 9.0}
+
+
+def _linky_v15(store: Store, today: date) -> None:
+    """#219: time of each daily peak; #277: index per rate period (HP / HC) over the last 120 days,
+    with one day where the index disagrees with the daily total (shown by the quality view)."""
+    rnd = random.Random(2190)  # separate stream
+    linky = store.doc("linky")
+    for day in sorted(linky.get("pmax", {})):
+        h = rnd.choice([7, 7, 8, 12, 19, 19, 19, 20, 20, 21])
+        store.put("linky", "pmax_at", day, None, f"{h:02d}:{rnd.randint(0, 59):02d}")
+    hp, hc = 41_250_000.0, 28_730_000.0
+    daily = linky.get("daily", {})
+    for back in range(120, 0, -1):
+        d = (today - timedelta(days=back)).isoformat()
+        if d not in daily:
+            continue
+        total = daily[d] * (1.035 if back == 15 else 1.0)
+        share = 0.36 + rnd.uniform(-0.03, 0.03)
+        hc += total * share
+        hp += total * (1 - share)
+        store.put("linky", "index", "distributeur.hch", d, round(hc))
+        store.put("linky", "index", "distributeur.hph", d, round(hp))
+    store.set_top("linky", "index_status", 200)
 
 
 HA_DAYS = 120
@@ -274,7 +425,7 @@ def _sources(today: date) -> dict:
     return {
         "intuis": {"ok": ok},
         "open-meteo": {"ok": ok},
-        "netatmo": {"ok": ok, "since": "2023-11-20"},
+        "netatmo": {"ok": ok, "since": "2023-11-20", "note": "pile faible : 1 module(s)"},
         "linky": {
             "ok": ok,
             "since": linky_since.isoformat(),
@@ -288,6 +439,11 @@ def _sources(today: date) -> dict:
             "note": "1 prise(s) sans compteur d'énergie : non exploitable(s) sans hub",
         },
         "releve-horaire": {"ok": ok, "note": "161 relevés sur 168 heures (7 derniers jours)"},
+        "appareils": {
+            "ok": ok,
+            "note": "8 modules, 0 module(s) injoignable(s), 0 mise(s) à jour de firmware détectée(s), "
+            "passerelle redémarrée 0 fois (7 j)",
+        },
         "ia": {"ok": ok},
     }
 
@@ -400,6 +556,8 @@ def generate(out_dir: Path, passphrase: str = "demo", start_year: int = 2022) ->
     store.update_coverage()
     _shelly(store, today)
     office = _room_states(store, today)
+    _devices(store, today)
+    _linky_v15(store, today)
     _home_assistant(store, today, office)
     for key in ("m0", "m1", "m2", "m3"):
         aggregate_days(store, key, key != "m1", hourly_from, today)
@@ -428,6 +586,7 @@ def generate(out_dir: Path, passphrase: str = "demo", start_year: int = 2022) ->
         "has_ha": True,
         "weather_source": "open-meteo",
         "contract": CONTRACT,
+        "intuis_contract": INTUIS_CONTRACT,
         "sources": _sources(today),
     }
     store.replace(
