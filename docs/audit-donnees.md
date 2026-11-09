@@ -59,11 +59,11 @@ Aucun historique n'est servi pour ces états (S-13.1) : seul le relevé horaire 
 
 | Donnée | Collectée | Exploitée | Valeur possible | Effort | Risque |
 |---|---|---|---|---|---|
-| `open_window` | `roomstate.enc.json` → `open_window_h` par pièce et par jour (`collector/roomstate.py`) | `views/windows.ts`, `web/src/windows.ts` | — | — | moyen |
-| `boost_status`, `therm_setpoint_mode` | `boost_h`, `mode_h` | `views/windows.ts` ; absences #210 | — | — | moyen |
+| `open_window` | `roomstate.enc.json` → `open_window_h` par pièce et par jour (`collector/roomstate.py`) | `views/windows.ts`, `web/src/windows.ts`, question « pièce froide » (`questions.ts`), jours inhabituels (`views/analyse.ts`), accord HA (`ha.ts`), faits IA mensuels (`insights.py`, S-5.10) | — | — | moyen |
+| `boost_status`, `therm_setpoint_mode` | `boost_h`, `mode_h` | `views/windows.ts` ; absences confirmées (`habits.ts` `withModeAbsences`) ; boost dans les faits IA (S-5.10) | — | — | moyen |
 | `radiator_state` | `heating_h` | `windows.ts` (part du chauffage pendant fenêtre ouverte) | — | — | faible |
-| `offload` | `offload_h` | `windows.ts` `offloadDays` (croisé avec le pic Linky) | — | — | faible |
-| `contactor_mode` (chauffe-eau) | `contactor_h` | `windows.ts` `contactor`, `checks.ts` | — | — | faible |
+| `offload` | `offload_h` | `windows.ts` `offloadDays`, `offloadByRoom` (Synthèse, sous la puissance maximale, croisé avec le pic Linky) | — | — | faible |
+| `contactor_mode` (chauffe-eau) | `contactor_h` | `windows.ts` `contactor` (carte chauffe-eau de l'Analyse et carte Confort), `checks.ts` | — | — | faible |
 | `presence` | `presence_h`, **seulement** avec `ROOM_STATE_PRESENCE` (S-13.5) | `windows.ts` | — | — | élevé |
 | `anticipating`, `lowering` | **non** | — | heures de pré-chauffe et d'abaissement par pièce : la relance démarre-t-elle en heures creuses ? (alimente #211) | S | faible |
 | `reachable`, `connection_status`, `last_seen` | **non** | — | **radiateur ou chauffe-eau hors ligne** : alerte (une pièce à 0 kWh n'est pas forcément économe) | S | faible |
@@ -128,7 +128,7 @@ fonctionner après l'arrêt des API Enedis historiques (mi-octobre 2026). Source
 |---|---|---|---|---|
 | Open-Meteo (archive ERA5) | `weather.outdoor` [min, max, moyenne] si pas de station | DJU, signature (`analysis.ts`, `views/analyse.ts`, `overview.ts`…) | ensoleillement, rayonnement : #117 ; vent `wind_speed_10m` (même appel) : S-3.12 (#221) | — |
 | Shelly Cloud | `shelly.enc.json` `daily` par prise | `views/breakdown.ts`, `views/settings.ts` | puissance instantanée, température de la prise : sans historique, pas d'intérêt | — |
-| Home Assistant (import manuel) | `ha.enc.json` | **aucune vue** : seulement la sauvegarde (`web/src/backup.ts`) | affichage et accord capteur ↔ `open_window` | critère encore ouvert de **#178** |
+| Home Assistant (import manuel) | `ha.enc.json` | `views/ha.ts` (carte Confort : capteurs importés, accord capteur d'ouverture ↔ `open_window`, `ha.ts`), sauvegarde | — | fait (#178) |
 | Relevé horaire (`roomstate.enc.json`) | voir § 2.2 | `views/windows.ts` | `values` (noms d'états vus) : contrôlé dans `windows.ts` | — |
 
 **Complétude par mois** : déjà calculée pour l'énergie Intuis (`coverage` par pièce et par mois,
@@ -147,7 +147,7 @@ la vue Qualité ne la montre pas encore : à ajouter lors du lancement réel si 
 | G5 | Heure du pic de puissance Linky perdue (`enedis._readings` tronque la date à 10 caractères) | on sait le jour du pic, pas l'heure | issue S-1.25 (#219) (format exact **à confirmer par le diagnostic**) |
 | G6 | Une seule maison Intuis (`Syncer.home`, avertissement dans le journal) et une seule station (`devices[0]`) | un second logement est ignoré | expliqué : feuille de route n° 18 « plusieurs maisons » |
 | G7 | Santé des modules (batterie, radio, `reachable`, `last_seen`, firmware) reçue chaque nuit dans `getstationsdata` / chaque heure dans `homestatus`, puis jetée | une pile vide ou un radiateur muet se voit seulement par un trou dans les courbes | issues S-1.20 (#214), S-1.21 (#215), S-1.22 (#216) |
-| G8 | `ha.enc.json` collecté mais affiché nulle part | import sans retour visible | suivi par #178 |
+| G8 | `ha.enc.json` collecté mais affiché nulle part | import sans retour visible | corrigé (#178) : carte « Capteurs Home Assistant » |
 | G9 | `setup_date` des modules non gardé | le début de l'historique d'un radiateur ajouté est deviné | petit ajout possible dans S-1.22 (#216) (même document « appareils ») |
 
 Aucun de ces trous n'est corrigé dans cette PR : G4, le seul qui puisse casser une collecte, touche
