@@ -569,15 +569,12 @@ try {
       await page.check('[data-toggle=simple]');
       await ready(page);
       await go(page, 'accueil');
-      await page.waitForSelector('body.is-simple');
+      await page.waitForSelector('body.simple-nav');
       check((await page.locator('.tabs a').count()) === 3, `${name}/vue simple : barre de 3 onglets attendue`);
-      check((await page.locator('.kpi.pinned').count()) >= 1, `${name}/épingle : pièce épinglée absente du mode simple`);
-      check(
-        (await page.locator('.kpis > .kpi').first().getAttribute('class')).includes('pinned'),
-        `${name}/épingle : la pièce épinglée n'est pas en premier`,
-      );
+      // #316: the pinned room comes right after the verdict of the month
+      check((await page.locator('#view .proche-room').count()) === 1, `${name}/épingle : pièce épinglée absente du mode simple`);
       // S-7.13: plain language and glossary terms, read aloud when touched.
-      check(/vous consommez/.test(await page.textContent('.verdict-title')), `${name}/FALC : verdict non réécrit`);
+      check(/vous consommez/.test(await page.textContent('.proche-strong')), `${name}/FALC : verdict non réécrit`);
       check(!/N-1/.test(await page.textContent('#view')), `${name}/FALC : sigle N-1 en mode simple`);
       await page.click('.glossary [data-term=dju]');
       check(await page.locator('.glossary [data-term=dju][aria-expanded=true] + .term-def:visible').count(), `${name}/FALC : définition non affichée`);
@@ -588,7 +585,7 @@ try {
       const cut = await page.evaluate(() => {
         const out = [];
         if (document.documentElement.scrollWidth > window.innerWidth + 1) out.push(`page ${document.documentElement.scrollWidth}px > ${window.innerWidth}px`);
-        for (const el of document.querySelectorAll('.top *, .tabs *, .verdict *, .kpi, .kpi *')) {
+        for (const el of document.querySelectorAll('.top *, .tabs *, #view .card, #view .card *')) {
           const cs = getComputedStyle(el);
           if (cs.display === 'none' || cs.visibility === 'hidden' || el.closest('details:not([open]) > :not(summary)') || el.classList.contains('sr-only')) continue;
           if (el.scrollWidth > el.clientWidth + 1 && el.clientWidth > 0 && cs.overflowX !== 'visible') out.push(el.className || el.tagName);
@@ -604,7 +601,7 @@ try {
       await page.waitForSelector(`#view[data-page="piece-${room}"][data-ready]`, { state: 'attached' }).catch(() => errors.push(`${name}/vue simple : « Ma pièce » n'ouvre pas la pièce épinglée`));
       await go(page, 'accueil');
       await page.click('[data-simple-exit=ask]');
-      check(await page.locator('body.is-simple').count(), `${name}/vue simple : quittée sans confirmation`);
+      check((await page.locator('.tabs a').count()) === 3, `${name}/vue simple : quittée sans confirmation`);
       await page.click('[data-simple-exit=yes]');
       await page.waitForFunction(() => document.querySelectorAll('.tabs a').length === 5, null, { timeout: 5000 }).catch(() => errors.push(`${name}/vue simple : « Voir plus de détails » ne la quitte pas`));
       await ready(page);
@@ -673,7 +670,7 @@ try {
     await page.check('[data-toggle=simple]');
     await ready(page);
     await go(page, 'accueil');
-    await page.waitForSelector('.kpi.pinned');
+    await page.waitForSelector('#view .proche-room');
     await audit(page, `${name}/vue-simple`, { enhanced: name !== 'couleurs-forcees' });
     await go(page, 'parametres-affichage');
     await page.uncheck('[data-toggle=simple]');

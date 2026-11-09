@@ -22,6 +22,9 @@ import { tenant } from './tenant';
 import { downloadBlob, esc, filtered, lastDay, roomName } from './ui';
 import { renderLoading, renderLock, showApp } from './views/lock';
 import { toggleTerm } from './plain';
+import { dismissTip, finishOnboarding, needsOnboarding, readFlags, tipPending } from './onboarding';
+import { onboardingHeader } from './views/onboarding';
+import { SIMPLE_PAGES } from './views/proche';
 import * as settings from './views/settings';
 import { html } from './trusted';
 import './style.css';
@@ -92,6 +95,15 @@ function applyTheme() {
   else delete root.dataset.theme;
 }
 
+/** #316: the simple view has its own Accueil, Ma pièce and Aide; the other pages are shared. */
+const pageOf = (r: Route) => (state.simple && SIMPLE_PAGES[r.page]) || PAGES[r.page];
+
+/** #312: the contextual tip shown once after the first launch, on the list of rooms. */
+function tipHtml(route: Route): string {
+  if (!ds || state.simple || route.page !== 'pieces' || !tipPending(ds.source === 'demo')) return '';
+  return `<p class="onb-tip" role="note"><span>Touchez une pièce pour son détail.</span> <button type="button" class="btn tertiary" data-tip-ok>Compris</button></p>`;
+}
+
 // ------------------------------------------------------------------ shell
 function render() {
   if (!ds) return;
@@ -110,8 +122,18 @@ function render() {
   const tabs = state.simple ? simpleTabs(state.pinnedRoom) : visibleTabs(tenant().on);
   const s = dataStatus();
   const title = titleOf(route, roomName);
-  const sub = parent !== null && !(state.simple && route.page === 'piece' && route.room === state.pinnedRoom);
+  // the three tabs of the simple view have no back arrow (Aide and the pinned room are tabs there)
+  const simpleTab = state.simple && (route.page === 'aide' || (route.page === 'piece' && route.room === state.pinnedRoom));
+  const sub = parent !== null && !simpleTab;
   const isOn = (k: string) => (state.simple ? k === key || (k === 'pieces' && route.page === 'piece') : k === tab);
+  const demo = ds.source === 'demo';
+  // #312: leaving the first launch by any way (link, Back, address) ends it; its tip goes once
+  if (shownRoute?.startsWith('bienvenue') && route.page !== 'bienvenue' && !readFlags(demo).done) finishOnboarding(demo);
+  if (route.page === 'piece' && tipPending(demo)) dismissTip(demo);
+  if (route.page === 'bienvenue') {
+    app.innerHTML = html`${onboardingHeader()}<main id="view" class="onboarding" data-page="${esc(key)}"></main>`;
+    return finishRender(route, key, changed, focus, null);
+  }
   app.innerHTML = html`
   <header class="top" data-swipe="${route.page === 'accueil' ? 'period' : 'tab'}">
     <div class="title">
@@ -135,7 +157,12 @@ function render() {
       ? `<div class="subhead"><a class="back" href="#${parent}" data-back aria-label="Retour">${icon('back')}</a><h2 id="page-title" tabindex="-1">${esc(title)}</h2></div>`
       : ''
   }
+  ${tipHtml(route)}
   <main id="view" data-page="${esc(key)}"></main>`;
+  finishRender(route, key, changed, focus, keepTab);
+}
+
+function finishRender(route: Route, key: string, changed: boolean, focus: string | null, keepTab: string | null) {
   renderView(document.getElementById('view')!, route);
   shownRoute = key;
   if (changed) {
@@ -155,14 +182,13 @@ function render() {
 }
 
 function renderView(view: HTMLElement, route: Route) {
-  const page = PAGES[route.page];
-  if (page.needsData && !filtered().length) view.innerHTML = html`<p class="empty">Aucune donnée pour cette sélection. <button type="button" class="link" data-filter-reset>Tout afficher</button></p>`;
+  const page = pageOf(route);
+  if ('needsData' in page && page.needsData && !filtered().length) view.innerHTML = html`<p class="empty">Aucune donnée pour cette sélection. <button type="button" class="link" data-filter-reset>Tout afficher</button></p>`;
   else page.render(view, route);
   if (slide) view.classList.add(`slide-${slide}`);
   slide = null;
   void updateNetStatus(ds);
   document.body.classList.toggle('is-report', route.page === 'rapport' || route.page === 'parametres');
-  document.body.classList.toggle('is-simple', state.simple && route.page === 'accueil');
   document.body.classList.toggle('simple-nav', state.simple);
   viewRendered(); // #260: #view[data-ready] once its lazy cards and documents have settled
 }
@@ -182,7 +208,7 @@ setRenderer(() => {
 });
 
 // ------------------------------------------------------------------ events (#257: one delegation)
-const pageHandlers = () => PAGES[currentRoute().page].handlers ?? [];
+const pageHandlers = () => pageOf(currentRoute()).handlers ?? [];
 
 /** Clicks of the shell itself: navigation, segments, filters, glossary, exports, lock. */
 async function shellClick(el: HTMLElement, e: MouseEvent): Promise<boolean> {
@@ -211,6 +237,12 @@ async function shellClick(el: HTMLElement, e: MouseEvent): Promise<boolean> {
   }
   if (el.dataset.filterReset !== undefined) {
     setState({ cat: 'all', rooms: null });
+    return true;
+  }
+  if (el.dataset.tipOk !== undefined) {
+    dismissTip(ds?.source === 'demo');
+    el.closest('.onb-tip')?.remove();
+    app.querySelector<HTMLElement>('#page-title')?.focus();
     return true;
   }
   if (el.dataset.simpleExit) {
@@ -418,6 +450,12 @@ onDatasetOpened(() => {
   const r = parseRoute(location.hash);
   if (r) state.view = routeKey(r);
   history.replaceState({ depth: 0 }, '', location.href);
+});
+// #312: the first unlock on this device opens the first launch (never in the demo).
+onDatasetOpened(() => {
+  if (needsOnboarding(ds!.source === 'demo')) state.view = 'bienvenue';
+  // a « Revoir la présentation » left half-way is not reopened on the next visit
+  else if (state.view.startsWith('bienvenue') && !location.hash.startsWith('#bienvenue')) state.view = 'accueil';
 });
 // #232: the decrypted documents and what was computed from them are forgotten on lock.
 onLock(clearDataCaches);
