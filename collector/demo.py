@@ -358,8 +358,9 @@ def _linky_v15(store: Store, today: date) -> None:
         share = 0.36 + rnd.uniform(-0.03, 0.03)
         hc += total * share
         hp += total * (1 - share)
-        store.put("linky", "index", "distributeur.hch", d, round(hc))
-        store.put("linky", "index", "distributeur.hph", d, round(hp))
+        read = (today - timedelta(days=back - 1)).isoformat()  # read at the start of the next day
+        store.put("linky", "index", "distributeur.hch", read, round(hc))
+        store.put("linky", "index", "distributeur.hph", read, round(hp))
     store.set_top("linky", "index_status", 200)
 
 

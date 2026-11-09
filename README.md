@@ -370,6 +370,11 @@ l'ordre de la liste ; la correspondance n'est affichée que dans l'application. 
 n'indique que des nombres (pièces suivies, sous le seuil, sans mesure récente). La vue Confort
 affiche aussi l'alerte, avec les vrais noms.
 
+Alerte « appareil injoignable » (facultative, v1.5) : avec la **variable** du dépôt
+`DEVICE_ALERT=true`, la collecte ouvre une issue tant qu'un radiateur, un relais, le chauffe-eau ou la
+passerelle ne répond plus, ou qu'une pile de la station passe sous 15 % (types de module et dates
+seulement, jamais un nom). Le détail est dans Paramètres → État des appareils.
+
 > **Ce n'est pas un dispositif de sécurité.** Avec une collecte par nuit, le délai peut atteindre
 > **24 h** après la journée froide (davantage si la collecte échoue ou si une sonde ne remonte plus).
 > Pour une personne fragile, gardez un autre moyen de contact.

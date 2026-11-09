@@ -5,6 +5,7 @@ import { loadOffers, loadTempo } from './offers';
 import { type Hourly, type TariffMap, type TempoRow, type TrveRow, type Weather, parseTrveCsv } from './analysis';
 import type { ShellyDoc } from './breakdown';
 import type { Coverage } from './checks';
+import { type DevicesDoc, type StationHealth, type TempoCheck, fillTempo } from './devices';
 import type { DayHours, Night, StationHourly } from './comfort';
 import { type Envelope, type KeyInfo, decryptEnvelope, deriveKey } from './crypto';
 import { type RememberedKey, freshKey } from './session';
@@ -31,6 +32,10 @@ export interface Dataset {
   tempo: { rows: TempoRow[]; days: Map<string, number> };
   station: Station | null;
   shelly?: ShellyDoc | null; // S-1.17: Shelly plugs, daily Wh (small document)
+  devices?: DevicesDoc | null; // v1.5: health of the devices (devices.enc.json, small document)
+  pmaxAt?: Map<string, string>; // #219: day -> local HH:MM of the Linky peak
+  linkyIndex?: Record<string, Record<string, number>>; // #277: rate period -> day -> index (Wh)
+  tempoCheck?: TempoCheck; // #278: gateway colours vs the public Tempo calendar (days filled from the gateway)
   roomMap?: Map<string, string>; // S-12.2: rooms merged by the household view (hourly documents follow it)
 }
 
@@ -39,6 +44,7 @@ export interface Station {
   daily: Record<string, Record<string, [number, number, number, number | null, number | null]>>; // [min, max, mean, hum, co2]
   nightly?: Record<string, Record<string, Night>>; // module -> night D (22 h → 7 h) -> CO₂ hours (S-11.1)
   hours?: Record<string, Record<string, DayHours>>; // module -> day -> humid / cold hours (S-11.2, S-11.3)
+  health?: StationHealth; // #215: module -> day -> [battery %, signal, answering]
 }
 
 /** Public CRE file, refreshed at each deploy; bundled copy as fallback. */
@@ -122,7 +128,7 @@ const toMap2 = <V>(o: Record<string, Record<string, V>> | undefined, into: Map<s
 
 export async function load(source: Source, key: CryptoKey): Promise<Dataset> {
   const meta = await decryptEnvelope<Meta>(await getJson<Envelope>(`${source}/meta.enc.json`), key);
-  const [years, weatherDoc, linkyDoc, insights, trve, station, offers, tempo, shelly] = await Promise.all([
+  const [years, weatherDoc, linkyDoc, insights, trve, station, offers, tempo, shelly, devices] = await Promise.all([
     Promise.all(
       meta.years.map(async (y) => {
         const doc = await decryptEnvelope<YearDoc>(await getJson<Envelope>(`${source}/${y}.enc.json`), key);
@@ -134,13 +140,18 @@ export async function load(source: Source, key: CryptoKey): Promise<Dataset> {
       'weather',
       key,
     ),
-    optional<{ daily?: Record<string, number>; pmax?: Record<string, number> }>(source, 'linky', key),
+    optional<{ daily?: Record<string, number>; pmax?: Record<string, number>; pmax_at?: Record<string, string>; index?: Record<string, Record<string, number>> }>(
+      source,
+      'linky',
+      key,
+    ),
     optional<Insights>(source, 'insights', key),
     loadTrve(),
     optional<Station>(source, 'station', key),
     loadOffers(),
     loadTempo(),
     optional<ShellyDoc>(source, 'shelly', key),
+    optional<DevicesDoc>(source, 'devices', key),
   ]);
   const tariffs: TariffMap = new Map();
   const temps: Dataset['temps'] = new Map();
@@ -162,6 +173,8 @@ export async function load(source: Source, key: CryptoKey): Promise<Dataset> {
   // Tariff values are stored in Wh like everything else: convert to kWh once.
   for (const days of tariffs.values()) for (const [d, v] of days) days.set(d, [v[0] / 1000, v[1] / 1000, v[2] / 1000]);
   const outdoor = weatherDoc?.outdoor ? new Map(Object.entries(weatherDoc.outdoor)) : null;
+  // #278: the gateway colour fills the days the public calendar lacks (only when both agree).
+  const tempoCheck = fillTempo(tempo.days, devices?.tempo, meta.last_day ?? '9999-12-31');
   return {
     source,
     key,
@@ -181,6 +194,10 @@ export async function load(source: Source, key: CryptoKey): Promise<Dataset> {
     pmax: new Map(Object.entries(linkyDoc?.pmax ?? {})),
     station: station?.daily && Object.keys(station.daily).length ? station : null,
     shelly,
+    devices,
+    pmaxAt: new Map(Object.entries(linkyDoc?.pmax_at ?? {})),
+    linkyIndex: linkyDoc?.index,
+    tempoCheck,
   };
 }
 
