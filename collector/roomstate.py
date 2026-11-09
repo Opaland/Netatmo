@@ -24,11 +24,18 @@ roomstate.enc.json:
                                    "mode_h": {"away": 2.2},          setpoint modes other than
                                                                      the schedule
                                    "contactor_h": {"auto": 23.0},    contactor (water heater)
-                                   "presence_h": 9.8}}},             only with the opt-in
+                                   "presence_h": 9.8,                only with the opt-in
+                                   "offline_h": 0.0,                 a module of the room was
+                                                                     unreachable (S-1.20 #214)
+                                   "anticipating_h": 1.0,            pre-heating before the
+                                   "lowering_h": 3.0}}},             schedule / lowering (#218)
    "values": {"radiator_state": ["heating", ...], ...}}  value names seen, to check the mapping
 
 Hours = count × (hours in that local day) / n: a missed or late cron run lowers n, not the
 hours (the coverage n / 24 is shown next to them).
+
+The gateway (NMG) of each snapshot (`uptime`, `wifi_strength`, Tempo colour of the day, no id)
+goes to devices.enc.json: restarts inferred from `uptime`, daily Wi-Fi (collector/devices.py).
 """
 
 from __future__ import annotations
@@ -45,11 +52,18 @@ from .crypto import decrypt_json, encrypt_json
 
 # Fields kept from homestatus. Everything else (temperatures, ids of other objects, names) is
 # dropped at once. `presence` only with the opt-in.
-ROOM_FIELDS = ("open_window", "boost_status", "therm_setpoint_mode", "heating_power_request")
-MODULE_FIELDS = ("radiator_state", "offload", "contactor_mode")
+ROOM_FIELDS = (
+    "open_window",
+    "boost_status",
+    "therm_setpoint_mode",
+    "heating_power_request",
+    "anticipating",
+    "lowering",
+)
+MODULE_FIELDS = ("radiator_state", "offload", "contactor_mode", "reachable", "connection_status")
 PRESENCE = "presence"
 # Enum-like fields whose value names are kept (encrypted) so the owner can check the mapping.
-ENUM_FIELDS = ("boost_status", "therm_setpoint_mode", "radiator_state", "contactor_mode")
+ENUM_FIELDS = ("boost_status", "therm_setpoint_mode", "radiator_state", "contactor_mode", "connection_status")
 MAX_VALUES = 12
 # A value that means "no": anything else that is not empty, zero or false means "yes".
 OFF = {"", "0", "false", "off", "no", "none", "null", "disabled", "inactive", "idle", "standby", "stand_by"}
@@ -58,6 +72,8 @@ OFF |= {"stop", "stopped", "unknown", "not_heating", "normal", "schedule"}
 SCHEDULE_MODES = {"schedule", "program", "home", "auto"}
 BOOST_MODES = {"max", "boost"}
 _SAFE = re.compile(r"[a-z][a-z0-9_]{0,23}")
+# connection_status values that mean "not connected" (S-1.20, names à confirmer by the inventory).
+DISCONNECTED = {"disconnected", "offline", "unreachable", "not_connected", "lost", "no_signal", "error"}
 SNAPSHOT_PREFIX = "etat-"
 SNAPSHOT_VERSION = 1
 
@@ -90,12 +106,47 @@ def snapshot(payload: dict, now: int, presence: bool = False, calls: int = 0) ->
         if isinstance(r, dict) and r.get("id") is not None:
             rooms[str(r["id"])] = {k: norm(r[k]) for k in fields_r if k in r}
     modules: dict[str, dict] = {}
+    gateway: dict = {}
     for m in home.get("modules") or []:
-        if isinstance(m, dict) and m.get("id") is not None:
-            kept = {k: norm(m[k]) for k in MODULE_FIELDS if k in m}
-            if kept:
-                modules[str(m["id"])] = kept
-    return {"v": SNAPSHOT_VERSION, "t": int(now), "calls": calls, "rooms": rooms, "modules": modules}
+        if not (isinstance(m, dict) and m.get("id") is not None):
+            continue
+        if is_gateway(m):
+            gateway = gateway or gateway_fields(m)
+            continue
+        kept = {k: norm(m[k]) for k in MODULE_FIELDS if k in m}
+        if kept:
+            modules[str(m["id"])] = kept
+    snap = {"v": SNAPSHOT_VERSION, "t": int(now), "calls": calls, "rooms": rooms, "modules": modules}
+    if gateway:
+        snap["gateway"] = gateway
+    return snap
+
+
+def is_gateway(m: dict) -> bool:
+    """The Intuis gateway (NMG): by type, or by the fields only it sends."""
+    return m.get("type") == "NMG" or ("uptime" in m and "radiator_state" not in m)
+
+
+def gateway_fields(m: dict) -> dict:
+    """Gateway fields kept (#276, #278): uptime (s), Wi-Fi strength, Tempo colour of the day.
+    Numbers only, the colour as a short identifier; never an id."""
+    out: dict = {}
+    for k in ("uptime", "wifi_strength"):
+        v = m.get(k)
+        if isinstance(v, int | float) and not isinstance(v, bool) and v >= 0:
+            out[k] = v
+    if m.get("therm_setpoint_day_color_type") is not None:
+        out["day_color"] = norm(m["therm_setpoint_day_color_type"])
+    return out
+
+
+def is_offline(f: dict) -> bool | None:
+    """A module seen unreachable (None when the snapshot says nothing about it)."""
+    if "reachable" not in f and "connection_status" not in f:
+        return None
+    if f.get("reachable") is False:
+        return True
+    return isinstance(f.get("connection_status"), str) and f["connection_status"] in DISCONNECTED
 
 
 def write_snapshot(out_dir: Path, snap: dict, passphrase: str, salt: bytes, iterations: int) -> Path:
@@ -145,7 +196,7 @@ def day_hours(day: str, tz: str) -> float:
     return (end.timestamp() - start.timestamp()) / 3600
 
 
-HOUR_KEYS = ("open_window", "boost", "heating", "offload", "presence")
+HOUR_KEYS = ("open_window", "boost", "heating", "offload", "presence", "offline", "anticipating", "lowering")
 DICT_KEYS = ("mode", "contactor")
 
 
@@ -192,6 +243,9 @@ def _room_states(snap: dict, mod_room: dict[str, str], presence: bool) -> dict[s
             st["heating"] = is_on(f["heating_power_request"])
         if presence and PRESENCE in f:
             st["presence"] = is_on(f[PRESENCE])
+        for k in ("anticipating", "lowering"):
+            if k in f:
+                st[k] = is_on(f[k])
         out[str(rid)] = st
     for mid, f in (snap.get("modules") or {}).items():
         rid = mod_room.get(str(mid))
@@ -204,6 +258,9 @@ def _room_states(snap: dict, mod_room: dict[str, str], presence: bool) -> dict[s
             st["offload"] = st.get("offload", False) or is_on(f["offload"])
         if isinstance(f.get("contactor_mode"), str):
             st["contactor"] = f["contactor_mode"]
+        off = is_offline(f)
+        if off is not None:
+            st["offline"] = st.get("offline", False) or off
     return out
 
 
@@ -221,17 +278,21 @@ def merge_snapshots(
     Idempotent: a snapshot whose local hour is already in `seen` is skipped, so a snapshot
     read twice (artifact not yet expired) or two runs in the same hour count once.
     Returns counts only (public log): snapshots read, added, already counted, days touched,
-    and the Intuis calls those snapshots made."""
+    the Intuis calls those snapshots made, and the gateway restarts seen (#276)."""
+    from .devices import observe_gateway
+
     z = ZoneInfo(tz)
     today = today or datetime.now(z).date().isoformat()
     doc = store.doc("roomstate")
     seen: dict[str, int] = dict(doc.get("seen", {}))
     rooms: dict[str, dict] = {k: dict(v) for k, v in doc.get("rooms", {}).items()}
     values: dict[str, set] = {k: set(v) for k, v in doc.get("values", {}).items()}
-    stats = {"snapshots": len(snaps), "added": 0, "duplicates": 0, "pending": 0, "days": 0, "calls": 0}
+    stats = {"snapshots": len(snaps), "added": 0, "duplicates": 0, "pending": 0, "days": 0, "calls": 0, "boots": 0}
     touched: set[str] = set()
     counts: dict[tuple[str, str], dict] = {}
     for snap in sorted(snaps, key=lambda s: s["t"]):
+        if isinstance(snap.get("gateway"), dict):  # events: today's snapshots count too (no double count)
+            stats["boots"] += observe_gateway(store, snap["t"], snap["gateway"], tz)
         local = datetime.fromtimestamp(snap["t"], z)
         day = local.date().isoformat()
         if day >= today:

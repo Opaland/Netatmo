@@ -199,6 +199,13 @@ jours à chaque collecte. Le collecteur en tire, par module et par jour, le CO�
 maximum, heures au-dessus de 1 000 / 1 400 / 1 500 ppm), les heures d'humidité au-dessus de 65 % et
 les heures sous 19 °C. Formats détaillés dans [docs/api-notes.md](docs/api-notes.md#station-météo-netatmo-api-publique).
 
+**Pièces au pas de 30 minutes** : énergie heures pleines / creuses, température et consigne de chaque
+pièce, toutes les 30 minutes, dans `data/AAAA.room30.enc.json` (un fichier par année, chargé à la
+demande). Intuis garde environ quatre ans : le collecteur les rattrape en quelques nuits (3 pour une
+maison de 7 pièces), pièce par pièce, sans dépasser son plafond d'appels. L'Analyse s'en sert pour le
+profil horaire (journée type au pas de 30 minutes) et les explications des pièces froides (chute
+rapide de température). Détails dans [docs/api-notes.md](docs/api-notes.md#pièces-au-pas-de-30-minutes-s-126).
+
 Netatmo renouvelle le jeton à chaque utilisation : le collecteur garde le nouveau, chiffré, dans
 `data/netatmo-token.enc.json`. Vous n'avez rien à refaire, sauf si vous révoquez l'accès.
 
@@ -370,6 +377,11 @@ l'ordre de la liste ; la correspondance n'est affichée que dans l'application. 
 n'indique que des nombres (pièces suivies, sous le seuil, sans mesure récente). La vue Confort
 affiche aussi l'alerte, avec les vrais noms.
 
+Alerte « appareil injoignable » (facultative, v1.5) : avec la **variable** du dépôt
+`DEVICE_ALERT=true`, la collecte ouvre une issue tant qu'un radiateur, un relais, le chauffe-eau ou la
+passerelle ne répond plus, ou qu'une pile de la station passe sous 15 % (types de module et dates
+seulement, jamais un nom). Le détail est dans Paramètres → État des appareils.
+
 > **Ce n'est pas un dispositif de sécurité.** Avec une collecte par nuit, le délai peut atteindre
 > **24 h** après la journée froide (davantage si la collecte échoue ou si une sonde ne remonte plus).
 > Pour une personne fragile, gardez un autre moyen de contact.
@@ -410,7 +422,8 @@ station Netatmo 400, Linky 200, Open-Meteo 20, Shelly 30. Plafond atteint : la c
 pour cette source, garde ce qui a été récupéré et reprend la nuit suivante (une récupération
 d'historique interrompue continue d'elle-même). Pour changer un plafond, ajoutez une **variable**
 (onglet *Variables*, pas *Secrets*) `MAX_CALLS_INTUIS`, `MAX_CALLS_NETATMO`, `MAX_CALLS_LINKY` ou
-`MAX_CALLS_OPEN_METEO` ou `MAX_CALLS_SHELLY` (un nombre entier).
+`MAX_CALLS_OPEN_METEO` ou `MAX_CALLS_SHELLY` (un nombre entier). Les pièces au pas de 30 minutes ont leur
+propre budget dans celui d'Intuis (`MAX_CALLS_INTUIS_30MIN`, 50 par défaut).
 
 ### Jours « estimés »
 

@@ -33,6 +33,24 @@ log = logging.getLogger(__name__)
 API = "https://conso.boris.sh/api/consommation_quotidienne"
 API_PMAX = "https://conso.boris.sh/api/puissance_conso_max_quotidienne"
 API_CURVE = "https://conso.boris.sh/api/courbe_de_charge_consommation"
+# S-1.28 (#277): meter index per rate period (Enedis API v2 type, conso.boris.sh/migration-2026).
+API_INDEX = "https://conso.boris.sh/api/index_consommation"
+INDEX_BACKFILL_DAYS = 365  # first run: the last 12 months (one request), then the last 10 days
+MAX_INDEX_SERIES = 16
+# Names of a rate period / calendar in the index answer (format à confirmer by the inventory).
+LABEL_KEYS = (
+    "idClasseTemporelle",
+    "classeTemporelle",
+    "classe_temporelle",
+    "codeCadran",
+    "cadran",
+    "idCalendrier",
+    "calendrier",
+    "libelle",
+    "label",
+    "code",
+    "id",
+)
 USER_AGENT = "intuis-history/1.0 (+https://github.com/Opaland/Netatmo)"
 # 2026 Enedis format: {"grandeur": [{"points": [{"d": "2024-01-01", "v": "12345"}]}]};
 # older formats used date/value or date/valeur.
@@ -185,7 +203,7 @@ def collect(
             log.info("Linky : aucune mesure sur %s → %s", chunk_start, chunk_end)
         rows += found
         chunk_start = chunk_end
-    _collect_pmax(store, api, prm, start, today)
+    _collect_pmax(store, api, prm, start, today, tz)
     if not rows:
         return 0
     factor = ENERGY_UNITS[_unit(store, "unit", bodies, rows, ENERGY_UNITS)]
@@ -195,7 +213,7 @@ def collect(
     return len(rows)
 
 
-def _collect_pmax(store: Store, api: _Paced, prm: str, start: date, today: date) -> None:
+def _collect_pmax(store: Store, api: _Paced, prm: str, start: date, today: date, tz: str = "Europe/Paris") -> None:
     """Daily maximum power drawn (kVA): tells whether the subscribed power fits. Best effort."""
     rows: list[tuple[str, float]] = []
     bodies: list[object] = []
@@ -223,7 +241,116 @@ def _collect_pmax(store: Store, api: _Paced, prm: str, start: date, today: date)
     factor = POWER_UNITS[_unit(store, "pmax_unit", bodies, rows, POWER_UNITS)]
     for day, v in rows:
         store.put("linky", "pmax", day, None, round(v * factor, 2))
-    log.info("Linky : puissance max sur %d jours", len(rows))
+    # S-1.25 (#219): the time of each maximum, when the answer dates it (local HH:MM).
+    times = 0
+    for body in bodies:
+        for day, hhmm in peak_times(body, tz).items():
+            store.put("linky", "pmax_at", day, None, hhmm)
+            times += 1
+    log.info("Linky : puissance max sur %d jours (%d avec l'heure du pic)", len(rows), times)
+
+
+def peak_times(body: object, tz: str) -> dict[str, str]:
+    """{"YYYY-MM-DD": "HH:MM"} local time of the daily maximum power, when the timestamp carries
+    a time (format à confirmer by the inventory). A bare day gives nothing; a timestamp without
+    offset is taken as local time. The day key is the one `pmax` uses (stamp[:10])."""
+    zone = ZoneInfo(tz)
+    out: dict[str, str] = {}
+    for stamp, _v, _step in _points(body):
+        if len(stamp) <= 10 or ("T" not in stamp and " " not in stamp):
+            continue
+        try:
+            at = datetime.fromisoformat(stamp.replace("Z", "+00:00").replace(" ", "T", 1))
+        except ValueError:
+            continue
+        local = at.replace(tzinfo=zone) if at.tzinfo is None else at.astimezone(zone)
+        if (local.hour, local.minute, local.second) == (0, 0, 0):
+            continue  # midnight on the dot: a day stamp in disguise, not the time of a peak
+        out[stamp[:10]] = local.strftime("%H:%M")
+    return out
+
+
+# ---------------------------------------------------------------- index per rate period (#277)
+def _label(obj: dict) -> str | None:
+    for k in LABEL_KEYS:
+        v = obj.get(k)
+        if isinstance(v, str) and v.strip():
+            text = re.sub(r"[^a-z0-9_]+", "_", v.strip().lower()).strip("_")[:24]
+            if text and text[0].isalpha():
+                return text
+    return None
+
+
+def parse_index(body: object) -> dict[str, dict[str, float]]:
+    """Index answer → {series: {"YYYY-MM-DD": value}}. A series is named by the labels met on the
+    way down (calendar, then rate period: "distributeur.hph"), "total" when there is none. The
+    format is not documented (migration page of Conso API): any dated reading under a label is
+    taken. Labels are identifiers only (never a free text, never the PRM: it starts with a digit)."""
+    out: dict[str, dict[str, float]] = {}
+
+    def walk(o: object, path: tuple[str, ...]) -> None:
+        if isinstance(o, dict):
+            label = _label(o)
+            here = path + (label,) if label and label not in path else path
+            dk = next((k for k in DATE_KEYS if isinstance(o.get(k), str)), None)
+            vk = next((k for k in VALUE_KEYS if k in o), None)
+            if dk and vk is not None:
+                with contextlib.suppress(TypeError, ValueError):
+                    v = float(o[vk])
+                    if math.isfinite(v):
+                        out.setdefault(".".join(path) or "total", {})[o[dk][:10]] = v
+            for v in o.values():
+                if isinstance(v, dict | list):
+                    walk(v, here)
+        elif isinstance(o, list):
+            for v in o:
+                walk(v, path)
+
+    walk(body, ())
+    return dict(sorted(out.items())[:MAX_INDEX_SERIES])
+
+
+def collect_index(
+    store: Store,
+    token: str,
+    prm: str,
+    first_day: str,
+    tz: str,
+    http: httpx.Client | None = None,
+    min_interval: float | None = None,
+    today: date | None = None,
+) -> int:
+    """Daily meter index per rate period in linky["index"] = {series: {day: Wh}}. The last 12
+    months on the first run, then the last 10 days. Best effort: an HTTP error or an empty answer
+    (series not served for this meter) is not an error of the collection. Returns the readings."""
+    api = _Paced(http or _client(), token, min_interval)
+    today = today or datetime.now(ZoneInfo(tz)).date()
+    have = store.doc("linky").get("index") or {}
+    last = max((max(days) for days in have.values() if days), default=None)
+    start = max(date.fromisoformat(first_day), today - timedelta(days=INDEX_BACKFILL_DAYS))
+    if last:
+        start = max(start, date.fromisoformat(last) - timedelta(days=10))
+    if start >= today:
+        return 0
+    resp = api.get(API_INDEX, {"pointId": prm, "dateDebut": start.isoformat(), "dateFin": today.isoformat()})
+    if resp.status_code != 200:
+        log.warning("Linky : index par cadran indisponibles (HTTP %s)", resp.status_code)
+        store.set_top("linky", "index_status", resp.status_code)
+        return 0
+    body = _json(resp, "index_consommation")
+    series = parse_index(body)
+    rows = [(d, v) for days in series.values() for d, v in days.items()]
+    if not rows:
+        log.info("Linky : aucun index par cadran")
+        store.set_top("linky", "index_status", 204)
+        return 0
+    factor = ENERGY_UNITS[_unit(store, "index_unit", [body], rows, ENERGY_UNITS)]
+    for name, days in series.items():
+        for d, v in days.items():
+            store.put("linky", "index", name, d, round(v * factor))
+    store.set_top("linky", "index_status", 200)
+    log.info("Linky : %d index (%d cadrans)", len(rows), len(series))
+    return len(rows)
 
 
 # ---------------------------------------------------------------- load curve (S-1.11)

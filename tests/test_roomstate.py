@@ -66,7 +66,7 @@ MOD_ROOM = {"m1": "100", "wh": "300"}
 def test_snapshot_keeps_only_whitelisted_fields_and_never_presence_by_default():
     snap = roomstate.snapshot(status(open_window=True), 1700000000)
     assert snap["rooms"]["100"] == {"open_window": True, "boost_status": "disabled", "therm_setpoint_mode": "schedule"}
-    assert snap["modules"]["m1"] == {"radiator_state": "idle", "offload": False}
+    assert snap["modules"]["m1"] == {"radiator_state": "idle", "offload": False, "reachable": True}
     assert snap["modules"]["wh"] == {"contactor_mode": "auto"}
     text = json.dumps(snap)
     for absent in ("presence", "Salon", "19.5", "therm_setpoint_end_time", "home1"):
@@ -114,7 +114,7 @@ def test_merge_counts_hours_pro_rata_and_skips_today_and_duplicates(tmp_path):
     snaps.append(roomstate.snapshot(status(open_window=True), ts(day, 10) + 600))  # same hour: once
     snaps.append(roomstate.snapshot(status(), ts("2025-01-16", 1)))  # day not over: next night
     stats = roomstate.merge_snapshots(store, snaps, TZ, MOD_ROOM, today="2025-01-16")
-    assert stats == {"snapshots": 24, "added": 22, "duplicates": 1, "pending": 1, "days": 1, "calls": 44}
+    assert stats == {"snapshots": 24, "added": 22, "duplicates": 1, "pending": 1, "days": 1, "calls": 44, "boots": 0}
     cell = store.doc("roomstate")["rooms"]["100"][day]
     # 2 of 22 snapshots with the window open -> 2 × 24 / 22 h
     assert cell["n"] == 22

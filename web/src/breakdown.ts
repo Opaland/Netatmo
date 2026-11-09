@@ -8,9 +8,11 @@
 // - what remains unexplained (cooking, lighting, short uses…).
 // Approximations, said in the card: a fridge cycles, so its average power is only roughly
 // what it adds to the night base load.
+import { type ShellyPrefs, readShellyPrefs } from './shelly-prefs';
 
 export interface ShellyDoc {
-  plugs?: Record<string, { name: string; model?: string; gen?: string; usable?: boolean }>;
+  // S-1.30: `channels` on a clamp meter (its series are the channel keys pNcM, with `parent`)
+  plugs?: Record<string, { name: string; model?: string; gen?: string; usable?: boolean; channels?: number; parent?: string; channel?: string }>;
   daily?: Record<string, Record<string, number>>; // plug -> day -> Wh
   estimated?: Record<string, Record<string, number>>;
   until?: Record<string, string>; // days before are complete
@@ -51,18 +53,22 @@ export interface Breakdown {
 const PERMANENT_CV = 0.3; // daily kWh this steady (coefficient of variation) = always-on appliance
 
 /** Plugs of the collector's document: usable ones, complete days only, kWh. */
-export function plugsFrom(doc: ShellyDoc | null | undefined): { plugs: Plug[]; unusable: string[] } {
+export function plugsFrom(doc: ShellyDoc | null | undefined, prefs: ShellyPrefs = readShellyPrefs()): { plugs: Plug[]; unusable: string[] } {
   const plugs: Plug[] = [];
   const unusable: string[] = [];
   for (const [key, p] of Object.entries(doc?.plugs ?? {})) {
+    const name = prefs.names[key] ?? p.name;
     if (p.usable === false) {
-      unusable.push(p.name);
+      unusable.push(name);
       continue;
     }
+    // A clamp meter is read channel by channel; a channel on the main supply or on the water
+    // heater (already counted by Intuis) is not an "other usage".
+    if (p.channels || prefs.roles[key]) continue;
     const until = doc?.until?.[key] ?? '9999-12-31';
     const daily = new Map<string, number>();
     for (const [d, wh] of Object.entries(doc?.daily?.[key] ?? {})) if (d < until) daily.set(d, wh / 1000);
-    if (daily.size) plugs.push({ key, name: p.name, daily });
+    if (daily.size) plugs.push({ key, name, daily });
   }
   return { plugs, unusable };
 }

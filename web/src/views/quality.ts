@@ -8,6 +8,7 @@ import { activeRooms, esc, lastDay, roomName, table } from '../ui';
 import { html } from '../trusted';
 import { lsKey } from '../scope';
 import { lazyCard } from '../lazy';
+import { devicesQualityHtml } from './devices-quality';
 
 let cached: Coverage | null = null;
 onDatasetLoaded(() => {
@@ -64,18 +65,26 @@ app.addEventListener('click', (e) => {
 
 const monthLabel = (m: string) => `${MONTHS_LONG[Number(m.slice(5, 7)) - 1]} ${m.slice(0, 4)}`;
 
-/** Collapsible card under the main chart; empty when every month is complete. */
+/** Collapsible card under the main chart; empty when every month is complete and no device event is known. */
 export function qualityCard(): string {
   const rooms = new Set(activeRooms().map((r) => r.id));
   const gaps = gapMonths(coverage(), rooms);
-  if (!gaps.length) return '';
+  const devices = devicesQualityHtml(); // v1.5: firmware, restarts, modules offline, Tempo, Linky index
+  if (!gaps.length && !devices) return '';
   const years = [...new Set(gaps.map((g) => g.month.slice(0, 4)))].sort();
   const lost = gaps.some((g) => g.missing > 0);
   // The card is inserted by the caller in this same task: draw once it is in the page.
   if (lost && reconOn) queueMicrotask(drawReconstitution);
+  const summary = gaps.length ? `${gaps.length} mois incomplet${gaps.length > 1 ? 's' : ''} (${years.join(', ')})` : 'appareils et compteurs';
   return `<details class="card quality" id="quality">
-    <summary><strong>Qualité des données</strong> · ${gaps.length} mois incomplet${gaps.length > 1 ? 's' : ''} (${years.join(', ')})</summary>
-    <p class="hint muted"><strong>Estimé</strong> : Intuis a gardé le total du mois mais perdu le détail de certains jours ; la collecte répartit l'écart sur ces jours. <strong>Perdu chez Intuis</strong> : ni le jour ni le total du mois ne sont disponibles ; la consommation de ces jours manque dans les totaux, qui ne contiennent que des valeurs mesurées. Sur les graphiques, les barres qui contiennent de tels jours sont plus pâles à toutes les granularités (jour, semaine, mois, an), et leur infobulle donne le nombre de jours ; les évolutions par rapport à l'année précédente le signalent.</p>
+    <summary><strong>Qualité des données</strong> · ${summary}</summary>
+    ${gaps.length ? gapsHtml(gaps, lost) : ''}
+    ${devices}
+  </details>`;
+}
+
+function gapsHtml(gaps: ReturnType<typeof gapMonths>, lost: boolean): string {
+  return `<p class="hint muted"><strong>Estimé</strong> : Intuis a gardé le total du mois mais perdu le détail de certains jours ; la collecte répartit l'écart sur ces jours. <strong>Perdu chez Intuis</strong> : ni le jour ni le total du mois ne sont disponibles ; la consommation de ces jours manque dans les totaux, qui ne contiennent que des valeurs mesurées. Sur les graphiques, les barres qui contiennent de tels jours sont plus pâles à toutes les granularités (jour, semaine, mois, an), et leur infobulle donne le nombre de jours ; les évolutions par rapport à l'année précédente le signalent.</p>
     ${table(
       ['Mois', 'Jours estimés', 'Jours perdus chez Intuis', 'Pièces concernées'],
       gaps.map((g) => [
@@ -95,8 +104,7 @@ export function qualityCard(): string {
         ? `<label class="toggle"><input type="checkbox" data-recon ${reconOn ? 'checked' : ''}> Reconstituer les jours perdus (à part, depuis Linky et la signature)</label>
     <div id="recon-zone"></div>`
         : ''
-    }
-  </details>`;
+    }`;
 }
 
 /** #297: the estimated or lost days behind a « vs l'an dernier » of [from, to] (HTML, empty when there are none). */

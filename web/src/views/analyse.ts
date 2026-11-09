@@ -4,7 +4,7 @@ import { type DayRecord, addDays, bucketLabel, minusYears } from '../aggregate';
 import { anomalies, dayProfile, daysAbove, fitSeason, signaturePoints, tariffSplit, weekHourGrid } from '../analysis';
 import { datasetDoc, ds, rerender, setState, state } from '../app';
 import { calendarChart, cssVar, gridHeatmap, lineChart, scatterChart } from '../charts';
-import { loadHourly, loadRoomState } from '../data';
+import { loadHourly, loadRoom30, loadRoomState } from '../data';
 import { lazyCard } from '../lazy';
 import { unavailable } from '../offline';
 import { activeRooms, catColor, esc, fmtKwh, lastDay, longDate, seg, series, table, tariffNames, measureColor, referenceColor } from '../ui';
@@ -25,6 +25,15 @@ const explainDoc = datasetDoc(async (d) => {
   return rs ? { open: w.openByDay(rs), away: w.absenceDays(rs) } : { open: new Map<string, number>(), away: new Set<string>() };
 });
 const redraw = () => state.view === 'analyse' && rerender();
+
+// S-1.26: per-room half hours of the profile's 90 days, preferred when present (#247: dataset shown only)
+const r30Doc = datasetDoc(async (d) => {
+  const [data, mod] = await Promise.all([loadRoom30(d, addDays(d.meta.last_day ?? lastDay(), -89)), import('../room30')]);
+  return { data, mod };
+});
+
+/** Minimum days of half hours in the 90-day window for the half-hour « journée type ». */
+const HALF_HOUR_MIN_DAYS = 28;
 
 function loadExplanations() {
   if (ds!.meta.has_roomstate) explainDoc.get(ds, (ok) => ok && redraw());
@@ -294,24 +303,33 @@ function drawHourly(records: DayRecord[]) {
   const last = lastDay();
   const from = addDays(last, -89);
   const rooms = new Set(records.map((r) => r.room));
-  const grid = weekHourGrid(hourly, rooms, from, last);
+  const r30 = (ds!.meta.room30_years ?? []).length ? (r30Doc.get(ds, (ok) => ok && redraw()) ?? null) : null;
+  // S-1.26: hours rebuilt from the half hours where they exist (more complete), the hourly data elsewhere
+  const from30 = r30 ? r30.mod.hourlyFrom30(r30.data, from, last, ds!.roomMap) : null;
+  const best = r30 && from30?.size ? r30.mod.preferRoom30(hourly, from30) : hourly;
+  const grid = weekHourGrid(best, rooms, from, last);
   const hours = Array.from({ length: 24 }, (_, h) => hour(h));
   const dows = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
+  const heatRooms = new Set(activeRooms().filter((r) => r.category === 'heating' && rooms.has(r.id)).map((r) => r.id));
+  const waterRooms = new Set(activeRooms().filter((r) => r.category === 'water_heater' && rooms.has(r.id)).map((r) => r.id));
+  const half = r30 ? (set: Set<string>) => r30!.mod.halfHourProfile(r30!.data, set, from, last, ds!.roomMap) : null;
+  const halfDays = half ? half(new Set([...heatRooms, ...waterRooms])).days : 0;
+  const byHalf = !!half && halfDays >= HALF_HOUR_MIN_DAYS;
   zone.innerHTML = html`<div class="chart" id="hour-grid" style="height:280px" role="img" aria-label="Consommation moyenne par jour de semaine et par heure"></div>
-    <div class="chart" id="hour-profile" style="height:240px" role="img" aria-label="Journée type"></div>`;
+    <div class="chart" id="hour-profile" style="height:240px" role="img" aria-label="Journée type${byHalf ? ' au pas de 30 minutes' : ''}"></div>
+    ${byHalf ? `<p class="hint muted">Journée type au pas de 30 minutes (${halfDays} jours mesurés pièce par pièce).</p>` : ''}`;
   gridHeatmap(document.getElementById('hour-grid')!, {
     xLabels: hours,
     yLabels: dows,
     data: grid.flatMap((row, y) => row.map((v, x) => [x, y, Math.round(v * 100) / 100] as [number, number, number])),
     unit: 'kWh',
   });
-  const heatRooms = new Set(activeRooms().filter((r) => r.category === 'heating' && rooms.has(r.id)).map((r) => r.id));
-  const waterRooms = new Set(activeRooms().filter((r) => r.category === 'water_heater' && rooms.has(r.id)).map((r) => r.id));
+  const profile = (set: Set<string>) => (byHalf ? half!(set).profile : dayProfile(best, set, from, last)).map((v) => Math.round(v * 100) / 100);
   lineChart(document.getElementById('hour-profile')!, {
-    labels: hours,
+    labels: byHalf ? Array.from({ length: 48 }, (_, i) => `${Math.floor(i / 2)}h${i % 2 ? '30' : ''}`) : hours,
     series: [
-      ...(heatRooms.size ? [{ name: 'Chauffage', color: catColor('heating'), data: dayProfile(hourly, heatRooms, from, last).map((v) => Math.round(v * 100) / 100) }] : []),
-      ...(waterRooms.size ? [{ name: 'Chauffe-eau', color: catColor('water_heater'), data: dayProfile(hourly, waterRooms, from, last).map((v) => Math.round(v * 100) / 100) }] : []),
+      ...(heatRooms.size ? [{ name: 'Chauffage', color: catColor('heating'), data: profile(heatRooms) }] : []),
+      ...(waterRooms.size ? [{ name: 'Chauffe-eau', color: catColor('water_heater'), data: profile(waterRooms) }] : []),
     ],
     price: null,
   });
