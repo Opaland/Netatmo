@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Paramètres · maquette v1.6</title>
+<link rel="stylesheet" href="ds.css">
+</head>
+<body class="">
+<div class="screen">
+<header class="top"><a class="back" href="accueil.html" aria-label="Retour">←</a><h1>Paramètres</h1><a class="icon-btn" href="parametres.html" aria-label="Paramètres"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/></svg></a></header>
+<main>
+
+<div class="alert"><span class="ico" aria-hidden="true">i</span><div>Démo : vous pouvez tout explorer, rien n'est enregistré.</div></div>
+<ul class="list">
+<li><a href="parametres-contrat.html"><span></span><span><span class="t">Contrat et prix</span><span class="s">Heures creuses · 12 kVA depuis le 1ᵉʳ oct. 2023</span></span><span><span class="tag shared">foyer</span></span><span class="chev">›</span></a></li>
+<li><a href="#"><span></span><span><span class="t">Mon logement</span><span class="s">6 pièces, surfaces, appareils, travaux, plan</span></span><span><span class="tag">appareil</span></span><span class="chev">›</span></a></li>
+<li><a href="#"><span></span><span><span class="t">Sources de données</span><span class="s">8 actives · Linky expire le 2 mars 2028</span></span><span><span class="tag shared">foyer</span></span><span class="chev">›</span></a></li>
+<li><a href="#"><span></span><span><span class="t">Objectifs et alertes</span><span class="s">budget 1 500 €, confort 19 °C, alerte froid</span></span><span><span class="tag">appareil</span></span><span class="chev">›</span></a></li>
+</ul>
+<ul class="list">
+<li><a href="#"><span></span><span><span class="t">Affichage et accessibilité</span><span class="s">complet · thème du système · motifs</span></span><span><span class="tag">appareil</span></span><span class="chev">›</span></a></li>
+<li><a href="#"><span></span><span><span class="t">Foyer et partage</span><span class="s">inviter, chambres regroupées, locataire</span></span><span><span class="tag">appareil</span></span><span class="chev">›</span></a></li>
+<li><a href="#"><span></span><span><span class="t">Sécurité</span><span class="s">verrouillage après 15 min, sauvegarde</span></span><span><span class="tag">appareil</span></span><span class="chev">›</span></a></li>
+<li><a href="#"><span></span><span><span class="t">À propos et confidentialité</span><span class="s">ce qui est public, cadre juridique, version</span></span><span></span><span class="chev">›</span></a></li>
+</ul>
+<a class="btn secondary block" href="onboarding.html">Revoir la présentation</a>
+<a class="btn secondary block" href="index.html">Quitter la démo</a>
+
+<button type="button" class="btn secondary theme-toggle" id="theme">Thème clair / sombre</button>
+</main>
+<nav class="tabs" aria-label="Onglets"><a href="accueil.html"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg><span>Accueil</span></a><a href="pieces.html"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="8" height="8" rx="1"/><rect x="13" y="3" width="8" height="8" rx="1"/><rect x="3" y="13" width="8" height="8" rx="1"/><rect x="13" y="13" width="8" height="8" rx="1"/></svg><span>Pièces</span></a><a href="historique.html"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 17l5-5 4 3 8-8"/><path d="M3 21h18"/></svg><span>Historique</span></a><a href="compteur.html"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="13" r="8"/><path d="M12 13l4-4M8 5l-1-2M16 5l1-2"/></svg><span>Compteur</span></a><a href="outils.html"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18l3 3 6.3-6.3a4 4 0 0 0 5.4-5.4l-2.5 2.5-2.4-.6-.6-2.4z"/></svg><span>Outils</span></a></nav>
+</div>
+<script>
+(function(){var r=document.documentElement,b=document.getElementById('theme');
+try{var t=localStorage.getItem('maquette-theme');if(t)r.dataset.theme=t;}catch(e){}
+b.addEventListener('click',function(){var d=r.dataset.theme==='dark'||(!r.dataset.theme&&matchMedia('(prefers-color-scheme: dark)').matches);
+r.dataset.theme=d?'light':'dark';try{localStorage.setItem('maquette-theme',r.dataset.theme);}catch(e){}});})();
+</script>
+</body>
+</html>
