@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Maquettes · maquette v1.6</title>
+<link rel="stylesheet" href="ds.css">
+</head>
+<body class="">
+<div class="screen">
+<header class="top"><h1>Maquettes v1.6</h1></header>
+<main>
+
+<p>Maquettes statiques de la <b>v1.6</b> (HTML et CSS, sans script externe ni étape de construction), données de démonstration. Elles appliquent l'<a href="../architecture-cible.md">architecture cible</a> et le <a href="../design-system.md">design system</a> proposés après l'<a href="../audit-ux.md">audit d'utilisabilité</a>. Bouton « Clair / sombre » en bas à droite ; le thème du système est suivi par défaut.</p>
+<ul class="list">
+  <li><a href="onboarding.html"><span>1</span><span><span class="t">Premier lancement</span><span class="s">4 étapes : bienvenue, qui utilise ce téléphone, sources, contrat</span></span><span></span><span class="chev">›</span></a></li>
+  <li><a href="accueil.html"><span>2</span><span><span class="t">Accueil</span><span class="s">verdict en €, 3 tuiles, alerte, ce qui a compté, consommation, IA</span></span><span></span><span class="chev">›</span></a></li>
+  <li><a href="pieces.html"><span>3</span><span><span class="t">Pièces</span><span class="s">liste triée par coût, confort, chauffe-eau à part</span></span><span></span><span class="chev">›</span></a></li>
+  <li><a href="piece.html"><span>4</span><span><span class="t">Une pièce (Salon)</span><span class="s">coût, température, pourquoi il a fait froid, air, radiateur</span></span><span></span><span class="chev">›</span></a></li>
+  <li><a href="historique.html"><span>5</span><span><span class="t">Historique (comparer)</span><span class="s">préréglages, hiver contre hiver à climat égal</span></span><span></span><span class="chev">›</span></a></li>
+  <li><a href="compteur.html"><span>6</span><span><span class="t">Compteur</span><span class="s">part des usages, puissance, veille</span></span><span></span><span class="chev">›</span></a></li>
+  <li><a href="outils.html"><span>7</span><span><span class="t">Outils (analyse, simulateurs)</span><span class="s">simulateurs, vérifier, journaux, analyse IA, rapports</span></span><span></span><span class="chev">›</span></a></li>
+  <li><a href="parametres.html"><span>8</span><span><span class="t">Paramètres</span><span class="s">centre unifié, portée foyer / appareil</span></span><span></span><span class="chev">›</span></a></li>
+  <li><a href="parametres-contrat.html"><span>9</span><span><span class="t">Paramètres → Contrat et prix</span><span class="s">sous-page type</span></span><span></span><span class="chev">›</span></a></li>
+  <li><a href="simple.html"><span>10</span><span><span class="t">Vue simple (proche)</span><span class="s">mode simple avec navigation et sortie visible</span></span><span></span><span class="chev">›</span></a></li>
+</ul>
+<p class="sub">Couleurs : Radix Colors (sand, iris, orange, blue, grass, amber, tomato) ; échelles : Open Props. Feuille commune : <a href="ds.css">ds.css</a>.</p>
+
+<button type="button" class="btn secondary theme-toggle" id="theme">Thème clair / sombre</button>
+</main>
+
+</div>
+<script>
+(function(){var r=document.documentElement,b=document.getElementById('theme');
+try{var t=localStorage.getItem('maquette-theme');if(t)r.dataset.theme=t;}catch(e){}
+b.addEventListener('click',function(){var d=r.dataset.theme==='dark'||(!r.dataset.theme&&matchMedia('(prefers-color-scheme: dark)').matches);
+r.dataset.theme=d?'light':'dark';try{localStorage.setItem('maquette-theme',r.dataset.theme);}catch(e){}});})();
+</script>
+</body>
+</html>

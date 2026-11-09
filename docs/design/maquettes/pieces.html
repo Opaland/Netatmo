@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pièces · maquette v1.6</title>
+<link rel="stylesheet" href="ds.css">
+</head>
+<body class="">
+<div class="screen">
+<header class="top"><h1>Maison démo <span class="badge">démo</span></h1>
+  <a class="status" href="outils.html#etat"><span class="dot" aria-hidden="true"></span>Données du 8 nov.</a>
+  <a class="icon-btn" href="parametres.html" aria-label="Paramètres"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/></svg></a></header>
+<main>
+
+<div class="card-head"><h2>Pièces</h2><div class="seg" role="radiogroup" aria-label="Affichage"><button role="radio" aria-checked="true">Liste</button><button role="radio" aria-checked="false">Plan</button></div></div>
+<div class="card-head"><button class="period" type="button">Depuis le 1ᵉʳ janvier ▾</button><span class="sub">trié par coût</span></div>
+<ul class="list">
+  <li><a href="piece.html"><span class="sw" style="background:var(--usage-heating)"></span><span><span class="t">Chambres <span class="tag">regroupées</span></span><span class="s">19,4 °C · <span class="pill ok">confort</span></span></span><span class="v">237 €<span class="s">1 278 kWh</span></span><span class="chev">›</span></a></li>
+  <li><a href="piece.html"><span class="sw" style="background:var(--usage-heating)"></span><span><span class="t">Salon</span><span class="s">19,6 °C · <span class="pill warn">2 jours sous 19 °C</span></span></span><span class="v">234 €<span class="s">1 263 kWh</span></span><span class="chev">›</span></a></li>
+  <li><a href="piece.html"><span class="sw" style="background:var(--usage-heating)"></span><span><span class="t">Cuisine</span><span class="s">19,9 °C · <span class="pill ok">confort</span></span></span><span class="v">107 €<span class="s">576 kWh</span></span><span class="chev">›</span></a></li>
+  <li><a href="piece.html"><span class="sw" style="background:var(--usage-heating)"></span><span><span class="t">Salle de bain</span><span class="s">21,2 °C · <span class="pill ok">confort</span></span></span><span class="v">86 €<span class="s">462 kWh</span></span><span class="chev">›</span></a></li>
+  <li><a href="piece.html"><span class="sw" style="background:var(--usage-heating)"></span><span><span class="t">Bureau</span><span class="s">19,1 °C · <span class="pill warn">fenêtre 6 h</span></span></span><span class="v">80 €<span class="s">432 kWh</span></span><span class="chev">›</span></a></li>
+</ul>
+<p class="section-title">Appareils</p>
+<ul class="list">
+  <li><a href="piece.html"><span class="sw" style="background:var(--usage-water)"></span><span><span class="t">Chauffe-eau</span><span class="s">92 % en heures creuses</span></span><span class="v">201 €<span class="s">1 263 kWh</span></span><span class="chev">›</span></a></li>
+</ul>
+<p class="section-title">Tout le logement</p>
+<ul class="list">
+  <li><a href="piece.html"><span aria-hidden="true">🌬</span><span><span class="t">Air et confort</span><span class="s">CO₂ des nuits, humidité, capteurs</span></span><span></span><span class="chev">›</span></a></li>
+</ul>
+
+<button type="button" class="btn secondary theme-toggle" id="theme">Thème clair / sombre</button>
+</main>
+<nav class="tabs" aria-label="Onglets"><a href="accueil.html"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg><span>Accueil</span></a><a href="pieces.html" aria-current="page"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="8" height="8" rx="1"/><rect x="13" y="3" width="8" height="8" rx="1"/><rect x="3" y="13" width="8" height="8" rx="1"/><rect x="13" y="13" width="8" height="8" rx="1"/></svg><span>Pièces</span></a><a href="historique.html"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 17l5-5 4 3 8-8"/><path d="M3 21h18"/></svg><span>Historique</span></a><a href="compteur.html"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="13" r="8"/><path d="M12 13l4-4M8 5l-1-2M16 5l1-2"/></svg><span>Compteur</span></a><a href="outils.html"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18l3 3 6.3-6.3a4 4 0 0 0 5.4-5.4l-2.5 2.5-2.4-.6-.6-2.4z"/></svg><span>Outils</span></a></nav>
+</div>
+<script>
+(function(){var r=document.documentElement,b=document.getElementById('theme');
+try{var t=localStorage.getItem('maquette-theme');if(t)r.dataset.theme=t;}catch(e){}
+b.addEventListener('click',function(){var d=r.dataset.theme==='dark'||(!r.dataset.theme&&matchMedia('(prefers-color-scheme: dark)').matches);
+r.dataset.theme=d?'light':'dark';try{localStorage.setItem('maquette-theme',r.dataset.theme);}catch(e){}});})();
+</script>
+</body>
+</html>
