@@ -256,15 +256,16 @@ Verrou (phrase / démo / installer)
 
 | Récit | Sujet |
 |---|---|
-| S-7.16 | Nouvelle navigation (onglets, en-tête, sous-pages, URL) |
-| S-7.17 | Centre de paramètres unifié |
-| S-7.18 | Design system : jetons et composants |
-| S-7.19 | Refonte de l'Accueil |
-| S-7.20 | Premier lancement |
-| S-7.21 | Page Pièce (réunit Pièces et Confort) |
-| S-7.22 | Espace Outils (simulateurs, vérifier, journaux, rapports) |
-| S-7.23 | Nomenclature, périodes et glossaire partout |
-| S-7.24 | Vue Proche (mode simple avec navigation) |
-| S-7.25 | Reconstruire l'application sur le nouveau design system (migration) |
-| S-7.26 | État des données (pastille, complétude, sources) |
+| S-7.16 (#308) | Nouvelle navigation (onglets, en-tête, sous-pages, URL) |
+| S-7.17 (#309) | Centre de paramètres unifié |
+| S-7.18 (#310) | Design system : jetons et composants |
+| S-7.19 (#311) | Refonte de l'Accueil |
+| S-7.20 (#312) | Premier lancement |
+| S-7.21 (#313) | Page Pièce (réunit Pièces et Confort) |
+| S-7.22 (#314) | Espace Outils (simulateurs, vérifier, journaux, rapports) |
+| S-7.23 (#315) | Nomenclature, périodes et glossaire partout |
+| S-7.24 (#316) | Vue Proche (mode simple avec navigation) |
+| S-7.25 (#317) | Reconstruire l'application sur le nouveau design system (migration) |
+| S-7.26 (#318) | État des données (pastille, complétude, sources) |
+| S-7.27 (#319) | Mise en page à 200 % et étiquettes tronquées (correctif avant migration) |
 | liées | #20 (réglages du graphique = feuille Période), #202 (plan, onglet Pièces), #204 (localisation, ⚙ Mon logement), #200 / #24 / #26 (volets, Journaux), #210 (absences, Journaux), #211 (plannings, Simulateurs), #220 / #221 (Météo) |

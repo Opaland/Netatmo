@@ -182,6 +182,9 @@ personne), **majeure** (lecture fausse probable, non-conformité AA, tâche clé
 6. **Glossaire et périodes normalisés** dans toute l'appli (S-7.23).
 7. **Premier lancement** guidé et vue « Proche » (mode simple avec navigation) (S-7.20, S-7.24).
 8. **Design system** (jetons, composants) puis **migration vue par vue** (S-7.18, S-7.25).
+9. Correctif immédiat des débordements à 200 % et des étiquettes tronquées (S-7.27).
+
+Issues du jalon v1.6 : #308 (S-7.16) à #319 (S-7.27).
 
 ## 7. Reproduire l'audit
 
