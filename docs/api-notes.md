@@ -25,7 +25,7 @@ officielle de Home Assistant ne les voit pas.
 | `GET /api/homesdata` | Maison, pièces, modules (`NMG` = passerelle, `NMH` = radiateur, `NMW` = Aqua Manager / chauffe-eau) |
 | `POST /api/gethomemeasure` (JSON) | Mesures de toutes les pièces en un appel. Corps : `home.id`, `home.rooms[] = {id, bridge, type}`, `scale`, `date_begin`, `date_end`, `app_identifier=app_muller` |
 | `POST /api/getroommeasure` (formulaire) | Une pièce par appel. Repli si `gethomemeasure` renvoie des mesures vides (constaté avec certains identifiants d'application) |
-| `POST /syncapi/v1/homestatus` | État courant (températures, consignes). Pas encore utilisé pour l'historique |
+| `POST /syncapi/v1/homestatus` | État courant (températures, consignes). Pas encore utilisé pour l'historique ; `diagnose` en liste les noms de champs (voir « Fenêtre ouverte ») |
 
 ## Types de mesure
 
@@ -70,6 +70,75 @@ une colonne par type demandé ; ou forme simple `{"<timestamp>": [v, ...]}`. Les
 - **Débit** : aucune limite publiée par Intuis (Netatmo documente 50 requêtes / 10 s et 500 / h pour son
   API publique). Le collecteur fait au plus un appel par seconde, respecte `Retry-After` et ralentit
   sur les réponses 429. Une collecte quotidienne coûte une poignée d'appels.
+
+## Fenêtre ouverte (`open_window`, #162)
+
+L'API Netatmo Energy expose `open_window` par pièce dans `homestatus` pour ses thermostats. Les
+radiateurs Intuitiv détectent aussi une fenêtre ouverte (chute anormale de température), mais **rien
+ne dit encore que le serveur Intuis renvoie ce champ**. **À vérifier sur un vrai compte** :
+lancer **Actions → Diagnostic** (ou `python -m collector diagnose --status` en local). La sortie
+liste seulement les **noms** des champs des objets `rooms` et `modules` de
+`/syncapi/v1/homestatus` (triés, sans doublon, identifiants uniquement), jamais les valeurs, ids ni
+noms de pièces, et indique si `open_window` (ou `window_open`, `open_window_detected`) est présent.
+
+Rien n'est enregistré pour l'instant. Si le champ existe, l'étape suivante serait un instantané
+nocturne (l'API ne donne pas d'historique) ; sinon, le noter ici.
+
+| Vérification | Résultat |
+|---|---|
+| Champs `rooms` de `homestatus` | à compléter après un diagnostic réel |
+| Champs `modules` de `homestatus` | à compléter après un diagnostic réel |
+| `open_window` présent ? | à vérifier |
+
+## Schémas de référence et changements de format (S-1.13)
+
+`collector/schema.py` décrit, pour chaque réponse utilisée, les champs attendus et leur type :
+
+| Source | Réponse | Champs vérifiés |
+|---|---|---|
+| Intuis | `/oauth2/token` | `access_token` |
+| Intuis | `/api/homesdata` | `body.homes[].id`, `rooms[].id`, `modules[].id` (et `type`, `module_ids` s'ils sont là) |
+| Intuis | `/api/gethomemeasure` | `body.home`, `rooms[].id`, `modules[].id`, `measures` (blocs `beg_time` + `value`, ou objet horodaté) |
+| Intuis | `/api/getroommeasure` | `body` (blocs ou objet horodaté) |
+| Intuis | `/syncapi/v1/homestatus` | `body.home` |
+| Netatmo | `/oauth2/token` | `access_token`, `refresh_token` |
+| Netatmo | `/api/getstationsdata` | `body.devices[]._id`, `modules[]._id` |
+| Netatmo | `/api/getmeasure` | `body` (blocs ou objet horodaté) |
+| Open-Meteo | `archive`, `forecast` | `daily.time`, `daily.temperature_2m_min/max/mean` |
+| Conso API | les trois points d'accès | voir ci-dessous |
+
+Un champ absent ou d'un autre type lève `FormatError` : « *source* : format de réponse inattendu
+(*point d'accès*), champ « *chemin* » absent ». Le message ne cite **jamais une valeur** (journal
+public). Une liste vide reste « pas de données », pas un changement de format.
+
+Conso API change de forme sans prévenir (2026) et le collecteur reconnaît plusieurs noms de champs
+(`d`/`date`…, `v`/`value`/`valeur`…). Le contrôle y est donc différent : si la réponse contient des
+objets « à plat » portant une date (des relevés) mais qu'aucun n'est reconnu, c'est un changement de
+format, et le message liste les **noms** des champs vus (ex. `champs vus : jour, wh`). Aucun relevé :
+pas de données.
+
+Conséquences : Intuis en échec arrête la collecte (issue d'alerte, résumé « Collecte interrompue ») ;
+une source facultative en échec est notée dans `meta.sources.<source>.format` (point d'accès et champ)
+et dans la section « Format de réponse changé » du résumé de la collecte. Limite connue : `measures`
+reste facultatif dans `gethomemeasure` (une pièce sans mesure peut l'omettre) ; un renommage de ce
+seul champ ressemblerait donc à « pas de données ».
+
+## Nombre d'appels par collecte (S-1.14)
+
+Chaque requête HTTP passe par un compteur par source (`collector/budget.py`) : nombre d'appels et
+durée cumulée des appels, affichés en fin de collecte et dans le résumé du job (« Appels API »).
+Plafonds par collecte, réglables par variable de dépôt (transmise par `collect.yml`) :
+
+| Source | Plafond | Variable |
+|---|---|---|
+| Intuis | 300 (3 000 lors d'une récupération de l'historique) | `MAX_CALLS_INTUIS` |
+| Netatmo | 400 (l'API publique autorise 500 / h) | `MAX_CALLS_NETATMO` |
+| Linky (Conso API) | 200 | `MAX_CALLS_LINKY` |
+| Open-Meteo | 20 | `MAX_CALLS_OPEN_METEO` |
+
+Les nouvelles tentatives (429, 5xx) comptent. Plafond atteint : la source s'arrête proprement, ce qui
+a été récupéré est enregistré, et la collecte se termine sans erreur (avertissement dans le journal).
+Si c'était une récupération d'historique Intuis, `meta.backfill_pending` la relance la nuit suivante.
 
 ## Station météo Netatmo (API publique)
 

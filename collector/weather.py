@@ -12,6 +12,8 @@ from zoneinfo import ZoneInfo
 
 import httpx
 
+from . import schema
+from .budget import METER
 from .storage import Store
 
 log = logging.getLogger(__name__)
@@ -19,6 +21,14 @@ log = logging.getLogger(__name__)
 ARCHIVE = "https://archive-api.open-meteo.com/v1/archive"
 FORECAST = "https://api.open-meteo.com/v1/forecast"
 DAILY = "temperature_2m_min,temperature_2m_max,temperature_2m_mean"
+
+
+def _get(http: httpx.Client, url: str, params: dict) -> dict:
+    with METER.call("open-meteo"):
+        resp = http.get(url, params=params)
+    resp.raise_for_status()
+    endpoint = url.rsplit("/", 1)[-1]
+    return schema.check("Open-Meteo", endpoint, schema.OPEN_METEO_DAILY, resp.json())
 
 
 def _rows(body: dict) -> list[tuple[str, list[float]]]:
@@ -49,14 +59,10 @@ def open_meteo(store: Store, lat: float, lon: float, tz: str, first_day: str, ht
     params = {"latitude": round(lat, 2), "longitude": round(lon, 2), "daily": DAILY, "timezone": tz}
     rows: list[tuple[str, list[float]]] = []
     if missing_from:
-        resp = http.get(
-            ARCHIVE, params={**params, "start_date": missing_from.isoformat(), "end_date": today.isoformat()}
-        )
-        resp.raise_for_status()
-        rows += _rows(resp.json())
-    resp = http.get(FORECAST, params={**params, "past_days": 10, "forecast_days": 1})
-    resp.raise_for_status()
-    rows += [r for r in _rows(resp.json()) if r[0] <= today.isoformat()]
+        body = _get(http, ARCHIVE, {**params, "start_date": missing_from.isoformat(), "end_date": today.isoformat()})
+        rows += _rows(body)
+    body = _get(http, FORECAST, {**params, "past_days": 10, "forecast_days": 1})
+    rows += [r for r in _rows(body) if r[0] <= today.isoformat()]
     for day, vals in rows:
         store.put("weather", "outdoor", day, None, vals)
     if rows:

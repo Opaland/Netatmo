@@ -24,7 +24,9 @@ from pathlib import Path
 import httpx
 
 from .api import IntuisClient
+from .budget import METER, CallCapReached, caps_from_env
 from .config import Settings
+from .schema import FormatError
 from .storage import Store
 from .sync import Syncer
 
@@ -56,7 +58,7 @@ def cmd_diagnose(s: Settings, args: argparse.Namespace) -> None:
         history(client)
         history_deep(client)
     else:
-        run(client)
+        run(client, status_only=args.status)
 
 
 def _warn(msg: str) -> None:
@@ -99,17 +101,24 @@ class Sources:
         st.pop("message", None)
         st.pop("auth_expired", None)
         st.pop("note", None)
+        st.pop("format", None)
         if "credential" in st:
             st.setdefault("since", self.now[:10])
         if note:
             st["note"] = note[:160]  # informative, not an error
 
-    def failed(self, name: str, message: str, auth: bool = False) -> None:
+    def failed(self, name: str, message: str, auth: bool = False, err: Exception | None = None) -> None:
         st = self.state.setdefault(name, {})
         st["error"] = self.now
         st["message"] = message[:160]
         if auth:
             st["auth_expired"] = True
+        if isinstance(err, FormatError):
+            # S-1.13: which field changed (a path in the reference schema, never a value).
+            st["format"] = f"{err.endpoint} · {err.field}"[:120]
+
+    def error(self, name: str, err: Exception) -> None:
+        self.failed(name, str(err), auth=getattr(err, "auth", False), err=err)
 
     def expiry(self, name: str, expires: str | None, issued: str | None = None, days: int | None = None) -> None:
         """Expiry date from the token itself, else estimated from its issue date or first success."""
@@ -217,8 +226,8 @@ def _weather(s: Settings, store: Store, home, sources: Sources) -> str | None:
             )
             sources.ok("netatmo")
             return "netatmo"
-        except (StationError, httpx.HTTPError) as err:
-            sources.failed("netatmo", str(err), auth=getattr(err, "auth", False))
+        except (StationError, httpx.HTTPError, FormatError, CallCapReached) as err:
+            sources.error("netatmo", err)
             _warn(f"{err} — repli sur Open-Meteo")
     if home.latitude is None or home.longitude is None:
         _warn("Coordonnées de la maison inconnues : pas de météo")
@@ -229,8 +238,8 @@ def _weather(s: Settings, store: Store, home, sources: Sources) -> str | None:
         open_meteo(store, home.latitude, home.longitude, home.timezone, first)
         sources.ok("open-meteo")
         return store.doc("weather").get("source")
-    except httpx.HTTPError as err:
-        sources.failed("open-meteo", str(err))
+    except (httpx.HTTPError, FormatError, CallCapReached) as err:
+        sources.error("open-meteo", err)
         _warn(f"Météo Open-Meteo indisponible : {err}")
         return store.meta.get("weather_source")
 
@@ -244,13 +253,13 @@ def _linky(s: Settings, store: Store, tz: str, sources: Sources) -> None:
     try:
         collect(store, s.enedis_token, s.enedis_prm, first, tz)
         sources.ok("linky")
-    except (LinkyError, httpx.HTTPError) as err:
-        sources.failed("linky", str(err), auth=getattr(err, "auth", False))
+    except (LinkyError, httpx.HTTPError, FormatError, CallCapReached) as err:
+        sources.error("linky", err)
         _warn(str(err))
     issued, expires = token_dates(s.enedis_token)
     sources.expiry("linky", expires, issued, LINKY_CONSENT_DAYS)
-    if sources.state["linky"].get("auth_expired"):
-        return  # same token: the curve would be refused too
+    if sources.state["linky"].get("auth_expired") or "linky" in METER.capped:
+        return  # same token (or no call left): the curve would fail too
     try:
         n = collect_curve(store, s.enedis_token, s.enedis_prm, first, tz)
         has_curve = any(store.doc(f"{y}.linky30").get("curve") for y in store.linky_curve_years())
@@ -260,9 +269,9 @@ def _linky(s: Settings, store: Store, tz: str, sources: Sources) -> None:
             else ("aucune mesure : activez la collecte de la courbe de charge dans votre espace Enedis")
         )
         sources.ok("linky-30min", note)
-    except (LinkyError, httpx.HTTPError) as err:
+    except (LinkyError, httpx.HTTPError, FormatError, CallCapReached) as err:
         # Usually no consent for the load curve: the daily totals are unaffected.
-        sources.failed("linky-30min", str(err))
+        sources.failed("linky-30min", str(err), err=err)
         _warn(f"{err} — la consommation quotidienne Linky n'est pas affectée")
 
 
@@ -271,12 +280,26 @@ def cmd_sync(s: Settings, args: argparse.Namespace, backfill: bool = False) -> N
     store = Store(s.data_dir, s.passphrase)
     syncer = Syncer(_client(s), store, s.room_categories)
     sources = Sources(store.meta.get("sources"))
+    # S-1.14: a backfill stopped by the call cap goes on at the next collection.
+    backfill = backfill or bool(store.meta.get("backfill_pending"))
+    first_run = backfill or store.last_day() is None
+    METER.reset(caps_from_env(backfill=first_run))
+    pending = False
     try:
         syncer.run(days=args.days, backfill=backfill, save=False)
+        sources.ok("intuis")
+    except CallCapReached as err:
+        if syncer.last_home is None:
+            _failure_summary(err)
+            raise
+        # Clean stop: keep what was fetched, resume tomorrow.
+        sources.error("intuis", err)
+        _warn(str(err))
+        pending = first_run
     except Exception as err:
-        sources.failed("intuis", str(err))
+        sources.failed("intuis", str(err), err=err)
+        _failure_summary(err)
         raise
-    sources.ok("intuis")
     home = syncer.last_home
     source = _weather(s, store, home, sources)
     extra = {"weather_source": source} if source else {}
@@ -296,6 +319,8 @@ def cmd_sync(s: Settings, args: argparse.Namespace, backfill: bool = False) -> N
             sources.failed("ia", str(err))
             _warn(f"Analyse IA non rédigée : {err}")
     extra["sources"] = sources.state
+    if pending:
+        extra["backfill_pending"] = True
     contract = shared_contract(store.meta.get("contract"))
     if contract:
         extra["contract"] = contract
@@ -306,6 +331,8 @@ def cmd_sync(s: Settings, args: argparse.Namespace, backfill: bool = False) -> N
     changed = syncer.save(home, extra)
     print("Fichiers modifiés : " + (", ".join(changed) if changed else "aucun"))
     print(f"Couverture : {store.first_day()} → {store.last_day()}")
+    for line in _call_lines():
+        print(line)
     _job_summary(store, syncer, changed)
 
 
@@ -320,6 +347,60 @@ def _expiry_label(st: dict) -> str:
 def _contract_label(contract: list | None) -> str:
     # Only a count: the contract itself is not secret but stays out of public logs.
     return f"oui ({len(contract)} période{'s' if len(contract) > 1 else ''})" if contract else "non"
+
+
+def _call_lines() -> list[str]:
+    """S-1.14: calls and time per source (counts only)."""
+    out = []
+    for name, calls, cap, seconds in METER.rows():
+        limit = f"plafond {cap}" if cap is not None else "sans plafond"
+        stop = " — plafond atteint, arrêt" if name in METER.capped else ""
+        out.append(f"Appels API {name} : {calls} ({limit}, {seconds:.1f} s){stop}")
+    return out
+
+
+def _calls_table() -> list[str]:
+    rows = METER.rows()
+    if not rows:
+        return []
+    return [
+        "",
+        "### Appels API",
+        "",
+        "| Source | Appels | Plafond | Durée des appels |",
+        "|---|---|---|---|",
+        *(
+            f"| {name} | {calls}{' ⛔' if name in METER.capped else ''} | {cap if cap is not None else '—'} "
+            f"| {seconds:.1f} s |"
+            for name, calls, cap, seconds in rows
+        ),
+    ]
+
+
+def _format_lines(sources: dict[str, dict]) -> list[str]:
+    """S-1.13: sources whose answer no longer has the expected shape (source and field only)."""
+    changed = [
+        f"- ⚠️ {name} : {v['format']}"
+        for name, v in sorted(sources.items())
+        if v.get("format") and v.get("error", "") > v.get("ok", "")
+    ]
+    if not changed:
+        return []
+    return ["", "### Format de réponse changé", "", *changed, "", "Voir docs/api-notes.md (schémas de référence)."]
+
+
+def _failure_summary(err: Exception) -> None:
+    """Fatal error: what is safe to say in the public job summary."""
+    path = os.environ.get("GITHUB_STEP_SUMMARY")
+    if not path:
+        return
+    if isinstance(err, FormatError | CallCapReached):
+        why = str(err)
+    else:
+        why = f"erreur {type(err).__name__} (détail dans le journal)"
+    lines = ["## Collecte interrompue", "", f"- {why}", *_calls_table()]
+    with open(path, "a", encoding="utf-8") as fh:
+        fh.write("\n".join(lines) + "\n")
 
 
 def _job_summary(store: Store, syncer: Syncer, changed: list[str]) -> None:
@@ -353,6 +434,8 @@ def _job_summary(store: Store, syncer: Syncer, changed: list[str]) -> None:
             for name, v in sorted(m.get("sources", {}).items())
         ),
     ]
+    lines += _format_lines(m.get("sources", {}))
+    lines += _calls_table()
     alerts = expiry_alerts(m.get("sources", {}), datetime.now(UTC).date())
     if alerts:
         lines += ["", "### À renouveler", "", *(f"- ⚠️ {a}" for a in alerts)]
@@ -372,7 +455,7 @@ def cmd_insights(s: Settings, args: argparse.Namespace) -> None:
             {
                 k: v
                 for k, v in store.meta.items()
-                if k.startswith("has_") or k in ("weather_source", "sources", "contract")
+                if k.startswith("has_") or k in ("weather_source", "sources", "contract", "backfill_pending")
             },
         )
         print(store.doc("insights")["markdown"])
@@ -467,6 +550,7 @@ def main(argv: list[str] | None = None) -> None:
     d.add_argument("--save-raw", metavar="FICHIER")
     dg = sub.add_parser("diagnose", help="diagnostic anonyme (sans noms ni valeurs)")
     dg.add_argument("--history", action="store_true", help="profondeur d'historique par échelle")
+    dg.add_argument("--status", action="store_true", help="seulement les noms des champs de homestatus")
     for name in ("sync", "backfill"):
         sp = sub.add_parser(name)
         sp.add_argument("--days", type=int, default=35, help="jours re-téléchargés à chaque sync (défaut 35)")

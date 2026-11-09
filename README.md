@@ -230,6 +230,23 @@ pouvez aussi saisir vos propres prix. Ces réglages restent sur votre appareil.
 Si la collecte nocturne échoue (mot de passe changé, serveur indisponible…), une *issue* GitHub
 s'ouvre et GitHub vous prévient par e-mail. Elle se ferme toute seule à la prochaine collecte réussie.
 
+### Format des API et nombre d'appels
+
+Chaque réponse d'Intuis, de la station Netatmo, de Conso API (Linky) et d'Open-Meteo est comparée à
+un **schéma de référence**. Si un champ attendu disparaît ou change de nom, la collecte le dit
+clairement (« format de réponse inattendu », avec la source et le nom du champ, jamais une valeur)
+au lieu d'enregistrer des jours vides. Une réponse sans mesure reste un simple « pas de données ».
+Pour Intuis, la collecte échoue (et l'issue d'alerte s'ouvre) ; pour les sources facultatives,
+l'erreur est notée dans l'état des sources et le résumé de la collecte.
+
+Le résumé de chaque collecte donne aussi le **nombre d'appels et leur durée par source**. Chaque
+source a un plafond par collecte : Intuis 300 (3 000 pour la récupération de tout l'historique),
+station Netatmo 400, Linky 200, Open-Meteo 20. Plafond atteint : la collecte s'arrête proprement
+pour cette source, garde ce qui a été récupéré et reprend la nuit suivante (une récupération
+d'historique interrompue continue d'elle-même). Pour changer un plafond, ajoutez une **variable**
+(onglet *Variables*, pas *Secrets*) `MAX_CALLS_INTUIS`, `MAX_CALLS_NETATMO`, `MAX_CALLS_LINKY` ou
+`MAX_CALLS_OPEN_METEO` (un nombre entier).
+
 ### Jours « estimés »
 
 Pour certaines périodes, le serveur Intuis a perdu le détail jour par jour mais garde le total du mois.
@@ -282,7 +299,8 @@ python -m collector discover
 | `python -m collector verify` | Déchiffre les données locales et affiche les totaux par année |
 | `python -m collector export-csv -o conso.csv` | Export CSV (séparateur `;`, décimales `,`, pour Excel) |
 | `python -m collector insights [--force]` | Analyse du dernier mois par Claude (`ANTHROPIC_API_KEY`) |
-| `python -m collector diagnose [--history]` | Diagnostic anonyme de l'API (modules, types de mesure, profondeur) |
+| `python -m collector diagnose [--history]` | Diagnostic anonyme de l'API (modules, types de mesure, profondeur, noms des champs de `homestatus`) |
+| `python -m collector diagnose --status` | Seulement les noms des champs des pièces et modules de `homestatus` (fenêtre ouverte ?) |
 | `python -m collector restore-backup FICHIER [--dry-run]` | Restaure dans `data/` une sauvegarde chiffrée téléchargée depuis l'appli |
 | `python -m collector demo` | Régénère les données de démonstration |
 
