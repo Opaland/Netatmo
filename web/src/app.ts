@@ -81,7 +81,7 @@ export const DEFAULT: State = {
   gran: 'month',
   split: 'category',
   compareYears: [],
-  compareMode: 'monthly',
+  compareMode: 'season', // maquette « Historique »: hiver contre hiver
   compareSeasons: null,
   roomsYear: null,
   focusRoom: null,
@@ -90,7 +90,7 @@ export const DEFAULT: State = {
   kva: 9,
   contracts: [],
   contractLocalEdit: false,
-  climate: false,
+  climate: true, // maquette « Historique »: à climat égal (off without weather)
   analyseYear: null,
   tempRoom: null,
   reportYear: null,

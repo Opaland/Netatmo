@@ -5,6 +5,8 @@ import { WrongPassphrase } from '../crypto';
 import { type Dataset, type Source, load, rememberKey, unlock } from '../data';
 import { html } from '../trusted';
 import { INSTALL_HASH, installSteps } from '../invite';
+import { clearLockNotice } from '../session';
+import { bindReveal, hideSecrets, revealButton } from '../reveal';
 
 /** `notice`: an information, not an error (S-7.9: key erased by the browser, data intact). */
 export function renderLock(message = '', hasRealData = true, notice = '') {
@@ -20,7 +22,10 @@ export function renderLock(message = '', hasRealData = true, notice = '') {
         hasRealData
           ? `<form id="unlock">
         <label for="pass">Phrase de passe</label>
-        <input id="pass" type="password" autocomplete="current-password" required autofocus>
+        <div class="secret-field">
+          <input id="pass" type="password" autocomplete="current-password" required autofocus spellcheck="false" autocapitalize="off">
+          ${revealButton('pass')}
+        </div>
         <label class="check"><input id="remember" type="checkbox" checked> Rester connecté sur cet appareil (30 jours au plus)</label>
         <button class="primary" type="submit">Déverrouiller</button>
       </form>`
@@ -35,8 +40,10 @@ export function renderLock(message = '', hasRealData = true, notice = '') {
     </div>
   </main>`;
   const form = document.getElementById('unlock') as HTMLFormElement | null;
+  if (form) bindReveal(form); // #335
   form?.addEventListener('submit', async (e) => {
     e.preventDefault();
+    hideSecrets(e.currentTarget as HTMLFormElement); // #335: masked again as soon as it is sent
     const pass = (document.getElementById('pass') as HTMLInputElement).value;
     const remember = (document.getElementById('remember') as HTMLInputElement).checked;
     await open('data', pass, remember);
@@ -56,6 +63,7 @@ async function open(source: Source, pass: string, remember: boolean) {
   let opened: Dataset;
   try {
     const key = await unlock(source, pass);
+    clearLockNotice(); // #334: unlocked again, the « locked after N min » notice has done its job
     if (remember) await rememberKey(source, key);
     // S-12.3: the install fragment of an invitation has done its job
     if (location.hash === INSTALL_HASH) history.replaceState(null, '', location.pathname + location.search);

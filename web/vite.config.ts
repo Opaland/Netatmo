@@ -38,6 +38,12 @@ export default defineConfig({
         ],
       },
       workbox: {
+        // #334: vite-plugin-pwa sets these for autoUpdate only when it injects the registration
+        // itself; with injectRegister: false (main.ts registers), a new version stayed « waiting »
+        // as long as one tab or installed window was open, a reload did not help, and the device
+        // kept running the old version (and its old storage names) for days.
+        skipWaiting: true,
+        clientsClaim: true,
         globPatterns: ['**/*.{js,css,html,svg,png}'],
         // Encrypted data: try the network first (fresh nightly data), fall back to cache offline.
         // S-7.12: requests are conditional (cache: 'no-cache' → ETag, 304 when unchanged), the

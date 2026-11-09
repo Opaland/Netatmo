@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { IdleLock, REMEMBER_DAYS, freshKey, idleSince } from './session';
+import { IdleLock, REMEMBER_DAYS, clearLockNotice, freshKey, idleSince, lockNotice, markIdleLock, storedActivity } from './session';
 
 const DAY = 86_400_000;
 const key = { type: 'secret' } as unknown as CryptoKey;
@@ -28,6 +28,7 @@ describe('inactivity lock (S-8.11)', () => {
     vi.stubGlobal('localStorage', {
       getItem: (k: string) => store.get(k) ?? null,
       setItem: (k: string, v: string) => void store.set(k, v),
+      removeItem: (k: string) => void store.delete(k),
     });
   });
   afterEach(() => {
@@ -80,5 +81,48 @@ describe('inactivity lock (S-8.11)', () => {
     expect(idleSince(15)).toBe(true);
     expect(idleSince(0)).toBe(false); // never
     expect(idleSince(60)).toBe(false);
+  });
+
+  it('#334 : une interaction dans un autre onglet garde ouvert l’onglet laissé seul', () => {
+    const onLockA = vi.fn();
+    const a = new IdleLock(onLockA, () => Date.now(), target()); // left alone
+    const tb = target();
+    const b = new IdleLock(() => {}, () => Date.now(), tb); // in use
+    a.start(15);
+    b.start(15);
+    for (let i = 0; i < 40; i++) {
+      vi.advanceTimersByTime(60_000);
+      tb.dispatchEvent(new Event('pointerdown'));
+    }
+    expect(onLockA).not.toHaveBeenCalled();
+    b.stop();
+    vi.advanceTimersByTime(15 * 60_000 + 1);
+    expect(onLockA).toHaveBeenCalledTimes(1); // no tab used for 15 min: locked
+  });
+
+  it('#334 : la dernière interaction est enregistrée quand la page passe en arrière-plan (rechargement)', () => {
+    const idle = new IdleLock(() => {}, () => Date.now(), target());
+    idle.start(15);
+    const first = storedActivity();
+    vi.advanceTimersByTime(10_000);
+    idle.touch(); // within 30 s: not saved yet
+    expect(storedActivity()).toBe(first);
+    idle.flush();
+    expect(storedActivity()).toBe(Date.now());
+    // never moved back by a tab whose last interaction is older
+    store.set('intuis-history:activity', String(Date.now() + 5_000));
+    idle.flush();
+    expect(storedActivity()).toBe(Date.now() + 5_000);
+  });
+
+  it('#334 : l’écran de verrouillage dit pourquoi, jusqu’au prochain déverrouillage', () => {
+    expect(lockNotice()).toBe('');
+    markIdleLock(15);
+    expect(lockNotice()).toMatch(/^Verrouillé après 15 min sans activité/);
+    expect(lockNotice()).toMatch(/données sont intactes/);
+    markIdleLock(60);
+    expect(lockNotice()).toMatch(/^Verrouillé après 1 h sans activité/);
+    clearLockNotice();
+    expect(lockNotice()).toBe('');
   });
 });

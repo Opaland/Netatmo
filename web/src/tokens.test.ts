@@ -140,6 +140,7 @@ const GRAPHIC = [
   '--border-strong',
   '--series-measure',
   '--year-0',
+  '--year-1',
   ...Array.from({ length: 8 }, (_, i) => `--room-${i + 1}`),
 ];
 
@@ -169,6 +170,12 @@ describe('jetons du design system (#310)', () => {
         .filter(([, r]) => r < 3)
         .map(([g, r]) => `${g} : ${r.toFixed(2)}`);
       expect(fails).toEqual([]);
+    });
+  }
+  for (const [name, env] of THEMES) {
+    it(`${name} : l'année la plus récente et la précédente se distinguent (≥ 3:1)`, () => {
+      const t = tokens(env);
+      expect(contrast(resolve(t, '--year-0'), resolve(t, '--year-1'))).toBeGreaterThanOrEqual(3);
     });
   }
   it('les couleurs de pièces sont distinctes entre elles et des usages', () => {
