@@ -114,7 +114,7 @@ async function audit(page, where) {
 /** #311: the amounts of the tiles (every page, components.ts tile()) stay on one line and inside their tile. */
 const tileAmounts = (page) =>
   page.evaluate(() =>
-    [...document.querySelectorAll('body:not(.is-simple) #view .kpis .kpi-value')].flatMap((el) => {
+    [...document.querySelectorAll('#view .kpis .kpi-value')].flatMap((el) => {
       const range = document.createRange();
       range.selectNodeContents(el);
       const lines = new Set([...range.getClientRects()].filter((r) => r.width > 0).map((r) => Math.round(r.top)));
@@ -345,7 +345,7 @@ try {
     check((await page.locator('[data-season]', { hasText: 'en cours' }).count()) === 1, '#298 : pas de puce pour la saison en cours');
     check(/\(en cours\) : total [\d\s  ]+ kWh/.test((await label()) ?? ''), '#298 : saison en cours absente du graphique');
     // maquette « Historique » : hiver contre hiver, deux hivers complets chiffrés, à climat égal, l'hiver en cours en pointillé
-    check((await page.locator('#cmp-card .kpis-pair .kpi').count()) === 2, 'Historique : les deux hivers complets ne sont pas chiffrés');
+    check((await page.locator('#cmp-card .season-tiles .kpi').count()) === 2, 'Historique : les deux hivers complets ne sont pas chiffrés');
     check(/à climat égal/.test(await page.locator('#cmp-card').innerText()), 'Historique : pas de comparaison « à climat égal »');
     check((await page.locator('#cmp-legend .legend i.line').count()) === 1, 'Historique : hiver en cours non signalé (pointillé)');
     // #303 : un seul tableau de signature, saison courte « provisoire »

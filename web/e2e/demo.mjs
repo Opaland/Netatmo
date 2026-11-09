@@ -70,7 +70,7 @@ async function audit(page, where, { enhanced = false } = {}) {
 /** #311: the amounts of the tiles (every page, components.ts tile()) stay on one line and inside their tile. */
 const tileAmounts = (page) =>
   page.evaluate(() =>
-    [...document.querySelectorAll('body:not(.is-simple) #view .kpis .kpi-value')].flatMap((el) => {
+    [...document.querySelectorAll('#view .kpis .kpi-value')].flatMap((el) => {
       const range = document.createRange();
       range.selectNodeContents(el);
       const lines = new Set([...range.getClientRects()].filter((r) => r.width > 0).map((r) => Math.round(r.top)));
@@ -82,6 +82,25 @@ const tileAmounts = (page) =>
       return out;
     }),
   );
+
+/**
+ * #348: the header stays on one line (name, data pill, ⚙): the three overlap vertically, none
+ * leaves the screen and the pill's text is not cut. Returns what is wrong, or ''.
+ */
+const headerLine = (page) =>
+  page.evaluate(() => {
+    const [name, pill, gear] = ['.top h1', '.top .status-pill', '.top .icon-btn'].map((s) => document.querySelector(s));
+    if (!name || !pill || !gear) return 'en-tête incomplet';
+    const [n, p, g] = [name, pill, gear].map((e) => e.getBoundingClientRect());
+    const out = [];
+    const overlap = (a, b) => a.top < b.bottom - 1 && b.top < a.bottom - 1;
+    if (!overlap(n, g) || !overlap(p, g) || !overlap(n, p)) out.push(`sur plusieurs lignes (nom ${Math.round(n.top)}–${Math.round(n.bottom)}, pastille ${Math.round(p.top)}–${Math.round(p.bottom)}, ⚙ ${Math.round(g.top)}–${Math.round(g.bottom)})`);
+    if (!(n.right <= p.left && p.right <= g.left)) out.push('nom, pastille et ⚙ ne se suivent pas');
+    if (g.right > window.innerWidth + 1) out.push(`⚙ hors de l'écran (${Math.round(g.right)} px)`);
+    if (pill.scrollWidth > pill.clientWidth + 1) out.push(`pastille coupée (« ${pill.innerText} »)`);
+    if (!/\d/.test(pill.innerText)) out.push(`pastille sans date (« ${pill.innerText} »)`);
+    return out.join(', ');
+  });
 
 async function openDemo(page) {
   await page.goto(base);
@@ -590,6 +609,23 @@ try {
       check(older !== before, `${name}/glisser : la période ne change pas (${before})`);
       await swipe(page, '.top .title', -120);
       check((await period()) === before, `${name}/glisser : retour impossible à la période ${before}`);
+      // #348: the same gesture on the other screens with one period (Compteur, Historique)
+      await go(page, 'compteur');
+      const meter = () => page.$eval('.periodbar [aria-checked=true]', (b) => b.dataset.value);
+      const m0 = await meter();
+      await swipe(page, '.top .title', -120);
+      check((await meter()) !== m0, `${name}/glisser : la période du Compteur ne change pas (${m0})`);
+      await swipe(page, '.top .title', 120);
+      check((await meter()) === m0, `${name}/glisser : retour impossible à la période ${m0} du Compteur`);
+      await go(page, 'historique');
+      const hist = () => page.$eval('#explore-card select[data-set=period]', (s) => s.value);
+      const h0 = await hist();
+      await swipe(page, '.top .title', 120);
+      check((await hist()) !== h0, `${name}/glisser : la période de l'Historique ne change pas (${h0})`);
+      check(/Période/.test(await page.textContent('#sr-status')), `${name}/glisser : période de l'Historique non annoncée`);
+      await swipe(page, '.top .title', -120);
+      check((await hist()) === h0, `${name}/glisser : retour impossible à la période ${h0} de l'Historique`);
+      await go(page, 'accueil');
       await swipe(page, '.tabs', -120);
       check(await page.locator('.tabs [data-view=pieces][aria-current=page]').count(), `${name}/glisser : l'onglet ne change pas`);
       check(/Pièces/.test(await page.textContent('#sr-status')), `${name}/glisser : changement non annoncé`);
@@ -659,6 +695,13 @@ try {
     const page = await ctx.newPage();
     page.on('pageerror', (e) => errors.push(`360-200: ${e.message}`));
     await openDemo(page);
+    // #348: at 100 % too, the header holds on one line with the long pill (« Données du … »)
+    for (const view of ['accueil', 'compteur', 'historique']) {
+      await go(page, view);
+      const bad = await headerLine(page);
+      check(!bad, `360 px/${view} : en-tête ${bad}`);
+    }
+    check(/Données du/.test(await page.locator('.top .status-pill').innerText()), '360 px : la pastille longue « Données du … » n’est plus affichée à 100 %');
     await page.addStyleTag({ content: 'html { font-size: 200% !important; }' });
     for (const view of ['accueil', 'pieces', 'piece-r-bureau', 'historique', 'compteur', 'outils', 'confort', 'parametres', 'parametres-contrat', 'parametres-affichage']) {
       progress(`360 px, texte 200 % : ${view}`);
@@ -681,6 +724,11 @@ try {
       check(!out.length, `360 px, texte 200 %/${view} : ${out.slice(0, 5).join(', ')}`);
       const cut = await tileAmounts(page);
       check(!cut.length, `360 px, texte 200 %/${view} : montant de tuile coupé → ${cut.join(', ')}`);
+      // #348: the header keeps one line, the pill down to its dot and date
+      const bad = await headerLine(page);
+      check(!bad, `360 px, texte 200 %/${view} : en-tête ${bad}`);
+      // #348: « hiver contre hiver » uses the shared tiles (amount on one line, checked just above)
+      if (view === 'historique') check((await page.locator('#cmp-card .kpis.season-tiles .kpi .kpi-value').count()) === 2, '360 px, texte 200 %/historique : tuiles « hiver contre hiver » absentes');
       await page.screenshot({ path: `${OUT}/mobile360-texte200-${view}.png`, fullPage: true });
       if (['accueil', 'historique', 'outils', 'parametres-contrat'].includes(view)) await audit(page, `360 px, texte 200 %/${view}`);
     }

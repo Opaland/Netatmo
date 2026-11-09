@@ -1,9 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   GLOSSARY,
-  budgetSentences,
   comparedToLastYear,
-  costSentence,
   glossarySection,
   kpiTitle,
   pinnedTemp,
@@ -35,9 +33,7 @@ function allTexts(): string[] {
     [90, 100],
   ] as [number, number | null][])
     out.push(comparedToLastYear(now, before));
-  out.push(costSentence(152.3), costSentence(12.6));
   for (const k of ['month', 'year', '12m', 'projection'] as const) out.push(kpiTitle(k, '2026-11-09'));
-  for (const over of [true, false]) out.push(budgetSentences(over, 123, 1500).sub);
   for (const cold of [0, 1, 5]) out.push(pinnedTemp(18.6, cold, 19).sub);
   out.push(...Object.values(GLOSSARY).map((g) => g.def));
   out.push(visibleText(glossarySection()));

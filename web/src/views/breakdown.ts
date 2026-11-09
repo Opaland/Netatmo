@@ -6,7 +6,7 @@
 import type { Hourly } from '../analysis';
 import { datasetDoc, ds, onDatasetLoaded } from '../app';
 import { addDays, minusYears } from '../aggregate';
-import { type Breakdown, type Declared, breakdown, kwhPerYear, parseDeclared, plugsFrom } from '../breakdown';
+import { type Breakdown, type Declared, type Part, breakdown, kwhPerYear, parseDeclared, plugsFrom } from '../breakdown';
 import { list } from '../components';
 import { openLocal, sealLocal } from '../crypto';
 import { type Curve, lastCurveDay, measuredWattsCached, talon } from '../curve';
@@ -173,6 +173,19 @@ function counted(b: Breakdown, hasPlugs: boolean): string {
 
 const KIND_LABEL = { plug: 'mesuré (prise Shelly)', declared: 'saisi', talon: 'nuits, hors appareils permanents', unexplained: 'différence' };
 
+/**
+ * #348: the « Veille » row next to the Veille page. That page gives the whole night base load
+ * (« 234 W »); here only what the permanent parts above do not already count, so the row says
+ * both figures instead of a bare « 0 W ».
+ */
+function talonSub(b: Breakdown, p: Part): string {
+  if (b.talonWatts === null) return `${KIND_LABEL.talon} · ≈ ${nf0.format(p.watts)} W`;
+  const all = `veille ${nf0.format(b.talonWatts)} W la nuit`;
+  if (b.talonInParts < 1) return `${all}, aucun appareil permanent à déduire`;
+  if (p.watts < 1) return `${all}, déjà comptée dans les appareils permanents ci-dessus`;
+  return `${all}, dont ${nf0.format(b.talonInParts)} W déjà dans les appareils permanents ci-dessus : reste ≈ ${nf0.format(p.watts)} W`;
+}
+
 function partsTable(b: Breakdown): string {
   const price = avgPrice();
   const rows = b.parts.map((p) => [
@@ -190,9 +203,11 @@ function notes(b: Breakdown, unusable: string[], hasPlugs: boolean): string {
   const out: string[] = [];
   if (b.talonWatts !== null) {
     out.push(
-      `Veille (niveau bas des nuits, de 1 h à 5 h) : <strong>${nf0.format(b.talonWatts)} W</strong>, soit ${nf0.format(
+      `Veille (niveau bas des nuits, de 1 h à 5 h, le chiffre de la page Veille) : <strong>${nf0.format(b.talonWatts)} W</strong>, soit ${nf0.format(
         kwhPerYear(b.talonWatts),
-      )} kWh par an. Les appareils permanents (débit régulier mesuré, ou saisis à 24 h par jour) en sont déduits pour ne pas les compter deux fois ; c'est approximatif (un réfrigérateur fonctionne par cycles).`,
+      )} kWh par an. Les appareils permanents (débit régulier mesuré, ou saisis à 24 h par jour) tournent aussi la nuit : ${
+        b.talonInParts >= 1 ? `${nf0.format(b.talonInParts)} W de cette veille sont déjà dans leurs lignes, ` : ''
+      }la ligne « Veille » ne garde que le reste, pour ne rien compter deux fois. C'est approximatif (un réfrigérateur fonctionne par cycles, un circuit du tableau mêle veille et usages de la journée).`,
     );
   } else {
     out.push('Sans courbe de charge du compteur, la veille n’est pas estimée : elle reste dans « Non attribué ».');
@@ -227,7 +242,7 @@ function partsList(b: Breakdown): string {
   return list(
     b.parts.map((p, i) => ({
       title: p.name,
-      sub: `${KIND_LABEL[p.kind]} · ≈ ${nf0.format(p.watts)} W`,
+      sub: p.kind === 'talon' ? talonSub(b, p) : `${KIND_LABEL[p.kind]} · ≈ ${nf0.format(p.watts)} W`,
       value: kwh(p.kwh),
       color: color(p.kind, i),
       share: b.rest ? Math.min(100, (p.kwh / b.rest) * 100) : 0,

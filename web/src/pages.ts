@@ -20,7 +20,7 @@ import * as household from './views/household';
 import { renderMeter } from './views/meter';
 import * as outils from './views/outils';
 import * as overview from './views/overview';
-import { pinSelect, pinnedTiles } from './views/pinned';
+import { pinSelect } from './views/pinned';
 import * as prices from './views/prices';
 import { qualityCard, qualityHandlers } from './views/quality';
 import { type Freshness, freshness } from './freshness';
@@ -28,7 +28,7 @@ import * as report from './views/report';
 import * as rooms from './views/rooms';
 import * as settings from './views/settings';
 import { sharedOriginWarning } from './views/settings';
-import { renderAide, simpleExit } from './views/proche';
+import { renderAide } from './views/proche';
 import { onboardingHandlers, renderOnboarding } from './views/onboarding';
 
 export interface Page {
@@ -238,16 +238,21 @@ const SOURCE_NAME: Record<string, string> = {
   ia: 'analyse IA',
 };
 
-/** Freshness of the data, for the header pill and the État page (#318). */
-export function dataStatus(): Freshness & { label: string } {
+/**
+ * Freshness of the data, for the header pill and the État page (#318). `short` is the pill on a
+ * narrow header (#348: 360 px, text at 200 %): the date alone, with a sign when it needs a look.
+ */
+export function dataStatus(): Freshness & { label: string; date: string; short: string } {
   const last = ds!.meta.last_day;
   const month = last ? `${last.slice(0, 8)}01` : '';
   const days = new Set<string>();
   if (last) for (const k of ds!.estimated) if (k.slice(k.indexOf('|') + 1) >= month) days.add(k.slice(k.indexOf('|') + 1));
   const sources = (ds!.meta as { sources?: Record<string, { ok?: string; error?: string }> }).sources;
   const f = freshness({ last, now: Date.now(), demo: ds!.source === 'demo', sources, uncertain: days.size });
-  const label = last ? `Données du ${dayShort(last)}${f.level === 'ok' ? '' : f.stale ? ' · en retard' : ' · à vérifier'}` : 'Pas encore de données';
-  return { ...f, label };
+  const date = last ? dayShort(last) : '';
+  const label = last ? `Données du ${date}${f.level === 'ok' ? '' : f.stale ? ' · en retard' : ' · à vérifier'}` : 'Pas encore de données';
+  const short = last ? `${date}${f.level === 'ok' ? '' : ' !'}` : 'Aucune donnée';
+  return { ...f, label, date, short };
 }
 
 // ------------------------------------------------------------------ Paramètres (#309)
@@ -385,15 +390,8 @@ function renderSettingsPage(view: HTMLElement, route: Route) {
 }
 
 // ------------------------------------------------------------------ Accueil
-function renderAccueil(view: HTMLElement) {
-  const records = filtered();
-  home.renderHome(view, records);
-  // S-7.8: the pinned room comes first among the key figures of the simple mode.
-  if (state.simple) {
-    view.querySelector('.kpis')?.insertAdjacentHTML('afterbegin', html(pinnedTiles()));
-    view.insertAdjacentHTML('beforeend', html(simpleExit()));
-  }
-}
+// #316 / #348: the simple view draws its own Accueil (views/proche.ts, SIMPLE_PAGES in main.ts).
+const renderAccueil = (view: HTMLElement) => home.renderHome(view, filtered());
 
 const settingsHandlers: Handlers[] = [h(settings.handleClick), h(prices.handleClick, prices.handleChange), h(household.handleClick, household.handleChange), { keydown: (e) => (settings.handleKeydown(e), false) }];
 

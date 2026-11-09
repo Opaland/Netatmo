@@ -96,21 +96,23 @@ code {
 /* ---------------------------------------------------------------- header (#308) */
 /* Home name, data-status pill (→ État des données) and ⚙ Paramètres; the tab bar under it
    (bottom of the screen on a phone, top from 760 px); a sub-page has a back arrow and a title. */
+/* #348: always one line, ⚙ included, down to 360 px at 200 % text: the name wraps in its
+   column and, when the header is narrow, the pill keeps the dot and the date only. */
 .top {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
   align-items: center;
-  flex-wrap: wrap;
   gap: var(--space-2);
   padding: calc(var(--space-3) + env(safe-area-inset-top)) 0 var(--space-3);
+  container-type: inline-size;
 }
 .top .title {
-  flex: 1 1 8em;
   min-width: 0;
 }
 .top .title h1 {
   margin: 0;
   font-size: var(--font-lg);
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
 }
 .badge {
   font-size: var(--font-xs);
@@ -133,8 +135,24 @@ code {
   color: var(--text);
   font-size: var(--font-sm);
   text-decoration: none;
-  max-width: 100%;
-  overflow-wrap: anywhere;
+}
+.status-pill .pill-short {
+  display: none;
+}
+.status-pill > span:not(.sr-only) {
+  white-space: nowrap;
+}
+@container (max-width: 19em) {
+  .status-pill {
+    gap: var(--space-1);
+    padding: 0 var(--space-2);
+  }
+  .status-pill .pill-long {
+    display: none;
+  }
+  .status-pill .pill-short {
+    display: inline;
+  }
 }
 .status-pill .dot {
   flex: none;
@@ -311,10 +329,6 @@ code {
 }
 .kpis-one {
   grid-template-columns: minmax(0, 1fr);
-}
-/* two figures compared side by side (Historique, hiver contre hiver), stacked at 200 % */
-.kpis.kpis-pair {
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 7.5rem), 1fr));
 }
 .chart-caption {
   margin-bottom: 0;
@@ -503,34 +517,34 @@ code {
   gap: var(--space-3);
   margin-bottom: var(--space-4);
 }
-body:not(.is-simple) .kpis .kpi-value {
+.kpis .kpi-value {
   white-space: nowrap;
   overflow-wrap: normal;
 }
 /* On a phone: one tile per line, label on the left, amount on the right, comparison below. */
 @media (max-width: 480px) {
-  body:not(.is-simple):not(.is-report) .kpis {
+  body:not(.is-report) .kpis {
     grid-template-columns: minmax(0, 1fr);
     gap: var(--space-2);
   }
-  body:not(.is-simple):not(.is-report) .kpis .kpi {
+  body:not(.is-report) .kpis .kpi {
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto;
     align-items: baseline;
     gap: 2px var(--space-3);
     padding: var(--space-3);
   }
-  body:not(.is-simple):not(.is-report) .kpis .kpi > h3 {
+  body:not(.is-report) .kpis .kpi > h3 {
     grid-column: 1;
     min-width: 0;
   }
-  body:not(.is-simple):not(.is-report) .kpis .kpi-value {
+  body:not(.is-report) .kpis .kpi-value {
     grid-column: 2;
     grid-row: 1;
     margin: 0;
     font-size: 1.25rem;
   }
-  body:not(.is-simple):not(.is-report) .kpis .kpi > :not(h3, .kpi-value) {
+  body:not(.is-report) .kpis .kpi > :not(h3, .kpi-value) {
     grid-column: 1 / -1;
   }
 }
@@ -1277,34 +1291,6 @@ fieldset.secrets input,
   font-size: var(--font-sm);
 }
 
-/* simple mode (S-7.1): verdict + key figures only, large type */
-body.is-simple #view > .card:not(.insight) {
-  display: none;
-}
-body.is-simple {
-  font-size: var(--font-lg);
-}
-body.is-simple .verdict-title {
-  font-size: var(--font-xl);
-}
-body.is-simple .kpi-value {
-  font-size: 2.2rem;
-}
-body.is-simple .kpis {
-  grid-template-columns: 1fr;
-}
-/* S-7.7: with the system text at 200 %, wrap instead of cutting. */
-body.is-simple .kpi,
-body.is-simple .verdict > div {
-  min-width: 0;
-  overflow-wrap: anywhere;
-}
-body.is-simple .kpi-value {
-  font-size: min(2.2rem, 13vw);
-}
-.kpi.pinned {
-  border-color: var(--accent);
-}
 
 /* S-7.13: glossary terms of the simple mode (touch to read the definition) */
 .term {
@@ -1491,9 +1477,6 @@ body.is-simple .kpi-value {
 }
 
 /* v1.3 money cards (S-2.11, S-2.12, S-2.13) and habits (S-4.9, S-4.10) */
-body.is-simple .kpis:has(.kpi-budget:not([hidden])) .kpi-detail {
-  display: none;
-}
 .money-field {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
@@ -1546,9 +1529,6 @@ body.is-simple .kpis:has(.kpi-budget:not([hidden])) .kpi-detail {
 .absence-list .link {
   color: var(--accent-text);
   font-size: var(--font-sm);
-}
-body.is-simple #grid-card {
-  display: none;
 }
 #grid-card .grid-seen {
   margin-top: 6px;

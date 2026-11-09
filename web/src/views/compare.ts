@@ -351,7 +351,8 @@ function seasonTiles(records: DayRecord[], picked: number[], current: number, cl
       : raw !== null
         ? `<b>${signedPct(raw)} ${esc(vs)}</b>.`
         : '';
-  return `<div class="kpis kpis-pair">${tiles}</div><p>${sentence}</p>`;
+  // #348: the shared tiles of Accueil (#311): side by side when there is room, an amount never cut
+  return `<div class="kpis season-tiles">${tiles}</div><p>${sentence}</p>`;
 }
 
 // ------------------------------------------------------------------ EDF offer comparator

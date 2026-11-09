@@ -99,6 +99,19 @@ try {
     await page.click('[data-set=meter][data-value="12m"]');
     await ready(page);
     check(/60 nuits sur 365/.test(await page.locator('#standby-card .counted').innerText()), 'Veille : la courbe (60 jours) n’est pas dite sur 12 mois');
+    // #348: « Autres usages en détail » gives the same standby as the Veille page, and why its row differs
+    const standby = (await page.locator('#standby-card .meter-big .big').innerText()).replace(/\s/g, ' ').trim();
+    await go(page, 'compteur-autres');
+    await page.waitForSelector('#bd-parts .row', { timeout: 15000 });
+    const veilleRow = (await page.locator('#bd-parts .row', { hasText: 'Veille' }).innerText()).replace(/\s/g, ' ');
+    check(veilleRow.includes(`veille ${standby} la nuit`), `Autres usages : la ligne « Veille » ne reprend pas les ${standby} de la page Veille → ${veilleRow}`);
+    check(/appareils permanents/.test(veilleRow), `Autres usages : l’écart avec la page Veille n’est pas expliqué → ${veilleRow}`);
+    // #348: shedding says what a day counts
+    await go(page, 'compteur');
+    await page.waitForSelector('#offload-line:not([hidden])', { timeout: 15000 }).catch(() => {});
+    const shed = await page.locator('#offload-line').innerText();
+    check(/\d+ jours? avec au moins un délestage|Aucun radiateur coupé/.test(shed), `délestage : libellé → ${shed}`);
+    await go(page, 'compteur-veille');
     // every detail page says what it counts
     for (const key of PAGES.slice(1)) {
       await go(page, key);
