@@ -5,6 +5,10 @@ import { type DayRecord, addDays, rawRecords } from './aggregate';
 import { type Fit, type Weather, anomalies, fitSeason, signaturePoints } from './analysis';
 import { isBedroom } from './comfort';
 import { BEDROOMS_ID } from './household';
+import type { Drop } from './room30';
+
+/** S-1.26: sharp temperature falls seen in the half hours, room -> day (room30.ts tempDrops). */
+export type Drops = Map<string, Map<string, Drop>>;
 
 export interface StateCell {
   n: number; // snapshots received that day for this room
@@ -185,6 +189,7 @@ export interface ColdWindow {
   room: string;
   temp: number;
   open: number;
+  drop?: Drop; // S-1.26: the sharpest temperature fall of the day (half hours), when known
 }
 
 /**
@@ -198,15 +203,30 @@ export function coldWithWindow(
   to: string,
   threshold = 19,
   minOpen = 1,
+  drops?: Drops,
 ): ColdWindow[] {
   const out: ColdWindow[] = [];
+  const seen = new Set<string>();
   for (const [room, cells] of Object.entries(rs.rooms ?? {})) {
     const t = temps.get(room);
     if (!t) continue;
     for (const [d, c] of Object.entries(cells)) {
       if (d < from || d > to) continue;
       const m = t.get(d)?.[0];
-      if (m !== undefined && m < threshold && (c.open_window_h ?? 0) >= minOpen) out.push({ day: d, room, temp: m, open: c.open_window_h! });
+      if (m !== undefined && m < threshold && (c.open_window_h ?? 0) >= minOpen) {
+        const drop = drops?.get(room)?.get(d);
+        out.push({ day: d, room, temp: m, open: c.open_window_h!, ...(drop ? { drop } : {}) });
+        seen.add(`${room}|${d}`);
+      }
+    }
+  }
+  // S-1.26: a sharp fall of the half-hour temperature explains a cold day the snapshots missed
+  for (const [room, days] of drops ?? []) {
+    const t = temps.get(room);
+    for (const [d, drop] of days) {
+      const m = t?.get(d)?.[0];
+      if (d < from || d > to || seen.has(`${room}|${d}`) || m === undefined || !(m < threshold)) continue;
+      out.push({ day: d, room, temp: m, open: rs.rooms?.[room]?.[d]?.open_window_h ?? 0, drop });
     }
   }
   return out.sort((a, b) => (a.day < b.day ? 1 : a.day > b.day ? -1 : b.open - a.open));
@@ -338,6 +358,7 @@ export interface ColdReasons {
   lowSetpoint: number; // … else with a setpoint below the threshold (chosen, not a fault)
   unexplained: number; // … else, with a snapshot that day
   noData: number; // … without any snapshot that day
+  drop?: number; // S-1.26: days counted in `window` from a sharp fall of the half-hour temperature only
 }
 
 /**
@@ -356,6 +377,7 @@ export function coldReasons(
   groupOf: (room: string) => string = (r) => r,
   threshold = 19,
   minOpen = 1,
+  drops?: Drops,
 ): Map<string, ColdReasons> {
   const seen = rs.seen ?? {};
   const all = rs.rooms ?? {};
@@ -372,7 +394,7 @@ export function coldReasons(
   }
   const out = new Map<string, ColdReasons>();
   for (const [key, days] of coldest) {
-    const r: ColdReasons = { cold: 0, window: 0, openHours: 0, away: 0, lowSetpoint: 0, unexplained: 0, noData: 0 };
+    const r: ColdReasons = { cold: 0, window: 0, openHours: 0, away: 0, lowSetpoint: 0, unexplained: 0, noData: 0, ...(drops ? { drop: 0 } : {}) };
     out.set(key, r);
     for (const [d, { room, setpoint }] of days) {
       r.cold++;
@@ -382,6 +404,9 @@ export function coldReasons(
       if (open >= minOpen) {
         r.window++;
         r.openHours += open;
+      } else if (drops?.get(room)?.has(d) && away < 12) {
+        r.window++; // the half hours show the fall the hourly snapshots missed
+        r.drop!++;
       } else if (away >= 12) r.away++;
       else if (setpoint !== null && setpoint < threshold) r.lowSetpoint++;
       else if (day.length || bits(seen[d] ?? 0) > 0) r.unexplained++;

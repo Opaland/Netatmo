@@ -8,7 +8,9 @@ from dataclasses import asdict
 from datetime import UTC, datetime, timedelta
 from zoneinfo import ZoneInfo
 
+from . import room30
 from .api import SCALE_SECONDS, ApiError, IntuisClient, chunk_ranges
+from .budget import CallCapReached
 from .model import (
     IGNORE,
     Columns,
@@ -57,6 +59,7 @@ class Syncer:
         self.temp_days = 0
         self.last_home: Home | None = None
         self.last_homesdata: dict = {}  # raw, for the module -> room map of the room states (E13)
+        self.room30: room30.Stats | None = None  # S-1.26: last 30-min collection (counters)
 
     def home(self) -> Home:
         self.last_homesdata = self.client.homesdata()
@@ -69,20 +72,35 @@ class Syncer:
         return homes[0]
 
     # ------------------------------------------------------------ low level
-    def _fetch_cols(self, endpoint: str, mtype: str, home: Home, begin: int, end: int, scale: str) -> ColSeries:
-        """Per-room points with one column per requested type; water heaters read at module level."""
-        rooms = home.api_room_ids()
+    def _fetch_cols(
+        self,
+        endpoint: str,
+        mtype: str,
+        home: Home,
+        begin: int,
+        end: int,
+        scale: str,
+        rooms: set[str] | None = None,
+        with_modules: bool = True,
+    ) -> ColSeries:
+        """Per-room points with one column per requested type; water heaters read at module level.
+        `rooms` limits the request to these rooms (S-1.26: resume per room)."""
         active = {r.id for r in home.rooms if r.category != IGNORE}
-        heaters = {mid: sid for mid, sid in home.water_heaters.items() if sid in active}
-        out: ColSeries = {rid: [] for rid in rooms}
+        if rooms is not None:
+            active &= rooms
+        heaters = {mid: sid for mid, sid in home.water_heaters.items() if sid in active} if with_modules else {}
+        ids = [rid for rid in home.api_room_ids() if rid in active]
+        out: ColSeries = {rid: [] for rid in ids}
         module_pts: ColSeries = {mid: [] for mid in heaters}
         step = SCALE_SECONDS[scale]
+        if rooms is not None and not ids and not heaters:
+            return out
         for b, e in chunk_ranges(begin, end, scale):
             if endpoint == "home":
                 payload = self.client.home_measure(
                     home.id,
                     home.bridge_id,
-                    rooms,
+                    ids,
                     measure_type=mtype,
                     scale=scale,
                     date_begin=b,
@@ -95,7 +113,7 @@ class Syncer:
                     if mid in module_pts:
                         module_pts[mid].extend(pts)
             else:
-                for rid in rooms:
+                for rid in ids:
                     payload = self.client.room_measure(
                         home.id, rid, measure_type=mtype, scale=scale, date_begin=b, date_end=e
                     )
@@ -265,16 +283,36 @@ class Syncer:
             self._backfill(home, strategy, now)
             if strategy[0] == "home":
                 self._hourly(home, strategy, now - HOURLY_DAYS_BACKFILL * DAY, now)
+            self._room30(home, strategy, now, backfill=True)
         else:
             # Re-download a few weeks: the backend fills values in late (up to a day).
             self._merge(home, self._fetch_with(strategy, home, now - days * DAY, now))
             self._temperatures(home, now - days * DAY, now)
             if strategy[0] == "home":
                 self._hourly(home, strategy, now - HOURLY_DAYS_SYNC * DAY, now)
+            self._room30(home, strategy, now)
         return self.save(home) if save else []
+
+    def _room30(self, home: Home, strategy: tuple[str, str], now: int, backfill: bool = False) -> None:
+        """S-1.26: per-room 30-min energy, temperature and setpoint, history resumed night after
+        night (collector/room30.py). Never fatal, and never stops the collection at the Intuis cap."""
+        today = datetime.fromtimestamp(now, ZoneInfo(home.timezone)).date()
+        try:
+            self.room30 = room30.collect(
+                self.store, home, self._fetch_cols, strategy[0], today, room30.env_calls(backfill)
+            )
+        except CallCapReached:
+            log.warning("30 min : plafond d'appels Intuis atteint, reprise à la prochaine collecte")
 
     def save(self, home: Home, extra: dict | None = None) -> list[str]:
         keep = {k: self.store.meta[k] for k in ("weather_source", "has_linky", "has_station") if k in self.store.meta}
+        progress = self.store.doc(room30.PROGRESS).get("progress", {})
+        if progress:  # S-1.26: counters only (rooms whose history is complete, oldest day reached)
+            keep["room30_history"] = {
+                "rooms": len(progress),
+                "done": sum(1 for p in progress.values() if p.get("done")),
+                "oldest": min(p.get("to", "9999") for p in progress.values()),
+            }
         meta_extra = {
             "has_tariffs": bool(self.tariff_days or self.store.meta.get("has_tariffs")),
             "has_temps": bool(self.temp_days or self.store.meta.get("has_temps")),

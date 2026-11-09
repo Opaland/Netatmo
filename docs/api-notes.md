@@ -217,6 +217,7 @@ Plafonds par collecte, réglables par variable de dépôt (transmise par `collec
 | Source | Plafond | Variable |
 |---|---|---|
 | Intuis | 300 (3 000 lors d'une récupération de l'historique) | `MAX_CALLS_INTUIS` |
+| Intuis, pièces au pas de 30 min (dans le plafond Intuis) | 50 (200 lors d'une récupération) | `MAX_CALLS_INTUIS_30MIN` |
 | Netatmo | 400 (l'API publique autorise 500 / h) | `MAX_CALLS_NETATMO` |
 | Linky (Conso API) | 200 | `MAX_CALLS_LINKY` |
 | Open-Meteo | 20 | `MAX_CALLS_OPEN_METEO` |
@@ -225,6 +226,42 @@ Plafonds par collecte, réglables par variable de dépôt (transmise par `collec
 Les nouvelles tentatives (429, 5xx) comptent. Plafond atteint : la source s'arrête proprement, ce qui
 a été récupéré est enregistré, et la collecte se termine sans erreur (avertissement dans le journal).
 Si c'était une récupération d'historique Intuis, `meta.backfill_pending` la relance la nuit suivante.
+
+## Pièces au pas de 30 minutes (S-1.26)
+
+Intuis sert `sum_energy_elec$1/$2`, `temperature` et `sp_temperature` par pièce au pas `30min`, avec au
+moins 1 460 jours d'historique (inventaire du 9 novembre 2026, `docs/audit-donnees.md` § 6). Le
+collecteur (`collector/room30.py`) les range dans `YYYY.room30.enc.json` (un par année, chargé à la
+demande ; années listées dans `meta.room30_years`) :
+
+```json
+{"rooms": {"<pièce>": {"YYYY-MM-DD": [hp, hc, temp, consigne]}}}
+```
+
+- Chaque colonne couvre les 48 demi-heures du **jour local** (indice = 2 × heure + minute / 30, début de
+  la demi-heure, comme `linky30`) : `null` (rien ce jour-là), un nombre (même valeur toute la journée :
+  0 sans chauffe, consigne constante) ou une liste de 48 valeurs (`null` si absente).
+- Énergie en Wh entiers (`$0`, base, comptée avec HP ; sur les périodes anciennes sans tarif, la plus
+  grande des familles `sum_energy_elec`, `_heating`, `_hot_water`, en HP), températures en °C à 0,1.
+  Une demi-heure mesurée dans un tarif vaut 0 dans l'autre.
+- Heure d'été : le jour du printemps, 02:00 et 02:30 restent `null` ; à l'automne, les deux 02:00 (et
+  02:30) sont fusionnés : énergie additionnée, températures moyennées.
+- Fenêtres de 21 jours locaux entiers (1 008 points, sous les 1 024 d'un appel) : 2 appels par fenêtre
+  (énergie, températures), 3 quand l'énergie est vide (essai des familles anciennes). Chaque nuit, les
+  2 derniers jours (et les nuits manquées), puis l'historique du plus récent au plus ancien, avec un
+  budget propre : 50 appels (200 lors d'une récupération complète), variable `MAX_CALLS_INTUIS_30MIN`,
+  toujours 10 appels sous le plafond Intuis de la collecte. Pour une maison de 7 pièces, 4 ans ≈ 72
+  fenêtres ≈ 150 appels, soit **3 nuits** (une seule avec `backfill`).
+- Reprise par pièce dans `room30.enc.json` : `{"newest": "YYYY-MM-DD", "progress": {"<pièce>": {"to":
+  plus ancien jour demandé, "empty": fenêtres vides consécutives, "done": bool}}}`. Une pièce est
+  complète après 2 fenêtres vides de suite ou à 1 830 jours ; une nouvelle pièce est rattrapée seule.
+- Taille : ≈ 1,5 à 1,8 Mo chiffrés par année pour 7 pièces ; au-delà de 4 Mo, avertissement dans le
+  journal (compteurs seulement). Le journal et le résumé ne contiennent que des compteurs
+  (« Pièces au pas 30 min : historique complet 5/7 pièces, depuis 2023-01 »).
+- Application : profil horaire de l'Analyse (heures reconstituées depuis les demi-heures quand elles
+  existent, journée type au pas de 30 min dès 28 jours mesurés), explications des pièces froides
+  (chute rapide de température ≥ 1,5 °C en une heure sans baisse de consigne). Inclus dans la
+  sauvegarde, avec `room30.enc.json`.
 
 ## Station météo Netatmo (API publique)
 

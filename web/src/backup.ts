@@ -27,10 +27,12 @@ export function backupNames(meta: BackupMeta): string[] {
     'shelly',
     'ha',
     ...(meta.has_roomstate ? ['roomstate'] : []),
+    ...((meta.room30_years ?? []).length ? ['room30'] : []), // S-1.26: progress of the 30-min history
     ...years(meta.years, ''),
     ...years(meta.hourly_years, '.hourly'),
     ...years(meta.station_hourly_years, '.station_h'),
     ...years(meta.linky_curve_years, '.linky30'),
+    ...years(meta.room30_years, '.room30'),
   ]
     .filter((n) => n !== 'netatmo-token')
     .map((n) => `${n}.enc.json`);

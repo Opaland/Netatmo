@@ -20,6 +20,7 @@ export interface Meta {
   updated: string;
   hourly_years?: number[];
   station_hourly_years?: number[];
+  room30_years?: number[]; // S-1.26: YYYY.room30.enc.json, per-room half hours (loaded on demand)
   has_tariffs?: boolean;
   has_temps?: boolean;
   has_linky?: boolean;
