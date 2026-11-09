@@ -108,6 +108,7 @@ jobs:
           COLD_ALERT_JSON: ${{ vars.COLD_ALERT_JSON }}
           # S-1.14: optional caps on API calls per collection (empty = default, see docs/api-notes.md).
           MAX_CALLS_INTUIS: ${{ vars.MAX_CALLS_INTUIS }}
+          MAX_CALLS_INTUIS_30MIN: ${{ vars.MAX_CALLS_INTUIS_30MIN }}
           MAX_CALLS_NETATMO: ${{ vars.MAX_CALLS_NETATMO }}
           MAX_CALLS_LINKY: ${{ vars.MAX_CALLS_LINKY }}
           MAX_CALLS_OPEN_METEO: ${{ vars.MAX_CALLS_OPEN_METEO }}

@@ -125,6 +125,14 @@ describe('S-5.9 questions answered by code', () => {
       expect(a.lines[4]).toContain('100 % des heures du mois');
     });
 
+    it('S-1.26: a sharp fall of the half-hour temperature explains the day the snapshots missed', () => {
+      const drops = new Map([['salon', new Map([['2025-01-05', { at: '07:00', fall: 2.1 }]])]]);
+      const a = answer('cold', '2025-01', { ...input, drops });
+      expect(a.lines[1]).toBe(
+        'Salon : 5 jours, dont 4 avec une fenêtre ouverte (6,5 h au total, dont 1 jour vu seulement par une chute de température au pas de 30 min), 1 en mode absence ou hors-gel.',
+      );
+    });
+
     it('says why it cannot answer without the hourly snapshots', () => {
       expect(answer('cold', '2025-01', base(records, { temps, roomState: null })).lines[0]).toContain('relevé horaire');
       expect(answer('cold', '2024-06', base(records, { temps, roomState })).lines[0]).toContain('aucun relevé de l’état des pièces en juin 2024');

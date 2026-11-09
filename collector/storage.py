@@ -19,6 +19,9 @@ data/
                            each half hour (optional, loaded on demand)
   station.enc.json        Netatmo weather station: modules, daily [min, max, mean, hum, co2] and
                           small daily aggregates "nightly" / "hours" (see docs/api-notes.md)
+  2025.room30.enc.json    {"rooms": {room: {"YYYY-MM-DD": [hp, hc, °C, setpoint °C]}}} per-room half hours
+                          of the local day, compacted (collector/room30.py; loaded on demand)
+  room30.enc.json         progress of the 30-min history: {"newest": day, "progress": {room: {...}}}
   2025.station_h.enc.json {"hourly": {"m0": {"YYYY-MM-DDTHH": [°C, %, ppm]}}} (loaded on demand)
   netatmo-token.enc.json  rotating refresh token of the Netatmo weather station (optional)
   shelly.enc.json         Shelly plugs: daily Wh per plug from cumulative counters (collector/shelly.py)
@@ -140,19 +143,28 @@ class Store:
         names |= {n for n, doc in self._docs.items() if doc}  # a document only read (absent) does not count
         return sorted(int(n[:4]) for n in names if n[:4].isdigit() and n[4:] == suffix)
 
+    def room30_years(self) -> list[int]:
+        """Years with per-room 30-min documents "YYYY.room30.enc.json" (S-1.26)."""
+        return self._years_of(".room30")
+
     def station_hourly_years(self) -> list[int]:
         """Years with hourly weather-station readings "YYYY.station_h.enc.json"."""
         return self._years_of(".station_h")
 
     def delete_room(self, room_id: str) -> None:
-        """Remove a room from every yearly document (daily, tariffs, temps, hourly)."""
+        """Remove a room from every yearly document (daily, tariffs, temps, hourly, 30 min)."""
         names = [str(y) for y in self.years()] + [f"{y}.hourly" for y in self.hourly_years()]
+        names += [f"{y}.room30" for y in self.room30_years()]
         for name in names:
             doc = self.doc(name)
             for section in doc.values():
                 if isinstance(section, dict) and room_id in section:
                     del section[room_id]
                     self._dirty.add(name)
+        progress = self.doc("room30").get("progress", {})  # its 30-min history is fetched again
+        if room_id in progress:
+            del progress[room_id]
+            self._dirty.add("room30")
 
     def update_coverage(self) -> None:
         """Per room and month, days with a real value, estimated, or missing (S-1.10).
@@ -216,6 +228,7 @@ class Store:
             "hourly_years": self.hourly_years(),
             "linky_curve_years": self.linky_curve_years(),
             "station_hourly_years": self.station_hourly_years(),
+            "room30_years": self.room30_years(),
             "first_day": self.first_day(),
             "last_day": self.last_day(),
             **(extra or {}),

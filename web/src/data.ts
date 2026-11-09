@@ -7,6 +7,7 @@ import type { ShellyDoc } from './breakdown';
 import type { Coverage } from './checks';
 import type { DayHours, Night, StationHourly } from './comfort';
 import { type Envelope, type KeyInfo, decryptEnvelope, deriveKey } from './crypto';
+import type { Room30, Room30Doc } from './room30';
 import { type RememberedKey, freshKey } from './session';
 import { askPersistence, writeMark } from './storage';
 import { KEY_DB } from './scope';
@@ -190,10 +191,10 @@ export async function load(source: Source, key: CryptoKey): Promise<Dataset> {
 // view), so toggling the household view neither downloads nor decrypts anything again: the
 // room merge of the hourly documents is applied afterwards. #232: emptied on lock.
 type Cache<V> = WeakMap<CryptoKey, Map<string, Promise<V>>>;
-let caches: { hourly: Cache<Hourly>; station: Cache<StationHourly>; roomState: Cache<import('./windows').RoomState | null>; curve: Cache<Map<string, number>>; ha: Cache<import('./ha').HaDoc | null> };
+let caches: { hourly: Cache<Hourly>; station: Cache<StationHourly>; roomState: Cache<import('./windows').RoomState | null>; curve: Cache<Map<string, number>>; ha: Cache<import('./ha').HaDoc | null>; room30: Cache<Room30> };
 /** Forget every decrypted document (on lock). */
 export function clearDataCaches() {
-  caches = { hourly: new WeakMap(), station: new WeakMap(), roomState: new WeakMap(), curve: new WeakMap(), ha: new WeakMap() };
+  caches = { hourly: new WeakMap(), station: new WeakMap(), roomState: new WeakMap(), curve: new WeakMap(), ha: new WeakMap(), room30: new WeakMap() };
   merged = new WeakMap();
 }
 let merged = new WeakMap<Hourly, WeakMap<Map<string, string>, Hourly>>();
@@ -318,6 +319,27 @@ async function fetchCurve(ds: Dataset): Promise<Map<string, number>> {
   const out = new Map<string, number>();
   for (const doc of docs) for (const [k, wh] of Object.entries(doc?.curve ?? {})) out.set(k, wh);
   return out;
+}
+
+/**
+ * Per-room half hours (S-1.26), one document per year (≈ 1.5 MB each): loaded only when a view
+ * needs them, from the year of `since` on, once per dataset (a load covering the asked years is
+ * reused). Raw rooms: the caller merges them for the household view if it shows energy.
+ */
+export function room30Years(ds: Dataset, since?: string): number[] {
+  const from = since ? Number(since.slice(0, 4)) : -Infinity;
+  return (ds.meta.room30_years ?? []).filter((y) => y >= from);
+}
+export function loadRoom30(ds: Dataset, since?: string): Promise<Room30> {
+  const years = room30Years(ds, since);
+  for (const [k, q] of caches.room30.get(ds.key) ?? []) {
+    const have = new Set(k.split(','));
+    if (years.every((y) => have.has(String(y)))) return q;
+  }
+  return once(caches.room30, ds, years.join(','), async () => {
+    const docs = await Promise.all(years.map((y) => optional<Room30Doc>(ds.source, `${y}.room30`, ds.key)));
+    return (await import('./room30')).mergeDocs(docs);
+  });
 }
 
 // ------------------------------------------------------------ remembered key (IndexedDB)

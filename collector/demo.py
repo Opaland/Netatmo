@@ -9,6 +9,7 @@ from datetime import date, datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
+from . import room30
 from .homeassistant import import_bytes
 from .model import HEATING, WATER_HEATER
 from .roomstate import merge_snapshots, snapshot
@@ -212,6 +213,45 @@ def _room_states(store: Store, today: date) -> dict[date, list[int]]:
     return office
 
 
+ROOM30_DAYS = 42
+HC_SLOTS = set(range(0, 12)) | {44, 45, 46, 47}  # heures creuses 22 h → 6 h
+
+
+def _room30(store: Store, today: date, office: dict[date, list[int]]) -> None:
+    """S-1.26: six weeks of per-room half hours, consistent with the hourly energy of the demo:
+    each hour split in two, HP / HC by the clock, a setpoint lowered by 2 °C at night, the measured
+    temperature following it with some lag, and sharp drops when a window is opened (the office
+    mornings of the room-state snapshots, the parents' bedroom aired at 7 h some days)."""
+    rnd = random.Random(2630)  # separate stream: the rest of the demo stays identical
+    for back in range(ROOM30_DAYS, 0, -1):
+        d = today - timedelta(days=back)
+        day = d.isoformat()
+        aired = rnd.random() < 0.5
+        for rid, _name, _cat, _w, setpoint in ROOMS:
+            hours = store.doc(f"{d.year}.hourly").get("hourly", {}).get(rid, {})
+            hp, hc = [0.0] * 48, [0.0] * 48
+            for i in range(48):
+                wh = hours.get(f"{day}T{i // 2:02d}", 0.0) / 2 * rnd.uniform(0.7, 1.3)
+                (hc if i in HC_SLOTS else hp)[i] = wh
+            t: list[float | None] = [None] * 48
+            sp: list[float | None] = [None] * 48
+            if setpoint is not None:
+                open_slots = set()
+                if rid == "r-bureau":
+                    open_slots = {h * 2 + k for h in office.get(d, []) for k in (0, 1)}
+                elif rid == "r-ch1" and aired:
+                    open_slots = {14, 15}
+                cur = setpoint - 1.5
+                for i in range(48):
+                    sp[i] = setpoint if 14 <= i < 44 else setpoint - 2
+                    if i in open_slots:
+                        cur -= rnd.uniform(1.2, 2.0)  # cold air: a fast fall the radiator cannot hold
+                    else:
+                        cur += (sp[i] - cur) * 0.35 + rnd.gauss(0, 0.08)
+                    t[i] = cur
+            room30.merge_day(store, rid, day, room30.to_days_from_columns(hp, hc, t, sp))
+
+
 HA_DAYS = 120
 
 
@@ -400,6 +440,7 @@ def generate(out_dir: Path, passphrase: str = "demo", start_year: int = 2022) ->
     store.update_coverage()
     _shelly(store, today)
     office = _room_states(store, today)
+    _room30(store, today, office)
     _home_assistant(store, today, office)
     for key in ("m0", "m1", "m2", "m3"):
         aggregate_days(store, key, key != "m1", hourly_from, today)
