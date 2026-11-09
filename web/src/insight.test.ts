@@ -1,5 +1,18 @@
 import { describe, expect, it } from 'vitest';
-import { loadVotes, pseudonymLegend, saveVote, usageLine, usefulRate } from './insight';
+import { firstSentence, loadVotes, pseudonymLegend, saveVote, usageLine, usefulRate } from './insight';
+
+describe('firstSentence (#314: the row of the monthly analysis in Outils)', () => {
+  it('skips the title and the markdown marks', () => {
+    expect(firstSentence('## Novembre 2026\n\n**Un mois plus sobre** que l’an dernier. Le salon a moins chauffé.')).toBe('Un mois plus sobre que l’an dernier.');
+    expect(firstSentence('- [Lien](x) court')).toBe('Lien court');
+    expect(firstSentence('')).toBe('');
+  });
+  it('cuts a long sentence', () => {
+    const s = firstSentence('a'.repeat(200), 20);
+    expect(s).toHaveLength(20);
+    expect(s.endsWith('…')).toBe(true);
+  });
+});
 
 function memory() {
   const m = new Map<string, string>();

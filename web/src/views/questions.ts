@@ -68,7 +68,10 @@ export function mountQuestions(el: HTMLElement | null) {
     ).join(' ')}</div>
     <div class="question-answer" aria-live="polite">${
       res
-        ? `<ul class="facts${res.ok ? '' : ' muted'}">${res.lines.map((l) => `<li>${esc(l)}</li>`).join('')}</ul>`
+        ? `<ul class="facts${res.ok ? '' : ' muted'}">${res.lines.map((l) => `<li>${esc(l)}</li>`).join('')}</ul>${
+            // #313: the day-by-day reasons live on the page of each room
+            question === 'cold' && res.ok ? '<p class="hint">Jour par jour, pièce par pièce : rubrique « Pourquoi il a fait froid » de la page de chaque pièce (<a href="#pieces">Pièces</a>).</p>' : ''
+          }`
         : '<p class="hint muted">Choisissez une question : la réponse est calculée sur vos données, sur cet appareil.</p>'
     }</div>`;
   el.querySelector<HTMLSelectElement>('#question-month')!.addEventListener('change', (e) => {

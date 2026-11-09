@@ -67,6 +67,22 @@ async function audit(page, where, { enhanced = false } = {}) {
   }
 }
 
+/** #311: the amounts of the tiles (every page, components.ts tile()) stay on one line and inside their tile. */
+const tileAmounts = (page) =>
+  page.evaluate(() =>
+    [...document.querySelectorAll('body:not(.is-simple) #view .kpis .kpi-value')].flatMap((el) => {
+      const range = document.createRange();
+      range.selectNodeContents(el);
+      const lines = new Set([...range.getClientRects()].filter((r) => r.width > 0).map((r) => Math.round(r.top)));
+      const tile = el.closest('.kpi').getBoundingClientRect();
+      const box = range.getBoundingClientRect();
+      const out = [];
+      if (lines.size > 1) out.push(`« ${el.textContent} » sur ${lines.size} lignes`);
+      if (box.right > tile.right + 1 || box.left < tile.left - 1) out.push(`« ${el.textContent} » sort de sa tuile`);
+      return out;
+    }),
+  );
+
 async function openDemo(page) {
   await page.goto(base);
   await page.click('#demo');
@@ -279,6 +295,8 @@ try {
         await page.mouse.move(0, 0);
         await page.evaluate(() => window.scrollTo(0, 0));
       }
+      const cut = await tileAmounts(page);
+      check(!cut.length, `${name}/${view} : montant de tuile coupé → ${cut.join(', ')}`);
       await checkViolations(page, `${name}/${view}`);
       await page.screenshot({ path: `${OUT}/${name}-${view}.png`, fullPage: true });
       await audit(page, `${name}/${view}`);
@@ -324,7 +342,17 @@ try {
       // S-1.10: lost days rebuilt apart, on demand (lazy module), in État des données (header pill)
       await page.click('.top .status-pill');
       await page.waitForSelector('#view[data-page=etat][data-ready]', { state: 'attached' });
+      // #318 / #336: the quality report, year by year, with the causes (demo: 26 days lost at Intuis in 2024)
       try {
+        await page.waitForSelector('#quality-years .year-verdict', { timeout: 15000 });
+        const years = await page.locator('#quality-years').innerText();
+        if (!/2024/.test(years) || !/Trou de 26 jours|trou de 26 jours/.test(years) || !/Intuis n'a rien renvoyé/.test(years)) errors.push(`${name}/etat: bilan 2024 sans le trou de 26 jours ni sa cause`);
+        if (!/Récupérable \?/.test(await page.locator('#quality-sources').innerText())) errors.push(`${name}/etat: « récupérable ? » absent`);
+      } catch (err) {
+        errors.push(`${name}/etat: bilan qualité non rendu (${err})`);
+      }
+      try {
+        await page.click('#quality > summary');
         await page.check('[data-recon]');
         await page.waitForSelector('#recon-chart canvas', { timeout: 15000 });
         if (!(await page.getByText('Jours suspects').count())) errors.push(`${name}/etat: jours suspects absents`);
@@ -550,7 +578,7 @@ try {
     if (name === 'mobile-clair') {
       // S-7.11: swipe on the header changes the period (Accueil), on the tab bar the tab.
       await go(page, 'accueil');
-      const period = () => page.$eval('select[data-set=period]', (s) => s.value);
+      const period = () => page.$eval('.periodbar [aria-checked=true]', (b) => b.dataset.value);
       const before = await period();
       await swipe(page, '.top .title', 120);
       const older = await period();
@@ -627,7 +655,7 @@ try {
     page.on('pageerror', (e) => errors.push(`360-200: ${e.message}`));
     await openDemo(page);
     await page.addStyleTag({ content: 'html { font-size: 200% !important; }' });
-    for (const view of ['accueil', 'pieces', 'historique', 'compteur', 'outils', 'confort', 'parametres', 'parametres-contrat', 'parametres-affichage']) {
+    for (const view of ['accueil', 'pieces', 'piece-r-bureau', 'historique', 'compteur', 'outils', 'confort', 'parametres', 'parametres-contrat', 'parametres-affichage']) {
       progress(`360 px, texte 200 % : ${view}`);
       await go(page, view);
       await nextFrame(page);
@@ -646,6 +674,8 @@ try {
         return found;
       });
       check(!out.length, `360 px, texte 200 %/${view} : ${out.slice(0, 5).join(', ')}`);
+      const cut = await tileAmounts(page);
+      check(!cut.length, `360 px, texte 200 %/${view} : montant de tuile coupé → ${cut.join(', ')}`);
       await page.screenshot({ path: `${OUT}/mobile360-texte200-${view}.png`, fullPage: true });
       if (['accueil', 'historique', 'outils', 'parametres-contrat'].includes(view)) await audit(page, `360 px, texte 200 %/${view}`);
     }

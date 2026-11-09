@@ -18,6 +18,7 @@ import { type Route, allowed, parentOf, parseRoute, routeKey, simpleTabs, tabOf,
 import { IdleLock, REMEMBER_DAYS, clearLockNotice, idleSince, lockNotice, markIdleLock } from './session';
 import { isIos, keyLoss, lossMessage, readMark, writeMark } from './storage';
 import { type SwipeDir, onSwipe, step } from './swipe';
+import { HOME_PERIODS, homePeriod } from './home';
 import { tenant } from './tenant';
 import { downloadBlob, esc, filtered, lastDay, roomName } from './ui';
 import { renderLoading, renderLock, showApp } from './views/lock';
@@ -139,7 +140,7 @@ function render() {
     <div class="title">
       <h1>${esc(meta.home.name)}${ds.source === 'demo' ? ' <span class="badge">démo</span>' : ''}</h1>
     </div>
-    <a class="status-pill ${s.level}" href="#etat" data-view="etat" title="État des données"><span class="dot" aria-hidden="true"></span>${esc(s.label)}<span class="sr-only"> : ${s.level === 'ok' ? 'à jour' : 'en retard'}, voir l'état des données</span></a>
+    <a class="status-pill ${s.level}" href="#etat" data-view="etat" title="État des données"><span class="dot" aria-hidden="true"></span>${esc(s.label)}<span class="sr-only"> : ${esc(s.text)}, voir l'état des données</span></a>
     <a class="icon-btn" href="#parametres" data-view="parametres" aria-label="Paramètres"${route.page === 'parametres' ? ' aria-current="page"' : ''}>${icon('settings')}</a>
   </header>
   <nav class="tabs${tabs.length === 3 ? ' three' : ''}" aria-label="Onglets" data-swipe="tab">
@@ -150,7 +151,7 @@ function render() {
       )
       .join('')}
   </nav>
-  ${s.level !== 'ok' ? `<p class="stale" role="alert"><span aria-hidden="true">⚠️</span> Données arrêtées au ${esc(s.label.replace('Données du ', ''))} (il y a ${s.days} jours) : la collecte est peut-être en panne. <a href="#etat">Voir pourquoi</a></p>` : ''}
+  ${s.stale ? `<p class="stale" role="alert"><span aria-hidden="true">⚠️</span> Données arrêtées au ${esc(s.label.replace('Données du ', ''))} (il y a ${s.days} jours) : la collecte est peut-être en panne. <a href="#etat">Voir pourquoi</a></p>` : ''}
   <p class="offline" id="net-status" role="status" hidden></p>
   ${
     sub
@@ -388,11 +389,9 @@ app.addEventListener('keydown', (e) => {
 });
 
 // ------------------------------------------------------------------ swipe (S-7.11)
-/** Period choices of Accueil, in the order of its select: recent → older → all. */
-function periods(): string[] {
-  return ['30d', '12m', ...ds!.meta.years.map(String).reverse(), 'all'];
-}
-const PERIOD_LABEL: Record<string, string> = { '30d': '30 derniers jours', '12m': '12 derniers mois', all: "tout l'historique" };
+/** #311: the period of Accueil, in the order of its control (Mois · Saison · 12 mois · Année). */
+const periods = () => HOME_PERIODS.map(([k]) => k);
+const PERIOD_LABEL = Object.fromEntries(HOME_PERIODS) as Record<string, string>;
 
 /** Polite announcement for screen readers (the live region sits outside #app, never re-rendered). */
 function announce(msg: string) {
@@ -404,11 +403,11 @@ onSwipe(app, (zone, dir) => {
   if (!ds || state.simple) return;
   const route = currentRoute();
   if (zone === 'period' && route.page === 'accueil') {
-    // Swipe right goes back in time (older period), swipe left towards the present.
-    const next = step(periods(), state.period, dir === 'right' ? 1 : -1);
+    // Swipe right: the next, longer period; swipe left: back to the shorter one.
+    const next = step(periods(), homePeriod(state.home), dir === 'right' ? 1 : -1);
     if (!next) return;
     slide = dir;
-    setState({ period: next });
+    setState({ home: next });
     return announce(`Période : ${PERIOD_LABEL[next] ?? next}`);
   }
   if (zone === 'tab') {

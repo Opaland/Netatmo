@@ -34,7 +34,9 @@ export interface State {
   view: View;
   cat: CatFilter;
   rooms: string[] | null;
-  period: string; // '12m' | 'all' | 'YYYY'
+  period: string; // '12m' | 'all' | 'YYYY' (Historique, « Consommation en détail »)
+  /** #311: the one period of Accueil. */
+  home: 'month' | 'season' | '12m' | 'year';
   gran: Granularity;
   split: 'category' | 'room';
   compareYears: number[];
@@ -75,10 +77,11 @@ export const DEFAULT: State = {
   cat: 'all',
   rooms: null,
   period: '12m',
+  home: 'month',
   gran: 'month',
   split: 'category',
   compareYears: [],
-  compareMode: 'monthly',
+  compareMode: 'season', // maquette « Historique »: hiver contre hiver
   compareSeasons: null,
   roomsYear: null,
   focusRoom: null,
@@ -87,7 +90,7 @@ export const DEFAULT: State = {
   kva: 9,
   contracts: [],
   contractLocalEdit: false,
-  climate: false,
+  climate: true, // maquette « Historique »: à climat égal (off without weather)
   analyseYear: null,
   tempRoom: null,
   reportYear: null,

@@ -2,25 +2,27 @@
 // entry: how it is drawn, from the v1.5 cards moved there (architecture-cible.md § 3), and the
 // event handlers that apply while it is shown. main.ts draws the shell (header, tab bar, back
 // arrow) and dispatches the events to the entry of the page shown only.
-import { MONTHS_LONG, total } from './aggregate';
 import { activeRooms, ds, householdStatus, state } from './app';
-import { alert, list, seg as segment, switchField, tile } from './components';
+import { alert, list, seg as segment, switchField } from './components';
 import type { Handlers } from './events';
-import { PERIOD, dayShort, fmt1 } from './glossary';
-import { type Route, SETTINGS, type SettingsPage, TOOLS, type Tool, routeKey } from './router';
+import { dayShort, fmt1 } from './glossary';
+import { type Route, SETTINGS, type SettingsPage, type Tool, routeKey } from './router';
 import { LOCK_CHOICES } from './session';
 import { tenant } from './tenant';
 import { html } from './trusted';
-import { costOf, esc, filtered, fmtEur, fmtKwh, lastDay, roomColor } from './ui';
+import { esc, filtered, roomColor } from './ui';
 import { lazyCard } from './lazy';
 import { CATEGORY_LABEL } from './aggregate';
 import * as analyse from './views/analyse';
 import * as compare from './views/compare';
+import * as home from './views/home';
 import * as household from './views/household';
+import * as outils from './views/outils';
 import * as overview from './views/overview';
-import { pinSelect, pinnedTiles, meanTemp } from './views/pinned';
+import { pinSelect, pinnedTiles } from './views/pinned';
 import * as prices from './views/prices';
-import { qualityHandlers } from './views/quality';
+import { qualityCard, qualityHandlers } from './views/quality';
+import { type Freshness, freshness } from './freshness';
 import * as report from './views/report';
 import * as rooms from './views/rooms';
 import * as settings from './views/settings';
@@ -68,7 +70,7 @@ const comfortHandlers: Handlers = {
 };
 
 // ------------------------------------------------------------------ filters (#308)
-/** The usage and rooms selection, now set in Accueil (usage) and Pièces (rooms): a chip says so elsewhere. */
+/** The usage and rooms selection, set in Historique (usage, « Consommation en détail ») and Pièces (rooms): a chip says so elsewhere. */
 function filterChip(): string {
   const all = activeRooms().length;
   const n = state.rooms ? state.rooms.length : all;
@@ -93,18 +95,32 @@ function roomsPicker(): string {
     </details>`;
 }
 
-// ------------------------------------------------------------------ Pièces, Pièce
+// ------------------------------------------------------------------ Pièces, Pièce (#313, lazy)
+let piece: typeof import('./views/piece') | null = null;
+function withPiece(view: HTMLElement, draw: (m: typeof import('./views/piece')) => void) {
+  if (piece) return draw(piece);
+  view.innerHTML = html('<p class="empty">Chargement…</p>');
+  void lazyCard(
+    () => import('./views/piece'),
+    (m) => {
+      piece = m;
+      if (view.isConnected) draw(m);
+    },
+    { zone: view, what: 'Pièces' },
+  );
+}
+
 function renderPieces(view: HTMLElement) {
-  const water = activeRooms().filter((r) => r.category === 'water_heater');
-  const records = filtered();
-  stack(view, `<h2 class="page-title" id="page-title" tabindex="-1">Pièces</h2>${roomsPicker()}${filterChip()}`, [
-    (el) => (records.length ? rooms.renderRooms(el, records, 'list') : (el.innerHTML = html('<p class="empty">Aucune donnée pour cette sélection.</p>'))),
-    (el) =>
-      (el.innerHTML = html(`<section class="card"><div class="card-head"><h2>Aussi dans Pièces</h2></div>${list([
-        { title: 'Air et confort', sub: 'CO₂ des nuits, humidité, heures sous le seuil, fenêtres, sondes', href: '#confort' },
-        ...(water.length ? [{ title: 'Chauffe-eau', sub: 'heures creuses, heures de chauffe, contacteur', href: '#chauffe-eau', color: roomColor(water[0].id) }] : []),
-      ])}</section>`)),
-  ]);
+  withPiece(view, (m) =>
+    m.renderPieces(view, {
+      picker: `${roomsPicker()}${filterChip()}`,
+      compare: (el) => {
+        const records = filtered();
+        if (records.length) rooms.renderRooms(el, records, 'list');
+        else el.innerHTML = html('<p class="empty">Aucune donnée pour cette sélection.</p>');
+      },
+    }),
+  );
 }
 
 function renderPiece(view: HTMLElement, route: Route) {
@@ -114,38 +130,17 @@ function renderPiece(view: HTMLElement, route: Route) {
     view.innerHTML = html`<section class="card"><p class="hint">Cette pièce n'est pas affichée (renommée, regroupée dans la vue foyer ou sans donnée).</p><a class="link" href="#pieces">Voir toutes les pièces</a></section>`;
     return;
   }
-  const last = lastDay();
-  const monthStart = `${last.slice(0, 8)}01`;
-  const yearStart = `${last.slice(0, 4)}-01-01`;
-  const mine = ds!.records.filter((r) => r.room === room.id);
-  const kwhM = total(mine, monthStart, last);
-  const kwhY = total(mine, yearStart, last);
-  const eurM = costOf(mine, monthStart, last);
-  const eurY = costOf(mine, yearStart, last);
-  const temp = meanTemp(ds!.temps.get(room.id), monthStart, last);
-  const month = MONTHS_LONG[Number(last.slice(5, 7)) - 1];
-  const tiles = `<section class="kpis">
-    ${tile({ label: `${PERIOD.month} (${month}, au ${dayShort(last)})`, value: eurM === null ? fmtKwh(kwhM) : fmtEur(eurM), sub: eurM === null ? '' : esc(fmtKwh(kwhM)) })}
-    ${tile({ label: PERIOD.ytd, value: eurY === null ? fmtKwh(kwhY) : fmtEur(eurY), sub: eurY === null ? '' : esc(fmtKwh(kwhY)) })}
-    ${temp === null ? '' : tile({ label: `Température moyenne en ${month}`, value: `${fmt1(temp)} °C`, sub: esc(`seuil de confort ${fmt1(state.comfortThreshold)} °C`) })}
-  </section>`;
-  stack(view, `<p class="hint muted">${esc(CATEGORY_LABEL[room.category])} · ${state.simple ? 'votre pièce' : 'détail complet à venir (#313)'}</p>${tiles}`, [
-    (el) => rooms.renderRooms(el, mine, 'room', room.id),
-    (el) => analyse.renderAnalyse(el, mine, 'temps', room.id),
-    (el) =>
-      (el.innerHTML = html(`<section class="card"><div class="card-head"><h2>Pour aller plus loin</h2></div>${list([
-        { title: 'Air et confort', sub: 'heures sous le seuil, fenêtres, CO₂ et humidité (module lié)', href: '#confort' },
-        ...(room.category === 'water_heater' ? [{ title: 'Chauffe-eau : heures creuses', href: '#chauffe-eau' }] : []),
-        { title: 'Qu’est-ce qui a changé ?', sub: 'pièce par pièce, dans Historique', href: '#historique' },
-      ])}</section>`)),
-  ]);
+  withPiece(view, (m) => m.renderPiece(view, room.id));
 }
+const pieceHandlers: Handlers = { click: (el) => piece?.handleClick(el) ?? false };
 
 // ------------------------------------------------------------------ Historique, Compteur
 function renderHistorique(view: HTMLElement) {
   const records = filtered();
   stack(view, `<h2 class="page-title" id="page-title" tabindex="-1">Historique</h2>${filterChip()}`, [
     (el) => overview.renderOverview(el, records, 'twelve'),
+    // #311: the explorer of the v1.5 Synthèse (period, usage, granularity, by room, values) left Accueil
+    (el) => overview.renderOverview(el, records, 'explore'),
     (el) => compare.renderCompare(el, records, 'history'),
     (el) => rooms.renderRooms(el, records, 'changes'),
     (el) => analyse.renderAnalyse(el, records, 'historique'),
@@ -160,34 +155,13 @@ function renderCompteur(view: HTMLElement) {
   ]);
 }
 
-// ------------------------------------------------------------------ Outils (#314 later)
-const row = (tool: Tool, sub: string) => ({ title: TOOLS[tool], sub, href: `#${routeKey({ page: 'outil', tool })}` });
-
-function renderOutils(view: HTMLElement) {
-  const t = tenant().on;
-  view.innerHTML = html`<h2 class="page-title" id="page-title" tabindex="-1">Outils</h2>
-  ${t ? alert('info', 'Mode locataire', 'L’onglet Compteur est masqué : la part du logement, la puissance et la courbe de charge supposent le compteur Linky et le contrat du titulaire.') : ''}
-  <p class="section-title">Simulateurs <span class="tag">et si…</span></p>
-  ${list([
-    ...(t ? [] : [row('offres', 'Base, heures creuses ou Tempo, sur votre consommation réelle')]),
-    row('consigne', 'économie estimée pour 1 °C de moins dans toutes les pièces'),
-    ...(t ? [] : [row('voiture', 'recharge, offre, dépassement de puissance')]),
-    row('pac', 'économie estimée selon le COP'),
-    row('teletravail', 'coût d’une journée au bureau chauffé'),
-  ])}
-  <p class="section-title">Vérifier</p>
-  ${list([row('facture', 'recouper le coût avec une facture'), { title: 'État des données', sub: 'jours estimés, sources, appareils', href: '#etat' }])}
-  <p class="section-title">Journaux</p>
-  ${list([row('absences', 'absences repérées et confirmées'), row('volets', 'soirs volets fermés'), ...(t ? [] : [{ title: 'Travaux', sub: 'saisis dans ⚙ Mon logement, avec les surfaces ; avant / après', href: '#parametres-logement' }])])}
-  <p class="section-title">Analyse du mois</p>
-  ${list([row('analyse', ds!.insights ? 'rédigée par l’IA, avec ce qui a été envoyé' : 'à activer (Sources de données)')])}
-  <p class="section-title">Rapports et exports</p>
-  ${list([
-    { title: 'Rapport annuel', sub: 'à imprimer ou en PDF, version anonymisée', href: '#rapport' },
-    row('questions', 'réponses calculées, sans IA'),
-    row('exports', 'CSV, export long, export recherche, sauvegarde chiffrée'),
-  ])}`;
+// ------------------------------------------------------------------ Outils (#314)
+/** Sources whose last attempt succeeded (meta.sources), for the État des données row. */
+function activeSources(): number {
+  const src = (ds!.meta as { sources?: Record<string, { ok?: string; error?: string }> }).sources ?? {};
+  return Object.values(src).filter((s) => s.ok && !(s.error && s.error > s.ok)).length;
 }
+const renderOutils = (view: HTMLElement) => outils.renderOutils(view, dataStatus(), activeSources());
 
 function renderExports(view: HTMLElement) {
   view.innerHTML = html`<section class="card">
@@ -209,10 +183,23 @@ function renderExports(view: HTMLElement) {
     <p class="hint">Le <a href="#rapport">rapport annuel</a> a une version anonymisée (bouton « Rapport anonymisé »).</p></section>`;
 }
 
+/** #314: the « et si… » tools look like simulations (dashed cards, label, assumptions recalled). */
+const SIMULATORS = new Set<Tool>(['offres', 'voiture', 'consigne', 'pac', 'teletravail']);
+
 function renderTool(view: HTMLElement, route: Route) {
   if (route.page !== 'outil') return;
+  drawTool(view, route.tool);
+  if (SIMULATORS.has(route.tool)) {
+    view.classList.add('sim-page');
+    view.insertAdjacentHTML(
+      'afterbegin',
+      html(`<p class="sim-note"><span class="tag">Simulation</span> Une estimation « et si… » calculée sur vos données réelles, pas une mesure : les hypothèses sont rappelées dans chaque carte.</p>`),
+    );
+  }
+}
+
+function drawTool(view: HTMLElement, t: Tool) {
   const records = filtered();
-  const t = route.tool;
   if (t === 'offres') return compare.renderCompare(view, records, 'offers');
   if (t === 'voiture') return compare.renderCompare(view, records, 'ev');
   if (t === 'facture') return overview.renderOverview(view, records, 'invoice');
@@ -226,30 +213,47 @@ function renderTool(view: HTMLElement, route: Route) {
   analyse.renderAnalyse(view, records, part);
 }
 
-// ------------------------------------------------------------------ État des données (#318 later)
+// ------------------------------------------------------------------ État des données (#318, #336)
 function renderEtat(view: HTMLElement) {
   const last = ds!.meta.last_day;
   const s = dataStatus();
-  stack(
-    view,
-    `${
-      last
-        ? s.level === 'ok'
-          ? alert('good', `Données à jour : jusqu'au ${dayShort(last, true)}`, ds!.source === 'demo' ? 'Démo : données d’exemple.' : 'La collecte passe chaque nuit.')
-          : alert(s.level === 'bad' ? 'bad' : 'warn', `Données arrêtées au ${dayShort(last, true)} (il y a ${s.days} jours)`, 'La collecte est peut-être en panne : une alerte est ouverte dans les issues GitHub du dépôt ; vous pouvez la relancer depuis ⚙ Paramètres → Sources de données.')
-        : ''
-    }`,
-    [(el) => overview.renderOverview(el, filtered(), 'quality'), (el) => settings.renderSettings(el, 'etat')],
-  );
+  const failing = s.failing.length ? `En échec : ${s.failing.map((k) => SOURCE_NAME[k] ?? k).join(', ')}. Le détail est dans « État des sources », plus bas.` : '';
+  const head = last
+    ? s.stale
+      ? alert('bad', `Données arrêtées au ${dayShort(last, true)} (il y a ${s.days} jours)`, 'La collecte est peut-être en panne : une alerte est ouverte dans les issues GitHub du dépôt ; vous pouvez la relancer depuis ⚙ Paramètres → Sources de données.')
+      : s.level === 'warn'
+        ? alert('warn', `Données du ${dayShort(last, true)} : ${s.text}`, failing || 'Intuis a gardé le total du mois mais pas le détail de ces jours : la collecte les a estimés.')
+        : alert('good', `Données à jour : jusqu'au ${dayShort(last, true)}`, ds!.source === 'demo' ? 'Démo : données d’exemple.' : 'La collecte passe chaque nuit.')
+    : '';
+  stack(view, `${head}<div id="etat-bilan" aria-busy="true"><p class="hint muted" role="status">Bilan des données : calcul…</p></div>`, [
+    (el) => settings.renderSettings(el, 'etat'),
+    (el) => (el.innerHTML = html(qualityCard(false) || '<section class="card"><p class="hint">Tous les mois sont complets : aucun jour estimé ni perdu.</p></section>')),
+  ]);
+  void lazyCard(() => import('./views/etat'), (m) => m.mountEtat(document.getElementById('etat-bilan')), { zone: 'etat-bilan', what: 'Bilan des données' });
 }
 
-/** Freshness of the data, for the header pill and the État page. */
-export function dataStatus(): { level: 'ok' | 'warn' | 'bad'; days: number; label: string } {
+const SOURCE_NAME: Record<string, string> = {
+  intuis: 'Intuis',
+  'open-meteo': 'météo',
+  netatmo: 'station Netatmo',
+  linky: 'Linky',
+  'linky-30min': 'Linky à la demi-heure',
+  shelly: 'prises Shelly',
+  'releve-horaire': 'relevé horaire',
+  appareils: 'état des appareils',
+  ia: 'analyse IA',
+};
+
+/** Freshness of the data, for the header pill and the État page (#318). */
+export function dataStatus(): Freshness & { label: string } {
   const last = ds!.meta.last_day;
-  if (!last) return { level: 'warn', days: 0, label: 'Pas encore de données' };
-  const days = Math.max(0, Math.floor((Date.now() - Date.parse(`${last}T12:00:00Z`)) / 86400000));
-  const level = ds!.source === 'demo' || days <= 3 ? 'ok' : days <= 7 ? 'warn' : 'bad';
-  return { level, days, label: `Données du ${dayShort(last)}` };
+  const month = last ? `${last.slice(0, 8)}01` : '';
+  const days = new Set<string>();
+  if (last) for (const k of ds!.estimated) if (k.slice(k.indexOf('|') + 1) >= month) days.add(k.slice(k.indexOf('|') + 1));
+  const sources = (ds!.meta as { sources?: Record<string, { ok?: string; error?: string }> }).sources;
+  const f = freshness({ last, now: Date.now(), demo: ds!.source === 'demo', sources, uncertain: days.size });
+  const label = last ? `Données du ${dayShort(last)}${f.level === 'ok' ? '' : f.stale ? ' · en retard' : ' · à vérifier'}` : 'Pas encore de données';
+  return { ...f, label };
 }
 
 // ------------------------------------------------------------------ Paramètres (#309)
@@ -389,7 +393,7 @@ function renderSettingsPage(view: HTMLElement, route: Route) {
 // ------------------------------------------------------------------ Accueil
 function renderAccueil(view: HTMLElement) {
   const records = filtered();
-  overview.renderOverview(view, records, 'home');
+  home.renderHome(view, records);
   // S-7.8: the pinned room comes first among the key figures of the simple mode.
   if (state.simple) {
     view.querySelector('.kpis')?.insertAdjacentHTML('afterbegin', html(pinnedTiles()));
@@ -397,18 +401,16 @@ function renderAccueil(view: HTMLElement) {
   }
 }
 
-const accueilHandlers: Handlers = h(undefined, overview.handleChange);
-
 const settingsHandlers: Handlers[] = [h(settings.handleClick), h(prices.handleClick, prices.handleChange), h(household.handleClick, household.handleChange), { keydown: (e) => (settings.handleKeydown(e), false) }];
 
 /** One entry per page (#257: the handlers apply while it is shown, and only then). */
 export const PAGES: Record<Route['page'], Page> = {
-  accueil: { render: renderAccueil, handlers: [accueilHandlers], needsData: true },
+  accueil: { render: renderAccueil, needsData: true },
   pieces: { render: renderPieces, handlers: [h(undefined, rooms.handleChange)] },
-  piece: { render: renderPiece, handlers: [h(undefined, rooms.handleChange)] },
+  piece: { render: renderPiece, handlers: [pieceHandlers] },
   confort: { render: renderComfort, handlers: [comfortHandlers] },
   'chauffe-eau': { render: (v) => analyse.renderAnalyse(v, filtered(), 'chauffe-eau'), needsData: true },
-  historique: { render: renderHistorique, handlers: [h(compare.handleClick, compare.handleChange), h(undefined, analyse.handleChange), h(undefined, rooms.handleChange)] },
+  historique: { render: renderHistorique, handlers: [h(undefined, overview.handleChange), h(compare.handleClick, compare.handleChange), h(undefined, analyse.handleChange), h(undefined, rooms.handleChange)] },
   compteur: { render: renderCompteur, handlers: [h(undefined, analyse.handleChange)] },
   outils: { render: renderOutils },
   outil: { render: renderTool, handlers: [h(compare.handleClick, compare.handleChange), h(undefined, analyse.handleChange)], needsData: true },

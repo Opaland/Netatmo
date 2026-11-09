@@ -1,0 +1,211 @@
+// #311 / #302: the figures of the new Accueil, as pure functions (tested in home.test.ts): one
+// period for the whole screen (Mois · Saison · 12 mois · Année), the line that says what is
+// counted, the verdict in euros with its one named reference, the projection to the end of the
+// period, the rooms that counted and the monthly series of the chart (with the outdoor
+// temperature). The view (views/home.ts) only lays them out.
+import { type DayRecord, addDays, bucketKeys, minusYears, pctChange } from './aggregate';
+import type { Verdict, Weather } from './analysis';
+import { MONTHS_LONG, MONTHS_SHORT, PERIOD, dayShort, seasonLabel, signedPct } from './glossary';
+import { daysBetween } from './periods';
+
+export type HomePeriod = 'month' | 'season' | '12m' | 'year';
+/** The segmented control of Accueil, in its order (the swipe on the header follows it). */
+export const HOME_PERIODS: [HomePeriod, string][] = [
+  ['month', 'Mois'],
+  ['season', 'Saison'],
+  ['12m', '12 mois'],
+  ['year', 'Année'],
+];
+/** A remembered value from another version falls back to the month. */
+export const homePeriod = (v: unknown): HomePeriod => (HOME_PERIODS.some(([k]) => k === v) ? (v as HomePeriod) : 'month');
+
+const lastOfMonth = (day: string) => new Date(Date.UTC(Number(day.slice(0, 4)), Number(day.slice(5, 7)), 0)).toISOString().slice(0, 10);
+const ord = (day: string) => (Number(day.slice(8, 10)) === 1 ? '1er' : String(Number(day.slice(8, 10))));
+
+export interface HomeRange {
+  period: HomePeriod;
+  /** First and last day counted (the last day of the data at most). */
+  from: string;
+  to: string;
+  /** Last day of the period once over (= `to` for the sliding 12 months). */
+  end: string;
+  /** Months of the chart (« 2026-01 »…), the future ones included (empty bars). */
+  months: string[];
+  /** First and last day of the chart. */
+  chartFrom: string;
+  chartTo: string;
+}
+
+/** The days of a period, on the last day of the data. */
+export function homeRange(period: HomePeriod, last: string): HomeRange {
+  const twelve = (): [string, string] => [addDays(minusYears(last), 1), last];
+  let from: string;
+  let end: string;
+  let chart: [string, string];
+  if (period === 'month') {
+    from = `${last.slice(0, 8)}01`;
+    end = lastOfMonth(last);
+    // the month is put in context: the 12 months before it, the current one hatched (maquette)
+    chart = twelve();
+  } else if (period === 'season') {
+    const y = Number(last.slice(5, 7)) >= 9 ? Number(last.slice(0, 4)) : Number(last.slice(0, 4)) - 1;
+    from = `${y}-09-01`;
+    end = `${y + 1}-08-31`;
+    chart = [from, end];
+  } else if (period === 'year') {
+    from = `${last.slice(0, 4)}-01-01`;
+    end = `${last.slice(0, 4)}-12-31`;
+    chart = [from, end];
+  } else {
+    [from] = twelve();
+    end = last;
+    chart = twelve();
+  }
+  return { period, from, to: last, end, months: bucketKeys(chart[0], chart[1], 'month'), chartFrom: chart[0], chartTo: chart[1] };
+}
+
+/** « novembre » for the month, « la saison » … : what the verdict's figures cover, in a sentence. */
+export function periodPhrase(r: HomeRange): string {
+  const at = `au ${dayShort(r.to)}`;
+  switch (r.period) {
+    case 'month':
+      return `en ${MONTHS_LONG[Number(r.to.slice(5, 7)) - 1]} (${r.to === r.end ? 'mois complet' : `au ${ord(r.to)}`})`;
+    case 'season':
+      return `depuis le 1er septembre (${at})`;
+    case 'year':
+      return `depuis le 1er janvier (${at})`;
+    default:
+      return 'sur les 12 derniers mois';
+  }
+}
+
+/** Title of the scope line: « Novembre 2026, du 1er au 8 (8 jours sur 30) ». */
+export function scopeTitle(r: HomeRange): string {
+  const elapsed = daysBetween(r.from, r.to);
+  const length = daysBetween(r.from, r.end);
+  const days = r.to < r.end ? ` (${elapsed} jour${elapsed > 1 ? 's' : ''} sur ${length})` : '';
+  switch (r.period) {
+    case 'month': {
+      const m = MONTHS_LONG[Number(r.to.slice(5, 7)) - 1];
+      return `${m[0].toUpperCase()}${m.slice(1)} ${r.to.slice(0, 4)}, du 1er au ${ord(r.to)}${days}`;
+    }
+    case 'season':
+      return `${PERIOD.season} ${seasonLabel(Number(r.from.slice(0, 4)))}, du 1er sept. au ${dayShort(r.to)}${days}`;
+    case 'year':
+      return `Année ${r.to.slice(0, 4)}, du 1er janv. au ${dayShort(r.to)}${days}`;
+    default:
+      return `${PERIOD['12m']}, du ${dayShort(r.from, true)} au ${dayShort(r.to, true)}`;
+  }
+}
+
+/** What the figures count: « chauffage et eau chaude, hors abonnement », « chauffage seul · 3 pièces sur 7, en kWh ». */
+export function countedLine(o: { cat: string; rooms: number; allRooms: number; euros: boolean }): string {
+  const what = o.cat === 'heating' ? 'chauffage seul' : o.cat === 'water_heater' ? 'eau chaude seule' : 'chauffage et eau chaude';
+  const rooms = o.rooms < o.allRooms ? ` · ${o.rooms} pièce${o.rooms > 1 ? 's' : ''} sur ${o.allRooms}` : '';
+  return `${what}${rooms}, ${o.euros ? 'hors abonnement' : 'en kWh (prix à renseigner)'}`;
+}
+
+// ------------------------------------------------------------------ verdict in euros (#302)
+export interface MoneyVerdict {
+  level: Verdict['level'];
+  /** Actual − expected, in euros (or kWh without prices). */
+  gap: number;
+  unit: '€' | 'kWh';
+  actual: number;
+  expected: number;
+  kwh: number;
+  pct: number;
+  climate: boolean;
+}
+
+/**
+ * The verdict of verdict() priced: the euros spent, and the expected kWh at the price paid over
+ * the same days (the reference stays the one of verdict(): the same dates of the previous years,
+ * at comparable weather when there is weather).
+ */
+export function moneyVerdict(v: Verdict, cost: number | null): MoneyVerdict {
+  const price = cost !== null && v.actual > 0 ? cost / v.actual : null;
+  if (price === null) return { level: v.level, gap: v.actual - v.expected, unit: 'kWh', actual: v.actual, expected: v.expected, kwh: v.actual, pct: v.pct, climate: v.climate };
+  return { level: v.level, gap: (v.actual - v.expected) * price, unit: '€', actual: cost!, expected: v.expected * price, kwh: v.actual, pct: v.pct, climate: v.climate };
+}
+
+const nf0 = new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 0 });
+const amount = (v: number, unit: '€' | 'kWh') => `${nf0.format(Math.round(Math.abs(v)))} ${unit}`;
+
+/** « 3 € de moins que d'habitude », « Comme d'habitude » under a euro (or a kWh). */
+export function verdictHeadline(m: MoneyVerdict): string {
+  if (Math.round(Math.abs(m.gap)) < 1) return "Comme d'habitude";
+  return `${amount(m.gap, m.unit)} de ${m.gap < 0 ? 'moins' : 'plus'} que d'habitude`;
+}
+
+/** The reference of the verdict, named the same way everywhere (verdict, month tile). */
+export const expectedLabel = (climate: boolean) => (climate ? 'vs attendu à météo comparable' : 'vs attendu (moyenne des années passées)');
+
+// ------------------------------------------------------------------ projection to the end of the period
+/**
+ * kWh still to come from the day after `to` to `end`, as in the previous years (up to four,
+ * each entirely measured), times `ratio` (this period vs expected, kept between ½ and 2).
+ * Null when no previous year covers those days.
+ */
+export function restOfPeriod(records: DayRecord[], to: string, end: string, firstDay: string, ratio = 1): number | null {
+  if (to >= end) return 0;
+  const from = addDays(to, 1);
+  const refs: number[] = [];
+  for (let k = 1; k <= 4; k++) {
+    const f = minusYears(from, k);
+    const t = minusYears(end, k);
+    if (f < firstDay) break;
+    refs.push(records.reduce((s, r) => s + (r.day >= f && r.day <= t ? r.kwh : 0), 0));
+  }
+  if (!refs.length) return null;
+  const r = Math.min(2, Math.max(0.5, Number.isFinite(ratio) && ratio > 0 ? ratio : 1));
+  return (refs.reduce((a, b) => a + b, 0) / refs.length) * r;
+}
+
+// ------------------------------------------------------------------ what counted
+export interface Counted {
+  id: string;
+  value: number;
+  /** % of the total of the lines. */
+  share: number;
+  /** Change vs the same days one year earlier, % (null without reference). */
+  change: number | null;
+}
+
+/**
+ * Lines of « Ce qui a compté », largest first: their value over [from, to] (euros or kWh),
+ * their share and their change vs the same days a year earlier.
+ */
+export function countedRows(ids: string[], valueOf: (id: string, from: string, to: string) => number, from: string, to: string): Counted[] {
+  const rows = ids.map((id) => ({ id, value: valueOf(id, from, to), before: valueOf(id, minusYears(from), minusYears(to)) })).filter((r) => r.value > 0);
+  const sum = rows.reduce((s, r) => s + r.value, 0);
+  return rows
+    .sort((a, b) => b.value - a.value)
+    .map((r) => ({ id: r.id, value: r.value, share: sum ? (r.value / sum) * 100 : 0, change: pctChange(r.value, r.before) }));
+}
+
+/** « −19 % vs 2025 à date » (text, for a list row). */
+export const changeText = (p: number | null, vs: string) => (p === null ? "pas de comparaison avec l'an dernier" : `${signedPct(p)} ${vs}`);
+
+// ------------------------------------------------------------------ chart
+/** Mean outdoor temperature of each month (null when none of its days was measured). */
+export function monthlyOutdoor(weather: Weather | null, months: string[], to: string): (number | null)[] {
+  if (!weather) return months.map(() => null);
+  const acc = new Map<string, [number, number]>();
+  for (const [d, w] of weather) {
+    if (d > to) continue;
+    const k = d.slice(0, 7);
+    const a = acc.get(k);
+    if (a) {
+      a[0] += w[2];
+      a[1]++;
+    } else acc.set(k, [w[2], 1]);
+  }
+  return months.map((m) => {
+    const a = acc.get(m);
+    return a ? Math.round((a[0] / a[1]) * 10) / 10 : null;
+  });
+}
+
+/** Short label of a month for the chart axis: « nov. », with the year on January and on the first bar. */
+export const monthTick = (key: string, i: number) => `${MONTHS_SHORT[Number(key.slice(5, 7)) - 1]}${i === 0 || key.endsWith('-01') ? ` ${key.slice(0, 4)}` : ''}`;
