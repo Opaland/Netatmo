@@ -1,7 +1,6 @@
 // Compare ("Comparer"): years side by side, annual totals and the EDF offer comparator.
 import {
   type DayRecord,
-  MONTHS_LONG,
   MONTHS_SHORT,
   SEASON_MONTHS,
   addDays,
@@ -15,7 +14,8 @@ import {
 } from '../aggregate';
 import { compareOffers, daySplits, djuBetween, monthlyDju, offPeakShares } from '../analysis';
 import { ds, setState, state } from '../app';
-import { type Series, barChart, lineChart } from '../charts';
+import { type Series, barChart, chartCaption, cssVar, lineChart } from '../charts';
+import { SEASON_DEFINITION, dayLong, seasonLabel, signedPct } from '../glossary';
 import { uncertainDays } from '../checks';
 import { WITH_SUBSCRIPTION } from '../synthese';
 import { bucketMarks, monthKeys, shortDate, yoyCaveat, yoyWindow } from '../periods';
@@ -28,18 +28,19 @@ import {
   esc,
   firstDay,
   fmtEur,
+  fmtKwh,
   lastDay,
   longDate,
   offCol,
   pct,
+  seasonStyle,
   seg,
-  series,
   table,
   tableToggle,
   yearColor,
 } from '../ui';
 import { html } from '../trusted';
-import { switchField } from '../components';
+import { legend, tile } from '../components';
 import { lazyCard } from '../lazy';
 import { tenant, tenantNote } from '../tenant';
 
@@ -66,17 +67,20 @@ export function renderCompare(view: HTMLElement, records: DayRecord[], part: 'hi
   const years = ds!.meta.years;
   const last = lastDay();
   const lastYear = Number(last.slice(0, 4));
-  const selected = state.compareYears.filter((y) => years.includes(y)).sort();
   // #297: first day of these records (a room or a first year can start late), lost or estimated days
   const first = records.reduce((a, r) => (r.day < a ? r.day : a), records[0]?.day ?? firstDay());
   const uncertain = uncertainDays(records, ds!.estimated, first, last);
   const firstYear = Number(first.slice(0, 4));
+  const mode = state.compareMode;
 
-  // #298: seasons (Sept → Aug) have their own chips, keyed by the year they start, current one included
-  const season = state.compareMode === 'season';
+  // #298: seasons (Sept → Aug) keyed by the year they start, the current one included
   const curSeason = Number(seasonOf(last).slice(0, 4));
-  const seasons = [...new Set([...monthlyBySeason(records).keys()].map((k) => Number(k.slice(0, 4))))].filter((y) => y <= curSeason).sort();
-  const pickedSeasons = (state.compareSeasons ?? seasons.slice(-3)).filter((y) => seasons.includes(y));
+  const bySeason = monthlyBySeason(records);
+  const seasons = [...new Set([...bySeason.keys()].map((k) => Number(k.slice(0, 4))))].filter((y) => y <= curSeason).sort();
+  // maquette « Historique »: the two last complete winters and the one running
+  const pickedSeasons = (state.compareSeasons ?? seasons.filter((y) => y >= curSeason - 2)).filter((y) => seasons.includes(y));
+  // « Cette année / l'an dernier »: two years; « Toutes les années »: the year chips
+  const selected = mode === 'monthly' ? years.filter((y) => y >= lastYear - 1) : state.compareYears.filter((y) => years.includes(y)).sort();
 
   // Year-over-year: the same window in both years (to date, and from the first data day
   // when the previous year started late), with its caveats (#297).
@@ -105,53 +109,67 @@ export function renderCompare(view: HTMLElement, records: DayRecord[], part: 'hi
         full - heat,
         ...(cost !== null ? [fmtEur(cost)] : []),
         ...(w ? [w.days > 300 || isCurrent ? Math.round(w.dju) : '—', w.dju > 50 ? (heat / w.dju).toFixed(2).replace('.', ',') : '—'] : []),
-        d === null ? "—" : `${pct(d)}${caveat ? caveat.split(" · ").map((c) => `<br><small class="muted">${esc(c)}</small>`).join("") : ""}`,
+        d === null ? '—' : `${pct(d)}${caveat ? caveat.split(' · ').map((c) => `<br><small class="muted">${esc(c)}</small>`).join('') : ''}`,
       ];
     });
 
+  const climateOk = !!ds!.weather;
+  const corrected = state.climate && climateOk && mode !== 'cumul';
+  const title = mode === 'season' ? 'Hiver contre hiver' : mode === 'monthly' ? "Cette année contre l'an dernier" : 'Toutes les années';
+  const sub =
+    mode === 'season'
+      ? 'kWh par mois, hivers complets de septembre à août'
+      : mode === 'monthly'
+        ? `kWh par mois, ${lastYear - 1} et ${lastYear} (au ${shortDate(last)})`
+        : 'kWh cumulés depuis le 1er janvier';
   view.innerHTML = html`
-  <section class="card">
-    <div class="card-head">
-      <h2>Comparer les ${season ? 'saisons' : 'années'} <small class="muted">${state.compareMode === 'monthly' ? 'kWh par mois' : state.compareMode === 'cumul' ? 'kWh cumulés depuis le 1er janvier' : 'kWh cumulés depuis septembre'}</small></h2>
-      <div class="controls">
-        ${seg('compareMode', state.compareMode, [['monthly', 'Mois par mois'], ['cumul', 'Cumul annuel'], ['season', 'Saison de chauffe']], 'Mode')}
-        ${
-          ds!.weather && state.compareMode !== 'cumul'
-            ? switchField('À climat égal', state.climate, { 'data-toggle': 'climate' })
-            : ''
-        }
-      </div>
-    </div>
+  <section class="card" id="cmp-card">
+    <div class="card-head"><h2>${title}</h2></div>
+    <p class="card-sub">${sub}</p>
+    ${seg('compareMode', mode, [['season', 'Hiver / hiver précédent'], ['monthly', "Cette année / l'an dernier"], ['cumul', 'Toutes les années']], 'Comparer')}
     ${
-      season
-        ? `<div class="chips" role="group" aria-label="Saisons">${seasons
-            .map(
-              (y) =>
-                `<button type="button" class="chip" data-season="${y}" aria-pressed="${pickedSeasons.includes(y)}"><span class="swatch" style="background:${yearColor(y)}"></span>${y}–${y + 1}${y === curSeason ? ' <small>en cours</small>' : ''}</button>`,
-            )
-            .join('')}</div>`
-        : `<div class="chips" role="group" aria-label="Années">${years
-            .map(
-              (y) =>
-                `<button type="button" class="chip" data-year="${y}" aria-pressed="${selected.includes(y)}"><span class="swatch" style="background:${yearColor(y)}"></span>${y}</button>`,
-            )
-            .join('')}</div>`
-    }
-    <p class="hint muted">${
-      state.compareMode === 'season'
-        ? `Saison de chauffe : de septembre à août, pour comparer des hivers entiers ; chaque courbe cumule depuis le 1er septembre. La saison en cours (trait épais) s'arrête au ${longDate(last)}.`
-        : state.compareMode === 'cumul'
-          ? `Total cumulé depuis le 1er janvier. L'année en cours s'arrête au ${longDate(last)}. Une courbe interrompue signale des jours estimés ou perdus (le cumul reprend ensuite).`
-          : 'Consommation de chaque mois, année par année. Les barres hachurées sont des mois incomplets (mois en cours, début de la collecte) ou avec des jours estimés ou perdus : le détail est dans l\'infobulle.'
-    }${
-      state.climate && ds!.weather && state.compareMode !== 'cumul'
-        ? ' <strong>À climat égal</strong> : le chauffage de chaque mois est ramené aux degrés-jours d\'un mois moyen (le chauffe-eau n\'est pas corrigé).'
+      climateOk && mode !== 'cumul'
+        ? `<label class="switch"><span><b>À climat égal</b><br><small class="muted">corrige l'écart de froid entre les ${mode === 'season' ? 'hivers' : 'années'}</small></span><input type="checkbox" role="switch" data-toggle="climate" aria-label="À climat égal"${state.climate ? ' checked' : ''}></label>`
         : ''
-    }</p>
+    }
+    ${mode === 'season' ? seasonTiles(records, pickedSeasons, curSeason, !!corrected) : ''}
     <div class="chart tall" id="cmp-chart" role="img" aria-label="${
-      season ? 'Saisons de chauffe, kWh cumulés depuis septembre' : state.compareMode === 'cumul' ? 'Années, kWh cumulés depuis le 1er janvier' : 'Années, kWh par mois'
+      mode === 'season' ? 'Hivers, kWh par mois de septembre à août' : mode === 'cumul' ? 'Années, kWh cumulés depuis le 1er janvier' : 'Cette année et l’an dernier, kWh par mois'
     }"></div>
+    <div id="cmp-legend"></div>
+    ${
+      mode === 'monthly'
+        ? ''
+        : `<details class="table-details" id="cmp-choose"${chipsOpen ? ' open' : ''}><summary>${mode === 'season' ? 'Choisir les hivers' : 'Choisir les années'}</summary>${
+      mode === 'season'
+        ? `<div class="chips" role="group" aria-label="Hivers affichés">${seasons
+            .map(
+              (y) =>
+                `<button type="button" class="chip" data-season="${y}" aria-pressed="${pickedSeasons.includes(y)}"><span class="swatch" style="background:${seasonStyle(y, curSeason).color}"></span>${seasonLabel(y)}${y === curSeason ? ' <small>en cours</small>' : ''}</button>`,
+            )
+            .join('')}</div>`
+        : mode === 'cumul'
+          ? `<div class="chips" role="group" aria-label="Années">${years
+              .map(
+                (y) =>
+                  `<button type="button" class="chip" data-year="${y}" aria-pressed="${selected.includes(y)}"><span class="swatch" style="background:${yearColor(y)}"></span>${y}</button>`,
+              )
+              .join('')}</div>`
+          : ''
+    }</details>`
+    }
     <div id="cmp-table"></div>
+    <details class="table-details"><summary>Comment c'est calculé</summary><p class="hint muted">${
+      mode === 'season'
+        ? `Saison de chauffe : ${SEASON_DEFINITION}, pour comparer des hivers entiers. L'hiver en cours (pointillé) s'arrête au ${longDate(last)}.`
+        : mode === 'cumul'
+          ? `Total cumulé depuis le 1er janvier. L'année en cours s'arrête au ${longDate(last)}. Une courbe interrompue signale des jours estimés ou perdus (le cumul reprend ensuite).`
+          : "Consommation de chaque mois. Les barres hachurées sont des mois incomplets (mois en cours, début de la collecte) ou avec des jours estimés ou perdus : le détail est dans l'infobulle."
+    }${
+      corrected
+        ? " <strong>À climat égal</strong> : le chauffage de chaque mois est ramené aux <span class=\"term\">degrés-jours</span> d'un mois moyen (le chauffe-eau n'est pas corrigé)."
+        : ''
+    }</p></details>
   </section>
   <section class="card">
     <h2>Totaux annuels</h2>
@@ -168,13 +186,12 @@ export function renderCompare(view: HTMLElement, records: DayRecord[], part: 'hi
       rows,
     )}
     ${ds!.weather ? '<p class="hint muted">DJU : degrés-jours unifiés (base 18 °C). Plus il fait froid, plus il y en a. Le ratio kWh / DJU compare l\'efficacité du chauffage d\'une année à l\'autre, indépendamment de la météo.</p>' : ''}
-    <p class="hint muted">L'évolution de l'année en cours est calculée à date : du 1er janvier au ${Number(last.slice(8, 10))} ${MONTHS_LONG[Number(last.slice(5, 7)) - 1]} des deux années. Quand l'année précédente a commencé en cours d'année (début de la collecte), l'évolution porte sur la même période des deux années. Les jours estimés ou perdus de chaque année sont signalés : ils faussent l'évolution.</p>
+    <p class="hint muted">L'évolution de l'année en cours est calculée à date : du 1er janvier au ${dayLong(last, false)} des deux années. Quand l'année précédente a commencé en cours d'année (début de la collecte), l'évolution porte sur la même période des deux années. Les jours estimés ou perdus de chaque année sont signalés : ils faussent l'évolution.</p>
   </section>`;
 
   const el = document.getElementById('cmp-chart')!;
   let ser: Series[] = [];
   let labels: string[] = [];
-  const corrected = state.climate && ds!.weather && state.compareMode !== 'cumul';
   const climateMonthly = () => {
     // heating × (DJU of an average month / DJU of that month) + the rest unchanged
     const heat = monthlyByYear(records.filter((r) => r.cat === 'heating'));
@@ -189,7 +206,10 @@ export function renderCompare(view: HTMLElement, records: DayRecord[], part: 'hi
           const o = other.get(y)?.[m] ?? null;
           if (h === null && o === null) return null;
           const dj = byYear.get(y)?.[m] ?? 0;
-          const hc = h === null ? 0 : dj > 5 && normal[m] > 5 ? (h * normal[m]) / dj : h;
+          // the month still running is compared with the same share of an average month
+          const share = y === lastYear && m === Number(last.slice(5, 7)) - 1 ? Number(last.slice(8, 10)) / new Date(Date.UTC(y, m + 1, 0)).getUTCDate() : 1;
+          const nm = normal[m] * share;
+          const hc = h === null ? 0 : dj > 5 && nm > 5 ? (h * nm) / dj : h;
           return hc + (o ?? 0);
         }),
       );
@@ -198,7 +218,7 @@ export function renderCompare(view: HTMLElement, records: DayRecord[], part: 'hi
   };
   // #297: partial months (first data month, current month) and months with estimated or lost days
   const marksOf = (keys: string[]) => bucketMarks(keys, 'month', first, last, uncertain);
-  if (state.compareMode === 'monthly') {
+  if (mode === 'monthly') {
     const m = corrected ? climateMonthly() : monthlyByYear(records);
     labels = MONTHS_SHORT;
     ser = selected.map((y) => {
@@ -206,7 +226,7 @@ export function renderCompare(view: HTMLElement, records: DayRecord[], part: 'hi
       const raw = m.get(y) ?? [];
       return {
         name: String(y),
-        color: yearColor(y),
+        color: y === lastYear ? cssVar('--year-0') : cssVar('--year-1'),
         data: raw.map((v) => (v === null ? null : Math.round(v))),
         raw,
         notes: marks.map((k) => k.note),
@@ -214,22 +234,23 @@ export function renderCompare(view: HTMLElement, records: DayRecord[], part: 'hi
       };
     });
     barChart(el, { labels, series: ser, stacked: false, price: avgPrice() });
-  } else if (state.compareMode === 'cumul') {
+  } else if (mode === 'cumul') {
     // #297: estimated or lost days break the line (the total goes on after them)
     const c = cumulativeByYear(records, last, uncertain);
     labels = Array.from({ length: 366 }, (_, i) => {
       const d = new Date(Date.UTC(2024, 0, 1 + i)); // leap year: 366 labels, 29 Feb repeats 28 Feb in other years (#245)
-      return `${d.getUTCDate()} ${MONTHS_SHORT[d.getUTCMonth()]}`;
+      return `${d.getUTCDate() === 1 ? '1er' : d.getUTCDate()} ${MONTHS_SHORT[d.getUTCMonth()]}`;
     });
     ser = selected.map((y) => ({
       name: String(y),
       color: yearColor(y),
       data: (c.get(y) ?? []).map((v) => (v === null ? null : Math.round(v))),
       measure: 'last' as const,
+      width: y === lastYear ? 3 : 2,
     }));
     lineChart(el, { labels, series: ser, price: avgPrice(), emphasize: String(lastYear) });
   } else {
-    let s = monthlyBySeason(records);
+    let s = bySeason;
     if (corrected) {
       // re-key the corrected calendar months into Sept → Aug seasons
       const cm = climateMonthly();
@@ -249,25 +270,88 @@ export function renderCompare(view: HTMLElement, records: DayRecord[], part: 'hi
       .map((y) => {
         const k = `${y}-${y + 1}`;
         const marks = marksOf(SEASON_MONTHS.map((m) => `${m >= 8 ? y : y + 1}-${String(m + 1).padStart(2, '0')}`));
-        let acc = 0;
+        const st = seasonStyle(y, curSeason);
+        const raw = s.get(k)!;
         return {
-          name: `${y}–${y + 1}${y === curSeason ? ' (en cours)' : ''}`,
-          color: yearColor(y),
-          data: s.get(k)!.map((v) => (v === null ? null : Math.round((acc += v)))),
-          measure: 'last' as const,
+          name: `${seasonLabel(y)}${y === curSeason ? ' (en cours)' : ''}`,
+          color: st.color,
+          dashed: st.dashed,
+          width: st.width,
+          data: raw.map((v) => (v === null ? null : Math.round(v))),
+          raw,
           lastLabel: y === curSeason ? shortDate(last) : undefined,
           notes: marks.map((m) => m.note),
         };
       });
-    lineChart(el, { labels, series: ser, price: avgPrice(), emphasize: `${curSeason}–${curSeason + 1} (en cours)` });
+    lineChart(el, { labels, series: ser, price: avgPrice(), endLabels: false, legend: false });
   }
-  const step = state.compareMode === 'cumul' ? 7 : 1;
+  // #304: the legend as HTML under the chart, readable at 200 % (dashed: the season running)
+  if (mode === 'season') {
+    document.getElementById('cmp-legend')!.innerHTML = html(
+      legend(ser.map((x) => ({ label: x.dashed ? `${x.name.replace(' (en cours)', '')} en cours (au ${shortDate(last)})` : `Hiver ${x.name}`, color: x.color, kind: x.dashed ? 'line' : 'swatch' }))),
+    );
+  }
+  const step = mode === 'cumul' ? 7 : 1;
   document.getElementById('cmp-table')!.innerHTML = html(tableToggle(
     table(
       ['', ...ser.map((s) => s.name)],
       labels.filter((_, i) => i % step === 0).map((l, j) => [esc(l), ...ser.map((s) => s.data[j * step] ?? '—')]),
     ),
   ));
+}
+
+/** The winter / year chips stay unfolded once used (a chip redraws the card). */
+let chipsOpen = false;
+
+/**
+ * Maquette « Historique »: the two last complete winters side by side and their change. At
+ * equal climate, the older winter is shown as it would have been with the cold of the newer one
+ * (its heating × degree-days ratio; the water heater is not corrected), so that the tiles and the
+ * sentence give the same change; the raw kWh are written under it.
+ */
+function seasonTiles(records: DayRecord[], picked: number[], current: number, climate: boolean): string {
+  const done = picked.filter((y) => y < current).slice(-2);
+  if (done.length < 2) return '';
+  const [b, a] = done;
+  const span = (y: number) => [`${y}-09-01`, `${y + 1}-08-31`] as const;
+  const sum = (y: number, heat?: boolean) => total(heat ? records.filter((r) => r.cat === 'heating') : records, ...span(y));
+  const [ta, tb] = [sum(a), sum(b)];
+  if (!ta || !tb) return '';
+  const raw = pctChange(ta, tb);
+  let tbEq: number | null = null;
+  let colder = '';
+  if (climate && ds!.weather) {
+    const da = djuBetween(ds!.weather, ...span(a)).dju;
+    const db = djuBetween(ds!.weather, ...span(b)).dju;
+    if (da > 50 && db > 50) {
+      const hb = sum(b, true);
+      tbEq = (hb * da) / db + (tb - hb);
+      colder =
+        db > da * 1.02
+          ? `L'hiver ${seasonLabel(b)} était plus froid.`
+          : da > db * 1.02
+            ? `L'hiver ${seasonLabel(a)} était plus froid.`
+            : 'Les deux hivers ont eu à peu près le même froid.';
+    }
+  }
+  const eq = tbEq !== null ? pctChange(ta, tbEq) : null;
+  const money = (y: number) => {
+    const c = costOf(records, ...span(y));
+    return c !== null ? `${esc(fmtEur(c))} <small class="muted">hors abonnement</small>` : undefined;
+  };
+  const tiles =
+    tbEq !== null
+      ? tile({ label: seasonLabel(a), value: fmtKwh(ta), sub: `<small class="muted">mesuré, hiver de référence</small>` }) +
+        tile({ label: seasonLabel(b), value: fmtKwh(tbEq), sub: `<small class="muted">à climat égal (mesuré : ${esc(fmtKwh(tb))})</small>` })
+      : tile({ label: seasonLabel(a), value: fmtKwh(ta), sub: money(a) }) + tile({ label: seasonLabel(b), value: fmtKwh(tb), sub: money(b) });
+  const vs = `vs l'hiver ${seasonLabel(b)}`;
+  const sentence =
+    eq !== null && raw !== null
+      ? `<b>${signedPct(eq)} ${esc(vs)}, à climat égal</b> (${signedPct(raw)} mesuré). ${colder}`
+      : raw !== null
+        ? `<b>${signedPct(raw)} ${esc(vs)}</b>.`
+        : '';
+  return `<div class="kpis kpis-pair">${tiles}</div><p>${sentence}</p>`;
 }
 
 // ------------------------------------------------------------------ EDF offer comparator
@@ -328,7 +412,7 @@ function comparatorCard() {
       </select></label>
     </div>
     ${simWarning()}
-    <div class="chart" id="offers-chart" role="img" aria-label="Coût par offre et par année"></div>
+    <div class="chart" id="offers-chart" role="img" aria-label="Écart de coût de Base et de Tempo avec votre offre heures pleines / creuses, par année"></div>
     <div id="offers-table"></div>
     <p class="hint muted">Recalcul jour par jour aux tarifs réglementés en vigueur (CRE, open data), abonnement compris, avec la puissance de votre contrat. Périmètre : ${
       scope === 'logement'
@@ -344,12 +428,24 @@ function drawComparator() {
   const { perYear } = comparison();
   const rows = perYear.filter((p) => p.r.hphc.days > 0);
   const cost = (r: (typeof rows)[number]['r'], k: 'base' | 'hphc' | 'tempo') => Math.round(r[k].energy + r[k].subscription);
+  // #306: the gap to the current offer (heures pleines / creuses) is the question; grouped bars
+  // of 1 800 € hid a 15 € gap. Neutral colours: no offer wears a usage or room colour (#300).
+  const days = rows.map((p) => (p.r.hphc.days < 360 ? `${p.r.hphc.days} jours de données` : null));
+  const gap = (k: 'base' | 'tempo') => rows.map((p) => cost(p.r, k) - cost(p.r, 'hphc'));
   const ser: Series[] = [
-    { name: 'Base', color: series(4), data: rows.map((p) => cost(p.r, 'base')) },
-    { name: 'Heures pleines / creuses', color: series(0), data: rows.map((p) => cost(p.r, 'hphc')) },
-    { name: 'Tempo', color: series(2), data: rows.map((p) => cost(p.r, 'tempo')) },
+    { name: 'Base', color: cssVar('--series-reference'), data: gap('base'), notes: days, measure: 'sum' },
+    { name: 'Tempo', color: cssVar('--series-measure'), data: gap('tempo'), notes: days, measure: 'sum' },
   ];
-  barChart(el, { labels: rows.map((p) => `${p.y}${p.r.hphc.days < 360 ? ` (${p.r.hphc.days} j)` : ''}`), series: ser, stacked: false, price: null, unit: '€' });
+  barChart(el, {
+    labels: rows.map((p) => String(p.y)),
+    series: ser,
+    stacked: false,
+    price: null,
+    unit: '€',
+    partial: rows.map((p) => p.r.hphc.days < 360),
+    mark: { value: 0, label: '' },
+  });
+  chartCaption(el, 'Écart avec votre offre heures pleines / creuses (ligne 0) : sous zéro, l’offre aurait coûté moins cher ; au-dessus, plus cher. Barres hachurées : année incomplète.');
   document.getElementById('offers-table')!.innerHTML = html(tableToggle(
     table(
       ['Année', 'Base', 'Heures pleines / creuses', 'Tempo'],
@@ -361,6 +457,7 @@ function drawComparator() {
 // ------------------------------------------------------------------ events
 /** Year chips. Returns true when the click belonged to this view. */
 export function handleClick(btn: HTMLElement): boolean {
+  if (btn.dataset.season || btn.dataset.year) chipsOpen = true;
   if (btn.dataset.season) {
     // #298: season chips, the current season included
     const y = Number(btn.dataset.season);

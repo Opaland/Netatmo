@@ -225,6 +225,16 @@ export function yearColor(y: number) {
   const age = years.indexOf(y) >= 0 ? years.length - 1 - years.indexOf(y) : 0;
   return cssVar(`--year-${Math.min(3, age)}`);
 }
+/**
+ * #300 / #303: one style per heating season (Sept → Aug), shared by Historique and the
+ * signature: the latest complete season in deep iris and thick, the one before in warm grey,
+ * older ones paler; the season still running dashed, in the colour of the newest.
+ */
+export function seasonStyle(start: number, current: number): { color: string; dashed: boolean; width: number } {
+  if (start >= current) return { color: cssVar('--year-0'), dashed: true, width: 2 };
+  const age = current - 1 - start;
+  return { color: cssVar(`--year-${age === 0 ? 0 : age === 1 ? 1 : 3}`), dashed: false, width: age === 0 ? 3 : 2 };
+}
 export const roomName = (id: string) => (id === OTHER ? 'Autres pièces' : (ds!.meta.rooms.find((r) => r.id === id)?.name ?? id));
 
 // ------------------------------------------------------------------ shared charts

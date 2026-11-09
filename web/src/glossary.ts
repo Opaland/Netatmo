@@ -101,6 +101,62 @@ export function rangeLabel(from: string, to: string): string {
   return `du ${dayShort(from, !sameYear)} au ${dayShort(to, true)}`;
 }
 
+// ------------------------------------------------------------------ standard periods (§ 7.1, #299)
+/** The seven periods of the app: a card says which one it shows, with its bounds. */
+export type PeriodCode = 'mois' | 'annee' | '12m' | '30j' | '90j' | 'saison' | 'hiver';
+const shift = (day: string, n: number) => new Date(Date.parse(`${day}T00:00:00Z`) + n * 86400000).toISOString().slice(0, 10);
+/** First and last day of a standard period ending at (or running on) `last`. */
+export function periodBounds(code: PeriodCode, last: string): [string, string] {
+  const y = Number(last.slice(0, 4));
+  const m = Number(last.slice(5, 7));
+  switch (code) {
+    case 'mois':
+      return [`${last.slice(0, 7)}-01`, last];
+    case 'annee':
+      return [`${y}-01-01`, last];
+    case '12m':
+      return [shift(last, -364), last];
+    case '30j':
+      return [shift(last, -29), last];
+    case '90j':
+      return [shift(last, -89), last];
+    case 'saison': {
+      const s = m >= 9 ? y : y - 1;
+      return [`${s}-09-01`, last];
+    }
+    case 'hiver': {
+      const s = m >= 11 ? y : y - 1;
+      const end = `${s + 1}-03-31`;
+      return [`${s}-11-01`, last < end ? last : end];
+    }
+  }
+}
+/**
+ * The line under a card title (§ 7.1 rule 1): « novembre 2026 (au 8) », « 2026 (au 8 nov.) »,
+ * « 12 mois (9 nov. 2025 – 8 nov. 2026) », « saison 2026–2027 (sept. – août, au 8 nov.) »…
+ */
+export function periodLine(code: PeriodCode, last: string): string {
+  const [from, to] = periodBounds(code, last);
+  const range = `${dayShort(from, from.slice(0, 4) !== to.slice(0, 4))} – ${dayShort(to, true)}`;
+  const y = Number(from.slice(0, 4));
+  switch (code) {
+    case 'mois':
+      return `${monthLong(last)}${isLastOfMonth(last) ? '' : ` (au ${dayNum(last)})`}`;
+    case 'annee':
+      return `${y}${last.slice(5) === '12-31' ? '' : ` (au ${dayShort(last)})`}`;
+    case '12m':
+      return `12 mois (${range})`;
+    case '30j':
+      return `30 jours (${range})`;
+    case '90j':
+      return `90 jours (${range})`;
+    case 'saison':
+      return `saison ${seasonLabel(y)} (sept. – août${last.slice(5) === '08-31' ? '' : `, au ${dayShort(last)}`})`;
+    case 'hiver':
+      return `hiver ${seasonLabel(y)} (nov. – mars${to.slice(5) === '03-31' ? '' : `, au ${dayShort(to)}`})`;
+  }
+}
+
 // ------------------------------------------------------------------ comparisons (#310 review rule)
 const isLastOfMonth = (day: string) => {
   const d = new Date(Date.UTC(Number(day.slice(0, 4)), Number(day.slice(5, 7)), 0));

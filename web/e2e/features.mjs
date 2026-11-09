@@ -298,7 +298,19 @@ try {
     await page.click('[data-set=compareMode][data-value=season]');
     await ready(page);
     check((await page.locator('[data-season]', { hasText: 'en cours' }).count()) === 1, '#298 : pas de puce pour la saison en cours');
-    check(/\(en cours\) : [\d\s ]+ kWh au \d+/.test((await label()) ?? ''), '#298 : saison en cours absente du graphique');
+    check(/\(en cours\) : total [\d\s  ]+ kWh/.test((await label()) ?? ''), '#298 : saison en cours absente du graphique');
+    // maquette « Historique » : hiver contre hiver, deux hivers complets chiffrés, à climat égal, l'hiver en cours en pointillé
+    check((await page.locator('#cmp-card .kpis-pair .kpi').count()) === 2, 'Historique : les deux hivers complets ne sont pas chiffrés');
+    check(/à climat égal/.test(await page.locator('#cmp-card').innerText()), 'Historique : pas de comparaison « à climat égal »');
+    check((await page.locator('#cmp-legend .legend i.line').count()) === 1, 'Historique : hiver en cours non signalé (pointillé)');
+    // #303 : un seul tableau de signature, saison courte « provisoire »
+    check((await page.locator('#indoor-sig table').count()) === 0, '#303 : deuxième tableau de signature');
+    check(/provisoire|en cours/.test(await page.locator('#sig-table').innerText()), '#303 : saison en cours non signalée dans la signature');
+    // #305 : résumés chiffrés des graphiques sans série
+    for (const id of ['#rooms-waterfall', '#sig-chart', '#cal-chart']) {
+      const a = (await page.locator(id).getAttribute('aria-label')) ?? '';
+      check(/\d/.test(a.split('. ').slice(1).join('. ')), `#305 : ${id} sans résumé chiffré (« ${a.slice(0, 120)} »)`);
+    }
     await page.click('[data-set=compareMode][data-value=monthly]');
     await go(page, 'pieces');
     await page.waitForSelector('#rooms-chart canvas');

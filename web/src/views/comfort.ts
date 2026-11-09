@@ -26,7 +26,7 @@ import {
   summarizeNights,
   wetStreak,
 } from '../comfort';
-import { barChart, comboChart, cssVar, lineChart, seqRamp } from '../charts';
+import { comboChart, cssVar, lineChart, seqRamp } from '../charts';
 import { type Station, loadStationHourly } from '../data';
 import { activeRooms, esc, lastDay, longDate, nf0, series, table, tableToggle, measureColor } from '../ui';
 import { html } from '../trusted';
@@ -364,16 +364,17 @@ function drawCold(st: Station | null, map: Map<string, string>) {
   const d30 = days(addDays(last, -29), last);
   const all = Object.keys(st.modules);
   const rooms = comfortRooms(st, map).filter((r) => r.source === 'station');
-  barChart(el, {
+  // #306: one line per room (60 thin grouped bars were unreadable on a phone)
+  lineChart(el, {
     labels: d30.map(dayLabel),
     series: rooms.map((r) => {
       const per = coldPerDay(st, r.module!, thr);
       // identity follows the module (same colour as in Analyse › Station)
       return { name: r.label, color: series(2 + all.indexOf(r.module!)), data: d30.map((d) => per?.get(d)?.cold ?? null) };
     }),
-    stacked: false,
     price: null,
     unit: 'h',
+    max: 24,
   });
 }
 
