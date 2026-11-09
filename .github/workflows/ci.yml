@@ -61,6 +61,7 @@ jobs:
       - run: npm run e2e:compteur # v1.6 #301 : onglet Compteur (période, « Compté : », 360 px 200 %, axe clair/sombre/contraste)
       - run: npm run e2e:proche # v1.6 #312, #316 : premier lancement et vue Proche
       - run: npm run e2e:piece # v1.6 #313 : liste Pièces et page Pièce (axe, 200 %, vue foyer)
+      - run: npm run e2e:retours # v1.6 retours : module « Cave » liable à une chambre, télétravail 0 à 5 jours
       - run: npm run e2e:plannings # v1.6 #211, #210 : plannings et heures creuses, absences reconstituées (axe, 200 %)
       - uses: actions/upload-artifact@v4
         if: always()

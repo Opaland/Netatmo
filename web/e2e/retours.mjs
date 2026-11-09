@@ -63,6 +63,39 @@ const probeTitles = (page) => page.$$eval('#probe-card h3', (els) => els.map((e)
 const linkedRooms = (page) =>
   page.$$eval('#probe-card select[data-map-room]', (els) => els.filter((s) => s.value).map((s) => s.closest('tr').querySelector('th, td').textContent.trim()));
 
+/**
+ * Clicks a segment below the fold (`want`: a selector, else the last unchecked segment button of
+ * the page that starts beyond the first screen) and checks that the page does not jump (scrollY
+ * kept within a few px once the redrawn page has settled) and that the focus stays on it.
+ */
+async function segmentKeepsPlace(page, where, want) {
+  const target = await page.evaluate((w) => {
+    const all = [...document.querySelectorAll(w ?? '#view .seg button[aria-checked="false"]')].filter((b) => b.offsetParent);
+    const top = (b) => b.getBoundingClientRect().top + window.scrollY;
+    const below = all.filter((b) => top(b) > window.innerHeight);
+    // a period bar sits at the top of its page: scroll just enough to tuck the header away
+    const b = below[below.length - 1] ?? all[0];
+    if (!b) return null;
+    const header = Math.max(0, ...[...document.querySelectorAll('header.top, .tabs')].map((h) => (getComputedStyle(h).position === 'sticky' ? h.getBoundingClientRect().bottom : 0)).filter((y) => y < window.innerHeight / 2));
+    return { sel: `button[data-set="${b.dataset.set}"][data-value="${b.dataset.value}"]`, y: below.length ? Math.max(0, top(b) - window.innerHeight / 2) : Math.max(0, top(b) - header - 8), below: below.length > 0 };
+  }, want ?? null);
+  if (!target) return errors.push(`${BROWSER} ${where} : aucun segment`);
+  const { sel, y, below } = target;
+  await page.evaluate((y) => window.scrollTo(0, y), y);
+  await page.waitForTimeout(200);
+  const before = await page.evaluate(() => window.scrollY);
+  await page.click(sel);
+  await page.waitForSelector(`${sel}[aria-checked="true"]`, { state: 'attached', timeout: 15000 });
+  await ready(page);
+  await page.waitForTimeout(400); // late charts and lazy cards
+  const after = await page.evaluate(() => window.scrollY);
+  const focused = await page.evaluate((s) => document.activeElement === document.querySelector(s), sel);
+  check(!below || before > 0, `${where} : le segment ${sel} n'a pas pu être amené sous la ligne de flottaison`);
+  check(Math.abs(after - before) <= 5, `${where} : le clic sur ${sel} fait défiler la page (${before} → ${after} px)`);
+  check(focused, `${where} : le focus quitte ${sel} après le clic`);
+  return before;
+}
+
 /** Ticks the first `n` weekdays of the telework card (Monday first), one change at a time. */
 async function tickDays(page, n) {
   for (let i = 0; i < 5; i++) {
@@ -145,6 +178,23 @@ try {
     } else {
       check((await wide(page)) <= 1, `${name} : défilement horizontal sur Air et confort (${await wide(page)} px)`);
       await audit(page, `${name}/confort`, enhanced);
+    }
+
+    // ---------------------------------------------------------------- segments: the page stays in place
+    if (name === 'clair' || name === 'texte-200') {
+      progress(`${name} : segments sans saut de page`);
+      await go(page, 'historique');
+      await segmentKeepsPlace(page, `${name}/historique`, '#view button[data-set="compareMode"][aria-checked="false"]');
+      await segmentKeepsPlace(page, `${name}/historique (autre segment)`);
+      for (const key of ['accueil', 'compteur']) {
+        await go(page, key);
+        await segmentKeepsPlace(page, `${name}/${key}`);
+      }
+      // the page of a room has no segment: its link to Historique keeps the rule « new page = top »
+      await go(page, 'piece-r-salon');
+      await page.evaluate(() => window.scrollTo(0, 400));
+      await go(page, 'historique');
+      check((await page.evaluate(() => window.scrollY)) === 0, `${name} : changer de page ne remonte pas en haut`);
     }
 
     // ---------------------------------------------------------------- Outils › Télétravail, 0 to 5 days ticked
