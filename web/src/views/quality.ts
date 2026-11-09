@@ -6,6 +6,7 @@ import { type Coverage, computeCoverage, gapMonths, uncertainDays } from '../che
 import { bucketMarks, countIn, shortDate, uncertainText } from '../periods';
 import { activeRooms, esc, lastDay, roomName, table } from '../ui';
 import { html } from '../trusted';
+import { lazyCard } from '../lazy';
 
 let cached: Coverage | null = null;
 onDatasetLoaded(() => {
@@ -47,9 +48,7 @@ export function drawReconstitution() {
   if (!zone) return;
   if (!reconOn) return void (zone.innerHTML = html(''));
   zone.innerHTML = html('<p class="hint muted">Reconstitution en cours…</p>');
-  import('./reconstitution')
-    .then((m) => zone.isConnected && m.renderReconstitution(zone))
-    .catch(() => (zone.innerHTML = html('<p class="hint muted">Reconstitution indisponible.</p>')));
+  void lazyCard(() => import('./reconstitution'), (m) => zone.isConnected && m.renderReconstitution(zone), { zone, what: 'Reconstitution' });
 }
 
 // The "N jours estimés" link of the period total opens the card.

@@ -12,7 +12,9 @@ const f1 = (v: number) => v.toFixed(1).replace('.', ',');
 const DAYS = 365; // load shedding happens on the coldest days: a whole year
 
 export async function fillOffload(el: HTMLElement) {
-  const rs = await loadRoomState(ds!);
+  const d = ds!;
+  const rs = await loadRoomState(d);
+  if (ds !== d) return; // #247: locked or another dataset since
   const last = rs ? lastStateDay(rs) : null;
   if (!rs || !last || !el.isConnected) return el.remove();
   const to = last < lastDay() ? last : lastDay();
@@ -41,7 +43,9 @@ export async function fillOffload(el: HTMLElement) {
 }
 
 export async function fillContactor(el: HTMLElement) {
-  const rs = await loadRoomState(ds!);
+  const d = ds!;
+  const rs = await loadRoomState(d);
+  if (ds !== d) return; // #247: locked or another dataset since
   const last = rs ? lastStateDay(rs) : null;
   if (!rs || !last || !el.isConnected) return el.remove();
   const c = contactor(rs, addDays(last, -89), last);

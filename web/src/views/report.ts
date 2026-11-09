@@ -25,6 +25,7 @@ import {
   yearColor,
 } from '../ui';
 import { html } from '../trusted';
+import { lazyAction, lazyCard } from '../lazy';
 
 export function renderReport(view: HTMLElement) {
   const years = ds!.meta.years;
@@ -147,9 +148,9 @@ export function renderReport(view: HTMLElement) {
   });
   drawWaterfall(document.getElementById('report-waterfall')!, deltas, year, windowSuffix(win));
   // S-6.3: offer comparator and maximum power, lazy module (entry chunk budget)
-  void import('./annual-share').then((m) => m.renderReportExtras(document.getElementById('report-extras'), year));
+  void lazyCard(() => import('./annual-share'), (m) => m.renderReportExtras(document.getElementById('report-extras'), year), { zone: 'report-extras', what: 'Comparateur d’offres' });
   // S-5.9: canned questions answered by code, loaded on demand
-  void import('./questions').then((m) => m.mountQuestions(document.getElementById('questions-card')));
+  void lazyCard(() => import('./questions'), (m) => m.mountQuestions(document.getElementById('questions-card')), { zone: 'questions-card', what: 'Questions types' });
 }
 
 // ------------------------------------------------------------------ events
@@ -157,7 +158,7 @@ export function renderReport(view: HTMLElement) {
 export function handleClick(btn: HTMLElement): boolean {
   if (btn.id === 'report-anon') {
     // S-6.4: anonymised report for a third party, lazy module
-    void import('./annual-share').then((m) => m.renderAnonymised(document.getElementById('view')!, m.anonDefault(Number(btn.dataset.yearAnon))));
+    void lazyAction(btn, () => import('./annual-share'), (m) => m.renderAnonymised(document.getElementById('view')!, m.anonDefault(Number(btn.dataset.yearAnon))), 'Rapport anonymisé');
     return true;
   }
   if (btn.id !== 'print') return false;

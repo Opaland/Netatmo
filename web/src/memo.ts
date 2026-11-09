@@ -2,7 +2,7 @@
 // every setState, but the hourly data, the Linky curve and the dataset never change once
 // loaded, so what is computed from them is kept with them (WeakMap: forgotten with them).
 
-const store = new WeakMap<object, Map<string, unknown>>();
+let store = new WeakMap<object, Map<string, unknown>>();
 const MAX = 64; // keys per source: windows and room sets in use stay well under it
 
 /** fn() computed once per (source, key); the oldest keys are dropped past MAX. */
@@ -14,6 +14,11 @@ export function memo<T>(source: object, key: string, fn: () => T): T {
   if (m.size >= MAX) m.delete(m.keys().next().value!);
   m.set(key, v);
   return v;
+}
+
+/** #232: forget every memoised series (on lock). */
+export function clearMemo() {
+  store = new WeakMap();
 }
 
 /** Stable key of a set of strings (order of insertion ignored). */

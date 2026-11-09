@@ -1,7 +1,7 @@
 // Helpers shared by several views: formatting, HTML fragments, colours, rooms, costs.
 import { type Category, type DayRecord, MONTHS_LONG, addDays, applyFilter, minusYears, pctChange } from './aggregate';
 import { type PriceAt, energyCost, energyCostTrve, hasPrices, offPeakColumn, offPeakShares, subscriptionCost, subscriptionTrve, trveAt } from './analysis';
-import { type State, activeRooms, ds, state } from './app';
+import { type State, activeRooms, ds, onLock, state } from './app';
 import { cssVar, escapeHtml as esc, waterfallChart } from './charts';
 import { type ResolvedContract, resolveContract } from './contract';
 import { type ContractPeriod, periodAt } from './offers';
@@ -103,6 +103,13 @@ export function offCol(): 1 | 2 {
 let priceDeps: unknown[] = [];
 let costCache = new WeakMap<DayRecord[], Map<string, number | null>>();
 let avgCache = new WeakMap<DayRecord[], { value: number | null }>();
+// #232: nothing computed from the data survives the lock (priceDeps holds the dataset itself).
+onLock(() => {
+  resolved = null;
+  priceDeps = [];
+  costCache = new WeakMap();
+  avgCache = new WeakMap();
+});
 function freshPrices() {
   const deps = [ds, contractInfo(), priceMode(), state.prices, tenant()];
   if (deps.some((d, i) => d !== priceDeps[i])) {
