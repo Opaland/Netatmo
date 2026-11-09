@@ -163,12 +163,39 @@ export function absencePeriods(low: Map<string, boolean>, minDays = ABSENCE_MIN_
   return out;
 }
 
+/** A period of absence, `confirmed` when the setpoint mode said so (S-13.4). */
+export interface AbsencePeriod extends Period {
+  confirmed?: boolean;
+}
+
+/**
+ * S-13.4: absences confirmed by the setpoint mode (away / frost guard in every room, from the
+ * hourly snapshots) take precedence over the detection by consumption, which stays the fallback
+ * (days without snapshot, households that never set the mode). Overlapping or adjacent periods
+ * are merged; a merged period is confirmed when the mode covers part of it. A run of mode days
+ * counts whatever its length: the mode was set on purpose.
+ */
+export function withModeAbsences(detected: Period[], byMode: Period[]): AbsencePeriod[] {
+  const all = [...detected.map((p) => ({ ...p, confirmed: false })), ...byMode.map((p) => ({ ...p, confirmed: true }))].sort((a, b) =>
+    a.from < b.from ? -1 : a.from > b.from ? 1 : 0,
+  );
+  const out: AbsencePeriod[] = [];
+  for (const p of all) {
+    const last = out[out.length - 1];
+    if (last && addDays(last.to, 1) >= p.from) {
+      if (p.to > last.to) last.to = p.to;
+      last.confirmed = last.confirmed || p.confirmed;
+    } else out.push({ ...p });
+  }
+  return out;
+}
+
 export function daysBetween(from: string, to: string): number {
   return Math.round((Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / 86_400_000);
 }
 
 /** Detected periods minus the dismissed ones, plus the ones added by hand, newest first. */
-export function mergeAbsences(detected: Period[], edits: AbsenceEdits): (Period & { manual: boolean })[] {
+export function mergeAbsences(detected: AbsencePeriod[], edits: AbsenceEdits): (AbsencePeriod & { manual: boolean })[] {
   const dismissed = new Set(edits.dismissed);
   const out = [
     ...detected.filter((p) => !dismissed.has(p.from)).map((p) => ({ ...p, manual: false })),

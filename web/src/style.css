@@ -1347,3 +1347,46 @@ code.hash {
   background: var(--surface-0);
   color: var(--text-primary);
 }
+
+/* ---------------------------------------------------------------- S-12.3 invitation */
+.install-help {
+  text-align: left;
+  font-size: 0.9rem;
+}
+.install-help summary {
+  cursor: pointer;
+  color: var(--text-secondary);
+}
+.install-steps {
+  margin: 6px 0 0;
+  padding-left: 1.1em;
+}
+.install-steps li + li {
+  margin-top: 4px;
+}
+.invite {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  align-items: flex-start;
+}
+.invite > div {
+  flex: 1 1 260px;
+  min-width: 0;
+}
+.qr {
+  width: 220px;
+  max-width: 100%;
+  height: auto;
+  border-radius: 8px;
+  flex: 0 0 auto;
+}
+.invite-url code {
+  overflow-wrap: anywhere;
+}
+.invite-steps {
+  padding-left: 1.3em;
+}
+.invite-steps li + li {
+  margin-top: 6px;
+}

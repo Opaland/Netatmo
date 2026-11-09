@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { type DayRecord, addDays } from './aggregate';
 import type { Weather } from './analysis';
-import { absencePeriods, dayKind, dayTypeCost, lowDays, mergeAbsences, summarizeAbsence, waterTalon } from './habits';
+import { absencePeriods, dayKind, dayTypeCost, lowDays, mergeAbsences, summarizeAbsence, waterTalon, withModeAbsences } from './habits';
 
 const days = (from: string, n: number) => Array.from({ length: n }, (_, i) => addDays(from, i));
 const rec = (day: string, room: string, cat: 'heating' | 'water_heater', kwh: number) => ({ day, room, cat, kwh }) as DayRecord;
@@ -96,5 +96,33 @@ describe('S-4.10 absences', () => {
     const s = summarizeAbsence({ from: '2025-01-15', to: '2025-01-18' }, heat, water, () => 20, 2);
     expect(s).toEqual({ days: 4, heat: 4, heatExpected: 80, water: 10, waterExcess: 2 });
     expect(waterTalon(new Map([['2025-01-01', 3]]), () => false, '2025-01-01', '2025-01-31')).toBeNull();
+  });
+});
+
+describe('S-13.4 absences confirmed by the setpoint mode', () => {
+  const detected = [
+    { from: '2025-01-10', to: '2025-01-14' },
+    { from: '2025-02-01', to: '2025-02-03' },
+  ];
+  it('marks the detected periods the mode overlaps, and widens them to the mode', () => {
+    const out = withModeAbsences(detected, [{ from: '2025-01-09', to: '2025-01-12' }]);
+    expect(out).toEqual([
+      { from: '2025-01-09', to: '2025-01-14', confirmed: true },
+      { from: '2025-02-01', to: '2025-02-03', confirmed: false },
+    ]);
+  });
+  it('adds a mode period the consumption missed, even a short one, and joins adjacent ones', () => {
+    const out = withModeAbsences(detected, [
+      { from: '2025-01-20', to: '2025-01-20' },
+      { from: '2025-02-04', to: '2025-02-05' },
+    ]);
+    expect(out).toContainEqual({ from: '2025-01-20', to: '2025-01-20', confirmed: true });
+    expect(out).toContainEqual({ from: '2025-02-01', to: '2025-02-05', confirmed: true });
+    expect(out).toHaveLength(3);
+  });
+  it('keeps the detection by consumption when no mode was read', () => {
+    expect(withModeAbsences(detected, []).every((p) => p.confirmed === false)).toBe(true);
+    const merged = mergeAbsences(withModeAbsences(detected, [{ from: '2025-02-02', to: '2025-02-02' }]), { dismissed: [], added: [] });
+    expect(merged[0]).toMatchObject({ from: '2025-02-01', confirmed: true, manual: false });
   });
 });

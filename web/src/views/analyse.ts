@@ -4,7 +4,7 @@ import { type DayRecord, addDays, bucketLabel, minusYears } from '../aggregate';
 import { type Hourly, anomalies, dayProfile, daysAbove, fitSeason, signaturePoints, tariffSplit, weekHourGrid } from '../analysis';
 import { ds, onDatasetLoaded, rerender, setState, state } from '../app';
 import { calendarChart, cssVar, gridHeatmap, lineChart, scatterChart } from '../charts';
-import { loadHourly } from '../data';
+import { loadHourly, loadRoomState } from '../data';
 import { unavailable } from '../offline';
 import { activeRooms, catColor, esc, fmtKwh, lastDay, longDate, seg, series, table, tariffNames } from '../ui';
 import { SUSPECT_RATIO } from '../reconstitute';
@@ -15,9 +15,39 @@ import { html } from '../trusted';
 
 let hourly: Hourly | null = null;
 let hourlyLoading = false;
+// S-13.3 / S-13.4: open-window hours and absence-mode days, a possible explanation of an unusual day
+let explain: { open: Map<string, number>; away: Set<string> } | null = null;
+let explainLoading = false;
 onDatasetLoaded(() => {
   hourly = null;
+  explain = null;
 });
+
+function loadExplanations() {
+  if (explain || explainLoading || !ds!.meta.has_roomstate) return;
+  explainLoading = true;
+  Promise.all([loadRoomState(ds!), import('../windows')])
+    .then(([rs, w]) => {
+      explain = rs ? { open: w.openByDay(rs), away: w.absenceDays(rs) } : { open: new Map(), away: new Set() };
+      if (state.view === 'analyse') rerender();
+    })
+    .catch(() => {
+      explain = { open: new Map(), away: new Set() };
+    })
+    .finally(() => {
+      explainLoading = false;
+    });
+}
+
+/** « fenêtre ouverte N h » / « mode absence », or '—' (S-13.3). */
+function explanation(day: string): string {
+  if (!explain) return '…';
+  const parts: string[] = [];
+  const open = explain.open.get(day) ?? 0;
+  if (open >= 1) parts.push(`fenêtre ouverte ${open.toFixed(1).replace('.', ',')} h`);
+  if (explain.away.has(day)) parts.push('mode absence');
+  return parts.join(', ') || '—';
+}
 
 function seasonColor(season: string, seasons: string[]) {
   // most recent season = slot 1, then 2, 3… (identity follows the season)
@@ -168,16 +198,20 @@ function anomaliesCard(records: DayRecord[]) {
   const suspect = (a: (typeof list)[number]) => a.z < 0 && a.kwh < SUSPECT_RATIO * a.expected;
   const alerts = hcAlerts();
   if (!list.length) return alerts ? `<section class="card"><h2>Jours inhabituels</h2>${alerts}</section>` : '';
-  return `<section class="card"><h2>Jours inhabituels <small class="muted">chauffage, écart à la signature</small></h2>
+  const withStates = !!ds!.meta.has_roomstate;
+  if (withStates) loadExplanations();
+  return `<section class="card" id="unusual-card"><h2>Jours inhabituels <small class="muted">chauffage, écart à la signature</small></h2>
     ${alerts}
     <p class="hint muted">Jours où le chauffage s'écarte nettement de ce qu'annonce la température extérieure (plus de 2 fois l'écart habituel et plus de 3 kWh) : fenêtre ouverte, absence, invités, réglage oublié… Les jours perdus chez Intuis ou estimés n'y figurent pas ; un jour très en dessous de la signature est marqué <strong>suspect</strong> (donnée peut-être incomplète, voir « Qualité des données » dans la Synthèse).</p>
+    ${withStates ? '<p class="hint muted">« Explication possible » : heures de fenêtre ouverte de toutes les pièces ce jour-là, ou mode absence relevé (relevé horaire de l’état des pièces). Une fenêtre ouverte coupe le radiateur de la pièce, qui relance ensuite : le jour peut se retrouver au-dessus ou en dessous de l’attendu.</p>' : ''}
     ${table(
-      ['Jour', 'Consommé', 'Attendu', 'Écart'],
+      ['Jour', 'Consommé', 'Attendu', 'Écart', ...(withStates ? ['Explication possible'] : [])],
       list.map((a) => [
         longDate(a.day),
         fmtKwh(a.kwh),
         fmtKwh(Math.max(0, a.expected)),
         `<span class="delta ${a.z > 0 ? 'up' : 'down'}"><span aria-hidden="true">${a.z > 0 ? '▲' : '▼'}</span> ${a.z > 0 ? '+' : '−'}${fmtKwh(Math.abs(a.kwh - a.expected))}</span>${suspect(a) ? ' <span class="badge-suspect" title="Très en dessous de la signature : donnée peut-être incomplète chez Intuis">suspect</span>' : ''}`,
+        ...(withStates ? [explanation(a.day)] : []),
       ]),
     )}</section>`;
 }

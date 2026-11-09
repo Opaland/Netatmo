@@ -3,6 +3,8 @@
 // collector/roomstate.py). Pure functions, no DOM: unit-tested in windows.test.ts.
 import { type DayRecord, addDays } from './aggregate';
 import { type Fit, type Weather, anomalies, fitSeason, signaturePoints } from './analysis';
+import { isBedroom } from './comfort';
+import { BEDROOMS_ID } from './household';
 
 export interface StateCell {
   n: number; // snapshots received that day for this room
@@ -55,6 +57,18 @@ export function coverage(rs: RoomState, from: string, to: string): { hours: numb
 export function lastStateDay(rs: RoomState): string | null {
   const days = Object.keys(rs.seen ?? {});
   return days.length ? days.reduce((a, b) => (a > b ? a : b)) : null;
+}
+
+/**
+ * Display key of a raw room id of roomstate.enc.json. S-13.5: bedrooms are merged into BEDROOMS_ID
+ * unless the household chose to see them; S-12.2: in household view the dataset already merged
+ * them, so their raw ids are unknown to `rooms` and go to BEDROOMS_ID too.
+ */
+export function bedroomGrouping(rooms: { id: string; name: string }[], showBedrooms: boolean): (room: string) => string {
+  const known = new Set(rooms.map((r) => r.id));
+  const merged = known.has(BEDROOMS_ID);
+  const bedroom = new Set(rooms.filter((r) => r.id !== BEDROOMS_ID && isBedroom(r.name)).map((r) => r.id));
+  return (room: string) => ((merged && !known.has(room)) || (!showBedrooms && bedroom.has(room)) ? BEDROOMS_ID : room);
 }
 
 export interface Totals {
@@ -198,10 +212,21 @@ export function coldWithWindow(
   return out.sort((a, b) => (a.day < b.day ? 1 : a.day > b.day ? -1 : b.open - a.open));
 }
 
-/** Unusual heating days (S-4.8) with the open-window hours of all rooms that day: a possible explanation. */
-export function anomaliesWithWindows(records: DayRecord[], weather: Weather, rs: RoomState, minOpen = 1): { day: string; z: number; open: number }[] {
+/** Open-window hours of all rooms, per day (days with a snapshot only). */
+export function openByDay(rs: RoomState): Map<string, number> {
   const perDay = new Map<string, number>();
   for (const cells of Object.values(rs.rooms ?? {})) for (const [d, c] of Object.entries(cells)) perDay.set(d, (perDay.get(d) ?? 0) + (c.open_window_h ?? 0));
+  return perDay;
+}
+
+/** Days confirmed as absences by the setpoint mode, as a set (see confirmedAbsences). */
+export function absenceDays(rs: RoomState, minHours = 12): Set<string> {
+  return new Set(confirmedAbsences(rs, minHours).flatMap(([a, b]) => daysBetween(a, b)));
+}
+
+/** Unusual heating days (S-4.8) with the open-window hours of all rooms that day: a possible explanation. */
+export function anomaliesWithWindows(records: DayRecord[], weather: Weather, rs: RoomState, minOpen = 1): { day: string; z: number; open: number }[] {
+  const perDay = openByDay(rs);
   return anomalies(records, weather)
     .filter((a) => (perDay.get(a.day) ?? 0) >= minOpen)
     .map((a) => ({ day: a.day, z: a.z, open: Math.round(perDay.get(a.day)! * 10) / 10 }));
@@ -269,6 +294,93 @@ export function offloadDays(rs: RoomState, pmax: Map<string, number>, from: stri
   return [...per]
     .map(([day, v]) => ({ day, rooms: v.rooms, hours: Math.round(v.hours * 10) / 10, pmax: pmax.get(day) ?? null }))
     .sort((a, b) => (a.day < b.day ? 1 : -1));
+}
+
+/** Load shedding per display key over [from, to] (S-13.6): days with shedding and hours. */
+export function offloadByRoom(rs: RoomState, from: string, to: string, groupOf: (room: string) => string = (r) => r): Map<string, { days: number; hours: number }> {
+  const seen = new Map<string, Set<string>>();
+  const hours = new Map<string, number>();
+  for (const [room, cells] of Object.entries(rs.rooms ?? {})) {
+    const key = groupOf(room);
+    for (const [d, c] of Object.entries(cells)) {
+      if (d < from || d > to || !(c.offload_h ?? 0)) continue;
+      if (!seen.has(key)) seen.set(key, new Set());
+      seen.get(key)!.add(d);
+      hours.set(key, (hours.get(key) ?? 0) + c.offload_h!);
+    }
+  }
+  return new Map([...seen].map(([k, days]) => [k, { days: days.size, hours: Math.round(hours.get(k)! * 10) / 10 }]));
+}
+
+/**
+ * Mean Linky peak (kVA) on the days with load shedding and on the other days with a snapshot,
+ * over [from, to] (S-13.6): shedding should come with the highest peaks.
+ */
+export function peakVsOffload(rs: RoomState, pmax: Map<string, number>, from: string, to: string): { withShed: number | null; without: number | null; nWith: number; nWithout: number } {
+  const shed = new Set(offloadDays(rs, pmax, from, to).map((d) => d.day));
+  let a = 0;
+  let na = 0;
+  let b = 0;
+  let nb = 0;
+  for (const d of Object.keys(rs.seen ?? {})) {
+    if (d < from || d > to || !pmax.has(d)) continue;
+    if (shed.has(d)) (a += pmax.get(d)!), na++;
+    else (b += pmax.get(d)!), nb++;
+  }
+  return { withShed: na ? a / na : null, without: nb ? b / nb : null, nWith: na, nWithout: nb };
+}
+
+export interface ColdReasons {
+  cold: number; // room-days below the threshold
+  window: number; // … with the window open at least `minOpen` hours
+  openHours: number; // open-window hours of those days
+  away: number; // … else in absence / frost-guard mode at least 12 h
+  lowSetpoint: number; // … else with a setpoint below the threshold (chosen, not a fault)
+  unexplained: number; // … else, with a snapshot that day
+  noData: number; // … without any snapshot that day
+}
+
+/**
+ * "Pourquoi cette pièce était froide ?" (S-13.3, questions.ts): room-days whose mean temperature
+ * (radiator probe) was below `threshold`, sorted by first explanation found: window open, absence
+ * mode, low setpoint, nothing. `groupOf` merges the bedrooms (S-13.5); temps may already be
+ * merged by the household view, hence the fallback on the display key.
+ */
+export function coldReasons(
+  temps: Map<string, Map<string, [number, number | null]>>,
+  rs: RoomState,
+  from: string,
+  to: string,
+  groupOf: (room: string) => string = (r) => r,
+  threshold = 19,
+  minOpen = 1,
+): Map<string, ColdReasons> {
+  const out = new Map<string, ColdReasons>();
+  const seen = rs.seen ?? {};
+  const all = rs.rooms ?? {};
+  for (const [room, t] of temps) {
+    // the room's own states, or those of the raw rooms the household view merged into it
+    const cells = all[room] ? [all[room]] : Object.entries(all).filter(([r]) => !temps.has(r) && groupOf(r) === room).map(([, c]) => c);
+    const key = groupOf(room);
+    for (const [d, [mean, setpoint]] of t) {
+      if (d < from || d > to || !(mean < threshold)) continue;
+      const r = out.get(key) ?? { cold: 0, window: 0, openHours: 0, away: 0, lowSetpoint: 0, unexplained: 0, noData: 0 };
+      out.set(key, r);
+      r.cold++;
+      const day = cells.map((c) => c[d]).filter((c): c is StateCell => !!c);
+      const open = day.reduce((sum, c) => sum + (c.open_window_h ?? 0), 0);
+      const away = Math.max(0, ...day.map((c) => ABSENCE_MODES.reduce((sum, m) => sum + (c.mode_h?.[m] ?? 0), 0)));
+      if (open >= minOpen) {
+        r.window++;
+        r.openHours += open;
+      } else if (away >= 12) r.away++;
+      else if (setpoint !== null && setpoint < threshold) r.lowSetpoint++;
+      else if (day.length || bits(seen[d] ?? 0) > 0) r.unexplained++;
+      else r.noData++;
+    }
+  }
+  for (const r of out.values()) r.openHours = Math.round(r.openHours * 10) / 10;
+  return out;
 }
 
 /** Contactor modes of the water heater over [from, to] (S-13.6): mode -> hours, and the latest day. */

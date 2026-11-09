@@ -232,9 +232,22 @@ export async function loadStationHourly(ds: Dataset): Promise<StationHourly> {
   return out;
 }
 
-/** Daily room states from the hourly snapshots (E13, roomstate.enc.json), loaded on demand. */
+/** Daily room states from the hourly snapshots (E13, roomstate.enc.json), loaded on demand, once
+ * per dataset (Confort, Analyse, Synthèse and the absences share it). */
+const roomStateCache = new WeakMap<Dataset, Promise<import('./windows').RoomState | null>>();
 export function loadRoomState(ds: Dataset): Promise<import('./windows').RoomState | null> {
-  return optional(ds.source, 'roomstate', ds.key);
+  let p = roomStateCache.get(ds);
+  if (!p) {
+    p = optional<import('./windows').RoomState>(ds.source, 'roomstate', ds.key);
+    roomStateCache.set(ds, p);
+    p.catch(() => roomStateCache.delete(ds));
+  }
+  return p;
+}
+
+/** Home Assistant daily aggregates (S-1.18, ha.enc.json), loaded on demand. */
+export function loadHa(ds: Dataset): Promise<import('./ha').HaDoc | null> {
+  return optional(ds.source, 'ha', ds.key);
 }
 
 /** Linky 30-min load curve (S-1.11), one document per year, loaded on demand, once per dataset

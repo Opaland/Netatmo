@@ -6,6 +6,8 @@ import { MONTHS_SHORT, addDays, minusYears } from '../aggregate';
 import { ds, onDatasetLoaded, rerender } from '../app';
 import { calendarChart } from '../charts';
 import { openLocal, sealLocal } from '../crypto';
+import { loadRoomState } from '../data';
+import { confirmedAbsences } from '../windows';
 import {
   ABSENCE_MIN_DAYS,
   ABSENCE_RATIO,
@@ -22,6 +24,7 @@ import {
   signatureExpect,
   summarizeAbsence,
   waterTalon,
+  withModeAbsences,
 } from '../habits';
 import { readPref, writePref } from '../money';
 import { activeRooms, avgPrice, costOf, esc, firstDay, fmtEur, fmtKwh, lastDay, nf0, table } from '../ui';
@@ -53,6 +56,7 @@ export async function fillAnalyse(cal: CalendarOpts) {
   put('telework-zone', teleworkCard());
   bindTelework();
   const edits = await loadEdits();
+  await loadModeAbsences();
   const list = absences(edits);
   const el = document.getElementById('cal-chart');
   const marks = list.flatMap((p) => daysOf(p)).filter((d) => d.startsWith(String(cal.year)));
@@ -161,11 +165,23 @@ function bindTelework() {
 let cachedEdits: AbsenceEdits | null = null;
 let persisted = true; // false: the key cannot encrypt (remembered by an older version), edits last until locking
 let detected: { key: string; list: Period[] } | null = null;
+let byMode: Period[] | null = null; // S-13.4: absences confirmed by the setpoint mode
 onDatasetLoaded(() => {
   cachedEdits = null;
   detected = null;
+  byMode = null;
   persisted = true;
 });
+
+async function loadModeAbsences() {
+  if (byMode || !ds!.meta.has_roomstate) return;
+  try {
+    const rs = await loadRoomState(ds!);
+    byMode = rs ? confirmedAbsences(rs).map(([from, to]) => ({ from, to })) : [];
+  } catch {
+    byMode = []; // the detection by consumption stays
+  }
+}
 const lsAbsences = () => `intuis-history:absences:${ds!.source}`;
 
 async function loadEdits(): Promise<AbsenceEdits> {
@@ -195,9 +211,9 @@ async function saveEdits(edits: AbsenceEdits) {
 }
 
 function absences(edits: AbsenceEdits) {
-  const key = `${ds!.records.length}|${lastDay()}`;
+  const key = `${ds!.records.length}|${lastDay()}|${byMode?.length ?? -1}`;
   if (!detected || detected.key !== key) {
-    detected = { key, list: absencePeriods(lowDays(ds!.records, ds!.weather, ds!.linky, firstDay(), lastDay())) };
+    detected = { key, list: withModeAbsences(absencePeriods(lowDays(ds!.records, ds!.weather, ds!.linky, firstDay(), lastDay())), byMode ?? []) };
   }
   return mergeAbsences(detected.list, edits);
 }
@@ -229,7 +245,7 @@ function absenceCard(list: ReturnType<typeof absences>, edits: AbsenceEdits): st
         : ` · chauffe-eau ${fmtKwh(s.water)} pour un talon de ${fmtKwh(talon * s.days)}${
             excess ? ` : <strong class="ko-red">${eur === null ? fmtKwh(excess) : eur < 1 ? 'moins de 1 €' : fmtEur(eur)} de trop</strong>` : ' : rien de trop'
           }`;
-    return `<li><div><strong>${shortDate(p.from)} → ${shortDate(p.to)}</strong> <small class="muted">${s.days} jours, ${p.manual ? 'ajoutée' : 'détectée'}</small></div>
+    return `<li><div><strong>${shortDate(p.from)} → ${shortDate(p.to)}</strong> <small class="muted">${s.days} jours, ${p.manual ? 'ajoutée' : p.confirmed ? '<span class="badge">confirmée par le mode de consigne</span>' : 'détectée'}</small></div>
       <div class="hint">Chauffage ${fmtKwh(s.heat)}${heatPct !== null ? ` (${heatPct} % de l'habituel à cette météo)` : ''}${water_}</div>
       <button type="button" class="link" data-absence="${i}">${p.manual ? 'Retirer cette période' : 'Ce n\'était pas une absence'}</button></li>`;
   });
@@ -255,7 +271,7 @@ function absenceCard(list: ReturnType<typeof absences>, edits: AbsenceEdits): st
     ${edits.dismissed.length ? `<button type="button" class="link" id="abs-restore">Rétablir les ${edits.dismissed.length} période${edits.dismissed.length > 1 ? 's' : ''} écartée${edits.dismissed.length > 1 ? 's' : ''}</button>` : ''}
     ${persisted ? '' : '<p class="hint muted">Vos corrections dureront jusqu\'au verrouillage : reconnectez-vous avec la phrase de passe pour qu\'elles soient enregistrées (chiffrées) sur cet appareil.</p>'}
     <details class="table-details"><summary>Comment c'est calculé</summary>
-      <p class="hint">Un jour est « vide » quand, par temps froid (moins de 12 °C dehors), le chauffage reste sous ${nf0.format(ABSENCE_RATIO * 100)} % de ce qu'annonce la signature énergétique de la saison ; hors saison de chauffe, quand les autres usages relevés par le compteur Linky (compteur moins radiateurs et chauffe-eau) tombent sous ${nf0.format(LINKY_RATIO * 100)} % de leur médiane des 60 jours précédents. ${ABSENCE_MIN_DAYS} jours vides d'affilée ou plus font une absence probable. Le <strong>talon</strong> du chauffe-eau est sa consommation d'entretien : le 10<sup>e</sup> centile de ses jours hors absence sur l'année précédente ; ce qu'il consomme au-delà pendant une absence est compté comme surcoût, au prix ${hp ? `heures creuses (${hp.hc.toLocaleString('fr-FR', { maximumFractionDigits: 4 })} €/kWh, ${esc(hp.source)})` : 'moyen du kWh'}.</p>
+      <p class="hint">Un jour est « vide » quand, par temps froid (moins de 12 °C dehors), le chauffage reste sous ${nf0.format(ABSENCE_RATIO * 100)} % de ce qu'annonce la signature énergétique de la saison ; hors saison de chauffe, quand les autres usages relevés par le compteur Linky (compteur moins radiateurs et chauffe-eau) tombent sous ${nf0.format(LINKY_RATIO * 100)} % de leur médiane des 60 jours précédents. ${ABSENCE_MIN_DAYS} jours vides d'affilée ou plus font une absence probable.${byMode !== null && ds!.meta.has_roomstate ? ' Quand le relevé horaire de l\'état des pièces montre le mode <strong>absence</strong> ou <strong>hors-gel</strong> (au moins 12 h dans toutes les pièces), la période est « confirmée par le mode de consigne », même courte ; la consommation reste le repli les jours sans relevé.' : ''} Le <strong>talon</strong> du chauffe-eau est sa consommation d'entretien : le 10<sup>e</sup> centile de ses jours hors absence sur l'année précédente ; ce qu'il consomme au-delà pendant une absence est compté comme surcoût, au prix ${hp ? `heures creuses (${hp.hc.toLocaleString('fr-FR', { maximumFractionDigits: 4 })} €/kWh, ${esc(hp.source)})` : 'moyen du kWh'}.</p>
       <p class="hint muted">Les absences sont calculées sur cet appareil seulement : elles ne sont jamais écrites en clair (vos corrections sont chiffrées avec votre phrase de passe), ni envoyées à l'IA.</p>
     </details>
   </section>`;

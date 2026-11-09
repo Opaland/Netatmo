@@ -543,6 +543,52 @@ def test_insights_facts_cost_unusual_days_linky_and_quality(tmp_path):
     assert "cout_energie_estime_eur" not in compute_facts(store, "2025-01")
 
 
+def test_insights_facts_windows_and_boost_grouped(tmp_path):
+    """S-5.10: monthly open-window and boost hours per pseudonym, bedrooms merged (S-13.5),
+    nothing daily, numbers verified like the others."""
+    from collector.insights import BEDROOMS_ALIAS, compute_facts, is_bedroom, unknown_numbers
+
+    store = Store(tmp_path, "pw")
+    for d in range(1, 32):
+        day = f"2025-01-{d:02d}"
+        for rid in ("salon", "ch1", "ch2", "ce"):
+            store.merge(rid, day, 5000.0)
+        store.put("roomstate", "seen", day, None, 0xFFFFFF if d != 3 else 0xFFFF00)
+        store.put("roomstate", "rooms", "salon", day, {"n": 24, "open_window_h": 0.5, "boost_h": 1.0 if d < 3 else 0})
+        store.put("roomstate", "rooms", "ch1", day, {"n": 24, "open_window_h": 2.0 if d < 11 else 0, "boost_h": 0})
+        store.put("roomstate", "rooms", "ch2", day, {"n": 24, "open_window_h": 1.0 if d == 5 else 0, "boost_h": 0.5})
+        store.put("roomstate", "rooms", "ce", day, {"n": 24, "contactor_h": {"auto": 24}})
+    store.put("roomstate", "rooms", "salon", "2025-02-01", {"n": 24, "open_window_h": 9.0})  # other month
+    store.save(
+        {"id": "x"},
+        [
+            {"id": "salon", "name": "Salon", "category": HEATING},
+            {"id": "ch1", "name": "Chambre parentale", "category": HEATING},
+            {"id": "ch2", "name": "Chambre d'Émile", "category": HEATING},
+            {"id": "ce", "name": "Chauffe-eau", "category": WATER_HEATER},
+        ],
+    )
+    facts = compute_facts(store, "2025-01")
+    wb = facts["fenetres_et_boost"]
+    assert wb["couverture_releve_pct"] == round((31 * 24 - 8) / (31 * 24) * 100)
+    pieces = {p["piece"]: p for p in wb["pieces"]}
+    assert set(pieces) == {"Pièce A", BEDROOMS_ALIAS}  # the two bedrooms in one line, the water heater left out
+    assert pieces[BEDROOMS_ALIAS] == {
+        "piece": BEDROOMS_ALIAS,
+        "fenetre_ouverte_h": 21.0,
+        "boost_h": 15.5,
+        "jours_fenetre_ouverte_1h_ou_plus": 11,
+    }
+    assert pieces["Pièce A"]["fenetre_ouverte_h"] == 15.5 and pieces["Pièce A"]["boost_h"] == 2.0
+    blob = json.dumps(facts, ensure_ascii=False)
+    assert "Émile" not in blob and "Chambre parentale" not in blob and "2025-01-05" not in blob
+    assert unknown_numbers("fenêtre ouverte 21 h dans les chambres, boost 15,5 h", facts) == []
+    assert unknown_numbers("fenêtre ouverte 77 h", facts) == [77.0]
+    assert is_bedroom("CHAMBRE d'amis") and not is_bedroom("Salon")
+    # no snapshot this month: no entry at all
+    assert "fenetres_et_boost" not in compute_facts(store, "2024-12")
+
+
 def test_rekey_reencrypts_everything_and_rates_strength(tmp_path):
     from collector.rekey import rekey, strength_bits
 

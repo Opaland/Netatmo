@@ -4,7 +4,8 @@ Principle: the CODE computes every number (facts below); the model only writes t
 text around them. Every number in the text is then checked against the facts.
 
 What is sent to the Anthropic API: aggregated monthly figures (kWh, estimated €, °C,
-degree days, percentages, a few unusual days, station comfort counts, data coverage).
+degree days, percentages, a few unusual days, station comfort counts, data coverage, and the
+monthly hours of open window and boost per room with the bedrooms merged, S-5.10 / S-13.5).
 Rooms and station modules are sent as pseudonyms ("Pièce A", "Capteur B"), never their
 names or ids (S-5.7); the real names are put back in the text locally, before storing.
 No home name, address, coordinates or identifiers, no daily series. Runs only when
@@ -19,6 +20,7 @@ import json
 import logging
 import math
 import re
+import unicodedata
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from statistics import median
@@ -70,6 +72,10 @@ une consigne, une part heures pleines, un coût, un jour inhabituel, une mesure 
 - Les pièces et capteurs sont désignés par des pseudonymes (« Pièce A », « Capteur B ») : \
 reprends-les tels quels, sans chercher à deviner de quelle pièce il s'agit.
 - Les coûts en euros sont des estimations (tarif réglementé, abonnement exclu) : dis « environ ».
+- « fenetres_et_boost » : heures du mois où le radiateur a détecté une fenêtre ouverte (chute \
+rapide de température, pas un capteur) et heures de boost, par pièce ; les chambres sont regroupées. \
+Une fenêtre ouverte est une explication possible d'une pièce froide ou d'un jour inhabituel, jamais \
+une certitude ; ne parle pas des chambres une par une.
 
 Format Markdown, 120 à 250 mots :
 ### <titre en une phrase qui donne le verdict>
@@ -261,6 +267,53 @@ def _unusual_days(store: Store, rooms: dict, weather: dict, first: str, last: st
     ]
 
 
+# ------------------------------------------------------------------ windows and boost (S-5.10)
+_BEDROOM = re.compile(r"\b(chambre|bedroom|dortoir)")
+BEDROOMS_ALIAS = "Chambres (regroupées)"
+
+
+def _fold(name: str) -> str:
+    return unicodedata.normalize("NFD", name).encode("ascii", "ignore").decode().lower()
+
+
+def is_bedroom(name: str) -> bool:
+    """Same rule as the app (web/src/comfort.ts isBedroom)."""
+    return bool(_BEDROOM.search(_fold(name or "")))
+
+
+def _windows_boost(store: Store, rooms: dict, room_alias: dict[str, str], first: str, last: str) -> dict:
+    """Monthly open-window and boost hours per pseudonym, from roomstate.enc.json (S-13.2).
+    S-13.5: the bedrooms are merged into one line, whatever their number; nothing daily is sent."""
+    doc = store.doc("roomstate")
+    seen = [bin(m & 0xFFFFFF).count("1") for d, m in doc.get("seen", {}).items() if first <= d <= last]
+    if not seen:
+        return {}
+    days = (date.fromisoformat(last) - date.fromisoformat(first)).days + 1
+    out: dict[str, dict] = {}
+    for rid, cells in doc.get("rooms", {}).items():
+        room = rooms.get(rid)
+        if not room or room.get("category") != "heating":
+            continue
+        alias = BEDROOMS_ALIAS if is_bedroom(room.get("name", "")) else room_alias.get(rid)
+        if not alias:
+            continue
+        month = [c for d, c in cells.items() if first <= d <= last]
+        if not month:
+            continue
+        e = out.setdefault(alias, {"fenetre_ouverte_h": 0.0, "boost_h": 0.0, "jours_fenetre_ouverte_1h_ou_plus": 0})
+        e["fenetre_ouverte_h"] += sum(c.get("open_window_h", 0) for c in month)
+        e["boost_h"] += sum(c.get("boost_h", 0) for c in month)
+        e["jours_fenetre_ouverte_1h_ou_plus"] += sum(1 for c in month if c.get("open_window_h", 0) >= 1)
+    pieces = [
+        {"piece": alias, **{k: round(v, 1) if isinstance(v, float) else v for k, v in e.items()}}
+        for alias, e in sorted(out.items(), key=lambda kv: -kv[1]["fenetre_ouverte_h"])
+        if e["fenetre_ouverte_h"] or e["boost_h"]
+    ]
+    if not pieces:
+        return {}
+    return {"couverture_releve_pct": round(sum(seen) / (24 * days) * 100), "pieces": pieces}
+
+
 # ------------------------------------------------------------------ station comfort (S-5.6)
 def _station_comfort(store: Store, module_alias: dict[str, str], first: str, last: str) -> dict:
     st = store.doc("station")
@@ -436,6 +489,10 @@ def compute_facts(store: Store, month: str) -> dict:
     pmax = [v for d, v in linky_doc.get("pmax", {}).items() if first <= d <= last]
     if pmax:
         facts["puissance_max_appelee_kva"] = r1(max(pmax))
+    # Open windows and boost (S-5.10), bedrooms merged (S-13.5)
+    wb = _windows_boost(store, rooms, room_alias, first, last)
+    if wb:
+        facts["fenetres_et_boost"] = wb
     # Netatmo station comfort, indoor modules
     comfort = _station_comfort(store, module_alias, first, last)
     if comfort:

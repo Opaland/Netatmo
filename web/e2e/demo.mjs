@@ -200,12 +200,38 @@ try {
           errors.push(`${name}/overview: reconstitution non rendue (${err})`);
         }
       }
+      if (view === 'overview') {
+        // S-13.6: load shedding per room next to the Linky peak (lazy module + room states)
+        try {
+          await page.waitForSelector('#offload-zone:not([hidden]) table', { timeout: 15000 });
+          if (!/Pic Linky moyen/.test(await page.locator('#offload-summary').innerText())) errors.push(`${name}/overview: délestage sans pic Linky`);
+        } catch (err) {
+          errors.push(`${name}/overview: délestage par pièce non rendu (${err})`);
+        }
+      }
       if (view === 'analyse') {
         // S-3.7: indoor − outdoor signature (lazy module)
         try {
           await page.waitForSelector('#indoor-sig-chart canvas', { timeout: 15000 });
         } catch (err) {
           errors.push(`${name}/analyse: signature intérieur − extérieur non rendue (${err})`);
+        }
+        // S-13.3: open windows as a possible explanation of the unusual days
+        try {
+          await page.waitForFunction(() => {
+            const t = document.querySelector('#unusual-card')?.textContent ?? '';
+            return t.includes('Explication possible') && !document.querySelector('#unusual-card td:last-child')?.textContent?.includes('…');
+          }, null, { timeout: 15000 });
+        } catch (err) {
+          errors.push(`${name}/analyse: explication des jours inhabituels absente (${err})`);
+        }
+        // S-13.4: absences confirmed by the setpoint mode; S-13.6: contactor of the water heater
+        try {
+          await page.waitForSelector('#absence-card', { timeout: 15000 });
+          if (!(await page.locator('#absence-card').textContent()).includes('confirmée par le mode de consigne')) errors.push(`${name}/analyse: absence confirmée par le mode de consigne absente`);
+          await page.waitForSelector('#contactor-line:not([hidden])', { timeout: 15000 });
+        } catch (err) {
+          errors.push(`${name}/analyse: absences confirmées ou contacteur non rendus (${err})`);
         }
       }
       const charts = await page.locator('.chart canvas').count();
@@ -271,6 +297,18 @@ try {
     } catch (err) {
       errors.push(`${name}/comfort: carte « Fenêtres ouvertes » non rendue (${err})`);
     }
+    // S-1.18: Home Assistant import, agreement between the window contact and open_window
+    try {
+      await page.waitForSelector('#ha-card table', { timeout: 15000 });
+      const ha = await page.locator('#ha-card').innerText();
+      for (const want of ['Fenêtre bureau', 'prise_frigo', 'Accord sur']) if (!ha.includes(want)) errors.push(`${name}/comfort: Home Assistant sans « ${want} »`);
+      await page.selectOption('select[data-ha-room]', '');
+      await page.waitForFunction(() => document.querySelector('#ha-card')?.textContent?.includes('Choisissez la pièce'), null, { timeout: 5000 });
+      await page.selectOption('select[data-ha-room]', 'r-bureau');
+      await page.waitForFunction(() => document.querySelector('#ha-card')?.textContent?.includes('Accord sur'), null, { timeout: 5000 });
+    } catch (err) {
+      errors.push(`${name}/comfort: carte Home Assistant non rendue (${err})`);
+    }
     const overflow = await page.evaluate(() => {
       const t = document.querySelector('.tabs');
       return t ? t.scrollWidth > t.clientWidth + 1 : false;
@@ -290,6 +328,15 @@ try {
       errors.push(`${name}/report: comparateur ou pic de puissance absent (${err})`);
     }
     // S-5.9: a canned question answered by code
+    await page.click('[data-question=normal]');
+    await page.waitForSelector('.question-answer li', { timeout: 5000 });
+    // S-13.3: « pourquoi cette pièce était froide ? » (room states loaded on demand)
+    await page.click('[data-question=cold]');
+    try {
+      await page.waitForFunction(() => /sous 19 °C/.test(document.querySelector('.question-answer')?.textContent ?? ''), null, { timeout: 10000 });
+    } catch (err) {
+      errors.push(`${name}/report: question « pièce froide » sans réponse (${err})`);
+    }
     await page.click('[data-question=normal]');
     await page.waitForSelector('.question-answer li', { timeout: 5000 });
     await page.screenshot({ path: `${OUT}/${name}-report.png`, fullPage: true });
@@ -320,6 +367,20 @@ try {
     await page.waitForTimeout(400);
     await audit(page, `${name}/settings`);
     await page.screenshot({ path: `${OUT}/${name}-settings.png`, fullPage: true }); // S-7.14: inventaire
+    // S-12.3: invite a member of the household: a QR code of the address, never the passphrase
+    try {
+      await page.click('#invite-open');
+      await page.waitForSelector('#invite-card svg.qr', { timeout: 10000 });
+      const invite = await page.locator('#invite-card').innerText();
+      if (!invite.includes(`${base}#installer`)) errors.push(`${name}/invitation: adresse attendue absente`);
+      if (/phrase de passe\s*:\s*\S|demo\b/.test(invite.replace(base, ''))) errors.push(`${name}/invitation: la phrase de passe semble affichée`);
+      if (name === 'bureau') {
+        await audit(page, `${name}/invitation`);
+        await page.screenshot({ path: `${OUT}/${name}-invitation.png`, fullPage: true });
+      }
+    } catch (err) {
+      errors.push(`${name}/invitation: QR code non rendu (${err})`);
+    }
 
     if (name === 'bureau') await keyboard(page, name);
 
@@ -375,6 +436,15 @@ try {
       await page.uncheck('.menu-panel [data-toggle=simple]');
     }
     await checkViolations(page, `${name}/report+settings`);
+    if (name === 'bureau') {
+      // S-12.3: the invited member lands on the lock screen with the installation help open
+      await page.goto('about:blank');
+      await page.goto(`${base}#installer`);
+      await page.waitForSelector('#install-help[open]', { timeout: 10000 }).catch(() => errors.push('invitation : aide d\'installation non ouverte'));
+      const help = await page.locator('#install-help').innerText();
+      if (!/iPhone/.test(help) || !/Android/.test(help)) errors.push('invitation : aide iPhone / Android absente');
+      await audit(page, `${name}/verrou-invitation`);
+    }
     await ctx.close();
   }
 
