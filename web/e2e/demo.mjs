@@ -45,6 +45,15 @@ const check = (ok, msg) => ok || errors.push(msg);
 const t0 = Date.now();
 const progress = (s) => console.log(`[${Math.round((Date.now() - t0) / 1000)} s] ${s}`);
 
+/**
+ * #260: the view is drawn and every lazy card, document and chart it started has settled
+ * (`#view[data-ready]`, set by src/ready.ts). Wait for it instead of a fixed delay, and before
+ * checking that something is ABSENT (a lazy card that would come late must fail the test).
+ */
+const ready = (page, timeout = 30000) => page.waitForSelector('#view[data-ready]', { state: 'attached', timeout });
+/** The next frame has been laid out (after a style change). */
+const nextFrame = (page) => page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(() => r()))));
+
 async function audit(page, where, { enhanced = false } = {}) {
   progress(`axe ${where}`);
   const tags = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', ...(enhanced ? ['wcag2aaa'] : [])];
@@ -89,7 +98,7 @@ async function keyboard(page, name) {
   check(f?.outline, `${name}/clavier : focus invisible sur l'onglet`);
   await page.keyboard.press('Enter');
   await page.waitForSelector('[data-view=compare][aria-current=page]');
-  await page.waitForTimeout(400);
+  await ready(page);
   let charts = 0;
   for (let i = 0; i < 80 && charts < 2; i++) {
     await page.keyboard.press('Tab');
@@ -120,7 +129,7 @@ async function keyboard(page, name) {
   const order = await page.locator('.menu [data-price]').evaluateAll((els) => els.map((e) => e.getAttribute('data-price')));
   await page.fill('.menu [data-price=base]', '0.2516');
   await page.keyboard.press('Tab');
-  await page.waitForTimeout(200);
+  await ready(page);
   const next = await page.evaluate(() => document.activeElement?.getAttribute('data-price') ?? document.activeElement?.tagName);
   check(next === order[1], `${name}/clavier : après un prix et Tab, le focus est sur « ${next} » au lieu de « ${order[1]} »`);
   check(await page.locator('.menu[open]').count(), `${name}/clavier : le menu se ferme après la saisie d'un prix`);
@@ -145,7 +154,7 @@ async function swipe(page, selector, dx) {
     },
     { selector, dx },
   );
-  await page.waitForTimeout(300);
+  await ready(page);
 }
 
 let failed = false;
@@ -182,7 +191,7 @@ try {
     await page.waitForSelector('.kpi', { timeout: 30000 });
     for (const view of name === 'mobile-360' ? [] : ['overview', 'compare', 'rooms', 'analyse']) {
       await page.click(`[data-view=${view}]`);
-      await page.waitForTimeout(view === 'analyse' ? 2000 : 600);
+      await ready(page);
       if (view === 'overview') {
         // Linky 30-min load curve card (lazy module + lazy documents)
         try {
@@ -285,8 +294,9 @@ try {
         const canvas = page.locator('.chart canvas').first();
         const { width, height } = (await canvas.boundingBox()) ?? { width: 0, height: 0 };
         await canvas.hover({ position: { x: width * 0.6, y: height * 0.6 } });
-        await page.waitForTimeout(400);
-        if (view === 'overview' && !(await page.locator('.tt').count())) errors.push(`${name}/${view}: infobulle ECharts absente`);
+        // the tooltip goes through the Trusted Types policy; only the Synthèse chart is sure to show one there
+        const tip = await page.waitForSelector('.tt', { state: 'attached', timeout: view === 'overview' ? 5000 : 1000 }).catch(() => null);
+        if (view === 'overview' && !tip) errors.push(`${name}/${view}: infobulle ECharts absente`);
         await page.mouse.move(0, 0);
         await page.evaluate(() => window.scrollTo(0, 0));
       }
@@ -335,7 +345,7 @@ try {
     await page.waitForSelector('#co2-0 canvas');
     await page.selectOption('select[data-comfort=threshold]', '18');
     await page.waitForFunction(() => !document.querySelector('#view td.num')?.closest('table')?.textContent?.includes('…'), null, { timeout: 15000 });
-    await page.waitForTimeout(600);
+    await ready(page);
     for (const id of ['co2-0', 'cellar-0', 'cold-chart', 'probe-0']) {
       if (!(await page.locator(`#${id} canvas`).count())) errors.push(`${name}/comfort: graphique ${id} absent`);
     }
@@ -417,7 +427,7 @@ try {
     if (!(await page.locator('.menu[open]').count())) await page.click('.menu summary');
     await audit(page, `${name}/menu`);
     await page.click('.menu-panel [data-view=settings]');
-    await page.waitForTimeout(400);
+    await ready(page);
     // S-12.6 tenant mode, S-12.5 prolonged cold alert (lazy cards)
     try {
       await page.waitForSelector('#tenant-card #tenant-on', { timeout: 15000 });
@@ -458,17 +468,17 @@ try {
       await page.waitForSelector('#tenant-price');
       await page.fill('#tenant-price', '0.25');
       await page.locator('#tenant-price').blur();
-      await page.waitForTimeout(300);
+      await ready(page);
       await page.fill('#tenant-from', '2024-07-01');
       await page.locator('#tenant-from').blur();
-      await page.waitForTimeout(300);
+      await ready(page);
       await page.click('[data-view=compare]');
-      await page.waitForTimeout(800);
+      await ready(page); // the EV card is lazy: only absent once the view has settled
       if (await page.locator('#offers-chart, #ev-card').count()) errors.push('locataire : comparateur ou recharge encore affichés');
       if (!(await page.locator('.tenant-note').count())) errors.push('locataire : phrase d\'explication absente dans Comparer');
       await audit(page, 'locataire/compare');
       await page.click('[data-view=overview]');
-      await page.waitForTimeout(600);
+      await ready(page); // the Linky cards are lazy too
       if (await page.locator('#linky-chart, #curve-card').count()) errors.push('locataire : cartes Linky encore affichées');
       if (!/€/.test(await page.locator('.kpis').innerText())) errors.push('locataire : coûts absents malgré le prix moyen');
       await page.click('.menu summary');
@@ -484,7 +494,7 @@ try {
       await page.click('.menu-panel [data-view=settings]');
       await page.waitForSelector('#tenant-on');
       await page.uncheck('#tenant-on');
-      await page.waitForTimeout(300);
+      await ready(page);
     }
 
     if (name === 'bureau') await keyboard(page, name);
@@ -492,7 +502,7 @@ try {
     if (name === 'mobile-clair') {
       // S-7.11: swipe on the header changes the period, on the tab bar the view.
       await page.click('[data-view=overview]');
-      await page.waitForTimeout(400);
+      await ready(page);
       const period = () => page.$eval('select[data-set=period]', (s) => s.value);
       const before = await period();
       await swipe(page, '.top .title', 120);
@@ -522,7 +532,7 @@ try {
       check(await page.locator('.glossary [data-term=dju][aria-expanded=true] + .term-def:visible').count(), `${name}/FALC : définition non affichée`);
       check(/degrés-jours/.test(await page.textContent('#sr-status')), `${name}/FALC : définition non annoncée`);
       await page.addStyleTag({ content: 'html { font-size: 200% !important; }' });
-      await page.waitForTimeout(300);
+      await nextFrame(page);
       const cut = await page.evaluate(() => {
         const out = [];
         if (document.documentElement.scrollWidth > window.innerWidth + 1) out.push(`page ${document.documentElement.scrollWidth}px > ${window.innerWidth}px`);
@@ -605,14 +615,14 @@ try {
     await checkViolations(page, `${name}/épingle`);
     for (const view of ['overview', 'compare']) {
       await page.click(`[data-view=${view}]`);
-      await page.waitForTimeout(800);
+      await ready(page);
       await page.screenshot({ path: `${OUT}/${name}-${view}.png`, fullPage: true });
       await audit(page, `${name}/${view}`, { enhanced: name !== 'couleurs-forcees' });
     }
     // S-7.14: captures of the other views for the design inventory (not audited at 7:1 yet: v1.6).
     for (const view of ['rooms', 'analyse', 'comfort']) {
       await page.click(`[data-view=${view}]`);
-      await page.waitForTimeout(1500);
+      await ready(page);
       await page.screenshot({ path: `${OUT}/${name}-${view}.png`, fullPage: true });
     }
     await ctx.close();
@@ -674,14 +684,14 @@ try {
       check(/\d\s?W/.test(talon), `cycle de vie : talon de veille absent après la bascule (${talon})`);
       await page.click('[data-view=analyse]');
       await page.waitForSelector('#hour-grid canvas', { timeout: 20000 });
-      await page.waitForTimeout(1500); // offline prefetch (idle callback) included
+      await ready(page); // offline prefetch (idle callback) included
       const before = hourlyRequests;
       for (let i = 0; i < 2; i++) {
         if ((await page.locator('.menu').getAttribute('open')) === null) await page.click('.menu summary');
         await page.click('[data-toggle=household]');
         await page.waitForSelector('#hour-grid canvas', { timeout: 20000 });
       }
-      await page.waitForTimeout(1500);
+      await ready(page);
       check(hourlyRequests === before, `cycle de vie : la bascule de la vue foyer a retéléchargé ${hourlyRequests - before} fichier(s) horaire(s) (#255)`);
       // lock (« Quitter la démo »), then reopen: the views draw again from a clean slate
       if ((await page.locator('.menu').getAttribute('open')) === null) await page.click('.menu summary');

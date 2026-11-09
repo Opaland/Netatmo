@@ -40,6 +40,12 @@ cd web && npm ci && npm run dev     # puis « Essayer avec des données de démo
 `npm run e2e` lance `vite preview` sur le port 4179 ; s'il est pris, choisissez-en un autre :
 `E2E_PORT=4200 npm run e2e`.
 
+Dans les tests e2e, pas d'attente fixe (`waitForTimeout`) : attendre `#view[data-ready]` (helper
+`ready(page)`), posé par l'appli (`web/src/ready.ts`) quand la vue et ses cartes différées,
+documents et graphiques sont arrivés. Une absence (« cette carte ne doit pas s'afficher ») se
+vérifie toujours après `ready(page)`. Tout nouveau chargement en arrière-plan d'une vue passe par
+`lazyCard`, `datasetDoc` ou `track()` pour être compté.
+
 Le **budget de taille** (`web/scripts/size-budget.mjs`, 281 kB gzip) compte le chunk d'entrée **et**
 tous les chunks que `index.html` précharge (`modulepreload`) ; il échoue au-delà de 80 % du budget
 (#227). ECharts est dans son propre chunk, chargé au premier graphique (`charts.ts` → `echarts-lib.ts`) :

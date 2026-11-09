@@ -43,6 +43,13 @@ const check = (ok, msg) => ok || errors.push(`${BROWSER}: ${msg}`);
 const t0 = Date.now();
 const progress = (s) => console.log(`[${Math.round((Date.now() - t0) / 1000)} s] ${BROWSER} ${s}`);
 
+/**
+ * #260: the view is drawn and every lazy card, document and chart it started has settled
+ * (`#view[data-ready]`, set by src/ready.ts). Wait for it instead of a fixed delay, and before
+ * checking that something is ABSENT (a lazy card that would come late must fail the test).
+ */
+const ready = (page, timeout = 30000) => page.waitForSelector('#view[data-ready]', { state: 'attached', timeout });
+
 async function audit(page, where) {
   progress(`axe ${where}`);
   const { violations } = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa']).analyze();
@@ -122,7 +129,7 @@ try {
     } catch {
       errors.push(`${BROWSER}/${view}: aucun graphique rendu`);
     }
-    await page.waitForTimeout(600);
+    await ready(page);
     await page.screenshot({ path: `${OUT}/${BROWSER}-iphone-${view}.png`, fullPage: true });
     await checkViolations(page, view);
   }
@@ -136,11 +143,11 @@ try {
     const totals = await page.locator('table', { hasText: 'Évolution' }).first().innerText();
     check(/jours? estimés? ou manquants?/.test(totals), '#297 : évolution annuelle sans mention des jours perdus');
     await page.click('[data-set=compareMode][data-value=cumul]');
-    await page.waitForTimeout(400);
+    await ready(page);
     const cumul = (await label()) ?? '';
     check(!/total/.test(cumul) && / kWh au \d+ /.test(cumul), `#295 : résumé du cumul faux (« ${cumul.slice(0, 160)} »)`);
     await page.click('[data-set=compareMode][data-value=season]');
-    await page.waitForTimeout(400);
+    await ready(page);
     check((await page.locator('[data-season]', { hasText: 'en cours' }).count()) === 1, '#298 : pas de puce pour la saison en cours');
     check(/\(en cours\) : [\d\s ]+ kWh au \d+/.test((await label()) ?? ''), '#298 : saison en cours absente du graphique');
     await page.click('[data-set=compareMode][data-value=monthly]');
@@ -153,7 +160,7 @@ try {
     await page.waitForSelector('.report .kpis');
     const yr = await page.locator('select[data-set=reportYear] option').first().getAttribute('value');
     await page.selectOption('select[data-set=reportYear]', yr);
-    await page.waitForTimeout(400);
+    await ready(page);
     const kpis = await page.locator('.report .kpis').innerText();
     check(!/par mois en moyenne/.test(kpis) || /par mois en moyenne sur [\d,]+ mois/.test(kpis), `#246 : moyenne mensuelle de l'année en cours sans période (« ${kpis.replace(/\s+/g, ' ')} »)`);
     await page.click('[data-view=overview]');
@@ -198,9 +205,9 @@ try {
   for (let i = 0; i < n; i++) {
     await page.locator('[data-works-surface]').nth(i).fill(String(10 + i));
     await page.locator('[data-works-surface]').nth(i).dispatchEvent('change');
-    await page.waitForTimeout(150);
+    await ready(page);
   }
-  await page.waitForTimeout(400);
+  await page.waitForFunction(() => /kWh\/m²/.test(document.querySelector('#works-card')?.textContent ?? ''), null, { timeout: 10000 }).catch(() => {});
   works = await page.locator('#works-card').innerText();
   check(/kWh\/m²/.test(works), 'travaux : kWh/m² absent après saisie des surfaces');
   await page.locator('#works-card').screenshot({ path: `${OUT}/${BROWSER}-travaux.png` });

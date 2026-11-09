@@ -7,6 +7,7 @@ import { BadEnvelope, WrongPassphrase } from './crypto';
 import { type Dataset, NoData, clearDataCaches, forgetKeys, load, recallKey } from './data';
 import { lazyAction, lazyCard } from './lazy';
 import { clearMemo } from './memo';
+import { viewRendered } from './ready';
 import { framedHtml, isFramed } from './frame';
 import { prefetchForOffline, unavailable, updateNetStatus } from './offline';
 import { IdleLock, LOCK_CHOICES, REMEMBER_DAYS, idleSince } from './session';
@@ -156,6 +157,7 @@ function renderView(view: HTMLElement) {
   document.body.classList.toggle('is-report', state.view === 'report' || state.view === 'settings');
   document.body.classList.toggle('is-comfort', state.view === 'comfort');
   document.body.classList.toggle('is-simple', state.simple && state.view === 'overview');
+  viewRendered(); // #260: #view[data-ready] once its lazy cards and documents have settled
 }
 setRenderer(render);
 
