@@ -4,6 +4,7 @@
 // `.catch(() => {})`, never a card that just disappears.
 import { ds } from './app';
 import { runLazy } from './loader';
+import { track } from './ready';
 
 type Zone = HTMLElement | string | null | undefined;
 
@@ -54,11 +55,11 @@ function showFailure(el: HTMLElement, what: string, outcome: 'offline' | 'reload
 export function lazyCard<M>(load: () => Promise<M>, fill: (m: M) => unknown, opts: { zone: Zone; what: string }): Promise<void> {
   const d = ds;
   const run = (): Promise<void> =>
-    runLazy(load, fill, { online, stale: () => ds !== d, what: opts.what, importFailedOffline }).then(({ outcome }) => {
+    track(runLazy(load, fill, { online, stale: () => ds !== d, what: opts.what, importFailedOffline }).then(({ outcome }) => {
       if (outcome === 'ok' || outcome === 'stale') return;
       const el = zoneOf(opts.zone);
       if (el?.isConnected) showFailure(el, opts.what, outcome, () => void run());
-    });
+    }));
   return run();
 }
 
@@ -68,7 +69,7 @@ export function lazyCard<M>(load: () => Promise<M>, fill: (m: M) => unknown, opt
  */
 export function lazyAction<M>(btn: HTMLElement, load: () => Promise<M>, run: (m: M) => unknown, what: string): Promise<void> {
   const d = ds;
-  return runLazy(load, run, { online, stale: () => ds !== d, what, importFailedOffline }).then(({ outcome }) => {
+  return track(runLazy(load, run, { online, stale: () => ds !== d, what, importFailedOffline })).then(({ outcome }) => {
     if (outcome === 'ok' || outcome === 'stale' || !btn.isConnected) return;
     const label = btn.textContent;
     btn.textContent =

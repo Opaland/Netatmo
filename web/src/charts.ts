@@ -3,6 +3,7 @@
 import type { ECharts, EChartsCoreOption, SetOptionOpts } from 'echarts/core';
 import { type Measure, summarize } from './summary';
 import { node } from './trusted';
+import { track } from './ready';
 
 // #227: ECharts lives in its own chunk (./echarts-lib), loaded on the first chart drawn — or
 // earlier, when the browser is idle — so the entry chunk stays light for the lock screen.
@@ -10,7 +11,7 @@ type Lib = typeof import('./echarts-lib');
 let lib: Lib | null = null;
 let loading: Promise<Lib> | null = null;
 export function loadCharts(): Promise<Lib> {
-  return (loading ??= import('./echarts-lib').then((m) => (lib = m)));
+  return (loading ??= track(import('./echarts-lib').then((m) => (lib = m))));
 }
 if (typeof window !== 'undefined' && typeof document !== 'undefined') {
   const idle = (window as { requestIdleCallback?: (f: () => void) => number }).requestIdleCallback;

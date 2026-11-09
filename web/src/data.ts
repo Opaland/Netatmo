@@ -12,6 +12,7 @@ import type { Room30, Room30Doc } from './room30';
 import { type RememberedKey, freshKey } from './session';
 import { askPersistence, writeMark } from './storage';
 import { KEY_DB } from './scope';
+import { track } from './ready';
 
 export type Source = 'data' | 'demo';
 
@@ -224,7 +225,7 @@ function once<V>(cache: Cache<V>, ds: Dataset, name: string, fetch: () => Promis
   let p = m.get(name);
   if (!p) {
     const own = m;
-    p = fetch();
+    p = track(fetch()); // #260: counted until settled (view ready signal)
     own.set(name, p);
     p.catch(() => own.get(name) === p && own.delete(name));
   }
