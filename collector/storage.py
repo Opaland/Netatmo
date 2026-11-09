@@ -9,6 +9,10 @@ data/
   2024.hourly.enc.json    {"hourly":  {room: {"YYYY-MM-DDTHH": Wh}}}   (loaded on demand by the app)
   weather.enc.json        {"source": "...", "outdoor": {"YYYY-MM-DD": [min, max, mean]},
                            "indoor": {"YYYY-MM-DD": mean}}
+  linky.enc.json          {"daily": {"YYYY-MM-DD": Wh}, "pmax": {"YYYY-MM-DD": kVA},
+                           "curve_scan": "YYYY-MM-DD" (last day asked for the load curve)}
+  2025.linky30.enc.json   {"curve":   {"YYYY-MM-DDTHH:MM": Wh}}  Linky load curve, local start of
+                           each half hour (optional, loaded on demand)
   netatmo-token.enc.json  rotating refresh token of the Netatmo weather station (optional)
 """
 
@@ -95,14 +99,19 @@ class Store:
         return self.doc(str(year)).setdefault("daily", {})
 
     def years(self) -> list[int]:
-        found = {int(p.name.split(".")[0]) for p in self.dir.glob("*.enc.json") if p.name.split(".")[0].isdigit()}
-        found |= {int(n) for n in self._docs if n.isdigit()}
-        return sorted(found)
+        return self._years_of("")
 
     def hourly_years(self) -> list[int]:
-        found = {int(p.name.split(".")[0]) for p in self.dir.glob("*.hourly.enc.json")}
-        found |= {int(n.split(".")[0]) for n in self._docs if n.endswith(".hourly")}
-        return sorted(found)
+        return self._years_of(".hourly")
+
+    def linky_curve_years(self) -> list[int]:
+        return self._years_of(".linky30")
+
+    def _years_of(self, suffix: str) -> list[int]:
+        """Years with a document named YYYY<suffix> (on disk or in memory)."""
+        names = {p.name.removesuffix(".enc.json") for p in self.dir.glob("*.enc.json")}
+        names |= {n for n, doc in self._docs.items() if doc}  # a document only read (absent) does not count
+        return sorted(int(n[:4]) for n in names if n[:4].isdigit() and n[4:] == suffix)
 
     def delete_room(self, room_id: str) -> None:
         """Remove a room from every yearly document (daily, tariffs, temps, hourly)."""
@@ -140,6 +149,7 @@ class Store:
             "rooms": rooms,
             "years": self.years(),
             "hourly_years": self.hourly_years(),
+            "linky_curve_years": self.linky_curve_years(),
             "first_day": self.first_day(),
             "last_day": self.last_day(),
             **(extra or {}),

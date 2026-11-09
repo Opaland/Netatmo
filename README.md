@@ -139,6 +139,19 @@ Netatmo renouvelle le jeton à chaque utilisation : le collecteur garde le nouve
    C'est celui qu'utilise l'intégration Linky de Home Assistant.
 2. Ajoutez les secrets `ENEDIS_TOKEN` et `ENEDIS_PRM` (numéro de point de livraison à 14 chiffres,
    visible sur votre facture ou dans l'espace Enedis).
+3. Facultatif : pour la **courbe de charge** (consommation par demi-heure, utile pour la vraie
+   répartition heures pleines / heures creuses et le talon de nuit), activez la « collecte de la
+   courbe de charge » dans votre espace client Enedis (intitulé à vérifier). Enedis ne la garde
+   qu'à partir de cette activation. Le collecteur récupère au plus les 12 derniers mois, par
+   tranches de 7 jours, puis seulement les jours manquants (les 3 derniers jours chaque nuit) ;
+   elle est rangée chiffrée dans `data/AAAA.linky30.enc.json`. Sans cette activation, rien
+   n'échoue : l'état de la source `linky-30min` l'indique.
+
+**Expiration des accès.** Le résumé de chaque collecte affiche la date d'expiration des jetons
+quand elle est connue (lue dans le jeton Conso API s'il la contient, sinon estimée à 3 ans après
+sa première utilisation, durée à vérifier). 30 jours avant, ou dès qu'un jeton Linky ou Netatmo
+est refusé, un avertissement « Renouveler le jeton … » apparaît dans le run GitHub Actions, avec
+la marche à suivre. Seule une empreinte courte du jeton est gardée (chiffrée), jamais le jeton.
 
 **Analyse du mois par l'IA (Claude)** :
 1. Créez une clé sur [console.anthropic.com](https://console.anthropic.com) (service payant ; une
