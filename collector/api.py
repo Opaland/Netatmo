@@ -132,17 +132,21 @@ class IntuisClient:
         scale: str,
         date_begin: int,
         date_end: int,
+        module_ids: list[str] | None = None,
     ) -> dict:
-        """All rooms in one call (what the mobile app does)."""
+        """All rooms (and optionally modules) in one call (what the mobile app does)."""
+        home: dict = {
+            "id": home_id,
+            "rooms": [{"id": rid, "bridge": bridge_id, "type": measure_type} for rid in room_ids],
+        }
+        if module_ids:
+            home["modules"] = [{"id": mid, "bridge": bridge_id, "type": measure_type} for mid in module_ids]
         body = {
             "app_identifier": self.s.app_identifier,
             "scale": scale,
             "date_begin": date_begin,
             "date_end": date_end,
-            "home": {
-                "id": home_id,
-                "rooms": [{"id": rid, "bridge": bridge_id, "type": measure_type} for rid in room_ids],
-            },
+            "home": home,
         }
         return self._call("POST", "/api/gethomemeasure", json=body)
 

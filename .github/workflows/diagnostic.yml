@@ -1,0 +1,25 @@
+name: Diagnostic
+
+# Anonymous: prints module type codes and, per measure type, the number of days with
+# data. No names, ids or energy values (the log of a public repository is public).
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    env:
+      INTUIS_USERNAME: ${{ secrets.INTUIS_USERNAME }}
+      INTUIS_PASSWORD: ${{ secrets.INTUIS_PASSWORD }}
+      INTUIS_CLIENT_ID: ${{ secrets.INTUIS_CLIENT_ID }}
+      INTUIS_CLIENT_SECRET: ${{ secrets.INTUIS_CLIENT_SECRET }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install .
+      - run: python -m collector diagnose
