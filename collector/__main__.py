@@ -106,6 +106,8 @@ def cmd_sync(s: Settings, args: argparse.Namespace, backfill: bool = False) -> N
             _warn(str(err))
     if store.doc("linky").get("daily"):
         extra["has_linky"] = True
+    if store.doc("station").get("daily"):
+        extra["has_station"] = True
     if os.environ.get("ANTHROPIC_API_KEY"):
         from .insights import generate
 

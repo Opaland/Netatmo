@@ -128,7 +128,7 @@ function legend(series: Series[]) {
 
 export function barChart(
   el: HTMLElement,
-  opts: { labels: string[]; series: Series[]; stacked: boolean; price: number | null; zoom?: boolean },
+  opts: { labels: string[]; series: Series[]; stacked: boolean; price: number | null; zoom?: boolean; unit?: string },
 ) {
   const surface = cssVar('--surface-1');
   const n = opts.series.length;
@@ -138,7 +138,7 @@ export function barChart(
       animationDuration: 300,
       ...axes(opts.labels),
       legend: legend(opts.series),
-      tooltip: tooltip(opts.price, opts.stacked),
+      tooltip: tooltip(opts.price, opts.stacked && !opts.unit, opts.unit),
       dataZoom: opts.zoom ? [{ type: 'inside', minValueSpan: 6 }] : [],
       series: opts.series.map((s, i) => ({
         type: 'bar',

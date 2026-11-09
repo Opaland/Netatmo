@@ -32,10 +32,14 @@ jobs:
         working-directory: web
       - name: Tarifs réglementés à jour (CRE, open data)
         run: |
-          curl -fsSL --max-time 30 https://www.cre.fr/fileadmin/Documents/Open_data/Marches_de_detail/Option_HPHC.csv \
-            -o /tmp/hphc.csv && head -1 /tmp/hphc.csv | grep -q PART_VARIABLE_HP_TTC \
-            && cp /tmp/hphc.csv web/public/tarifs/Option_HPHC.csv \
-            || echo "::warning::Tarifs CRE injoignables : copie du dépôt utilisée"
+          for f in Option_HPHC Option_Base Option_Tempo; do
+            curl -fsSL --max-time 30 "https://www.cre.fr/fileadmin/Documents/Open_data/Marches_de_detail/$f.csv" -o "/tmp/$f.csv" \
+              && head -1 "/tmp/$f.csv" | grep -q PART_FIXE_TTC \
+              && cp "/tmp/$f.csv" "web/public/tarifs/$f.csv" \
+              || echo "::warning::Tarifs CRE $f injoignables : copie du dépôt utilisée"
+          done
+      - name: Couleurs des jours Tempo (données publiques)
+        run: python3 scripts/tempo_jours.py || true
       - run: npm run build
         working-directory: web
       - name: Ajout des données chiffrées

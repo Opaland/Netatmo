@@ -101,3 +101,27 @@ describe('regulated tariff (CRE open data)', () => {
     expect(subscriptionTrve(rows, 9, '2025-03-01', '2025-03-02')).toBeCloseTo((2 * 214.88) / 365, 6);
   });
 });
+
+import { compareOffers, daySplits, parseTempoCsv } from './analysis';
+
+describe('offer comparator', () => {
+  const head = 'DATE_DEBUT;DATE_FIN;P_SOUSCRITE;PART_FIXE_HT;PART_FIXE_TTC;';
+  const base = parseTrveCsv(`${head}PART_VARIABLE_HT;PART_VARIABLE_TTC\n01/01/2024;;9;0;365;0;0,25\n`);
+  const hphc = parseTrveCsv(`${head}PART_VARIABLE_HC_HT;PART_VARIABLE_HC_TTC;PART_VARIABLE_HP_HT;PART_VARIABLE_HP_TTC\n01/01/2024;;9;0;365;0;0,20;0;0,30\n`);
+  const tempo = parseTempoCsv(
+    'DATE_DEBUT;DATE_FIN;P_SOUSCRITE;PART_FIXE_HT;PART_FIXE_TTC;PART_VARIABLE_HCBleu_HT;PART_VARIABLE_HCBleu_TTC;PART_VARIABLE_HPBleu_HT;PART_VARIABLE_HPBleu_TTC;PART_VARIABLE_HCBlanc_HT;PART_VARIABLE_HCBlanc_TTC;PART_VARIABLE_HPBlanc_HT;PART_VARIABLE_HPBlanc_TTC;PART_VARIABLE_HCRouge_HT;PART_VARIABLE_HCRouge_TTC;PART_VARIABLE_HPRouge_HT;PART_VARIABLE_HPRouge_TTC\n01/01/2024;;9;0;365;0;0,1;0;0,15;0;0,12;0;0,18;0;0,14;0;0,7\n',
+  );
+  it('splits the rest of the home flat over 24 h and prices each offer the same days', () => {
+    const tariffs = new Map([['a', new Map([['2025-01-02', [0, 4, 6] as [number, number, number]]])]]);
+    const recs = [rec('2025-01-02', 10)];
+    const linky = new Map([['2025-01-02', 13]]); // 3 kWh of other uses
+    const splits = daySplits(recs, tariffs, 2, { perRoom: new Map(), overall: 0.3 }, linky);
+    expect(splits[0].hc).toBeCloseTo(6 + 1, 6);
+    expect(splits[0].hp).toBeCloseTo(4 + 2, 6);
+    const r = compareOffers(splits, () => 9, base, hphc, tempo, new Map([['2025-01-02', 3]]));
+    expect(r.base.energy).toBeCloseTo(13 * 0.25, 6);
+    expect(r.hphc.energy).toBeCloseTo(7 * 0.2 + 6 * 0.3, 6);
+    expect(r.tempo.energy).toBeCloseTo(7 * 0.14 + 6 * 0.7, 6); // red day
+    expect(r.tempo.subscription).toBeCloseTo(1, 6);
+  });
+});

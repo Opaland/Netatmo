@@ -1,5 +1,15 @@
 # Historique des versions
 
+## v1.2 — en cours
+
+- Mode projet : règles BMAD (`docs/PROJET.md`), gabarits d'issues et de PR, jalons, une issue par récit.
+- Station Netatmo complète : salon, chambre des enfants, cave, extérieur (température, humidité, CO₂).
+- Historique de contrat (offre, puissance par période) et fichiers de tarifs extensibles à d'autres
+  fournisseurs ; comparateur EDF Base / HP-HC / Tempo jour par jour (couleurs Tempo réelles).
+- Puissance maximale appelée (Linky) comparée à la puissance souscrite.
+- Études : volets Wiser (no-go passerelle, mesure d'abord) et plateforme domotique ouverte
+  (Home Assistant, matériel manquant).
+
 ## v1.1 — novembre 2026 : comprendre sa consommation
 
 - Historique complet depuis novembre 2022 : quatre types de mesure selon l'époque, chauffe-eau lu au

@@ -795,3 +795,37 @@ body.is-report .filters {
   font-size: 0.75rem;
   white-space: pre-wrap;
 }
+
+.contract-row {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 4px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--grid);
+}
+.contract-row input,
+.contract-row select,
+fieldset.prices select {
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-1);
+}
+.menu-panel {
+  width: min(330px, calc(100vw - 32px));
+}
+fieldset.prices {
+  min-width: 0;
+}
+.contract-row input,
+.contract-row select,
+fieldset.prices select,
+fieldset.prices input {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+.contract-row .link {
+  justify-self: end;
+  color: var(--bad);
+}

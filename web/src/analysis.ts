@@ -266,13 +266,15 @@ export function parseTrveCsv(text: string): TrveRow[] {
   const lines = text.trim().split(/\r?\n/);
   const head = lines[0].split(';');
   const col = (name: string) => head.indexOf(name);
+  // HP/HC files have two variable prices; single-price offers (Base) one, used for both.
+  const single = col('PART_VARIABLE_TTC');
   const [iFrom, iTo, iKva, iFix, iHc, iHp] = [
     col('DATE_DEBUT'),
     col('DATE_FIN'),
     col('P_SOUSCRITE'),
     col('PART_FIXE_TTC'),
-    col('PART_VARIABLE_HC_TTC'),
-    col('PART_VARIABLE_HP_TTC'),
+    single >= 0 ? single : col('PART_VARIABLE_HC_TTC'),
+    single >= 0 ? single : col('PART_VARIABLE_HP_TTC'),
   ];
   return lines
     .slice(1)
@@ -317,21 +319,24 @@ export interface TrveCost {
 }
 
 /** Energy cost day by day at the regulated price in force that day. */
+export type PriceAt = (day: string) => TrveRow | null;
+
 export function energyCostTrve(
   records: DayRecord[],
   tariffs: TariffMap,
-  rows: TrveRow[],
+  rowsOrPrice: TrveRow[] | PriceAt,
   kva: number,
   off: 1 | 2,
   shares: { perRoom: Map<string, number>; overall: number },
 ): TrveCost {
+  const priceAt: PriceAt = typeof rowsOrPrice === 'function' ? rowsOrPrice : (d) => trveAt(rowsOrPrice, kva, d);
   const on = off === 1 ? 2 : 1;
   let energy = 0;
   let estimatedKwh = 0;
   const cache = new Map<string, TrveRow | null>();
   for (const r of records) {
     let p = cache.get(r.day);
-    if (p === undefined) cache.set(r.day, (p = trveAt(rows, kva, r.day)));
+    if (p === undefined) cache.set(r.day, (p = priceAt(r.day)));
     if (!p) continue;
     const t = tariffs.get(r.room)?.get(r.day);
     if (t && t[1] + t[2] > 0) {
@@ -345,11 +350,130 @@ export function energyCostTrve(
   return { energy, estimatedKwh };
 }
 
-export function subscriptionTrve(rows: TrveRow[], kva: number, from: string, to: string): number {
+export function subscriptionTrve(rowsOrPrice: TrveRow[] | PriceAt, kva: number, from: string, to: string): number {
+  const priceAt: PriceAt = typeof rowsOrPrice === 'function' ? rowsOrPrice : (d) => trveAt(rowsOrPrice, kva, d);
   let s = 0;
   for (let d = from; d <= to; d = addDays(d, 1)) {
-    const p = trveAt(rows, kva, d);
+    const p = priceAt(d);
     if (p) s += p.fixedYear / (Number(d.slice(0, 4)) % 4 === 0 ? 366 : 365);
   }
   return s;
+}
+
+// ------------------------------------------------------------------ offer comparator (Base / HP-HC / Tempo)
+export interface TempoRow {
+  from: string;
+  to: string | null;
+  kva: number;
+  fixedYear: number;
+  prices: Record<1 | 2 | 3, [number, number]>; // colour → [HC, HP] €/kWh
+}
+
+export function parseTempoCsv(text: string): TempoRow[] {
+  const lines = text.trim().split(/\r?\n/);
+  const head = lines[0].split(';');
+  const c = (n: string) => head.indexOf(n);
+  const num = (s: string) => Number((s ?? '').replace(',', '.'));
+  return lines
+    .slice(1)
+    .map((l) => l.split(';'))
+    .filter((v) => v[c('PART_FIXE_TTC')] && v[c('PART_VARIABLE_HPRouge_TTC')])
+    .map((v) => ({
+      from: frDate(v[c('DATE_DEBUT')])!,
+      to: frDate(v[c('DATE_FIN')]),
+      kva: Number(v[c('P_SOUSCRITE')]),
+      fixedYear: num(v[c('PART_FIXE_TTC')]),
+      prices: {
+        1: [num(v[c('PART_VARIABLE_HCBleu_TTC')]), num(v[c('PART_VARIABLE_HPBleu_TTC')])] as [number, number],
+        2: [num(v[c('PART_VARIABLE_HCBlanc_TTC')]), num(v[c('PART_VARIABLE_HPBlanc_TTC')])] as [number, number],
+        3: [num(v[c('PART_VARIABLE_HCRouge_TTC')]), num(v[c('PART_VARIABLE_HPRouge_TTC')])] as [number, number],
+      },
+    }))
+    .sort((a, b) => (a.from < b.from ? -1 : 1));
+}
+
+function rowAt<T extends { from: string; to: string | null; kva: number }>(rows: T[], kva: number, day: string): T | null {
+  let found: T | null = null;
+  for (const r of rows) if (r.kva === kva && r.from <= day && (!r.to || day <= r.to)) found = r;
+  return found;
+}
+
+/** Energy of one day split into off-peak / peak kWh. */
+export interface DaySplit {
+  day: string;
+  hc: number;
+  hp: number;
+}
+
+/**
+ * Daily HC/HP split. Intuis rooms: measured tariff columns, or the room's measured
+ * share. Rest of the home (Linky total minus Intuis): assumed flat over 24 h, i.e. 8
+ * off-peak hours out of 24.
+ */
+export function daySplits(
+  records: DayRecord[],
+  tariffs: TariffMap,
+  off: 1 | 2,
+  shares: { perRoom: Map<string, number>; overall: number },
+  linky: Map<string, number> | null,
+): DaySplit[] {
+  const on = off === 1 ? 2 : 1;
+  const byDay = new Map<string, { hc: number; hp: number; total: number }>();
+  for (const r of records) {
+    const e = byDay.get(r.day) ?? { hc: 0, hp: 0, total: 0 };
+    const t = tariffs.get(r.room)?.get(r.day);
+    if (t && t[1] + t[2] > 0) (e.hc += t[off]), (e.hp += t[on] + t[0]);
+    else {
+      const s = shares.perRoom.get(r.room) ?? shares.overall;
+      (e.hc += r.kwh * s), (e.hp += r.kwh * (1 - s));
+    }
+    e.total += r.kwh;
+    byDay.set(r.day, e);
+  }
+  const days = linky ? [...linky.keys()] : [...byDay.keys()];
+  return days.sort().map((day) => {
+    const e = byDay.get(day) ?? { hc: 0, hp: 0, total: 0 };
+    const rest = linky ? Math.max(0, (linky.get(day) ?? 0) - e.total) : 0;
+    return { day, hc: e.hc + rest / 3, hp: e.hp + (rest * 2) / 3 };
+  });
+}
+
+export interface OfferCost {
+  energy: number;
+  subscription: number;
+  days: number; // days actually priced
+}
+
+export function compareOffers(
+  splits: DaySplit[],
+  kvaAt: (day: string) => number,
+  base: TrveRow[],
+  hphc: TrveRow[],
+  tempo: TempoRow[],
+  tempoDays: Map<string, number>,
+): Record<'base' | 'hphc' | 'tempo', OfferCost> {
+  const out = {
+    base: { energy: 0, subscription: 0, days: 0 },
+    hphc: { energy: 0, subscription: 0, days: 0 },
+    tempo: { energy: 0, subscription: 0, days: 0 },
+  };
+  for (const s of splits) {
+    const kva = kvaAt(s.day);
+    const yearDays = Number(s.day.slice(0, 4)) % 4 === 0 ? 366 : 365;
+    const b = rowAt(base, kva, s.day);
+    const h = rowAt(hphc, kva, s.day);
+    const t = rowAt(tempo, kva, s.day);
+    const colour = tempoDays.get(s.day) as 1 | 2 | 3 | undefined;
+    // Only days where all three offers can be priced, so totals stay comparable.
+    if (!b || !h || !t || !colour) continue;
+    out.base.energy += (s.hc + s.hp) * b.hp;
+    out.base.subscription += b.fixedYear / yearDays;
+    out.hphc.energy += s.hc * h.hc + s.hp * h.hp;
+    out.hphc.subscription += h.fixedYear / yearDays;
+    const [thc, thp] = t.prices[colour];
+    out.tempo.energy += s.hc * thc + s.hp * thp;
+    out.tempo.subscription += t.fixedYear / yearDays;
+    out.base.days++, out.hphc.days++, out.tempo.days++;
+  }
+  return out;
 }

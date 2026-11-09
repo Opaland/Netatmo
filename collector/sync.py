@@ -265,7 +265,7 @@ class Syncer:
         return self.save(home) if save else []
 
     def save(self, home: Home, extra: dict | None = None) -> list[str]:
-        keep = {k: self.store.meta[k] for k in ("weather_source", "has_linky") if k in self.store.meta}
+        keep = {k: self.store.meta[k] for k in ("weather_source", "has_linky", "has_station") if k in self.store.meta}
         meta_extra = {
             "has_tariffs": bool(self.tariff_days or self.store.meta.get("has_tariffs")),
             "has_temps": bool(self.temp_days or self.store.meta.get("has_temps")),
