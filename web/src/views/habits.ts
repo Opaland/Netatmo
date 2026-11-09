@@ -30,6 +30,7 @@ import { readPref, writePref } from '../money';
 import { activeRooms, avgPrice, costOf, esc, firstDay, fmtEur, fmtKwh, lastDay, nf0, table } from '../ui';
 import { currentHcHp } from './waterheater';
 import { html } from '../trusted';
+import { NS, lsKey } from '../scope';
 
 const num1 = (v: number) => v.toLocaleString('fr-FR', { maximumFractionDigits: 1 });
 const shortDate = (d: string) => `${Number(d.slice(8, 10))} ${MONTHS_SHORT[Number(d.slice(5, 7)) - 1]} ${d.slice(0, 4)}`;
@@ -72,8 +73,8 @@ function daysOf(p: Period): string[] {
 }
 
 // ------------------------------------------------------------------ S-4.9 telework
-const LS_ROOM = 'intuis-history:telework-room';
-const LS_DAYS = 'intuis-history:telework-days';
+const LS_ROOM = lsKey('telework-room');
+const LS_DAYS = lsKey('telework-days');
 const DOW = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven'];
 
 function teleworkRoom(): string | null {
@@ -182,7 +183,7 @@ async function loadModeAbsences() {
     byMode = []; // the detection by consumption stays
   }
 }
-const lsAbsences = () => `intuis-history:absences:${ds!.source}`;
+const lsAbsences = () => `${NS}:absences:${ds!.source}`;
 
 async function loadEdits(): Promise<AbsenceEdits> {
   if (cachedEdits) return cachedEdits;

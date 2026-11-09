@@ -498,7 +498,7 @@ web/                application PWA (Vite + TypeScript + ECharts)
   public/demo/      données de démonstration chiffrées (phrase « demo »)
 docs/               notes sur l'API, étude de l'existant, feuille de route, règles du projet (PROJET.md)
   etudes/           études « faut-il le faire ? » (volets Wiser, plateforme domotique, Home Assistant
-                    et Zigbee, module intérieur de la station, audit de tous les appareils et achats)
+                    et Zigbee, module intérieur de la station, audit de tous les appareils et achats, origine dédiée)
   design/           inventaire de l'interface (couleurs, typographie, composants), base du design system
   revues-agents/    consignes des revues de code et design par agents (à chaque version)
   bmad/             cadrage BMAD : brief, revue 50 personas, PRD, architecture, epics, QA
@@ -534,8 +534,20 @@ scripts/            outils ponctuels (jours Tempo, constats de revue → issues)
   écrite avec des entités). Elle analyse les balises comme le navigateur (petit analyseur, pas une
   expression régulière) : un texte échappé contenant « javascript: » ne bloque jamais l'affichage, et
   ce que l'analyseur ne sait pas trancher (commentaires, `<title>` contenant `<`…) est refusé. La politique `default` n'accepte que la chaîne vide
-  (ECharts vide ses infobulles) et le service worker du site. Le test de bout en bout échoue à la
-  moindre violation de la CSP.
+  (ECharts vide ses infobulles) et le service worker de l'appli, à son chemin exact. Le test de bout
+  en bout échoue à la moindre violation de la CSP.
+- **Origine partagée de GitHub Pages (risque résiduel, #229).** Sous `https://<compte>.github.io/<dépôt>/`,
+  l'origine du navigateur est `https://<compte>.github.io`, commune à **tous** les sites Pages du
+  compte. La clé « Rester connecté » (IndexedDB), les notes et réglages (localStorage) et le cache hors
+  ligne sont donc à la portée de tout script d'un autre site Pages de ce compte ouvert dans le même
+  navigateur : la clé n'est pas copiable, mais un tel script peut s'en servir pour déchiffrer
+  l'historique (public) et les notes ; il pourrait aussi ouvrir l'appli et lire la phrase tapée. Ce
+  que fait l'appli : noms rangés sous le chemin du dépôt (`intuis-history@<dépôt>`, caches
+  `energy-data@<dépôt>`, pour qu'une autre copie de l'appli sur le compte ne réutilise pas la clé par
+  mégarde ; ce n'est pas une isolation), service worker accepté à son chemin exact seulement,
+  avertissement dans Paramètres. **Ce qu'il faut faire** : ne publier aucun autre site GitHub Pages
+  sur ce compte, ou ne pas cocher « Rester connecté » ; la vraie parade est un domaine personnel dédié
+  (origine propre, quelques euros par an) : voir [docs/etudes/origine-dediee.md](docs/etudes/origine-dediee.md).
 
 ### Inviter un membre du foyer (S-12.3)
 

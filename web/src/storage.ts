@@ -8,8 +8,9 @@
 // - At start-up, a mark without its key means the key was erased by the browser (or has
 //   expired): the lock screen says so, and asks for the passphrase again.
 // - Locking on purpose forgets the key and the mark together: no message then.
+import { lsKey } from './scope';
 
-export const REMEMBER_MARK = 'intuis-history:remembered';
+export const REMEMBER_MARK = lsKey('remembered');
 
 export interface RememberMark {
   source: string;

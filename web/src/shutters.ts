@@ -4,8 +4,9 @@
 // Pure functions except the two storage helpers (localStorage, never sent anywhere).
 import { addDays } from './aggregate';
 import { type Fit, type Hourly, type Weather, linearFit } from './analysis';
+import { lsKey } from './scope';
 
-const LS_KEY = 'intuis-history:shutters';
+const LS_KEY = lsKey('shutters');
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
 
 /** Evenings noted « volets fermés » on this device, sorted. */

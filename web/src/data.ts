@@ -9,6 +9,7 @@ import type { DayHours, Night, StationHourly } from './comfort';
 import { type Envelope, type KeyInfo, decryptEnvelope, deriveKey } from './crypto';
 import { type RememberedKey, freshKey } from './session';
 import { askPersistence, writeMark } from './storage';
+import { KEY_DB } from './scope';
 
 export type Source = 'data' | 'demo';
 
@@ -286,7 +287,8 @@ async function fetchCurve(ds: Dataset): Promise<Map<string, number>> {
 }
 
 // ------------------------------------------------------------ remembered key (IndexedDB)
-const DB = 'intuis-history';
+// #229: scoped to the app's path (scope.ts).
+const DB = KEY_DB;
 const STORE = 'keys';
 
 function db(): Promise<IDBDatabase> {

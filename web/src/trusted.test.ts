@@ -110,6 +110,10 @@ describe('Trusted Types (S-8.9)', () => {
     expect(serviceWorkerUrl('./assets/index.js', base)).toBeNull();
     expect(serviceWorkerUrl('./sw.js?x=1', base)).toBeNull();
     expect(serviceWorkerUrl('data:text/javascript,alert(1)', base)).toBeNull();
+    // #229: same origin (shared by every Pages site of the account) but another site's worker
+    expect(serviceWorkerUrl('https://opaland.github.io/autre/sw.js', base)).toBeNull();
+    expect(serviceWorkerUrl('/sw.js', base)).toBeNull();
+    expect(serviceWorkerUrl('./sub/sw.js', base)).toBeNull();
   });
 
   it('aucun innerHTML ni insertAdjacentHTML sans passer par la politique', () => {

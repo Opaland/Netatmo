@@ -8,6 +8,7 @@ import { bedroomIds, householdView, translateRooms } from './household';
 import { sameContract, validContract } from './contract';
 import type { ContractPeriod } from './offers';
 import { DEFAULT_LOCK_MINUTES } from './session';
+import { lsKey } from './scope';
 
 export type View = 'overview' | 'compare' | 'rooms' | 'analyse' | 'comfort' | 'report' | 'settings';
 export type CatFilter = 'all' | Category;
@@ -79,7 +80,7 @@ export const DEFAULT: State = {
   groupBedrooms: false,
 };
 
-const LS_KEY = 'intuis-history:state';
+const LS_KEY = lsKey('state');
 export function loadState(): State {
   try {
     const saved = JSON.parse(localStorage.getItem(LS_KEY) ?? '{}');
