@@ -165,8 +165,19 @@ export async function load(source: Source, key: CryptoKey): Promise<Dataset> {
   };
 }
 
-/** Hourly documents are big: loaded only when the hourly view opens. */
-export async function loadHourly(ds: Dataset): Promise<Hourly> {
+/** Hourly documents are big: loaded only when a view needs them, once per dataset. */
+const hourlyCache = new WeakMap<Dataset, Promise<Hourly>>();
+export function loadHourly(ds: Dataset): Promise<Hourly> {
+  let p = hourlyCache.get(ds);
+  if (!p) {
+    p = fetchHourly(ds);
+    hourlyCache.set(ds, p);
+    p.catch(() => hourlyCache.delete(ds));
+  }
+  return p;
+}
+
+async function fetchHourly(ds: Dataset): Promise<Hourly> {
   const out: Hourly = new Map();
   const years = (ds.meta as Meta & { hourly_years?: number[] }).hourly_years ?? [];
   const docs = await Promise.all(
@@ -197,6 +208,15 @@ export async function loadStationHourly(ds: Dataset): Promise<StationHourly> {
       out.set(mod, m);
     }
   }
+  return out;
+}
+
+/** Linky 30-min load curve (S-1.11), one document per year, loaded on demand. */
+export async function loadCurve(ds: Dataset): Promise<Map<string, number>> {
+  const years = (ds.meta as Meta & { linky_curve_years?: number[] }).linky_curve_years ?? [];
+  const docs = await Promise.all(years.map((y) => optional<{ curve?: Record<string, number> }>(ds.source, `${y}.linky30`, ds.key)));
+  const out = new Map<string, number>();
+  for (const doc of docs) for (const [k, wh] of Object.entries(doc?.curve ?? {})) out.set(k, wh);
   return out;
 }
 
