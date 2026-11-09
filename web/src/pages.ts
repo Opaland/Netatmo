@@ -17,6 +17,7 @@ import { lazyCard } from './lazy';
 import { CATEGORY_LABEL } from './aggregate';
 import * as analyse from './views/analyse';
 import * as compare from './views/compare';
+import * as home from './views/home';
 import * as household from './views/household';
 import * as overview from './views/overview';
 import { pinSelect, pinnedTiles, meanTemp } from './views/pinned';
@@ -67,7 +68,7 @@ const comfortHandlers: Handlers = {
 };
 
 // ------------------------------------------------------------------ filters (#308)
-/** The usage and rooms selection, now set in Accueil (usage) and Pièces (rooms): a chip says so elsewhere. */
+/** The usage and rooms selection, set in Historique (usage, « Consommation en détail ») and Pièces (rooms): a chip says so elsewhere. */
 function filterChip(): string {
   const all = activeRooms().length;
   const n = state.rooms ? state.rooms.length : all;
@@ -145,6 +146,8 @@ function renderHistorique(view: HTMLElement) {
   const records = filtered();
   stack(view, `<h2 class="page-title" id="page-title" tabindex="-1">Historique</h2>${filterChip()}`, [
     (el) => overview.renderOverview(el, records, 'twelve'),
+    // #311: the explorer of the v1.5 Synthèse (period, usage, granularity, by room, values) left Accueil
+    (el) => overview.renderOverview(el, records, 'explore'),
     (el) => compare.renderCompare(el, records, 'history'),
     (el) => rooms.renderRooms(el, records, 'changes'),
     (el) => analyse.renderAnalyse(el, records, 'historique'),
@@ -400,7 +403,7 @@ export function simpleExit(): string {
 // ------------------------------------------------------------------ Accueil
 function renderAccueil(view: HTMLElement) {
   const records = filtered();
-  overview.renderOverview(view, records, 'home');
+  home.renderHome(view, records);
   // S-7.8: the pinned room comes first among the key figures of the simple mode.
   if (state.simple) {
     view.querySelector('.kpis')?.insertAdjacentHTML('afterbegin', html(pinnedTiles()));
@@ -408,18 +411,16 @@ function renderAccueil(view: HTMLElement) {
   }
 }
 
-const accueilHandlers: Handlers = h(undefined, overview.handleChange);
-
 const settingsHandlers: Handlers[] = [h(settings.handleClick), h(prices.handleClick, prices.handleChange), h(household.handleClick, household.handleChange), { keydown: (e) => (settings.handleKeydown(e), false) }];
 
 /** One entry per page (#257: the handlers apply while it is shown, and only then). */
 export const PAGES: Record<Route['page'], Page> = {
-  accueil: { render: renderAccueil, handlers: [accueilHandlers], needsData: true },
+  accueil: { render: renderAccueil, needsData: true },
   pieces: { render: renderPieces, handlers: [h(undefined, rooms.handleChange)] },
   piece: { render: renderPiece, handlers: [h(undefined, rooms.handleChange)] },
   confort: { render: renderComfort, handlers: [comfortHandlers] },
   'chauffe-eau': { render: (v) => analyse.renderAnalyse(v, filtered(), 'chauffe-eau'), needsData: true },
-  historique: { render: renderHistorique, handlers: [h(compare.handleClick, compare.handleChange), h(undefined, analyse.handleChange), h(undefined, rooms.handleChange)] },
+  historique: { render: renderHistorique, handlers: [h(undefined, overview.handleChange), h(compare.handleClick, compare.handleChange), h(undefined, analyse.handleChange), h(undefined, rooms.handleChange)] },
   compteur: { render: renderCompteur, handlers: [h(undefined, analyse.handleChange)] },
   outils: { render: renderOutils },
   outil: { render: renderTool, handlers: [h(compare.handleClick, compare.handleChange), h(undefined, analyse.handleChange)], needsData: true },

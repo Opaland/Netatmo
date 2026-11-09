@@ -66,9 +66,10 @@ async function go(page, key) {
  * opened and must show the listed elements. « text: » checks a sentence of the page instead.
  */
 const DESTINATIONS = {
-  accueil: ['.verdict', '#grid-card', '.kpis .kpi', '#main-chart canvas', '[data-set=cat]', '#insight-card .md'],
+  // #311: period, verdict and its gauge, 3 tiles, alerts, what counted, consumption and cold, AI summary
+  accueil: ['.periodbar [data-set=home]', '.periodbar .scope', '.verdict .gauge', '.home-tiles .kpi', '#grid-card .alert', '#counted-card .list .row', '#home-chart canvas', '#insight-card .md', 'a[href="#historique"]'],
   pieces: ['.rooms-picker', '#rooms-chart canvas', 'a[href="#confort"]', 'a[href="#chauffe-eau"]'],
-  historique: ['.kpis-one .kpi', '#cmp-chart canvas', 'text:Totaux annuels', '#rooms-waterfall canvas', '#sig-chart canvas', '#indoor-sig-chart canvas', '#unusual-card', '#cal-chart canvas', '#station-chart canvas'],
+  historique: ['.kpis-one .kpi', '#explore-card #main-chart canvas', '#explore-card [data-set=cat]', '#explore-card [data-set=gran]', '#cmp-chart canvas', 'text:Totaux annuels', '#rooms-waterfall canvas', '#sig-chart canvas', '#indoor-sig-chart canvas', '#unusual-card', '#cal-chart canvas', '#station-chart canvas'],
   compteur: ['#linky-chart canvas', '#pmax-chart canvas', '#offload-zone table', '#curve-day-chart canvas', '#bd-chart canvas', '#hour-grid canvas', 'text:Heures pleines / heures creuses'],
   confort: ['#cold-chart canvas', '#windows-chart canvas', '#ha-card table', '#cellar-0 canvas', '#probe-0 canvas'],
   'chauffe-eau': ['#wh-month-chart canvas', '#contactor-line:not([hidden])'],
@@ -103,6 +104,22 @@ async function audit(page, where) {
     errors.push(`${BROWSER} ${where} : axe ${v.impact} « ${v.id} » ${v.help} → ${nodes.join(' | ')}`);
   }
 }
+
+/** #311: the amounts of the tiles (every page, components.ts tile()) stay on one line and inside their tile. */
+const tileAmounts = (page) =>
+  page.evaluate(() =>
+    [...document.querySelectorAll('body:not(.is-simple) #view .kpis .kpi-value')].flatMap((el) => {
+      const range = document.createRange();
+      range.selectNodeContents(el);
+      const lines = new Set([...range.getClientRects()].filter((r) => r.width > 0).map((r) => Math.round(r.top)));
+      const tile = el.closest('.kpi').getBoundingClientRect();
+      const box = range.getBoundingClientRect();
+      const out = [];
+      if (lines.size > 1) out.push(`« ${el.textContent} » sur ${lines.size} lignes`);
+      if (box.right > tile.right + 1 || box.left < tile.left - 1) out.push(`« ${el.textContent} » sort de sa tuile`);
+      return out;
+    }),
+  );
 
 const recordViolations = () => {
   window.__csp = [];
@@ -281,6 +298,28 @@ try {
     await ready(page);
     await page.screenshot({ path: `${OUT}/${BROWSER}-iphone-${view}.png`, fullPage: true });
     await checkViolations(page, view);
+  }
+
+  // #311 / #302: Accueil holds in 3 iPhone screens; one period for the screen, each comparison named
+  progress('accueil');
+  {
+    await go(page, 'accueil');
+    const [h, screenH] = await page.evaluate(() => [document.documentElement.scrollHeight, window.screen.height]);
+    check(h <= 3 * screenH, `#311 : l'Accueil fait ${h} px, plus de 3 écrans (${3 * screenH} px)`);
+    const tiles = await page.locator('.home-tiles').innerText();
+    check(/vs nov\. \d{4} au \d+/.test(tiles) && /vs attendu à météo comparable/.test(tiles), `#302 : tuile du mois sans ses deux références nommées (« ${tiles.replace(/\s+/g, ' ').slice(0, 200)} »)`);
+    check(/attendus à météo comparable/.test(await page.locator('.verdict').innerText()), '#302 : verdict sans sa référence');
+    check(!/N-1/.test(await page.locator('#view').innerText()), '#302 : « N-1 » encore affiché');
+    for (const [p, want] of [['season', /^Saison de chauffe/], ['12m', /^12 derniers mois/], ['year', /^Année \d{4}/], ['month', /^[A-Z][a-zéû]+ \d{4}, du 1er au/]]) {
+      await page.click(`.periodbar [data-value="${p}"]`);
+      await ready(page);
+      const scope = await page.locator('.periodbar .scope').innerText();
+      check(want.test(scope) && /hors abonnement/.test(scope), `#311 : ligne « ce qui est compté » inattendue pour ${p} (« ${scope} »)`);
+      check((await page.locator('#home-chart canvas').count()) === 1, `#311 : graphique absent pour ${p}`);
+    }
+    const cut = await tileAmounts(page);
+    check(!cut.length, `#311 : montant de tuile coupé (iPhone 13) → ${cut.join(', ')}`);
+    await audit(page, 'accueil');
   }
 
   // v1.5 figures (#245 #246 #294 #295 #297 #298)

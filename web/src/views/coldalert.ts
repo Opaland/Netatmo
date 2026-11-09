@@ -23,6 +23,7 @@ import { html } from '../trusted';
 import '../simulators.css';
 import { lsKey } from '../scope';
 import { fmt1 as num1 } from '../glossary';
+import { alert } from '../components';
 
 export const COLD_VARIABLE = 'COLD_ALERT_JSON';
 const LS = lsKey('cold-draft');
@@ -67,12 +68,18 @@ export function mountColdBanner(zone: HTMLElement | null) {
   const cold = c.rooms
     .map((id) => byId.get(id))
     .filter((s): s is Sensor => !!s && coldStatus(s.means, c.threshold, c.days, lastDay()).status === 'cold');
+  // #311: among the grouped alerts of Accueil (alert component); nothing when no room is cold
   zone.innerHTML = html(
     cold.length
-      ? `<p class="stale" role="alert"><span aria-hidden="true">❄️</span> <strong>Froid prolongé</strong> : ${cold
-          .map((s) => `${esc(householdStatus().active && isBedroom(s.name) ? `${BEDROOMS_NAME} (une chambre)` : s.name)} ${describe(s, c)}`)
-          .join(' ; ')}. Une issue GitHub « alerte froid » est ouverte par la collecte (sans nom ni température).</p>`
-      : `<p class="hint muted">Alerte froid prolongé active : aucune des ${c.rooms.length} pièce${c.rooms.length > 1 ? 's' : ''} suivie${c.rooms.length > 1 ? 's' : ''} sous ${num1(c.threshold)} °C (moyenne d'une journée). Réglage : Paramètres.</p>`,
+      ? alert(
+          'bad',
+          'Froid prolongé',
+          '',
+          `<p>${cold
+            .map((s) => `${esc(householdStatus().active && isBedroom(s.name) ? `${BEDROOMS_NAME} (une chambre)` : s.name)} ${describe(s, c)}`)
+            .join(' ; ')}. Une alerte est ouverte dans GitHub par la collecte (sans nom ni température). <a class="link" href="#parametres-objectifs">Réglage</a></p>`,
+        )
+      : '',
   );
 }
 
