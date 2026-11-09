@@ -12,6 +12,7 @@ import { type SwipeDir, onSwipe, step } from './swipe';
 import { esc, filtered, keepMenuOpen, lastDay, longDate, roomColor, seg } from './ui';
 import * as analyse from './views/analyse';
 import * as compare from './views/compare';
+import * as household from './views/household';
 import { renderLoading, renderLock } from './views/lock';
 import * as overview from './views/overview';
 import { pinSelect, pinnedTiles } from './views/pinned';
@@ -68,6 +69,7 @@ function render() {
         ${prices.pricesForm()}
         <button type="button" data-view="report">${icon('report')} Rapport annuel imprimable</button>
         <button type="button" data-view="settings">${icon('settings')} Paramètres et connexions</button>
+        ${household.householdMenu()}
         <label class="check"><input type="checkbox" data-toggle="simple" ${state.simple ? 'checked' : ''}> Mode simple (grands caractères, l'essentiel)</label>
         ${pinSelect()}
         <label class="lock-after">Verrouiller sans activité
@@ -150,8 +152,8 @@ function staleBanner() {
 /** View-specific handlers: each returns true when the event was its own. */
 const comfortClick = (btn: HTMLElement) => comfort?.handleClick(btn) ?? false;
 const comfortChange = (t: HTMLInputElement | HTMLSelectElement) => comfort?.handleChange(t) ?? false;
-const clickHandlers = [compare.handleClick, rooms.handleClick, report.handleClick, settings.handleClick, prices.handleClick, comfortClick];
-const changeHandlers = [overview.handleChange, rooms.handleChange, prices.handleChange, compare.handleChange, analyse.handleChange, report.handleChange, comfortChange];
+const clickHandlers = [compare.handleClick, rooms.handleClick, report.handleClick, settings.handleClick, prices.handleClick, comfortClick, household.handleClick];
+const changeHandlers = [overview.handleChange, rooms.handleChange, prices.handleChange, compare.handleChange, analyse.handleChange, report.handleChange, comfortChange, household.handleChange];
 
 app.addEventListener('submit', (e) => settings.handleSubmit(e));
 

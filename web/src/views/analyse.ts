@@ -48,6 +48,7 @@ export function renderAnalyse(view: HTMLElement, records: DayRecord[]) {
   }
   <div id="works-zone"></div>
   ${setpointCard(records)}
+  <div id="shutters-zone"></div>
   ${anomaliesCard(records)}
   <section class="card" id="calendar-card">
     <div class="card-head"><h2>Calendrier <small class="muted">kWh par jour</small></h2>
@@ -156,6 +157,8 @@ export function renderAnalyse(view: HTMLElement, records: DayRecord[]) {
   drawWaterHeater(hourly);
   drawSetpoint(records);
   drawIndoorSignature(records);
+  // S-9.6: « volets fermés » journal, lazy module
+  void import('./shutters').then((m) => document.getElementById('shutters-zone') && m.renderShutters(document.getElementById('shutters-zone')!));
 }
 
 function anomaliesCard(records: DayRecord[]) {

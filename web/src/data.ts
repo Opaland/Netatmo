@@ -29,6 +29,7 @@ export interface Dataset {
   pmax: Map<string, number>; // day -> max power drawn (kVA), Linky
   tempo: { rows: TempoRow[]; days: Map<string, number> };
   station: Station | null;
+  roomMap?: Map<string, string>; // S-12.2: rooms merged by the household view (hourly documents follow it)
 }
 
 export interface Station {
@@ -198,9 +199,11 @@ async function fetchHourly(ds: Dataset): Promise<Hourly> {
     years.map((y) => optional<{ hourly?: Record<string, Record<string, number>> }>(ds.source, `${y}.hourly`, ds.key)),
   );
   for (const doc of docs) {
-    for (const [room, hours] of Object.entries(doc?.hourly ?? {})) {
+    for (const [raw, hours] of Object.entries(doc?.hourly ?? {})) {
+      const room = ds.roomMap?.get(raw) ?? raw;
+      const merged = room !== raw;
       const m = out.get(room) ?? new Map<string, number>();
-      for (const [h, wh] of Object.entries(hours)) m.set(h, wh / 1000);
+      for (const [h, wh] of Object.entries(hours)) m.set(h, (merged ? (m.get(h) ?? 0) : 0) + wh / 1000);
       out.set(room, m);
     }
   }
