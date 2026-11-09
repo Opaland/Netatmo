@@ -363,6 +363,30 @@ def test_monthly_totals_fill_days_lost_by_the_backend(tmp_path):
     assert sum(feb.values()) == 31000.0
     assert feb["2024-02-28"] == feb["2024-02-29"] == 2000.0
     assert store.doc("2024")["estimated"]["100"] == {"2024-02-28": 1, "2024-02-29": 1}
+    # S-1.10: coverage per month, written at save time
+    assert store.doc("2024")["coverage"]["100"]["2024-02"] == [27, 2, 0]
+
+
+def test_coverage_counts_real_estimated_and_missing_days_of_stored_years(tmp_path):
+    """Years stored before coverage existed get it on the next save (S-1.10)."""
+    store = Store(tmp_path, "pw")
+    for d in range(1, 11):  # 1-10 March real
+        store.merge("r1", f"2024-03-{d:02d}", 500.0)
+    for d in range(11, 16):  # 11-15 estimated from the monthly total
+        store.merge("r1", f"2024-03-{d:02d}", 700.0)
+        store.put("2024", "estimated", "r1", f"2024-03-{d:02d}", 1)
+    store.merge("r1", "2024-04-02", 500.0)  # 16 Mar - 1 Apr lost, nothing after 2 Apr
+    store.merge("r2", "2024-04-01", 100.0)  # a room that starts later
+    store.merge("r2", "2024-04-02", 100.0)
+    store.save({"id": "h"}, [])
+    assert "coverage" not in Store(tmp_path, "pw").doc("2024")  # plain save: unchanged format
+
+    again = Store(tmp_path, "pw")
+    again.update_coverage()
+    again.save({"id": "h"}, [])
+    cov = Store(tmp_path, "pw").doc("2024")["coverage"]
+    assert cov["r1"] == {"2024-03": [10, 5, 16], "2024-04": [1, 0, 1]}
+    assert cov["r2"] == {"2024-04": [2, 0, 0]}
 
 
 def test_insights_use_only_computed_numbers(tmp_path):

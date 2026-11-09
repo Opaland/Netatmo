@@ -5,7 +5,9 @@ data/
   meta.enc.json           home, rooms (with category), coverage, available extras, last update
   2024.enc.json ...       {"daily":   {room: {"YYYY-MM-DD": Wh}},
                            "tariffs": {room: {"YYYY-MM-DD": [Wh $0, Wh $1, Wh $2]}},
-                           "temps":   {room: {"YYYY-MM-DD": [measured °C, setpoint °C]}}}
+                           "temps":   {room: {"YYYY-MM-DD": [measured °C, setpoint °C]}},
+                           "estimated": {room: {"YYYY-MM-DD": 1}}  (day spread from a monthly total),
+                           "coverage": {room: {"YYYY-MM": [real, estimated, missing]}}  (days)}
   2024.hourly.enc.json    {"hourly":  {room: {"YYYY-MM-DDTHH": Wh}}}   (loaded on demand by the app)
   weather.enc.json        {"source": "...", "outdoor": {"YYYY-MM-DD": [min, max, mean]},
                            "indoor": {"YYYY-MM-DD": mean}}
@@ -24,7 +26,7 @@ from __future__ import annotations
 import base64
 import json
 import os
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -130,6 +132,28 @@ class Store:
                     del section[room_id]
                     self._dirty.add(name)
 
+    def update_coverage(self) -> None:
+        """Per room and month, days with a real value, estimated, or missing (S-1.10).
+
+        Computed from what is stored, so already-stored years get it too. A room is
+        counted from its first stored day to the last day of the archive.
+        """
+        last = self.last_day()
+        if not last:
+            return
+        years = self.years()
+        daily = {y: self.year(y) for y in years}
+        estimated = {y: self.doc(str(y)).get("estimated", {}) for y in years}
+        firsts: dict[str, str] = {}
+        for days in daily.values():
+            for rid, d in days.items():
+                if d:
+                    firsts[rid] = min(firsts.get(rid, "9999"), min(d))
+        for y in years:
+            cov = month_coverage(daily[y], estimated[y], firsts, last, y)
+            if cov or "coverage" in self.doc(str(y)):
+                self.set_top(str(y), "coverage", cov)
+
     def merge(self, room_id: str, day: str, wh: float) -> None:
         self.put(day[:4], "daily", room_id, day, wh)
 
@@ -169,6 +193,35 @@ class Store:
             self.meta = meta
             changed.append("meta.enc.json")
         return changed
+
+
+def month_coverage(
+    daily: dict[str, dict[str, float]],
+    estimated: dict[str, dict[str, Any]],
+    firsts: dict[str, str],
+    last_day: str,
+    year: int,
+) -> dict[str, dict[str, list[int]]]:
+    """{room: {"YYYY-MM": [real, estimated, missing]}} for one year.
+
+    A day present in `daily` is real unless flagged in `estimated`; a day absent
+    between the room's first day and `last_day` is missing (lost on the server side).
+    """
+    out: dict[str, dict[str, list[int]]] = {}
+    for rid, first in firsts.items():
+        days = daily.get(rid, {})
+        est = estimated.get(rid, {})
+        d = max(date(year, 1, 1), date.fromisoformat(first))
+        end = min(date(year, 12, 31), date.fromisoformat(last_day))
+        months: dict[str, list[int]] = {}
+        while d <= end:
+            key = d.isoformat()
+            cell = months.setdefault(key[:7], [0, 0, 0])
+            cell[1 if key in est else 0 if key in days else 2] += 1
+            d += timedelta(days=1)
+        if months:
+            out[rid] = months
+    return out
 
 
 def _sorted(obj: Any) -> Any:

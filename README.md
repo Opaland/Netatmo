@@ -205,6 +205,16 @@ Le collecteur classe chaque pièce en **chauffage** ou **chauffe-eau** d'après 
 
 Les identifiants de pièces s'obtiennent avec `python -m collector discover` (voir plus bas).
 
+## Jours estimés
+
+Le serveur Intuis perd parfois le détail journalier (constaté sur février et mars 2024, également visible dans l'application officielle). La collecte distingue trois cas, pièce par pièce et jour par jour :
+
+- **réel** : la valeur du jour vient du serveur ;
+- **estimé** : le jour manque mais le total du mois est connu ; l'écart entre ce total et la somme des jours présents est réparti sur les jours manquants, qui sont marqués « estimés » (`estimated` dans le fichier de l'année) ;
+- **perdu chez Intuis** : ni le jour ni le total du mois ne sont disponibles ; rien n'est reconstitué et la consommation de ces jours manque dans les totaux.
+
+À chaque enregistrement, le collecteur recalcule pour chaque pièce et chaque mois le nombre de jours réels, estimés et perdus (`coverage` dans le fichier de l'année, y compris pour les années déjà stockées). Dans l'application, la Synthèse affiche le nombre de jours estimés ou manquants de la période, une carte repliable **Qualité des données** liste les mois incomplets, et les barres des graphiques par jour et par semaine qui contiennent de tels jours sont dessinées plus pâles. Les comparaisons d'une année touchée (2024) avec les autres sont donc à lire avec prudence.
+
 ## Utilisation en local (facultatif)
 
 ```bash

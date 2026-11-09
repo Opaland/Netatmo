@@ -39,6 +39,7 @@ import {
   table,
   tableToggle,
 } from '../ui';
+import { qualityCard, uncertainBuckets, uncertainDays } from './quality';
 
 function kpi(label: string, from: string, to: string, records: DayRecord[]) {
   const now = total(records, from, to);
@@ -112,7 +113,8 @@ export function renderOverview(view: HTMLElement, records: DayRecord[]) {
     }
     <div class="chart" id="main-chart" role="img" aria-label="Consommation par période"></div>
     <div id="main-table"></div>
-  </section>`;
+  </section>
+  ${qualityCard()}`;
   drawLinky();
 
   const set = aggregate(records, from, to, state.gran, split === 'category' ? (r) => r.cat : (r) => roomGroup(r.room));
@@ -126,7 +128,8 @@ export function renderOverview(view: HTMLElement, records: DayRecord[]) {
     data: set.groups.get(k)!.map((v) => Math.round(v * 10) / 10),
   }));
   const labels = set.keys.map((k) => bucketLabel(k, state.gran));
-  barChart(document.getElementById('main-chart')!, { labels, series: ser, stacked: true, price: avgPrice(), zoom: labels.length > 60 });
+  const muted = uncertainBuckets(records, set.keys, from, to);
+  barChart(document.getElementById('main-chart')!, { labels, series: ser, stacked: true, price: avgPrice(), zoom: labels.length > 60, muted });
   document.getElementById('main-table')!.innerHTML = tableToggle(
     table(
       ['Période', ...ser.map((s) => s.name), 'Total'],
@@ -138,9 +141,8 @@ export function renderOverview(view: HTMLElement, records: DayRecord[]) {
 }
 
 function estimatedNote(records: DayRecord[], from: string, to: string) {
-  if (!ds!.estimated.size) return '';
-  const n = new Set(records.filter((r) => r.day >= from && r.day <= to && ds!.estimated.has(`${r.room}|${r.day}`)).map((r) => r.day)).size;
-  return n ? ` <span class="muted" title="Jours dont le détail a été perdu par le serveur : reconstitués à partir du total mensuel.">· ${n} jour${n > 1 ? 's' : ''} estimé${n > 1 ? 's' : ''}</span>` : '';
+  const n = uncertainDays(records, ds!.estimated, from, to).size;
+  return n ? ` <a class="muted" href="#quality" title="Jours estimés à partir du total mensuel ou perdus chez Intuis : voir « Qualité des données ».">· ${n} jour${n > 1 ? 's' : ''} estimé${n > 1 ? 's' : ''} ou manquant${n > 1 ? 's' : ''}</a>` : '';
 }
 
 // ------------------------------------------------------------------ overview cards

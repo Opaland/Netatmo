@@ -142,9 +142,26 @@ function legend(series: Series[]) {
 
 export function barChart(
   el: HTMLElement,
-  opts: { labels: string[]; series: Series[]; stacked: boolean; price: number | null; zoom?: boolean; unit?: string },
+  opts: {
+    labels: string[];
+    series: Series[];
+    stacked: boolean;
+    price: number | null;
+    zoom?: boolean;
+    unit?: string;
+    /** Buckets drawn paler (estimated or lost days, S-1.10). */
+    muted?: boolean[];
+  },
 ) {
   const surface = cssVar('--surface-1');
+  // Per-bar style only when needed: plain arrays keep the default fast path.
+  const item = (s: Series) =>
+    s.colors || opts.muted?.some(Boolean)
+      ? s.data.map((v, j) => ({
+          value: v,
+          itemStyle: { ...(s.colors ? { color: s.colors[j] } : {}), ...(opts.muted?.[j] ? { opacity: 0.4 } : {}) },
+        }))
+      : s.data;
   const n = opts.series.length;
   const chart = instance(el);
   describe(el, opts.labels, opts.series, opts.unit);
@@ -158,7 +175,7 @@ export function barChart(
       series: opts.series.map((s, i) => ({
         type: 'bar',
         name: s.name,
-        data: s.data,
+        data: item(s),
         stack: opts.stacked ? 'total' : undefined,
         barMaxWidth: 28,
         barGap: '15%',
