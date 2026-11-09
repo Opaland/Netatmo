@@ -100,6 +100,53 @@ def _curve_day(store: Store, rnd: random.Random, d: date, hours_wh: list[float],
     return round(total, 1)
 
 
+SHELLY_DAYS = 90
+# S-1.17: Shelly plugs of the demo (name, model, mean W, washing cycles): the fridge and the
+# freezer run around the clock; the washing machine runs ~1 kWh cycles 3 or 4 times a week;
+# the TV box plug only gives its instantaneous power (not usable without a hub).
+SHELLY_PLUGS = [
+    ("p0", "Réfrigérateur", "SNPL-00112EU", 38.0),
+    ("p1", "Congélateur", "SNPL-00112EU", 31.0),
+    ("p2", "Lave-linge", "SHPLG-S", 0.0),
+    ("p3", "Box TV", "SNPL-00112EU", None),
+]
+
+
+def _shelly(store: Store, today: date) -> None:
+    """Daily kWh of the demo Shelly plugs, last SHELLY_DAYS days (separate random stream)."""
+    rnd = random.Random(158)
+    start = today - timedelta(days=SHELLY_DAYS)
+    for key, name, model, watts in SHELLY_PLUGS:
+        store.put(
+            "shelly",
+            "plugs",
+            key,
+            None,
+            {
+                "id": f"demo{key}",
+                "name": name,
+                "model": model,
+                "gen": "G1" if model == "SHPLG-S" else "G2",
+                "usable": watts is not None,
+            },
+        )
+        if watts is None:
+            continue
+        total = 0.0
+        d = start
+        while d < today:
+            if watts:
+                cold = max(0.0, math.cos((d.timetuple().tm_yday - 200) / 365 * 2 * math.pi))
+                wh = watts * 24 * (0.9 + 0.15 * (1 - cold)) * rnd.uniform(0.93, 1.07)
+            else:
+                wh = rnd.uniform(850, 1250) if rnd.random() < (0.6 if d.weekday() >= 5 else 0.4) else rnd.uniform(1, 3)
+            store.put("shelly", "daily", key, d.isoformat(), round(wh, 1))
+            total += wh
+            d += timedelta(days=1)
+        store.put("shelly", "until", key, None, today.isoformat())
+        store.put("shelly", "last", key, None, {"ts": 0, "total": round(total, 2)})
+
+
 def _sources(today: date) -> dict:
     """State of the sources (S-1.7, S-1.12) as the settings screen shows it."""
     ok = f"{today.isoformat()}T04:12:00+00:00"
@@ -115,6 +162,11 @@ def _sources(today: date) -> dict:
             "expires_estimated": True,
         },
         "linky-30min": {"ok": ok},
+        "shelly": {
+            "ok": ok,
+            "since": (today - timedelta(days=SHELLY_DAYS)).isoformat(),
+            "note": "1 prise(s) sans compteur d'énergie : non exploitable(s) sans hub",
+        },
         "ia": {"ok": ok},
     }
 
@@ -223,6 +275,7 @@ def generate(out_dir: Path, passphrase: str = "demo", start_year: int = 2022) ->
             store.merge(rid, day, share)
             store.put(day[:4], "estimated", rid, day, 1)
     store.update_coverage()
+    _shelly(store, today)
     for key in ("m0", "m1", "m2", "m3"):
         aggregate_days(store, key, key != "m1", hourly_from, today)
     store.set_top("weather", "source", "open-meteo")
@@ -245,6 +298,7 @@ def generate(out_dir: Path, passphrase: str = "demo", start_year: int = 2022) ->
         "has_temps": True,
         "has_linky": True,
         "has_station": True,
+        "has_shelly": True,
         "weather_source": "open-meteo",
         "contract": CONTRACT,
         "sources": _sources(today),

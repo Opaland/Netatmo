@@ -19,6 +19,14 @@ describe('settings', () => {
     expect(validate('ANTHROPIC_API_KEY', 'abc')).toMatch(/sk-ant-/);
   });
 
+  it('only accepts a Shelly Cloud server, like the collector (S-1.17)', () => {
+    expect(validate('SHELLY_SERVER', 'shelly-103-eu.shelly.cloud')).toBeNull();
+    expect(validate('SHELLY_SERVER', 'https://shelly-103-eu.shelly.cloud/')).toBeNull();
+    expect(validate('SHELLY_SERVER', 'evil.example.com')).toMatch(/shelly\.cloud/);
+    expect(validate('SHELLY_SERVER', 'x.shelly.cloud.evil.com')).toMatch(/shelly\.cloud/);
+    expect(validate('SHELLY_AUTH_KEY', 'court')).toMatch(/incomplète/);
+  });
+
   it('seals each value with the repository public key; only the private key opens it', async () => {
     await sodium.ready;
     const pair = sodium.crypto_box_keypair();

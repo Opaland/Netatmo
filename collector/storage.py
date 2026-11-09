@@ -19,6 +19,8 @@ data/
                           small daily aggregates "nightly" / "hours" (see docs/api-notes.md)
   2025.station_h.enc.json {"hourly": {"m0": {"YYYY-MM-DDTHH": [°C, %, ppm]}}} (loaded on demand)
   netatmo-token.enc.json  rotating refresh token of the Netatmo weather station (optional)
+  shelly.enc.json         Shelly plugs: daily Wh per plug from cumulative counters (collector/shelly.py)
+  ha.enc.json             Home Assistant daily aggregates per sensor, imported by hand (homeassistant.py)
 """
 
 from __future__ import annotations

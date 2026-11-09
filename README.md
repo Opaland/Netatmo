@@ -197,6 +197,29 @@ Netatmo renouvelle le jeton à chaque utilisation : le collecteur garde le nouve
    les données horaires existent) en W, kWh/an et €/an au prix du moment ; la demi-heure la plus
    chargée des 12 derniers mois face à la puissance souscrite ; et la courbe d'un jour au choix.
 
+**Prises connectées Shelly** (consommation des gros appareils : réfrigérateur, congélateur,
+lave-linge…) :
+1. Dans l'application Shelly : *Paramètres utilisateur* → *Clé d'autorisation cloud* → *Obtenir la
+   clé*. Copiez la **clé** et le **serveur** affiché (par exemple `shelly-103-eu.shelly.cloud`).
+2. Ajoutez les secrets `SHELLY_AUTH_KEY` et `SHELLY_SERVER` (ou dans l'écran Paramètres de l'appli).
+
+Chaque nuit, le collecteur lit le **compteur d'énergie cumulé** de chaque prise (Plus Plug S, Plug S
+et toute prise ou relais Shelly qui mesure l'énergie) et en déduit les kWh par jour, chiffrés dans
+`data/shelly.enc.json` avec le nom de la prise. L'API officielle ne donne pas d'historique : les
+kWh sont comptés à partir de la première collecte, et une prise débranchée ou redémarrée est
+rattrapée (jours « estimés »). Une prise qui n'affiche que la puissance instantanée est signalée
+« non exploitable sans hub » dans Paramètres. Détails dans
+[docs/api-notes.md](docs/api-notes.md#prises-shelly-shelly-cloud-control-api-s-117). La Synthèse
+affiche alors, sous la courbe de charge, la carte **Autres usages en détail** : le reste du Linky
+(total − chauffage − chauffe-eau, 30 derniers jours) découpé en prises mesurées, **postes saisis à la
+main** (nom, puissance, heures par jour, gardés chiffrés sur l'appareil), **talon de veille** non
+attribué (courbe de charge, appareils permanents déduits) et reste non attribué, en kWh, W moyens,
+part du reste et coût par an. La carte s'affiche dès qu'il y a un Linky, même sans prise.
+
+**Home Assistant** (capteurs d'ouverture, prises, sondes Zigbee) : export local puis
+`python -m collector import-ha FICHIER`, qui verse des agrégats quotidiens par capteur, chiffrés,
+dans `data/ha.enc.json`. Formats et procédure : [docs/import-ha.md](docs/import-ha.md).
+
 **Expiration des accès.** Le résumé de chaque collecte affiche la date d'expiration des jetons
 quand elle est connue (lue dans le jeton Conso API s'il la contient, sinon estimée à 3 ans après
 sa première utilisation, durée à vérifier). 30 jours avant, ou dès qu'un jeton Linky ou Netatmo
@@ -261,11 +284,11 @@ l'erreur est notée dans l'état des sources et le résumé de la collecte.
 
 Le résumé de chaque collecte donne aussi le **nombre d'appels et leur durée par source**. Chaque
 source a un plafond par collecte : Intuis 300 (3 000 pour la récupération de tout l'historique),
-station Netatmo 400, Linky 200, Open-Meteo 20. Plafond atteint : la collecte s'arrête proprement
+station Netatmo 400, Linky 200, Open-Meteo 20, Shelly 30. Plafond atteint : la collecte s'arrête proprement
 pour cette source, garde ce qui a été récupéré et reprend la nuit suivante (une récupération
 d'historique interrompue continue d'elle-même). Pour changer un plafond, ajoutez une **variable**
 (onglet *Variables*, pas *Secrets*) `MAX_CALLS_INTUIS`, `MAX_CALLS_NETATMO`, `MAX_CALLS_LINKY` ou
-`MAX_CALLS_OPEN_METEO` (un nombre entier).
+`MAX_CALLS_OPEN_METEO` ou `MAX_CALLS_SHELLY` (un nombre entier).
 
 ### Jours « estimés »
 

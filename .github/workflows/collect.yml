@@ -45,6 +45,10 @@ jobs:
       # Optional: Linky meter through Conso API (see README)
       ENEDIS_TOKEN: ${{ secrets.ENEDIS_TOKEN }}
       ENEDIS_PRM: ${{ secrets.ENEDIS_PRM }}
+      # Optional: Shelly smart plugs through the Shelly Cloud (see README)
+      SHELLY_AUTH_KEY: ${{ secrets.SHELLY_AUTH_KEY }}
+      SHELLY_SERVER: ${{ secrets.SHELLY_SERVER }}
+      MAX_CALLS_SHELLY: ${{ vars.MAX_CALLS_SHELLY }}
       # Optional: monthly analysis written by Claude (see README)
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
     steps:

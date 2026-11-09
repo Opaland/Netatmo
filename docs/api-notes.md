@@ -105,6 +105,8 @@ nocturne (l'API ne donne pas d'historique) ; sinon, le noter ici.
 | Netatmo | `/api/getstationsdata` | `body.devices[]._id`, `modules[]._id` |
 | Netatmo | `/api/getmeasure` | `body` (blocs ou objet horodaté) |
 | Open-Meteo | `archive`, `forecast` | `daily.time`, `daily.temperature_2m_min/max/mean` |
+| Shelly Cloud | `interface/device/list`, `device/all_status` | `isok` (et `data`, `errors` s'ils sont là) |
+| Shelly Cloud | `v2/devices/api/get` | liste de `{id, online?, status?, settings?}` |
 | Conso API | les trois points d'accès | voir ci-dessous |
 
 Un champ absent ou d'un autre type lève `FormatError` : « *source* : format de réponse inattendu
@@ -135,6 +137,7 @@ Plafonds par collecte, réglables par variable de dépôt (transmise par `collec
 | Netatmo | 400 (l'API publique autorise 500 / h) | `MAX_CALLS_NETATMO` |
 | Linky (Conso API) | 200 | `MAX_CALLS_LINKY` |
 | Open-Meteo | 20 | `MAX_CALLS_OPEN_METEO` |
+| Shelly Cloud | 30 | `MAX_CALLS_SHELLY` |
 
 Les nouvelles tentatives (429, 5xx) comptent. Plafond atteint : la source s'arrête proprement, ce qui
 a été récupéré est enregistré, et la collecte se termine sans erreur (avertissement dans le journal).
@@ -204,8 +207,54 @@ Règles utiles à l'affichage :
 - Les jours sont recalculés à chaque collecte sur la fenêtre téléchargée (plus la veille, pour la
   nuit à cheval) : une nuit incomplète le matin est complétée le lendemain.
 
+## Prises Shelly (Shelly Cloud Control API, S-1.17)
+
+Source facultative (`collector/shelly.py`). Secrets : `SHELLY_AUTH_KEY` (clé) et `SHELLY_SERVER`
+(« server uri »), tous deux affichés dans l'application Shelly → *Paramètres utilisateur* →
+*Clé d'autorisation cloud*. La clé change si le mot de passe Shelly change. Le collecteur
+n'envoie la clé qu'à un hôte `*.shelly.cloud` (vérifié, comme dans l'écran Paramètres).
+
+Vérifié le 9 novembre 2026 sur la [documentation officielle](https://shelly-api-docs.shelly.cloud/cloud-control-api/) :
+
+| Point d'accès | Statut | Usage |
+|---|---|---|
+| `POST https://<serveur>/v2/devices/api/get?auth_key=<clé>` (JSON `{"ids": [1 à 10 ids], "select": ["status", "settings"]}`) | officiel (« v2.0-beta ») | État de 10 appareils au plus : liste de `{id, type, code, gen, online (0/1), status, settings}` |
+| `POST https://<serveur>/interface/device/list` (formulaire `auth_key`) | **non documenté** (utilisé par la communauté, à vérifier) | Liste des appareils : `{"isok": true, "data": {"devices": {id: {name, type, gen, …}}}}` |
+| `POST https://<serveur>/device/all_status` (formulaire `auth_key`) | **non documenté** (repli) | `{"isok": true, "data": {"devices_status": {id: {…}}}}` : sert seulement à connaître les ids |
+
+- **Débit** : 1 requête par seconde (documenté) ; le collecteur espace ses appels de 1,1 s.
+  Une collecte coûte 2 appels pour 10 prises au plus (plafond `MAX_CALLS_SHELLY`, 30 par défaut).
+- **Pas d'historique** dans l'API officielle : `/statistics/relay/consumption`, cité sur le forum,
+  n'est pas documenté et n'est pas utilisé. Le collecteur lit donc le **compteur cumulé** :
+  Gen2+ `switch:N.aenergy.total` (Wh), Gen1 `meters[].total` (**watt-minutes**, divisé par 60) ou
+  `emeters[].total` (Wh). L'horloge de l'appareil (`sys.unixtime`, Gen1 `unixtime`) date le relevé.
+- **Énergie par jour** : différence entre deux relevés, répartie sur les jours locaux couverts au
+  prorata du temps (une collecte nocturne : chaque jour reçoit une part de deux intervalles ; exact
+  pour un réfrigérateur, approché pour un lave-linge). Compteur en baisse (redémarrage, coupure) :
+  seule la nouvelle valeur compte, jours marqués estimés. Intervalle de plus de 30 h (prise hors
+  ligne, collecte manquée) : jours marqués estimés ; au-delà de 45 jours, l'intervalle est ignoré.
+- **Prise sans compteur** (puissance instantanée seulement) : gardée avec `usable: false` et signalée
+  « non exploitable sans hub » dans l'état des sources. Les appareils sans mesure (capteurs) sont ignorés.
+- Erreurs : HTTP 401/403 ou `isok: false` avec une erreur de clé → jeton refusé (issue « 🔑 Jeton à
+  renouveler »). Les messages ne citent ni la clé, ni un id, ni un nom ; les URL (qui portent la clé
+  pour `v2`) ne sont jamais journalisées (le journal `httpx` est coupé au niveau INFO).
+
+Document `data/shelly.enc.json` (chiffré, chargé au démarrage de l'appli, petit) :
+
+```jsonc
+{
+  "plugs":     {"p0": {"id": "<id Shelly>", "name": "Réfrigérateur", "model": "SNPL-00112EU", "gen": "G2", "usable": true}},
+  "last":      {"p0": {"ts": 1731130000, "total": 123456.7}},  // dernier relevé (s, Wh)
+  "daily":     {"p0": {"YYYY-MM-DD": 1012.4}},                // Wh par jour local
+  "estimated": {"p0": {"YYYY-MM-DD": 1}},
+  "until":     {"p0": "YYYY-MM-DD"}                           // jours antérieurs complets
+}
+```
+
 ## Sources
 
+- [Shelly Cloud Control API](https://shelly-api-docs.shelly.cloud/cloud-control-api/) et sa
+  [communication v2](https://shelly-api-docs.shelly.cloud/cloud-control-api/communication-v2)
 - [antoine-pyre/intuis-connect](https://github.com/antoine-pyre/intuis-connect) : intégration Home Assistant la plus complète (docs `02-api-reference.md`, `06-energy-consumption.md`)
 - [tramsdale/muller_intuis](https://github.com/tramsdale/muller_intuis) : chauffe-eau (`NMW`), énergie chauffage / eau chaude
 - [Flow Node-RED « Intuis connect »](https://flows.nodered.org/flow/3d7f77cef8a7c6aa4fc33e2dbf26f15e) : `gethomemeasure` en JSON

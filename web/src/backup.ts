@@ -24,6 +24,8 @@ export function backupNames(meta: BackupMeta): string[] {
     'linky',
     'station',
     'insights',
+    'shelly',
+    'ha',
     ...years(meta.years, ''),
     ...years(meta.hourly_years, '.hourly'),
     ...years(meta.station_hourly_years, '.station_h'),

@@ -172,6 +172,24 @@ try {
         } catch (err) {
           errors.push(`${name}/overview: carte « Courbe de charge » non rendue (${err})`);
         }
+        // S-4.12 / S-1.17: other usages split into Shelly plugs, declared appliances, talon
+        try {
+          await page.waitForSelector('#bd-chart canvas', { timeout: 15000 });
+          const text = await page.locator('#breakdown-card').innerText();
+          for (const want of ['Réfrigérateur', 'Lave-linge', 'Veille non attribuée', 'Non attribué', 'non exploitable sans hub']) {
+            if (!text.includes(want)) errors.push(`${name}/overview: décomposition sans « ${want} »`);
+          }
+          await page.fill('#bd-form [name=name]', 'Box internet');
+          await page.fill('#bd-form [name=watts]', '12');
+          await page.fill('#bd-form [name=hours]', '24');
+          await page.click('#bd-form button[type=submit]');
+          await page.waitForSelector('[data-bd-remove]', { timeout: 5000 });
+          if (!(await page.locator('#breakdown-card').innerText()).includes('Box internet'))
+            errors.push(`${name}/overview: poste saisi absent de la décomposition`);
+          await page.click('[data-bd-remove]');
+        } catch (err) {
+          errors.push(`${name}/overview: carte « Autres usages en détail » non rendue (${err})`);
+        }
         // S-1.10: lost days rebuilt apart, on demand (lazy module)
         try {
           await page.click('#quality summary');

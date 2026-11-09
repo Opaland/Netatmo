@@ -37,6 +37,8 @@ class Settings:
     netatmo_refresh_token: str = ""
     enedis_token: str = ""
     enedis_prm: str = ""
+    shelly_auth_key: str = ""
+    shelly_server: str = ""
     data_dir: Path = Path("data")
     # Optional overrides: {"<room_id>": "water_heater" | "heating" | "ignore"}
     room_categories: dict[str, str] = field(default_factory=dict)
@@ -60,6 +62,8 @@ class Settings:
             netatmo_refresh_token=os.environ.get("NETATMO_REFRESH_TOKEN", "").strip(),
             enedis_token=os.environ.get("ENEDIS_TOKEN", "").strip(),
             enedis_prm=os.environ.get("ENEDIS_PRM", "").strip(),
+            shelly_auth_key=os.environ.get("SHELLY_AUTH_KEY", "").strip(),
+            shelly_server=os.environ.get("SHELLY_SERVER", "").strip(),
             data_dir=Path(os.environ.get("DATA_DIR", "data")),
             room_categories=overrides,
         )

@@ -3,6 +3,7 @@
 import { type DayRecord, type Meta, toRecords } from './aggregate';
 import { loadOffers, loadTempo } from './offers';
 import { type Hourly, type TariffMap, type TempoRow, type TrveRow, type Weather, parseTrveCsv } from './analysis';
+import type { ShellyDoc } from './breakdown';
 import type { Coverage } from './checks';
 import type { DayHours, Night, StationHourly } from './comfort';
 import { type Envelope, type KeyInfo, decryptEnvelope, deriveKey } from './crypto';
@@ -28,6 +29,7 @@ export interface Dataset {
   pmax: Map<string, number>; // day -> max power drawn (kVA), Linky
   tempo: { rows: TempoRow[]; days: Map<string, number> };
   station: Station | null;
+  shelly?: ShellyDoc | null; // S-1.17: Shelly plugs, daily Wh (small document)
 }
 
 export interface Station {
@@ -118,7 +120,7 @@ const toMap2 = <V>(o: Record<string, Record<string, V>> | undefined, into: Map<s
 
 export async function load(source: Source, key: CryptoKey): Promise<Dataset> {
   const meta = await decryptEnvelope<Meta>(await getJson<Envelope>(`${source}/meta.enc.json`), key);
-  const [years, weatherDoc, linkyDoc, insights, trve, station, offers, tempo] = await Promise.all([
+  const [years, weatherDoc, linkyDoc, insights, trve, station, offers, tempo, shelly] = await Promise.all([
     Promise.all(
       meta.years.map(async (y) => {
         const doc = await decryptEnvelope<YearDoc>(await getJson<Envelope>(`${source}/${y}.enc.json`), key);
@@ -136,6 +138,7 @@ export async function load(source: Source, key: CryptoKey): Promise<Dataset> {
     optional<Station>(source, 'station', key),
     loadOffers(),
     loadTempo(),
+    optional<ShellyDoc>(source, 'shelly', key),
   ]);
   const tariffs: TariffMap = new Map();
   const temps: Dataset['temps'] = new Map();
@@ -175,6 +178,7 @@ export async function load(source: Source, key: CryptoKey): Promise<Dataset> {
     tempo,
     pmax: new Map(Object.entries(linkyDoc?.pmax ?? {})),
     station: station?.daily && Object.keys(station.daily).length ? station : null,
+    shelly,
   };
 }
 
@@ -224,8 +228,20 @@ export async function loadStationHourly(ds: Dataset): Promise<StationHourly> {
   return out;
 }
 
-/** Linky 30-min load curve (S-1.11), one document per year, loaded on demand. */
-export async function loadCurve(ds: Dataset): Promise<Map<string, number>> {
+/** Linky 30-min load curve (S-1.11), one document per year, loaded on demand, once per dataset
+ * (the curve card and the breakdown card both need it). */
+const curveCache = new WeakMap<Dataset, Promise<Map<string, number>>>();
+export function loadCurve(ds: Dataset): Promise<Map<string, number>> {
+  let p = curveCache.get(ds);
+  if (!p) {
+    p = fetchCurve(ds);
+    curveCache.set(ds, p);
+    p.catch(() => curveCache.delete(ds));
+  }
+  return p;
+}
+
+async function fetchCurve(ds: Dataset): Promise<Map<string, number>> {
   const years = (ds.meta as Meta & { linky_curve_years?: number[] }).linky_curve_years ?? [];
   const docs = await Promise.all(years.map((y) => optional<{ curve?: Record<string, number> }>(ds.source, `${y}.linky30`, ds.key)));
   const out = new Map<string, number>();
