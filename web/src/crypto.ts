@@ -25,7 +25,7 @@ export async function deriveKey(passphrase: string, info: KeyInfo): Promise<Cryp
     base,
     { name: 'AES-GCM', length: 256 },
     false, // non-extractable: can be kept in IndexedDB without exposing the raw key
-    ['decrypt'],
+    ['decrypt', 'encrypt'], // encrypt: private notes kept on the device (S-4.10 absences)
   );
 }
 
@@ -36,4 +36,18 @@ export async function decryptEnvelope<T>(env: Envelope, key: CryptoKey): Promise
   } catch {
     throw new WrongPassphrase('Phrase de passe incorrecte');
   }
+}
+
+const toB64 = (b: Uint8Array) => btoa(String.fromCharCode(...b));
+
+/** Small private JSON kept on this device (localStorage), encrypted with the data key. */
+export async function sealLocal(value: unknown, key: CryptoKey): Promise<{ iv: string; ct: string }> {
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const ct = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, new TextEncoder().encode(JSON.stringify(value)));
+  return { iv: toB64(iv), ct: toB64(new Uint8Array(ct)) };
+}
+
+export async function openLocal<T>(sealed: { iv: string; ct: string }, key: CryptoKey): Promise<T> {
+  const pt = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: fromB64(sealed.iv) }, key, fromB64(sealed.ct));
+  return JSON.parse(new TextDecoder().decode(pt)) as T;
 }
