@@ -104,7 +104,7 @@ export function renderOverview(view: HTMLElement, records: DayRecord[]) {
     <p class="period-total"><strong>${fmtKwh(periodTotal)}</strong> ${eurOf(records, from, to) ? `· ${eurOf(records, from, to)} ` : ''}du ${longDate(from)} au ${longDate(to)}${estimatedNote(records, from, to)}</p>
     ${
       shares.length > 1
-        ? `<div class="share" aria-label="Répartition">${shares
+        ? `<div class="share" aria-hidden="true">${shares
             .map((s) => `<span style="flex:${s.p};background:${catColor(s.c)}"></span>`)
             .join('')}</div><p class="share-legend">${shares
             .map((s) => `<span><i style="background:${catColor(s.c)}"></i>${CATEGORY_LABEL[s.c]} ${nf0.format(s.p)} % · ${fmtKwh(s.v)}</span>`)

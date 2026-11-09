@@ -7,7 +7,7 @@
   --grid: #ecebe7;
   --text-primary: #0b0b0b;
   --text-secondary: #52514e;
-  --text-muted: #77756f;
+  --text-muted: #6b6963; /* 4.9:1 on surface-0 (S-7.6, axe) */
   --accent: #c2410c;
   --accent-ink: #ffffff;
   --ghost: #c9c7c0;
@@ -78,14 +78,33 @@ body {
   margin: 0;
   background: var(--surface-0);
   color: var(--text-primary);
-  font: 15px/1.45 system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  /* S-7.7: 93.75 % of the browser size (15 px by default): rem follow the text size of the system. */
+  font: 93.75%/1.45 system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
   -webkit-text-size-adjust: 100%;
+}
+body {
+  font-size: 1rem;
+}
+/* iPhone: follow the Dynamic Type size of the system (Safari ignores it otherwise). */
+@supports (font: -apple-system-body) and (-webkit-touch-callout: none) {
+  html {
+    font: -apple-system-body;
+    font-family: system-ui, -apple-system, sans-serif;
+    line-height: 1.45;
+  }
 }
 button,
 input,
 select {
   font: inherit;
   color: inherit;
+}
+/* S-7.6: native fields take the app surface (the dark default grey failed contrast). */
+input:where(:not([type='checkbox'], [type='radio'], [type='range'])),
+select {
+  background-color: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: 8px;
 }
 h1,
 h2,
@@ -907,7 +926,7 @@ body.is-simple .tabs {
   display: none;
 }
 body.is-simple {
-  font-size: 18px;
+  font-size: 1.2rem;
 }
 body.is-simple .verdict-title {
   font-size: 1.4rem;
@@ -917,6 +936,152 @@ body.is-simple .kpi-value {
 }
 body.is-simple .kpis {
   grid-template-columns: 1fr;
+}
+/* S-7.7: with the system text at 200 %, wrap instead of cutting. */
+body.is-simple .kpi,
+body.is-simple .verdict > div {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+body.is-simple .kpi-value {
+  font-size: min(2.2rem, 13vw);
+}
+.top .title h1 {
+  overflow-wrap: anywhere;
+}
+.kpi.pinned {
+  border-color: var(--accent);
+}
+
+/* ---------------------------------------------------------------- swipe (S-7.11) */
+.top,
+.tabs {
+  touch-action: pan-y pinch-zoom;
+}
+@media (prefers-reduced-motion: no-preference) {
+  #view.slide-left {
+    animation: slide-left 0.2s ease-out;
+  }
+  #view.slide-right {
+    animation: slide-right 0.2s ease-out;
+  }
+}
+@keyframes slide-left {
+  from {
+    transform: translateX(32px);
+    opacity: 0.4;
+  }
+}
+@keyframes slide-right {
+  from {
+    transform: translateX(-32px);
+    opacity: 0.4;
+  }
+}
+
+/* ---------------------------------------------------------------- offline (S-7.12) */
+.offline {
+  margin: 0 0 12px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--text-muted);
+  background: var(--surface-1);
+  font-size: 0.9rem;
+}
+.offline[hidden] {
+  display: none;
+}
+
+/* ---------------------------------------------------------------- high contrast (S-7.7) */
+/* Every text token reaches 7:1 on the surfaces; borders become visible lines. */
+@media (prefers-contrast: more) {
+  :root {
+    --surface-0: #ffffff;
+    --surface-1: #ffffff;
+    --surface-raised: #ffffff;
+    --border: #5c5b57;
+    --grid: #b5b3ad;
+    --text-primary: #000000;
+    --text-secondary: #262624;
+    --text-muted: #3a3936;
+    --accent: #8f2f0a;
+    --accent-ink: #ffffff;
+    --ghost: #8d8b84;
+    --good: #0a520a;
+    --bad: #8a1717;
+    --cat-heating: #c2410c;
+    --cat-water: #1c5cab;
+    --series-1: #1c5cab;
+    --series-2: #c2410c;
+    --series-3: #0b7650;
+    --series-4: #8a5d00;
+    --series-5: #b0336a;
+    --series-6: #005c00;
+    --series-7: #4a3aae;
+    --series-8: #b42323;
+  }
+  :focus-visible {
+    outline-width: 3px;
+  }
+  .tabs button[aria-current='page'] span,
+  .seg button[aria-checked='true'] {
+    text-decoration: underline 2px;
+    text-underline-offset: 3px;
+  }
+  .kpi,
+  .card,
+  .verdict,
+  .seg,
+  .chip {
+    border-color: var(--text-secondary);
+  }
+}
+@media (prefers-contrast: more) and (prefers-color-scheme: dark) {
+  :root:where(:not([data-theme='light'])) {
+    --surface-0: #000000;
+    --surface-1: #000000;
+    --surface-raised: #0d0d0c;
+    --border: #a3a29a;
+    --grid: #4d4d48;
+    --text-primary: #ffffff;
+    --text-secondary: #e6e5df;
+    --text-muted: #d2d1c9;
+    --accent: #fdba74;
+    --accent-ink: #000000;
+    --ghost: #77766f;
+    --good: #86e086;
+    --bad: #ffa3a3;
+    --cat-heating: #f6894f;
+    --cat-water: #7ab3f2;
+    --series-1: #7ab3f2;
+    --series-2: #f6894f;
+    --series-3: #3fcf98;
+    --series-4: #f0bb3a;
+    --series-5: #f08cb5;
+    --series-6: #4cc24c;
+    --series-7: #b1a8f5;
+    --series-8: #ff8585;
+  }
+}
+/* Windows high contrast and other forced palettes: keep state and colour keys visible. */
+@media (forced-colors: active) {
+  .seg button[aria-checked='true'],
+  .tabs button[aria-current='page'],
+  .chip[aria-pressed='true'] {
+    forced-color-adjust: none;
+    background: Highlight;
+    color: HighlightText;
+  }
+  .swatch,
+  .share span,
+  .share-legend i,
+  .tt-key,
+  .verdict-icon {
+    forced-color-adjust: none;
+  }
+  :focus-visible {
+    outline: 3px solid Highlight;
+  }
 }
 
 .ko-red {
@@ -944,4 +1109,11 @@ body.is-simple .kpis {
 }
 @media (prefers-reduced-motion: reduce) {
   .sk { animation: none; }
+}
+
+/* S-7.6: a primary button inside the menu keeps its colours (was white on white). */
+.menu-panel .primary {
+  border: 0;
+  background: var(--accent);
+  color: var(--accent-ink);
 }
