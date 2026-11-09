@@ -312,6 +312,13 @@ code {
 .kpis-one {
   grid-template-columns: minmax(0, 1fr);
 }
+/* two figures compared side by side (Historique, hiver contre hiver), stacked at 200 % */
+.kpis.kpis-pair {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 7.5rem), 1fr));
+}
+.chart-caption {
+  margin-bottom: 0;
+}
 .actions {
   display: flex;
   flex-wrap: wrap;
