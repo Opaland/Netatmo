@@ -16,6 +16,11 @@ export interface Meta {
   first_day: string | null;
   last_day: string | null;
   updated: string;
+  hourly_years?: number[];
+  has_tariffs?: boolean;
+  has_temps?: boolean;
+  has_linky?: boolean;
+  weather_source?: string | null;
 }
 
 export interface DayRecord {

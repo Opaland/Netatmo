@@ -1,23 +1,58 @@
 // Fetching the encrypted files and remembering the derived key on this device.
 
 import { type DayRecord, type Meta, toRecords } from './aggregate';
+import type { Hourly, TariffMap, Weather } from './analysis';
 import { type Envelope, type KeyInfo, decryptEnvelope, deriveKey } from './crypto';
 
 export type Source = 'data' | 'demo';
 
 export interface Dataset {
   source: Source;
+  key: CryptoKey;
   meta: Meta;
   records: DayRecord[];
+  tariffs: TariffMap;
+  temps: Map<string, Map<string, [number, number | null]>>; // room -> day -> [measured, setpoint]
+  weather: Weather | null;
+  indoor: Map<string, number>;
+  linky: Map<string, number>; // day -> kWh, whole home
+  insights: Insights | null;
+  estimated: Set<string>; // "room|day" rebuilt from a monthly total
+}
+
+export interface Insights {
+  generated: string;
+  model: string;
+  period: string;
+  markdown: string;
+  verified?: boolean;
+  facts?: unknown;
+}
+
+interface YearDoc {
+  daily?: Record<string, Record<string, number>>;
+  tariffs?: Record<string, Record<string, [number, number, number]>>;
+  temps?: Record<string, Record<string, [number, number | null]>>;
+  estimated?: Record<string, Record<string, number>>;
 }
 
 export class NoData extends Error {}
 
 async function getJson<T>(url: string): Promise<T> {
   const resp = await fetch(url, { cache: 'no-cache' });
-  if (resp.status === 404) throw new NoData(url);
+  // 404 on GitHub Pages; dev/preview servers answer missing files with index.html.
+  if (resp.status === 404 || (resp.headers.get('content-type') ?? '').includes('text/html')) throw new NoData(url);
   if (!resp.ok) throw new Error(`${url} : HTTP ${resp.status}`);
   return (await resp.json()) as T;
+}
+
+async function optional<T>(source: Source, name: string, key: CryptoKey): Promise<T | null> {
+  try {
+    return await decryptEnvelope<T>(await getJson<Envelope>(`${source}/${name}.enc.json`), key);
+  } catch (err) {
+    if (err instanceof NoData) return null;
+    throw err;
+  }
 }
 
 export async function keyInfo(source: Source): Promise<KeyInfo> {
@@ -31,16 +66,72 @@ export async function unlock(source: Source, passphrase: string): Promise<Crypto
   return key;
 }
 
+const toMap2 = <V>(o: Record<string, Record<string, V>> | undefined, into: Map<string, Map<string, V>>) => {
+  for (const [room, days] of Object.entries(o ?? {})) {
+    const m = into.get(room) ?? new Map<string, V>();
+    for (const [d, v] of Object.entries(days)) m.set(d, v);
+    into.set(room, m);
+  }
+};
+
 export async function load(source: Source, key: CryptoKey): Promise<Dataset> {
   const meta = await decryptEnvelope<Meta>(await getJson<Envelope>(`${source}/meta.enc.json`), key);
-  const years = await Promise.all(
-    meta.years.map(async (y) => {
-      const env = await getJson<Envelope>(`${source}/${y}.enc.json`);
-      const { daily } = await decryptEnvelope<{ daily: Record<string, Record<string, number>> }>(env, key);
-      return [String(y), daily] as const;
-    }),
+  const [years, weatherDoc, linkyDoc, insights] = await Promise.all([
+    Promise.all(
+      meta.years.map(async (y) => {
+        const doc = await decryptEnvelope<YearDoc>(await getJson<Envelope>(`${source}/${y}.enc.json`), key);
+        return [String(y), doc] as const;
+      }),
+    ),
+    optional<{ source?: string; outdoor?: Record<string, [number, number, number]>; indoor?: Record<string, number> }>(
+      source,
+      'weather',
+      key,
+    ),
+    optional<{ daily?: Record<string, number> }>(source, 'linky', key),
+    optional<Insights>(source, 'insights', key),
+  ]);
+  const tariffs: TariffMap = new Map();
+  const temps: Dataset['temps'] = new Map();
+  const estimated = new Set<string>();
+  for (const [, doc] of years) {
+    toMap2(doc.tariffs, tariffs);
+    toMap2(doc.temps, temps);
+    for (const [room, days] of Object.entries(doc.estimated ?? {})) for (const d of Object.keys(days)) estimated.add(`${room}|${d}`);
+  }
+  // Tariff values are stored in Wh like everything else: convert to kWh once.
+  for (const days of tariffs.values()) for (const [d, v] of days) days.set(d, [v[0] / 1000, v[1] / 1000, v[2] / 1000]);
+  const outdoor = weatherDoc?.outdoor ? new Map(Object.entries(weatherDoc.outdoor)) : null;
+  return {
+    source,
+    key,
+    meta,
+    records: toRecords(meta, Object.fromEntries(years.map(([y, d]) => [y, d.daily ?? {}]))),
+    tariffs,
+    temps,
+    weather: outdoor && outdoor.size ? outdoor : null,
+    indoor: new Map(Object.entries(weatherDoc?.indoor ?? {})),
+    linky: new Map(Object.entries(linkyDoc?.daily ?? {}).map(([d, wh]) => [d, wh / 1000])),
+    insights,
+    estimated,
+  };
+}
+
+/** Hourly documents are big: loaded only when the hourly view opens. */
+export async function loadHourly(ds: Dataset): Promise<Hourly> {
+  const out: Hourly = new Map();
+  const years = (ds.meta as Meta & { hourly_years?: number[] }).hourly_years ?? [];
+  const docs = await Promise.all(
+    years.map((y) => optional<{ hourly?: Record<string, Record<string, number>> }>(ds.source, `${y}.hourly`, ds.key)),
   );
-  return { source, meta, records: toRecords(meta, Object.fromEntries(years)) };
+  for (const doc of docs) {
+    for (const [room, hours] of Object.entries(doc?.hourly ?? {})) {
+      const m = out.get(room) ?? new Map<string, number>();
+      for (const [h, wh] of Object.entries(hours)) m.set(h, wh / 1000);
+      out.set(room, m);
+    }
+  }
+  return out;
 }
 
 // ------------------------------------------------------------ remembered key (IndexedDB)

@@ -14,8 +14,11 @@ import argparse
 import csv
 import json
 import logging
+import os
 import sys
 from pathlib import Path
+
+import httpx
 
 from .api import IntuisClient
 from .config import Settings
@@ -53,12 +56,80 @@ def cmd_diagnose(s: Settings, args: argparse.Namespace) -> None:
         run(client)
 
 
+def _warn(msg: str) -> None:
+    # "::warning::" shows up as an annotation on the GitHub Actions run.
+    print(f"::warning::{msg}" if os.environ.get("GITHUB_ACTIONS") else f"Attention : {msg}")
+
+
+def _weather(s: Settings, store: Store, home) -> str | None:
+    """Outdoor temperatures: the Netatmo station if configured, else Open-Meteo. Never fatal."""
+    first = store.first_day()
+    if not first:
+        return None
+    if s.netatmo_client_id and s.netatmo_refresh_token:
+        from .station import Station, StationError
+
+        try:
+            Station(store, s.netatmo_client_id, s.netatmo_client_secret, s.netatmo_refresh_token).collect(
+                home.timezone, first
+            )
+            return "netatmo"
+        except (StationError, httpx.HTTPError) as err:
+            _warn(f"{err} — repli sur Open-Meteo")
+    if home.latitude is None or home.longitude is None:
+        _warn("Coordonnées de la maison inconnues : pas de météo")
+        return None
+    from .weather import open_meteo
+
+    try:
+        open_meteo(store, home.latitude, home.longitude, home.timezone, first)
+        return store.doc("weather").get("source")
+    except httpx.HTTPError as err:
+        _warn(f"Météo Open-Meteo indisponible : {err}")
+        return store.meta.get("weather_source")
+
+
 def cmd_sync(s: Settings, args: argparse.Namespace, backfill: bool = False) -> None:
     s.require("passphrase")
     store = Store(s.data_dir, s.passphrase)
-    changed = Syncer(_client(s), store, s.room_categories).run(days=args.days, backfill=backfill)
+    syncer = Syncer(_client(s), store, s.room_categories)
+    syncer.run(days=args.days, backfill=backfill, save=False)
+    home = syncer.last_home
+    source = _weather(s, store, home)
+    extra = {"weather_source": source} if source else {}
+    if s.enedis_token and s.enedis_prm and store.first_day():
+        from .enedis import LinkyError, collect
+
+        try:
+            collect(store, s.enedis_token, s.enedis_prm, store.first_day(), home.timezone)
+        except (LinkyError, httpx.HTTPError) as err:
+            _warn(str(err))
+    if store.doc("linky").get("daily"):
+        extra["has_linky"] = True
+    if os.environ.get("ANTHROPIC_API_KEY"):
+        from .insights import generate
+
+        try:
+            generate(store)
+        except Exception as err:  # never lose a night of data because of the optional AI step
+            _warn(f"Analyse IA non rédigée : {err}")
+    changed = syncer.save(home, extra)
     print("Fichiers modifiés : " + (", ".join(changed) if changed else "aucun"))
     print(f"Couverture : {store.first_day()} → {store.last_day()}")
+
+
+def cmd_insights(s: Settings, args: argparse.Namespace) -> None:
+    from .insights import generate
+
+    s.require("passphrase")
+    store = Store(s.data_dir, s.passphrase)
+    if generate(store, force=args.force):
+        store.save(
+            store.meta.get("home", {}),
+            store.meta.get("rooms", []),
+            {k: v for k, v in store.meta.items() if k.startswith("has_") or k == "weather_source"},
+        )
+        print(store.doc("insights")["markdown"])
 
 
 def cmd_verify(s: Settings, args: argparse.Namespace) -> None:
@@ -114,6 +185,8 @@ def main(argv: list[str] | None = None) -> None:
         sp = sub.add_parser(name)
         sp.add_argument("--days", type=int, default=35, help="jours re-téléchargés à chaque sync (défaut 35)")
     sub.add_parser("verify")
+    ins = sub.add_parser("insights", help="analyse du mois rédigée par Claude (ANTHROPIC_API_KEY)")
+    ins.add_argument("--force", action="store_true")
     e = sub.add_parser("export-csv")
     e.add_argument("-o", "--output", default="-")
     dm = sub.add_parser("demo")
@@ -128,6 +201,7 @@ def main(argv: list[str] | None = None) -> None:
         "sync": cmd_sync,
         "backfill": lambda s, a: cmd_sync(s, a, backfill=True),
         "verify": cmd_verify,
+        "insights": cmd_insights,
         "export-csv": cmd_export,
         "demo": cmd_demo,
     }[args.cmd](s, args)

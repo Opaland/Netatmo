@@ -141,6 +141,49 @@ def history_deep(client: IntuisClient) -> None:
         "sum_energy_buy_from_grid",
         "sum_energy_buy_from_grid$0",
     ]
+    print("\nPar pièce (P = pièce, M = module), jours non nuls à l'échelle 1day :")
+    for year in (2022, 2023, 2024, 2025):
+        b = int(datetime(year, 1, 1, tzinfo=UTC).timestamp())
+        e = int(datetime(year + 1, 1, 1, tzinfo=UTC).timestamp())
+        for t in (
+            "sum_energy_elec_heating",
+            "sum_energy_elec",
+            "sum_energy_elec$1,sum_energy_elec$2",
+            "sum_energy_elec_hot_water",
+        ):
+            try:
+                cells = []
+                start = b
+                per_room: dict[str, int] = {}
+                per_mod: dict[str, int] = {}
+                while start < e:
+                    stop = min(start + 1000 * DAY, e)
+                    p = client.home_measure(
+                        h["id"],
+                        bridge,
+                        room_ids,
+                        measure_type=t,
+                        scale="1day",
+                        date_begin=start,
+                        date_end=stop,
+                        module_ids=nmh,
+                    )
+                    home = p.get("body", {}).get("home", {})
+                    for x in home.get("rooms", []):
+                        per_room[str(x.get("id"))] = per_room.get(str(x.get("id")), 0) + _nonzero_days(
+                            x.get("measures") or []
+                        )
+                    for x in home.get("modules", []) or []:
+                        per_mod[str(x.get("id"))] = per_mod.get(str(x.get("id")), 0) + _nonzero_days(
+                            x.get("measures") or []
+                        )
+                    start = stop
+                cells = [f"P{i}={per_room.get(rid, 0)}" for i, rid in enumerate(room_ids)]
+                mi = {m["id"]: i for i, m in enumerate(modules)}
+                cells += [f"M{mi[mid]}={n}" for mid, n in per_mod.items() if n]
+                print(f"  {year} {t[:28]:<28} " + " ".join(cells))
+            except ApiError as err:
+                print(f"  {year} {t[:28]:<28} erreur {str(err)[:40]}")
     for year in (2022, 2023, 2024):
         b = int(datetime(year, 1, 1, tzinfo=UTC).timestamp())
         e = int(datetime(year + 1, 1, 1, tzinfo=UTC).timestamp())

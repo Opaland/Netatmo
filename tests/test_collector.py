@@ -22,7 +22,11 @@ def test_parse_homes_classifies_rooms():
     (home,) = parse_homes(load("homesdata.json"))
     assert home.bridge_id == "gw"
     cats = {r.name: r.category for r in home.rooms}
-    assert cats == {"Salon": HEATING, "Chambre": HEATING, "Chauffe-eau": WATER_HEATER}
+    assert cats == {
+        "Salon": HEATING,
+        "Chambre": HEATING,
+        "Chauffe-eau": WATER_HEATER,
+    }
 
 
 def test_override_and_name_heuristics():
@@ -151,6 +155,36 @@ def test_water_heater_is_read_at_module_level(tmp_path):
     assert store.year(2024)["100"]["2024-01-01"] == 1200.0
 
 
+def test_water_heater_combines_room_and_module_levels_without_double_count(tmp_path):
+    """Old installation measured at room level, the new Aqua Manager at module level."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        path = request.url.path
+        if path == "/oauth2/token":
+            return httpx.Response(200, json={"access_token": "t", "expires_in": 3600})
+        if path == "/api/homesdata":
+            return httpx.Response(200, json=load("homesdata.json"))
+        req = json.loads(request.content)
+        rooms = [
+            {"id": r["id"], "measures": [{"beg_time": 1704063600, "step_time": 86400, "value": [[400], [300]]}]}
+            for r in req["home"]["rooms"]
+        ]
+        modules = [
+            {"id": m["id"], "measures": [{"beg_time": 1704150000, "step_time": 86400, "value": [[500], [600]]}]}
+            for m in req["home"].get("modules", [])
+        ]
+        return httpx.Response(200, json={"body": {"home": {"rooms": rooms, "modules": modules}}})
+
+    settings = Settings(username="u", password="p", client_id="c", client_secret="s", api_base="https://x")
+    client = IntuisClient(settings, http=httpx.Client(transport=httpx.MockTransport(handler)), min_interval=0)
+    store = Store(tmp_path, "pw")
+    store.merge("300", "2023-06-01", 999.0)  # stale value from an older run: rebuilt on backfill
+    Syncer(client, store).run(backfill=True)
+    assert "300" not in store.year(2023)
+    # day 1: room only; day 2: max(room 300, module 500); day 3: module only
+    assert store.year(2024)["300"] == {"2024-01-01": 400.0, "2024-01-02": 500.0, "2024-01-03": 600.0}
+
+
 def test_water_heater_outside_any_room_becomes_virtual_room():
     payload = load("homesdata.json")
     home = payload["body"]["homes"][0]
@@ -177,7 +211,8 @@ def test_measure_families_are_combined_with_max_not_sum(tmp_path):
             "sum_energy_elec_heating": [[100], [None]],  # 1 Jan only
             "sum_energy_elec": [[90], [200]],  # overlaps 1 Jan, has 2 Jan
             "sum_energy_elec$0,sum_energy_elec$1,sum_energy_elec$2": [[None, None, None], [150, 60, None]],
-        }[mtype]
+            "temperature,sp_temperature": [[19.46, 19], [None, None]],
+        }.get(mtype, [])
         room = {"id": "100", "measures": [{"beg_time": 1704063600, "step_time": 86400, "value": values}]}
         return httpx.Response(200, json={"body": {"home": {"rooms": [room]}}})
 
@@ -187,3 +222,153 @@ def test_measure_families_are_combined_with_max_not_sum(tmp_path):
     syncer.run(days=10)
     assert syncer.strategy == ("home", "ALL")
     assert syncer.store.year(2024)["100"] == {"2024-01-01": 100.0, "2024-01-02": 210.0}
+    # tariff columns kept apart for the cost, temperatures stored per room and day
+    assert syncer.store.doc("2024")["tariffs"]["100"] == {"2024-01-02": [150.0, 60.0, 0.0]}
+    assert syncer.store.doc("2024")["temps"]["100"] == {"2024-01-01": [19.5, 19.0]}
+    assert syncer.store.meta["has_tariffs"] and syncer.store.meta["has_temps"]
+
+
+def test_open_meteo_fills_outdoor_temperatures(tmp_path):
+    from collector.weather import open_meteo
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.url.params["latitude"] == "48.85"
+        daily = {
+            "time": ["2024-01-01", "2024-01-02"],
+            "temperature_2m_min": [1.0, None],
+            "temperature_2m_max": [7.0, 9.0],
+            "temperature_2m_mean": [None, 5.0],
+        }
+        return httpx.Response(200, json={"daily": daily})
+
+    store = Store(tmp_path, "pw")
+    http = httpx.Client(transport=httpx.MockTransport(handler))
+    open_meteo(store, 48.8534, 2.3488, "Europe/Paris", "2024-01-01", http=http)
+    weather = store.doc("weather")
+    assert weather["source"] == "open-meteo"
+    assert weather["outdoor"] == {"2024-01-01": [1.0, 7.0, 4.0]}  # mean computed, incomplete day dropped
+
+
+def test_station_rotates_refresh_token_and_reads_outdoor(tmp_path):
+    from collector.station import Station
+
+    tokens = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        path = request.url.path
+        if path == "/oauth2/token":
+            form = dict(x.split("=") for x in request.content.decode().split("&"))
+            tokens.append(form["refresh_token"])
+            return httpx.Response(200, json={"access_token": "a", "refresh_token": f"r{len(tokens)}"})
+        if path == "/api/getstationsdata":
+            return httpx.Response(
+                200, json={"body": {"devices": [{"_id": "main", "modules": [{"_id": "out", "type": "NAModule1"}]}]}}
+            )
+        if path == "/api/getmeasure":
+            if request.url.params.get("module_id") == "out":
+                return httpx.Response(200, json={"body": {"1704063600": [-2.0, 6.0, None]}})
+            return httpx.Response(200, json={"body": {"1704063600": [19.0, 21.0, 20.2]}})
+        return httpx.Response(404)
+
+    store = Store(tmp_path, "pw")
+    http = httpx.Client(transport=httpx.MockTransport(handler))
+    Station(store, "id", "secret", "seed", http=http).collect("Europe/Paris", "2024-01-01")
+    Station(store, "id", "secret", "seed", http=http).collect("Europe/Paris", "2024-01-01")
+    assert tokens == ["seed", "r1"]  # second run uses the rotated token
+    weather = store.doc("weather")
+    assert weather["source"] == "netatmo"
+    assert weather["outdoor"]["2024-01-01"] == [-2.0, 6.0, 2.0]
+    assert weather["indoor"]["2024-01-01"] == 20.2
+
+
+def test_linky_parser_accepts_unknown_shapes_and_kwh(tmp_path):
+    from collector.enedis import collect
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.headers["Authorization"] == "Bearer tok"
+        assert request.url.params["pointId"] == "12345678901234"
+        return httpx.Response(
+            200,
+            json={
+                "mesures": [
+                    {"date": "2024-01-01", "valeur": 21.5},
+                    {"date": "2024-01-02T00:00:00+01:00", "valeur": "18"},
+                ]
+            },
+        )
+
+    store = Store(tmp_path, "pw")
+    n = collect(
+        store,
+        "tok",
+        "12345678901234",
+        "2024-01-01",
+        "Europe/Paris",
+        http=httpx.Client(transport=httpx.MockTransport(handler)),
+    )
+    assert n > 0
+    assert store.doc("linky")["daily"]["2024-01-01"] == 21500.0  # kWh payload converted to Wh
+
+
+def test_monthly_totals_fill_days_lost_by_the_backend(tmp_path):
+    """Daily values missing for part of a month, monthly total intact: spread the gap."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        path = request.url.path
+        if path == "/oauth2/token":
+            return httpx.Response(200, json={"access_token": "t", "expires_in": 3600})
+        if path == "/api/homesdata":
+            return httpx.Response(200, json=load("homesdata.json"))
+        req = json.loads(request.content)
+        if req["home"]["rooms"][0]["type"] != "sum_energy_elec":
+            return httpx.Response(200, json={"body": {"home": {"rooms": []}}})
+        if req["scale"] == "1month":
+            measures = [{"beg_time": 1706742000, "step_time": 2592000, "value": [[31000]]}]  # Feb 2024
+        elif req["scale"] == "1day":
+            # only 1-27 Feb 2024 at 1000 Wh, 28-29 lost
+            measures = [{"beg_time": 1706742000, "step_time": 86400, "value": [[1000]] * 27}]
+        else:
+            measures = []
+        rooms = [{"id": "100", "measures": measures}]
+        return httpx.Response(200, json={"body": {"home": {"rooms": rooms}}})
+
+    settings = Settings(username="u", password="p", client_id="c", client_secret="s", api_base="https://x")
+    client = IntuisClient(settings, http=httpx.Client(transport=httpx.MockTransport(handler)), min_interval=0)
+    store = Store(tmp_path, "pw")
+    Syncer(client, store).run(backfill=True)
+    feb = {d: v for d, v in store.year(2024)["100"].items() if d.startswith("2024-02")}
+    assert sum(feb.values()) == 31000.0
+    assert feb["2024-02-28"] == feb["2024-02-29"] == 2000.0
+    assert store.doc("2024")["estimated"]["100"] == {"2024-02-28": 1, "2024-02-29": 1}
+
+
+def test_insights_use_only_computed_numbers(tmp_path):
+    from datetime import date
+    from types import SimpleNamespace
+
+    from collector.insights import compute_facts, generate, unknown_numbers
+
+    store = Store(tmp_path, "pw")
+    for d in range(1, 32):
+        store.merge("100", f"2024-01-{d:02d}", 10000.0)
+        store.merge("100", f"2023-01-{d:02d}", 12000.0)
+    store.save({"id": "h"}, [{"id": "100", "name": "Salon", "category": HEATING}])
+    facts = compute_facts(store, "2024-01")
+    assert facts["chauffage_kwh"] == 310.0 and facts["chauffage_kwh_annee_precedente"] == 372.0
+    assert unknown_numbers("Salon : 310 kWh contre 372 kWh", facts) == []
+    assert unknown_numbers("soit 999 kWh", facts) == [999.0]
+
+    calls = []
+
+    def create(**kw):
+        calls.append(kw)
+        text = "### Bien\n310 kWh, 999 kWh" if len(calls) == 1 else "### Bien\nSalon : 310 kWh contre 372 kWh."
+        return SimpleNamespace(stop_reason="end_turn", content=[SimpleNamespace(type="text", text=text)])
+
+    client = SimpleNamespace(beta=SimpleNamespace(messages=SimpleNamespace(create=create)))
+    assert generate(store, today=date(2024, 2, 10), client=client)
+    assert len(calls) == 2  # invented number → one rewrite
+    assert calls[0]["model"] == "claude-opus-5-5" and calls[0]["fallbacks"] == "default"
+    doc = store.doc("insights")
+    assert doc["period"] == "2024-01" and doc["verified"]
+    assert not generate(store, today=date(2024, 2, 11), client=client)  # once per month
