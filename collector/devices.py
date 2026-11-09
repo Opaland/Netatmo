@@ -11,10 +11,12 @@
   and the tariff seen by Intuis in the schedules of `homesdata` (kept in the encrypted meta).
 
 The nightly collection reads `homestatus` once (one Intuis call) for the first three; nothing
-else is asked. Modules are keyed i0, i1… (API ids only in "ids", encrypted, never logged).
+else is asked. Modules are keyed i0, i1…: the API id (a MAC address) is never stored, only a
+salted hash of it in "module_keys" (collector/storage.py KeyMap; the "ids" table of v1.5, id in
+clear → key, is hashed once and removed).
 
 devices.enc.json:
-  {"ids":      {"<api module id>": "i0"},
+  {"module_keys": {"salt": "<hex>", "keys": {"<sha256(salt:id)[:16]>": "i0"}},
    "modules":  {"i0": {"type": "NMH", "room": "<room id>", "setup": "YYYY-MM-DD", "fw": "105"},
                 "m1": {"type": "NAModule1", "fw": "50"}},        station modules: key of station.enc.json
    "reach":    {"i0": {"YYYY-MM-DD": 1}},       nightly: 1 answering, 0 unreachable or silent > 6 h
@@ -34,7 +36,7 @@ from datetime import UTC, datetime, timedelta
 from zoneinfo import ZoneInfo
 
 from .roomstate import DISCONNECTED, gateway_fields, is_gateway, norm
-from .storage import Store
+from .storage import KeyMap, Store
 
 DOC = "devices"
 SILENT_HOURS = 6  # a module whose last_seen is older is counted as not answering
@@ -64,19 +66,13 @@ def _num(v: object) -> float | None:
 
 
 def module_keys(store: Store, ids: list[str]) -> dict[str, str]:
-    """Stable key per Intuis module (i0, i1…), assigned once, kept in the encrypted document."""
-    known: dict[str, str] = dict(store.doc(DOC).get("ids") or {})
-    used = set(known.values())
-    n = 0
-    for mid in ids:
-        if mid in known:
-            continue
-        while f"i{n}" in used:
-            n += 1
-        known[mid] = f"i{n}"
-        used.add(known[mid])
-    store.set_top(DOC, "ids", known)
-    return known
+    """Stable key per Intuis module (i0, i1…), assigned once, in the order of `ids`. The returned
+    map (API id → key) lives in memory only: the document keeps salted hashes."""
+    keys = KeyMap(store, DOC, "i", legacy=store.doc(DOC).get("ids") or {})
+    out = {mid: keys.key(mid) for mid in ids}
+    keys.save()
+    store.drop_top(DOC, "ids")
+    return out
 
 
 def note_firmware(store: Store, key: str, raw: object, day: str, kind: str | None = None) -> bool:

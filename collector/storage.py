@@ -18,8 +18,9 @@ data/
                            values, decided once and kept: enedis.py)}
   2025.linky30.enc.json   {"curve":   {"YYYY-MM-DDTHH:MM": Wh}}  Linky load curve, local start of
                            each half hour (optional, loaded on demand)
-  station.enc.json        Netatmo weather station: modules, daily [min, max, mean, hum, co2] and
-                          small daily aggregates "nightly" / "hours" (see docs/api-notes.md)
+  station.enc.json        Netatmo weather station: modules, daily [min, max, mean, hum, co2],
+                          small daily aggregates "nightly" / "hours" and "module_keys" (salted
+                          hash of each module id → stable key "m0"…; see docs/api-notes.md)
   2025.room30.enc.json    {"rooms": {room: {"YYYY-MM-DD": [hp, hc, °C, setpoint °C]}}} per-room half hours
                           of the local day, compacted (collector/room30.py; loaded on demand)
   room30.enc.json         progress of the 30-min history: {"newest": day, "progress": {room: {...}}}
@@ -34,8 +35,10 @@ data/
 from __future__ import annotations
 
 import base64
+import hashlib
 import json
 import os
+import secrets
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import Any
@@ -102,6 +105,12 @@ class Store:
         doc = self.doc(name)
         if doc.get(key) != value:
             doc[key] = value
+            self._dirty.add(name)
+
+    def drop_top(self, name: str, key: str) -> None:
+        doc = self.doc(name)
+        if key in doc:
+            del doc[key]
             self._dirty.add(name)
 
     def replace(self, name: str, obj: dict) -> None:
@@ -243,6 +252,55 @@ class Store:
             self.meta = meta
             changed.append("meta.enc.json")
         return changed
+
+
+class KeyMap:
+    """Stable opaque keys ("m0", "i3", "p1"…) for device ids that must not be stored in clear
+    (MAC addresses, serial-like ids). The document keeps, under `field`,
+    {"salt": random hex, "keys": {sha256("<salt>:<id>")[:16]: key}}: the id itself is never
+    written, only its salted hash, and the key never changes once given. A new id gets the first
+    free key `prefix`N (also free of `reserved`, keys already used elsewhere in the document); a
+    known id finds its key again, even after being absent for a while. `legacy` is a map
+    id → key written in clear by an earlier version: it is hashed once (the caller then removes
+    it from the document). `save` writes the map back."""
+
+    def __init__(
+        self,
+        store: Store,
+        name: str,
+        prefix: str,
+        field: str = "module_keys",
+        legacy: dict[str, str] | None = None,
+        reserved: set[str] | None = None,
+    ) -> None:
+        self.store, self.name, self.prefix, self.field = store, name, prefix, field
+        stored = store.doc(name).get(field) or {}
+        self.salt: str = stored.get("salt") or secrets.token_hex(8)
+        self.keys: dict[str, str] = dict(stored.get("keys") or {})
+        for raw, key in (legacy or {}).items():
+            self.keys.setdefault(self.hash(raw), key)
+        self.used = set(self.keys.values()) | set(reserved or ())
+        self._n = 0
+
+    def hash(self, raw: str) -> str:
+        return hashlib.sha256(f"{self.salt}:{raw}".encode()).hexdigest()[:16]
+
+    def get(self, raw: str) -> str | None:
+        return self.keys.get(self.hash(raw))
+
+    def key(self, raw: str) -> str:
+        """The key of this id, given now if it has none."""
+        h = self.hash(raw)
+        if h not in self.keys:
+            while f"{self.prefix}{self._n}" in self.used:
+                self._n += 1
+            self.keys[h] = f"{self.prefix}{self._n}"
+            self.used.add(self.keys[h])
+        return self.keys[h]
+
+    def save(self) -> None:
+        if self.keys:
+            self.store.set_top(self.name, self.field, {"salt": self.salt, "keys": dict(self.keys)})
 
 
 def month_coverage(

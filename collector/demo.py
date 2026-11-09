@@ -15,7 +15,7 @@ from .homeassistant import import_bytes
 from .model import HEATING, WATER_HEATER
 from .roomstate import merge_snapshots, snapshot
 from .station import aggregate_days
-from .storage import Store
+from .storage import KeyMap, Store
 
 ROOMS = [
     ("r-salon", "Salon", HEATING, 2.2, 20.0),
@@ -131,7 +131,6 @@ def _shelly(store: Store, today: date) -> None:
             key,
             None,
             {
-                "id": f"demo{key}",
                 "name": name,
                 "model": model,
                 "gen": "G1" if model == "SHPLG-S" else "G2",
@@ -154,7 +153,7 @@ def _shelly(store: Store, today: date) -> None:
         store.put("shelly", "until", key, None, today.isoformat())
         store.put("shelly", "last", key, None, {"ts": 0, "total": round(total, 2)})
     clamp = random.Random(279)  # separate stream
-    base = {"id": "demop4", "model": "S1EM-001PCEU", "gen": "G3", "usable": True}
+    base = {"model": "S1EM-001PCEU", "gen": "G3", "usable": True}
     store.put("shelly", "plugs", "p4", None, {**base, "name": "Tableau électrique", "channels": 2})
     for i, label in enumerate(("Tableau électrique · canal 1", "Tableau électrique · canal 2")):
         key = f"p4c{i}"
@@ -614,6 +613,11 @@ def generate(out_dir: Path, passphrase: str = "demo", start_year: int = 2022) ->
             "m3": {"name": "Cave", "type": "NAModule4", "indoor": True},
         },
     )
+    # Stable module keys (collector/station.py): salted hashes of made-up ids, never the ids.
+    keys = KeyMap(store, "station", "m")
+    for mid in ("70:ee:50:00:00:00", "02:00:00:00:00:01", "03:00:00:00:00:02", "03:00:00:00:00:03"):
+        keys.key(mid)
+    keys.save()
     rooms = [
         {"id": r, "name": n, "category": c, "module_types": ["NMH"] if c == HEATING else ["NMW"], "virtual": False}
         for r, n, c, _w, _sp in ROOMS
