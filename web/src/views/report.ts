@@ -61,6 +61,7 @@ export function renderReport(view: HTMLElement) {
           .map((y) => `<option value="${y}" ${y === year ? 'selected' : ''}>${y}</option>`)
           .join('')}</select></label>
         <button type="button" class="primary small" id="print">Imprimer / PDF</button>
+        <button type="button" class="small" id="report-anon" data-year-anon="${year}">Rapport anonymisé</button>
         <button type="button" class="link" data-view="overview">Fermer</button>
       </div>
     </div>
@@ -92,6 +93,7 @@ export function renderReport(view: HTMLElement) {
         return [esc(r.name), d.now, d.before, pc === null ? '—' : pct(pc)];
       }),
     )}
+    <div id="report-extras"></div>
     <p class="hint muted">Rapport généré le ${longDate(new Date().toISOString().slice(0, 10))} par l'application Historique énergie. Données Intuis${ds!.weather ? ', météo ' + (ds!.meta.weather_source === 'netatmo' ? 'station Netatmo' : 'Open-Meteo') : ''}${ds!.linky.size ? ', compteur Linky' : ''}.</p>
   </section>
   <section class="card no-print" id="questions-card" aria-busy="true"><h2>Questions types</h2></section>`;
@@ -105,6 +107,8 @@ export function renderReport(view: HTMLElement) {
     price: avgPrice(),
   });
   drawWaterfall(document.getElementById('report-waterfall')!, deltas, year);
+  // S-6.3: offer comparator and maximum power, lazy module (entry chunk budget)
+  void import('./annual-share').then((m) => m.renderReportExtras(document.getElementById('report-extras'), year));
   // S-5.9: canned questions answered by code, loaded on demand
   void import('./questions').then((m) => m.mountQuestions(document.getElementById('questions-card')));
 }
@@ -112,6 +116,11 @@ export function renderReport(view: HTMLElement) {
 // ------------------------------------------------------------------ events
 /** Print button. Returns true when the click belonged to this view. */
 export function handleClick(btn: HTMLElement): boolean {
+  if (btn.id === 'report-anon') {
+    // S-6.4: anonymised report for a third party, lazy module
+    void import('./annual-share').then((m) => m.renderAnonymised(document.getElementById('view')!, Number(btn.dataset.yearAnon)));
+    return true;
+  }
   if (btn.id !== 'print') return false;
   window.print();
   return true;
