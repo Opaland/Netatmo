@@ -33,6 +33,11 @@ jobs:
       # S-12.1: contract shared between devices (not secret: a repository variable written by
       # Settings). Validated by the collector, stored in the encrypted meta, never printed.
       CONTRACT_JSON: ${{ vars.CONTRACT_JSON }}
+      # S-1.14: optional caps on API calls per collection (empty = default, see docs/api-notes.md).
+      MAX_CALLS_INTUIS: ${{ vars.MAX_CALLS_INTUIS }}
+      MAX_CALLS_NETATMO: ${{ vars.MAX_CALLS_NETATMO }}
+      MAX_CALLS_LINKY: ${{ vars.MAX_CALLS_LINKY }}
+      MAX_CALLS_OPEN_METEO: ${{ vars.MAX_CALLS_OPEN_METEO }}
       # Optional: Netatmo weather station (see README)
       NETATMO_CLIENT_ID: ${{ secrets.NETATMO_CLIENT_ID }}
       NETATMO_CLIENT_SECRET: ${{ secrets.NETATMO_CLIENT_SECRET }}

@@ -24,6 +24,8 @@ from zoneinfo import ZoneInfo
 
 import httpx
 
+from .budget import METER
+from .schema import FormatError, dated_records, safe_keys
 from .storage import Store
 
 log = logging.getLogger(__name__)
@@ -66,7 +68,8 @@ class _Paced:
         if wait > 0:
             time.sleep(wait)
         try:
-            return self.http.get(url, params=params, headers={"Authorization": f"Bearer {self.token}"})
+            with METER.call("linky"):
+                return self.http.get(url, params=params, headers={"Authorization": f"Bearer {self.token}"})
         finally:
             self.last = time.monotonic()
 
@@ -90,6 +93,28 @@ def _readings(obj: object) -> list[tuple[str, float]]:
         for v in obj:
             out += _readings(v)
     return out
+
+
+def _json(resp: httpx.Response, endpoint: str) -> object:
+    try:
+        return resp.json()
+    except ValueError:
+        raise FormatError("Linky (Conso API)", endpoint, "(réponse)", "n'est plus du JSON") from None
+
+
+def _check_found(body: object, found: int, endpoint: str) -> None:
+    """S-1.13: readings present (flat objects with a date) but none recognised means the field
+    names changed, as Enedis did in 2026; no reading at all is just "no data". The message
+    names the fields seen (identifiers only), never a value."""
+    if found:
+        return
+    # A reading with known field names but an unusable value (null) is not a format change.
+    records = [
+        r for r in dated_records(body) if not (any(k in r for k in DATE_KEYS) and any(k in r for k in VALUE_KEYS))
+    ]
+    if records:
+        fields = ", ".join(safe_keys(k for r in records[:20] for k in r)) or "?"
+        raise FormatError("Linky (Conso API)", endpoint, "mesures", f"non reconnu (champs vus : {fields})")
 
 
 def collect(
@@ -121,9 +146,11 @@ def collect(
             )
         if resp.status_code != 200:
             raise LinkyError(f"Linky (Conso API) : HTTP {resp.status_code} {resp.text[:150]}")
-        found = _readings(resp.json())
+        body = _json(resp, "consommation_quotidienne")
+        found = _readings(body)
+        _check_found(body, len(found), "consommation_quotidienne")
         if not found:
-            log.warning("Linky : réponse sans mesure reconnue (clés : %s)", list(resp.json())[:8])
+            log.info("Linky : aucune mesure sur %s → %s", chunk_start, chunk_end)
         rows += found
         chunk_start = chunk_end
     _collect_pmax(store, api, prm, start, today)
@@ -149,7 +176,14 @@ def _collect_pmax(store: Store, api: _Paced, prm: str, start: date, today: date)
         if resp.status_code != 200:
             log.warning("Linky : puissance max indisponible (HTTP %s)", resp.status_code)
             return
-        rows += _readings(resp.json())
+        body = _json(resp, "puissance_conso_max_quotidienne")
+        found = _readings(body)
+        try:
+            _check_found(body, len(found), "puissance_conso_max_quotidienne")
+        except FormatError as err:  # best effort: the daily totals are already fetched
+            log.warning("%s", err)
+            return
+        rows += found
         chunk_start = chunk_end
     if not rows:
         return
@@ -267,7 +301,9 @@ def collect_curve(
                 f"Linky, courbe de charge : HTTP {resp.status_code} {resp.text[:150]}",
                 auth=resp.status_code in (401, 403),
             )
-        curve = parse_curve(resp.json(), tz)
+        body = _json(resp, "courbe_de_charge_consommation")
+        _check_found(body, len(_points(body)), "courbe_de_charge_consommation")
+        curve = parse_curve(body, tz)
         for key, wh in curve.items():
             store.put(curve_doc(key[:4]), "curve", key, None, wh)
         received += len(curve)

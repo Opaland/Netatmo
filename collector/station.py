@@ -20,6 +20,8 @@ from zoneinfo import ZoneInfo
 
 import httpx
 
+from . import schema
+from .budget import METER
 from .model import parse_measure_columns
 from .storage import Store
 
@@ -80,15 +82,16 @@ class Station:
         return self.seed_token
 
     def login(self) -> None:
-        resp = self.http.post(
-            f"{API}/oauth2/token",
-            data={
-                "grant_type": "refresh_token",
-                "refresh_token": self._refresh_token(),
-                "client_id": self.client_id,
-                "client_secret": self.client_secret,
-            },
-        )
+        with METER.call("netatmo"):
+            resp = self.http.post(
+                f"{API}/oauth2/token",
+                data={
+                    "grant_type": "refresh_token",
+                    "refresh_token": self._refresh_token(),
+                    "client_id": self.client_id,
+                    "client_secret": self.client_secret,
+                },
+            )
         if resp.status_code != 200:
             try:
                 code = resp.json().get("error", "")
@@ -104,26 +107,28 @@ class Station:
                 f"Station Netatmo : HTTP {resp.status_code} {code} — {hint}",
                 auth=code == "invalid_grant" or resp.status_code in (401, 403),
             )
-        body = resp.json()
+        body = schema.check("Station Netatmo", "/oauth2/token", schema.NETATMO_TOKEN, resp.json())
         self.access = body["access_token"]
         seed_hash = hashlib.sha256(self.seed_token.encode()).hexdigest()[:16]
         self.store.replace(TOKEN_DOC, {"seed": seed_hash, "refresh_token": body["refresh_token"]})
 
-    def _get(self, path: str, params: dict) -> dict:
+    def _get(self, path: str, params: dict, spec: object = None) -> dict:
         # Gentle with the public API (50 requests / 10 s, 500 / h per user).
         wait = self._last_call + self.min_interval - time.monotonic()
         if wait > 0:
             time.sleep(wait)
         self._last_call = time.monotonic()
-        resp = self.http.get(f"{API}{path}", params=params, headers={"Authorization": f"Bearer {self.access}"})
+        with METER.call("netatmo"):
+            resp = self.http.get(f"{API}{path}", params=params, headers={"Authorization": f"Bearer {self.access}"})
         if resp.status_code != 200:
             raise StationError(f"Station Netatmo : {path} → HTTP {resp.status_code} {resp.text[:150]}")
-        return resp.json()
+        body = resp.json()
+        return schema.check("Station Netatmo", path, spec, body) if spec is not None else body
 
     # ------------------------------------------------------------ data
     def modules(self) -> list[dict]:
         """Main (indoor) module first, then its radio modules (outdoor, extra indoor)."""
-        body = self._get("/api/getstationsdata", {})["body"]
+        body = self._get("/api/getstationsdata", {}, schema.NETATMO_STATIONS)["body"]
         devices = body.get("devices", [])
         if not devices:
             raise StationError("Station Netatmo : aucune station sur ce compte")
@@ -163,7 +168,7 @@ class Station:
             }
             if module:
                 params["module_id"] = module
-            out += parse_measure_columns(self._get("/api/getmeasure", params).get("body", []), DAY)
+            out += parse_measure_columns(self._get("/api/getmeasure", params, schema.NETATMO_MEASURE)["body"], DAY)
             start = stop
         return out
 
@@ -230,7 +235,7 @@ class Station:
             }
             if module:
                 params["module_id"] = module
-            out += parse_measure_columns(self._get("/api/getmeasure", params).get("body", []), HOUR)
+            out += parse_measure_columns(self._get("/api/getmeasure", params, schema.NETATMO_MEASURE)["body"], HOUR)
             start = stop
         return out
 
