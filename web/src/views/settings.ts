@@ -142,6 +142,11 @@ export function renderSettings(view: HTMLElement) {
     )}
   </section>
   <section class="card" id="build-info" aria-live="polite"></section>
+  <section class="card" id="legal-card">
+    <div class="card-head"><h2>Cadre juridique</h2></div>
+    <p class="hint muted">Conditions d'utilisation de chaque service (Intuis, Netatmo, Conso API…), date de lecture et risque d'arrêt ; usage domestique et vie privée du foyer.</p>
+    <button type="button" class="primary small" id="legal-open">Ouvrir « Cadre juridique »</button>
+  </section>
   ${settingsMsg ? `<p class="settings-msg ${settingsMsg.ok ? 'ok' : 'ko'}" role="status">${esc(settingsMsg.text)}</p>` : ''}`;
   void showBuild(document.getElementById('build-info'));
 }
@@ -245,6 +250,14 @@ export function handleClick(btn: HTMLElement): boolean {
       // Keep using this device's contract until the collection copies the shared one.
       if (contractInfo().source === 'default') setState({ contracts: periods.map((c) => ({ ...c })) });
       return `Contrat partagé (${periods.length} période${periods.length > 1 ? 's' : ''}). Lancez la collecte pour l'appliquer sur tous les appareils.`;
+    });
+    return true;
+  }
+  if (btn.id === 'legal-open') {
+    // S-8.14: lazy module, only for whoever opens it
+    void import('../legal').then((m) => {
+      const card = document.getElementById('legal-card');
+      if (card) card.innerHTML = html(`<div class="card-head"><h2>Cadre juridique</h2></div>${m.legalHtml()}`);
     });
     return true;
   }

@@ -43,7 +43,9 @@ uniquement dans votre navigateur.
 > **Avertissement** : l'application Intuis n'a pas d'API publique. Ce projet utilise le même serveur
 > que l'application mobile, comme les intégrations Home Assistant existantes. Ce n'est ni officiel ni
 > garanti : l'accès peut changer ou être coupé. Les données déjà collectées restent dans votre dépôt.
-> Détails dans [docs/api-notes.md](docs/api-notes.md) et [docs/etude-marche.md](docs/etude-marche.md).
+> Détails dans [docs/api-notes.md](docs/api-notes.md) et [docs/etude-marche.md](docs/etude-marche.md) ;
+> conditions d'utilisation de chaque service, date de lecture et risque d'arrêt dans
+> [docs/juridique.md](docs/juridique.md) (aussi dans l'appli : Paramètres → **Cadre juridique**).
 
 ## Essayer sans compte
 
@@ -268,6 +270,27 @@ l'activation des tarifs dans l'application Intuis (2025), la répartition heures
 n'existe pas : elle est estimée pour chaque pièce à partir de sa répartition mesurée depuis. Vous
 pouvez aussi saisir vos propres prix. Ces réglages restent sur votre appareil.
 
+### Vue foyer : chambres regroupées
+
+Les consommations, profils horaires, températures et le CO₂ par chambre disent beaucoup des
+habitudes de chacun. Par défaut, l'application regroupe donc sur tous les écrans les pièces dont le
+nom contient « chambre » (ou « bedroom ») en une seule pièce **« Chambres »** : totaux additionnés,
+températures et CO₂ moyennés, modules de la station compris ; dans l'analyse IA, leurs noms sont
+remplacés par « Chambres ». Le détail s'affiche par un geste volontaire, menu ⋮ → **Afficher le
+détail des chambres**, et seulement jusqu'au verrouillage suivant. La case « Vue foyer » du menu
+désactive le regroupement sur cet appareil seulement. C'est une protection d'affichage : toute
+personne qui connaît la phrase de passe peut voir le détail.
+
+### Soirs « volets fermés »
+
+Onglet Analyse, carte **Volets fermés le soir** : cochez « volets fermés ce soir » (ou notez un autre
+soir). Les dates restent sur l'appareil ; exportez-les en CSV pour les garder ou les reprendre sur un
+autre appareil (bouton Importer). Dès 7 soirs notés en période de chauffe (environ 4
+semaines en alternant), la carte compare le chauffage de nuit (22 h → 7 h, données horaires) des
+soirs volets fermés aux autres, chacun ramené à la température extérieure (signature de nuit), avec
+l'intervalle d'incertitude à 95 %. C'est la mesure prévue par l'étude
+[volets Wiser](docs/etudes/volets-wiser.md) (S-9.0).
+
 ### Alertes
 
 Si la collecte nocturne échoue (mot de passe changé, serveur indisponible…), une *issue* GitHub
@@ -419,6 +442,11 @@ fichier ; il fonctionne sur n'importe quel fichier téléchargé du site (par ex
 `gh attestation verify index.html -R Opaland/Netatmo`). L'artefact Pages lui-même se télécharge depuis
 le déploiement (onglet Actions, conservé un jour) : décompresser le zip puis
 `gh attestation verify artifact.tar -R Opaland/Netatmo`. Le déploiement ne crée pas de release GitHub.
+
+## Contribuer
+
+Voir [`CONTRIBUTING.md`](CONTRIBUTING.md) : devcontainer prêt à l'emploi (démo, tests Python et
+Vitest sans configuration), commandes de vérification, cycle des PR et règles de sécurité.
 
 ## Gestion du projet
 

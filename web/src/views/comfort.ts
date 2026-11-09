@@ -1,7 +1,7 @@
 // Comfort ("Confort"), loaded on demand: night CO₂ (S-11.1), cellar humidity (S-11.2),
 // hours under a threshold per room (S-11.3) and radiator probe vs station (S-3.8).
 import { addDays, bucketLabel, minusYears } from '../aggregate';
-import { ds, onDatasetLoaded, rerender, setState, state } from '../app';
+import { ds, householdStatus, onDatasetLoaded, rerender, revealBedrooms, setState, state } from '../app';
 import {
   type NightRow,
   type StationHourly,
@@ -458,6 +458,9 @@ function drawProbes(st: Station, map: Map<string, string>) {
 // ------------------------------------------------------------------ events
 export function handleClick(btn: HTMLElement): boolean {
   if (btn.dataset.comfort === 'show-bedrooms') {
+    // S-12.2: the same gesture also lifts the household view (bedrooms merged elsewhere);
+    // it reloads the dataset, which resets this view: set the flag afterwards.
+    if (householdStatus().active) revealBedrooms(true);
     showBedrooms = true;
     rerender();
     return true;
