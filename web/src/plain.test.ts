@@ -15,6 +15,9 @@ import {
   verdictSentences,
   verdictTitle,
   visibleText,
+  whenWord,
+  roomFeel,
+  heatingSentence,
 } from './plain';
 
 /** Every text of the simple mode, for a spread of inputs. */
@@ -83,5 +86,27 @@ describe('S-7.13 mode simple en langage clair', () => {
 
   it('compte les mots comme un lecteur', () => {
     expect(sentenceLengths("D'habitude, à cette date : 1 230 kWh. Ce calcul tient compte du froid.")).toEqual([6, 6]);
+  });
+});
+
+describe('vue Proche (#316)', () => {
+  it('dit quand la température a été mesurée', () => {
+    expect(whenWord('2026-11-09', '2026-11-09')).toBe("aujourd'hui");
+    expect(whenWord('2026-11-08', '2026-11-09')).toBe('hier');
+    expect(whenWord('2026-10-31', '2026-11-01')).toBe('hier');
+    expect(whenWord('2026-11-01', '2026-11-09')).toBe('le 1er novembre');
+  });
+
+  it('décrit la pièce en phrases courtes, sans mot technique', () => {
+    expect(roomFeel(19.8, 19)).toBe('Il fait bon.');
+    expect(roomFeel(17.5, 19)).toBe('Il fait un peu frais.');
+    expect(roomFeel(15, 19)).toBe('Il fait froid.');
+    expect(heatingSentence(19.5, 20)).toBe('Le chauffage atteint la température demandée.');
+    expect(heatingSentence(17, 20)).toBe('La pièce reste sous la température demandée (20 °C).');
+    expect(heatingSentence(17, null)).toBe('');
+    for (const s of [roomFeel(15, 19), heatingSentence(17, 20.5)]) {
+      expect(s).not.toMatch(/consigne|setpoint|kWh/i);
+      for (const n of sentenceLengths(s)) expect(n).toBeLessThanOrEqual(15);
+    }
   });
 });

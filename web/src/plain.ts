@@ -135,6 +135,30 @@ export function pinnedTemp(temp: number, coldDays: number, threshold: number): {
   };
 }
 
+// ------------------------------------------------------------------ vue Proche (#316)
+/** « aujourd'hui », « hier » or « le 7 novembre » for the last day with data. */
+export function whenWord(day: string, today: string): string {
+  if (day === today) return "aujourd'hui";
+  const y = new Date(`${today}T12:00:00Z`);
+  y.setUTCDate(y.getUTCDate() - 1);
+  if (day === y.toISOString().slice(0, 10)) return 'hier';
+  return `le ${dayOf(day)} ${monthOf(day)}`;
+}
+
+/** How the room feels, against the comfort threshold of this device. */
+export function roomFeel(temp: number, threshold: number): string {
+  if (temp >= threshold) return 'Il fait bon.';
+  if (temp >= threshold - 2) return 'Il fait un peu frais.';
+  return 'Il fait froid.';
+}
+
+/** Whether the heating reached the temperature asked for ('' without a request known). */
+export function heatingSentence(temp: number, asked: number | null): string {
+  if (asked === null || !Number.isFinite(asked)) return '';
+  if (temp >= asked - 1) return 'Le chauffage atteint la température demandée.';
+  return `La pièce reste sous la température demandée (${nf0.format(Math.round(asked))} °C).`;
+}
+
 // ------------------------------------------------------------------ checks (tests and review)
 /** Text without tags nor the hidden definitions, as read on screen. */
 export function visibleText(htmlText: string): string {

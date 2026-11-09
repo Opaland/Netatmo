@@ -57,7 +57,11 @@ export type Route =
   | { page: 'confort' | 'chauffe-eau' | 'etat' | 'rapport' | 'aide' }
   | { page: 'outil'; tool: Tool }
   | { page: 'compteur-detail'; sub: MeterPage }
-  | { page: 'parametres'; section: SettingsPage | null };
+  | { page: 'parametres'; section: SettingsPage | null }
+  | { page: 'bienvenue'; step: OnboardingStep };
+
+/** #312: the four screens of the first launch (« #bienvenue », « #bienvenue-2 »…). */
+export type OnboardingStep = 1 | 2 | 3 | 4;
 
 const SIMPLE_PAGES = new Set(['confort', 'chauffe-eau', 'etat', 'rapport', 'aide']);
 const isTab = (s: string): s is Tab => TABS.some(([t]) => t === s);
@@ -68,6 +72,9 @@ export function parseRoute(hash: string): Route | null {
   if (isTab(h)) return { page: h };
   if (SIMPLE_PAGES.has(h)) return { page: h as 'confort' };
   if (h === 'parametres') return { page: 'parametres', section: null };
+  if (h === 'bienvenue') return { page: 'bienvenue', step: 1 };
+  const b = /^bienvenue-([2-4])$/.exec(h);
+  if (b) return { page: 'bienvenue', step: Number(b[1]) as OnboardingStep };
   let m = /^parametres-(.+)$/.exec(h);
   if (m) return m[1] in SETTINGS ? { page: 'parametres', section: m[1] as SettingsPage } : null;
   m = /^compteur-(.+)$/.exec(h);
@@ -96,6 +103,8 @@ export function routeKey(r: Route): string {
       return `compteur-${r.sub}`;
     case 'parametres':
       return r.section ? `parametres-${r.section}` : 'parametres';
+    case 'bienvenue':
+      return r.step > 1 ? `bienvenue-${r.step}` : 'bienvenue';
     default:
       return r.page;
   }
@@ -116,6 +125,7 @@ export function tabOf(r: Route): Tab | null {
       return 'outils';
     case 'parametres':
     case 'aide':
+    case 'bienvenue':
       return null;
     default:
       return r.page;
@@ -140,7 +150,7 @@ export function parentOf(r: Route): string | null {
     case 'aide':
       return 'accueil';
     default:
-      return null;
+      return null; // a tab, or the first launch (its own header, #312)
   }
 }
 
@@ -159,6 +169,8 @@ export function titleOf(r: Route, roomName: (id: string) => string = (id) => id)
       return 'Rapport annuel';
     case 'aide':
       return 'Aide';
+    case 'bienvenue':
+      return 'Bienvenue';
     case 'outil':
       return TOOLS[r.tool];
     case 'compteur-detail':

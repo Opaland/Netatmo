@@ -1,0 +1,250 @@
+/* #312 first launch and #316 vue Proche (maquettes onboarding.html, simple.html). Colours and
+   sizes from styles/tokens.css only. */
+
+/* ---------------------------------------------------------------- vue Proche: tokens */
+/* The simple view redefines the body text size: every component that reads --font-md grows. */
+body.simple-nav {
+  --font-md: 1.25rem;
+  font-size: var(--font-md);
+}
+body.simple-nav #view > .card,
+body.simple-nav #view > .simple-exit {
+  margin-bottom: var(--space-3);
+}
+/* Long words are hyphenated (lang="fr"), never cut anywhere: titles are capped by the width so
+   that each of their words fits on a line (e2e/proche.mjs checks it at 360 px and 200 %). */
+body.simple-nav #view .card {
+  hyphens: auto;
+  overflow-wrap: break-word;
+}
+body.simple-nav #view :is(h2, h3, .proche-strong, .page-title) {
+  font-size: clamp(var(--font-sm), 9vw, var(--font-xl));
+  hyphens: manual;
+  overflow-wrap: normal;
+}
+/* the labels of the three tabs follow the text size (at least the body size) */
+body.simple-nav .tabs a span {
+  font-size: max(1rem, min(var(--font-sm), 3.3vw));
+  overflow-wrap: normal;
+  hyphens: manual;
+  letter-spacing: -0.02em;
+}
+/* three wide tabs: the whole width goes to the labels (the current one is shown by its icon pill
+   and its colour, not by a wider bold text) */
+@media (max-width: 759px) {
+  body.simple-nav .tabs {
+    padding-inline: 0;
+  }
+  body.simple-nav .tabs a {
+    padding-inline: 0;
+  }
+  body.simple-nav .tabs a[aria-current='page'] {
+    font-weight: 500;
+  }
+}
+@media (min-width: 760px) {
+  body.simple-nav .tabs a span {
+    font-size: var(--font-md);
+  }
+}
+body.simple-nav #view .card h3.muted {
+  margin: 0 0 var(--space-1);
+  font-size: min(var(--font-md), 7vw);
+  font-weight: 400;
+  color: var(--text-muted);
+}
+.proche-big {
+  margin: 0;
+  font-size: min(2.5rem, 12vw);
+  font-weight: 600;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+.proche-verdict {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--space-3);
+  align-items: start;
+}
+.proche-verdict .mark {
+  width: 44px;
+  height: 44px;
+  border-radius: var(--radius-full);
+  display: grid;
+  place-items: center;
+  background: var(--state-good-soft);
+  color: var(--state-good);
+  font-weight: 600;
+}
+.proche-verdict.verdict-high .mark {
+  background: var(--state-warn-soft);
+  color: var(--state-warn);
+}
+.proche-verdict p {
+  margin: 0 0 var(--space-1);
+}
+.proche-strong {
+  display: block;
+  font-weight: 600;
+  line-height: 1.25;
+}
+.proche-rooms,
+.proche-list {
+  margin: 0;
+  padding: 0;
+}
+.proche-rooms {
+  list-style: none;
+  display: grid;
+  gap: var(--space-2);
+}
+.proche-list {
+  padding-left: 1.2em;
+  display: grid;
+  gap: var(--space-1);
+}
+.simple-exit {
+  margin-top: var(--space-4);
+}
+.simple-confirm {
+  margin-top: var(--space-3);
+}
+.simple-confirm .btn {
+  margin: var(--space-1) 0;
+  max-width: 100%;
+  white-space: normal;
+}
+
+/* ---------------------------------------------------------------- first launch */
+.onboarding-top .btn {
+  min-height: var(--target-min);
+}
+main.onboarding {
+  max-width: 36rem;
+  margin: 0 auto;
+}
+.onb-step {
+  display: grid;
+  gap: var(--space-4);
+}
+.onb-step > * {
+  margin: 0;
+  min-width: 0;
+  hyphens: auto;
+  overflow-wrap: break-word;
+}
+.onb-steps {
+  display: flex;
+  gap: var(--space-2);
+  justify-content: center;
+  padding-top: var(--space-2);
+}
+.onb-steps i {
+  width: 8px;
+  height: 8px;
+  border-radius: var(--radius-full);
+  background: var(--border);
+}
+.onb-steps i.on {
+  width: 24px;
+  background: var(--accent);
+}
+.onb-progress {
+  text-align: center;
+  font-size: var(--font-sm);
+  color: var(--text-muted);
+}
+.onb-hero {
+  font-size: clamp(var(--font-sm), 9vw, var(--font-xl));
+  hyphens: manual;
+  overflow-wrap: normal;
+  font-weight: 600;
+  line-height: 1.3;
+}
+.onb-hero:focus {
+  outline: none;
+}
+.onb-hero:focus-visible {
+  outline: 3px solid var(--focus, var(--accent));
+  outline-offset: 2px;
+}
+.onb-points {
+  padding-left: 1.2em;
+  display: grid;
+  gap: var(--space-2);
+}
+.onb-choice {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: var(--space-3);
+  min-width: 0;
+}
+.radio-card {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--space-3);
+  align-items: start;
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-card);
+  cursor: pointer;
+  min-height: var(--target-min);
+}
+.radio-card:has(input:checked) {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+.radio-card input {
+  width: 20px;
+  height: 20px;
+  margin-top: 2px;
+  accent-color: var(--accent);
+}
+.radio-card .sub {
+  color: var(--text-muted);
+  font-size: var(--font-sm);
+}
+.onb-step .field {
+  display: grid;
+  gap: var(--space-1);
+}
+.onb-step .field select,
+.onb-step .field input {
+  min-height: var(--target-min);
+  max-width: 100%;
+  font: inherit;
+}
+.onb-step .btn.block + .btn.block {
+  margin-top: calc(-1 * var(--space-2));
+}
+
+/* the one contextual tip after the first launch */
+.onb-tip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin: 0 0 var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-md);
+  background: var(--accent-soft);
+  color: var(--text);
+}
+
+@media (forced-colors: active) {
+  .onb-steps i,
+  .onb-steps i.on,
+  .proche-verdict .mark {
+    forced-color-adjust: none;
+    background: CanvasText;
+    color: Canvas;
+  }
+  .radio-card:has(input:checked) {
+    outline: 2px solid Highlight;
+  }
+}
