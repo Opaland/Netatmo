@@ -21,6 +21,7 @@ const ICONS = {
   overview: '<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>',
   compare: '<path d="M3 17l5-5 4 3 8-8"/><path d="M3 21h18"/>',
   rooms: '<path d="M3 10l9-7 9 7v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1z"/><path d="M9 21v-7h6v7"/>',
+  comfort: '<path d="M14 14.8V4.5a2.5 2.5 0 0 0-5 0v10.3a4.5 4.5 0 1 0 5 0z"/><path d="M11.5 9v8"/>',
   analyse: '<circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3M8 13l2-3 2 2 2-4"/>',
   report: '<path d="M6 2h9l5 5v15H6z"/><path d="M14 2v6h6M9 13h8M9 17h8"/>',
   settings:
@@ -39,6 +40,7 @@ function render() {
     ['compare', 'Comparer'],
     ['rooms', 'Pièces'],
     ['analyse', 'Analyse'],
+    ['comfort', 'Confort'],
   ];
   const roomsCount = state.rooms ? state.rooms.length : activeRooms().length;
   app.innerHTML = `
@@ -81,18 +83,35 @@ function render() {
   <main id="view"></main>`;
   const view = document.getElementById('view')!;
   const records = filtered();
-  if (!records.length && state.view !== 'settings') {
+  if (!records.length && state.view !== 'settings' && state.view !== 'comfort') {
     view.innerHTML = `<p class="empty">Aucune donnée pour cette sélection.</p>`;
   } else if (state.view === 'overview') overview.renderOverview(view, records);
   else if (state.view === 'compare') compare.renderCompare(view, records);
   else if (state.view === 'analyse') analyse.renderAnalyse(view, records);
+  else if (state.view === 'comfort') renderComfort(view);
   else if (state.view === 'report') report.renderReport(view);
   else if (state.view === 'settings') settings.renderSettings(view);
   else rooms.renderRooms(view, records);
   document.body.classList.toggle('is-report', state.view === 'report' || state.view === 'settings');
+  document.body.classList.toggle('is-comfort', state.view === 'comfort');
   document.body.classList.toggle('is-simple', state.simple && state.view === 'overview');
 }
 setRenderer(render);
+
+// Comfort (S-11, S-3.8) is loaded on demand: its code stays out of the entry chunk.
+let comfort: typeof import('./views/comfort') | null = null;
+function renderComfort(view: HTMLElement) {
+  if (comfort) return comfort.renderComfort(view);
+  view.innerHTML = '<p class="empty">Chargement…</p>';
+  import('./views/comfort')
+    .then((m) => {
+      comfort = m;
+      if (state.view === 'comfort') render();
+    })
+    .catch(() => {
+      view.innerHTML = '<p class="empty">Vue indisponible hors ligne : elle se chargera au prochain accès réseau.</p>';
+    });
+}
 
 /** S-1.5: warn when the archive stopped moving (collection broken or Intuis late). */
 function staleBanner() {
@@ -105,8 +124,10 @@ function staleBanner() {
 
 // ------------------------------------------------------------------ events (delegated)
 /** View-specific handlers: each returns true when the event was its own. */
-const clickHandlers = [compare.handleClick, rooms.handleClick, report.handleClick, settings.handleClick, prices.handleClick];
-const changeHandlers = [overview.handleChange, rooms.handleChange, prices.handleChange, compare.handleChange, analyse.handleChange, report.handleChange];
+const comfortClick = (btn: HTMLElement) => comfort?.handleClick(btn) ?? false;
+const comfortChange = (t: HTMLInputElement | HTMLSelectElement) => comfort?.handleChange(t) ?? false;
+const clickHandlers = [compare.handleClick, rooms.handleClick, report.handleClick, settings.handleClick, prices.handleClick, comfortClick];
+const changeHandlers = [overview.handleChange, rooms.handleChange, prices.handleChange, compare.handleChange, analyse.handleChange, report.handleChange, comfortChange];
 
 app.addEventListener('submit', (e) => settings.handleSubmit(e));
 

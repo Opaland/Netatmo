@@ -17,6 +17,7 @@ export interface Meta {
   last_day: string | null;
   updated: string;
   hourly_years?: number[];
+  station_hourly_years?: number[];
   has_tariffs?: boolean;
   has_temps?: boolean;
   has_linky?: boolean;

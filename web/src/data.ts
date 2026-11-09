@@ -3,6 +3,7 @@
 import { type DayRecord, type Meta, toRecords } from './aggregate';
 import { loadOffers, loadTempo } from './offers';
 import { type Hourly, type TariffMap, type TempoRow, type TrveRow, type Weather, parseTrveCsv } from './analysis';
+import type { DayHours, Night, StationHourly } from './comfort';
 import { type Envelope, type KeyInfo, decryptEnvelope, deriveKey } from './crypto';
 
 export type Source = 'data' | 'demo';
@@ -29,6 +30,8 @@ export interface Dataset {
 export interface Station {
   modules: Record<string, { name: string; type: string; indoor: boolean }>;
   daily: Record<string, Record<string, [number, number, number, number | null, number | null]>>; // [min, max, mean, hum, co2]
+  nightly?: Record<string, Record<string, Night>>; // module -> night D (22 h → 7 h) -> CO₂ hours (S-11.1)
+  hours?: Record<string, Record<string, DayHours>>; // module -> day -> humid / cold hours (S-11.2, S-11.3)
 }
 
 /** Public CRE file, refreshed at each deploy; bundled copy as fallback. */
@@ -160,6 +163,24 @@ export async function loadHourly(ds: Dataset): Promise<Hourly> {
       const m = out.get(room) ?? new Map<string, number>();
       for (const [h, wh] of Object.entries(hours)) m.set(h, wh / 1000);
       out.set(room, m);
+    }
+  }
+  return out;
+}
+
+/** Station hourly readings (S-11): loaded only when the comfort view needs them. */
+export async function loadStationHourly(ds: Dataset): Promise<StationHourly> {
+  const out: StationHourly = new Map();
+  const docs = await Promise.all(
+    (ds.meta.station_hourly_years ?? []).map((y) =>
+      optional<{ hourly?: Record<string, Record<string, [number | null, number | null, number | null]>> }>(ds.source, `${y}.station_h`, ds.key),
+    ),
+  );
+  for (const doc of docs) {
+    for (const [mod, hours] of Object.entries(doc?.hourly ?? {})) {
+      const m = out.get(mod) ?? new Map();
+      for (const [h, v] of Object.entries(hours)) m.set(h, v);
+      out.set(mod, m);
     }
   }
   return out;

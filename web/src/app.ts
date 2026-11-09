@@ -6,7 +6,7 @@ import { NO_PRICES, type Prices } from './analysis';
 import type { Dataset } from './data';
 import type { ContractPeriod } from './offers';
 
-export type View = 'overview' | 'compare' | 'rooms' | 'analyse' | 'report' | 'settings';
+export type View = 'overview' | 'compare' | 'rooms' | 'analyse' | 'comfort' | 'report' | 'settings';
 export type CatFilter = 'all' | Category;
 
 export interface State {
@@ -32,6 +32,9 @@ export interface State {
   simKva: number | null; // comparator: simulate another subscribed power
   simple: boolean; // simple mode (S-7.1)
   showTables: boolean;
+  comfortThreshold: number; // °C, hours below it count as cold (S-11.3)
+  /** S-3.8: Intuis room id -> station module key ('' = deliberately not linked). Shared later by S-12.1. */
+  roomModuleMap: Record<string, string>;
 }
 
 export const DEFAULT: State = {
@@ -57,6 +60,8 @@ export const DEFAULT: State = {
   simKva: null,
   simple: false,
   showTables: false,
+  comfortThreshold: 19,
+  roomModuleMap: {},
 };
 
 const LS_KEY = 'intuis-history:state';
