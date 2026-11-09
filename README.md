@@ -15,7 +15,8 @@ Ce que l'application mobile ne fait pas, et que celle-ci fait :
   (offre, puissance souscrite), et un **comparateur Base / heures creuses / Tempo** ;
 - la **puissance maximale appelée** (Linky) face à la puissance souscrite ;
 - l'historique complet de la **station météo Netatmo** (tous les modules : température, humidité, CO₂) ;
-- la **signature énergétique** du logement (kWh par jour selon la température extérieure) ;
+- la **signature énergétique** du logement (kWh par jour selon la température extérieure), et selon
+  l'**écart intérieur − extérieur** mesuré par la station, avec intervalles de confiance à 95 % ;
 - un **calendrier** de consommation, des **profils horaires**, les **températures** des pièces ;
 - la **part du chauffage et du chauffe-eau** dans la consommation totale (compteur **Linky**) ;
 - **par pièce** : classement, évolution N-1 → N en cascade, détail mensuel ;
@@ -42,7 +43,11 @@ uniquement dans votre navigateur.
 ## Essayer sans compte
 
 L'application contient des **données de démonstration** : ouvrez-la et touchez
-« Essayer avec des données de démonstration ».
+« Essayer avec des données de démonstration ». Elles montrent toutes les vues : station météo
+(avec relevés horaires), Linky et sa courbe de charge, contrat en deux périodes (Base puis heures
+creuses), comparateur Tempo, et des trous de données comme sur un vrai compte (jours perdus chez
+Intuis en février-mars et novembre 2024, jours estimés en décembre 2023, deux jours « suspects » en
+janvier 2025).
 
 ## Installation (une seule fois, environ 15 minutes)
 
@@ -284,6 +289,17 @@ Le serveur Intuis perd parfois le détail journalier (constaté sur février et 
 - **perdu chez Intuis** : ni le jour ni le total du mois ne sont disponibles ; rien n'est reconstitué et la consommation de ces jours manque dans les totaux.
 
 À chaque enregistrement, le collecteur recalcule pour chaque pièce et chaque mois le nombre de jours réels, estimés et perdus (`coverage` dans le fichier de l'année, y compris pour les années déjà stockées). Dans l'application, la Synthèse affiche le nombre de jours estimés ou manquants de la période, une carte repliable **Qualité des données** liste les mois incomplets, et les barres des graphiques par jour et par semaine qui contiennent de tels jours sont dessinées plus pâles. Les comparaisons d'une année touchée (2024) avec les autres sont donc à lire avec prudence.
+
+Dans cette carte, la case **Reconstituer les jours perdus** (mémorisée sur l'appareil) estime à part
+la consommation des pièces perdues, jour par jour : par le **compteur Linky** du jour, moins les autres
+usages du logement (médiane « Linky − Intuis » des jours complets à ± 3 semaines) et moins ce que les
+autres pièces ont mesuré ; sans Linky, par la **signature** de la saison × la température du jour, au
+prorata de la part habituelle des pièces. Ces valeurs forment une **série « reconstitué » distincte**
+(graphique mensuel, totaux par année « mesuré », « reconstitué », « mesuré + reconstitué ») et ne sont
+jamais mêlées aux données mesurées. La carte liste aussi les **jours suspects** : des jours mesurés où le
+chauffage est très en dessous de la signature par temps froid (moins de 35 %) alors que Linky indique
+davantage. Les jours perdus ou estimés sont exclus des **Jours inhabituels** (et de la droite qui sert
+à les repérer) ; un jour très en dessous de la signature y porte la mention « suspect ».
 
 ## Utilisation en local (facultatif)
 

@@ -983,6 +983,17 @@ body.is-simple .kpis {
   .sk { animation: none; }
 }
 
+/* S-1.10: suspect days (very low against the signature) */
+.badge-suspect {
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: 6px;
+  border: 1px dashed var(--text-muted);
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
 /* v1.3 money cards (S-2.11, S-2.12, S-2.13) and habits (S-4.9, S-4.10) */
 body.is-simple .kpis:has(.kpi-budget:not([hidden])) .kpi-detail {
   display: none;

@@ -486,10 +486,14 @@ export interface Anomaly {
   z: number; // residual / σ of the season
 }
 
-/** Heating days far from the season's energy signature (|residual| > 2σ and > 3 kWh). */
-export function anomalies(records: DayRecord[], weather: Weather): Anomaly[] {
+/**
+ * Heating days far from the season's energy signature (|residual| > 2σ and > 3 kWh).
+ * `exclude`: days not fully measured (lost or estimated, S-1.10), left out of the fit and the list.
+ */
+export function anomalies(records: DayRecord[], weather: Weather, exclude: Set<string> = new Set()): Anomaly[] {
   const out: Anomaly[] = [];
-  for (const pts of signaturePoints(records, weather).values()) {
+  for (const all of signaturePoints(records, weather).values()) {
+    const pts = all.filter((p) => !exclude.has(p[2]));
     const fit = fitSeason(pts);
     if (!fit) continue;
     const heating = pts.filter(([t, k]) => t < 15 && k > 0.2);

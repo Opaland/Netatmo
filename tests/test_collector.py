@@ -1000,3 +1000,24 @@ def test_renew_file_lists_only_what_must_be_renewed(tmp_path, monkeypatch):
     assert path.read_text() == ""
     monkeypatch.delenv("RENEW_FILE")
     write_renew_file(["x"])  # no file asked: nothing written, no error
+
+
+def test_demo_shows_every_data_quality_case_and_the_contract(tmp_path):
+    """S-1.8 / S-1.10: the demo has lost, estimated and suspect days, a contract and Linky."""
+    from collector.__main__ import parse_contract
+    from collector.demo import generate
+
+    generate(tmp_path)
+    s = Store(tmp_path, "demo")
+    cov = s.doc("2024")["coverage"]
+    assert cov["r-salon"]["2024-02"][2] == 18  # lost at Intuis, every room
+    assert cov["r-ch1"]["2024-11"] == [30, 0, 0]  # the second gap touches two rooms only
+    assert cov["r-salon"]["2024-11"][2] == 14
+    assert "2024-02-20" not in s.year(2024)["r-salon"]
+    assert s.doc("linky")["daily"]["2024-02-20"] > 20000  # the meter saw the lost day
+    est = s.doc("2023")["estimated"]["r-salon"]
+    assert sorted(est) == [f"2023-12-0{d}" for d in range(4, 9)]
+    assert len({s.year(2023)["r-salon"][d] for d in est}) == 1  # spread evenly
+    assert s.year(2025)["r-salon"]["2025-01-14"] < 0.3 * s.year(2025)["r-salon"]["2025-01-13"]
+    assert parse_contract(json.dumps(s.meta["contract"])) == s.meta["contract"]
+    assert s.meta["sources"]["linky"]["expires_estimated"] is True

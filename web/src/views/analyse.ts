@@ -6,6 +6,8 @@ import { ds, onDatasetLoaded, rerender, setState, state } from '../app';
 import { calendarChart, cssVar, gridHeatmap, lineChart, scatterChart } from '../charts';
 import { loadHourly } from '../data';
 import { activeRooms, catColor, esc, fmtKwh, lastDay, longDate, seg, series, table, tariffNames } from '../ui';
+import { SUSPECT_RATIO } from '../reconstitute';
+import { uncertainDays } from './quality';
 import { drawSetpoint, setpointCard } from './setpoint';
 import { drawWaterHeater, hcAlerts, waterHeaterCard } from './waterheater';
 
@@ -38,7 +40,8 @@ export function renderAnalyse(view: HTMLElement, records: DayRecord[]) {
     <p class="hint muted">Chaque point est un jour : consommation de chauffage selon la température extérieure moyenne${ds!.meta.weather_source === 'netatmo' ? ' (station Netatmo)' : ' (Open-Meteo)'}. La droite résume la saison : plus elle est <strong>pentue</strong>, plus la maison consomme par degré de froid ; là où elle touche zéro, c'est la température à partir de laquelle vous ne chauffez plus.</p>
     <div class="chart tall" id="sig-chart" role="img" aria-label="Signature énergétique"></div>
     <div id="sig-table"></div>
-  </section>`
+  </section>
+  <section class="card" id="indoor-sig" hidden></section>`
       : `<section class="card"><h2>Signature énergétique</h2><p class="hint muted">Disponible dès que la collecte a récupéré la météo (prochaine collecte).</p></section>`
   }
   ${setpointCard(records)}
@@ -147,25 +150,35 @@ export function renderAnalyse(view: HTMLElement, records: DayRecord[]) {
   drawHourly(records);
   drawWaterHeater(hourly);
   drawSetpoint(records);
+  drawIndoorSignature(records);
 }
 
 function anomaliesCard(records: DayRecord[]) {
   if (!ds!.weather) return '';
-  const list = anomalies(records, ds!.weather).slice(0, 12);
+  // S-1.10: lost or estimated days are not "unusual", they are not measured
+  const list = anomalies(records, ds!.weather, uncertainDays(ds!.records, ds!.estimated, '0000-01-01', lastDay())).slice(0, 12);
+  const suspect = (a: (typeof list)[number]) => a.z < 0 && a.kwh < SUSPECT_RATIO * a.expected;
   const alerts = hcAlerts();
   if (!list.length) return alerts ? `<section class="card"><h2>Jours inhabituels</h2>${alerts}</section>` : '';
   return `<section class="card"><h2>Jours inhabituels <small class="muted">chauffage, écart à la signature</small></h2>
     ${alerts}
-    <p class="hint muted">Jours où le chauffage s'écarte nettement de ce qu'annonce la température extérieure (plus de 2 fois l'écart habituel et plus de 3 kWh) : fenêtre ouverte, absence, invités, réglage oublié…</p>
+    <p class="hint muted">Jours où le chauffage s'écarte nettement de ce qu'annonce la température extérieure (plus de 2 fois l'écart habituel et plus de 3 kWh) : fenêtre ouverte, absence, invités, réglage oublié… Les jours perdus chez Intuis ou estimés n'y figurent pas ; un jour très en dessous de la signature est marqué <strong>suspect</strong> (donnée peut-être incomplète, voir « Qualité des données » dans la Synthèse).</p>
     ${table(
       ['Jour', 'Consommé', 'Attendu', 'Écart'],
       list.map((a) => [
         longDate(a.day),
         fmtKwh(a.kwh),
         fmtKwh(Math.max(0, a.expected)),
-        `<span class="delta ${a.z > 0 ? 'up' : 'down'}"><span aria-hidden="true">${a.z > 0 ? '▲' : '▼'}</span> ${a.z > 0 ? '+' : '−'}${fmtKwh(Math.abs(a.kwh - a.expected))}</span>`,
+        `<span class="delta ${a.z > 0 ? 'up' : 'down'}"><span aria-hidden="true">${a.z > 0 ? '▲' : '▼'}</span> ${a.z > 0 ? '+' : '−'}${fmtKwh(Math.abs(a.kwh - a.expected))}</span>${suspect(a) ? ' <span class="badge-suspect" title="Très en dessous de la signature : donnée peut-être incomplète chez Intuis">suspect</span>' : ''}`,
       ]),
     )}</section>`;
+}
+
+/** S-3.7: indoor − outdoor signature, a lazily loaded card under the signature. */
+function drawIndoorSignature(records: DayRecord[]) {
+  const card = document.getElementById('indoor-sig');
+  if (!card || !ds!.station) return card?.remove();
+  import('./indoorsig').then((m) => card.isConnected && m.renderIndoorSignature(card, records)).catch(() => card.remove());
 }
 
 // ------------------------------------------------------------------ Netatmo weather station
