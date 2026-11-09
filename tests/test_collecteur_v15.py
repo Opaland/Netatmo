@@ -335,3 +335,12 @@ def test_partial_statistics_day_never_replaces_a_complete_one(tmp_path):
     import_bytes(store, _hourly_stats("2025-02-02T18:00:00+01:00", 6), "Europe/Paris")
     import_bytes(store, _hourly_stats("2025-02-02T00:00:00+01:00", 24, kwh=1.0), "Europe/Paris")
     assert next(iter(store.doc("ha")["daily"].values()))["2025-02-02"] == {"kwh": 24.0}
+
+
+def test_collect_workflow_commits_the_token_even_after_a_failure():
+    yaml = pytest.importorskip("yaml")
+    steps = yaml.safe_load((ROOT / ".github" / "workflows" / "collect.yml").read_text())["jobs"]["collect"]["steps"]
+    runs = {s.get("name"): s for s in steps}
+    assert "scripts/commit-data.sh" in runs["Commit des données chiffrées"]["run"]
+    token = runs["Sauvegarde du jeton Netatmo renouvelé"]
+    assert token["if"].startswith("always()") and "data/netatmo-token.enc.json" in token["run"]

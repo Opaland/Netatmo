@@ -114,13 +114,15 @@ jobs:
       - name: Commit des données chiffrées
         id: commit
         if: steps.check.outputs.configured == 'true'
-        run: scripts/commit-data.sh "data: collecte du $(date -u +%Y-%m-%d)" data/
+        run: |
+          scripts/commit-data.sh "data: collecte du $(date -u +%Y-%m-%d)" data/
       # #262: Netatmo rotates its refresh token at every login and the collector writes the new
       # one to data/ at once. When the collection or the commit above failed, it is still
       # committed here: otherwise the next run would reuse a consumed token (invalid_grant).
       - name: Sauvegarde du jeton Netatmo renouvelé
         if: always() && steps.check.outputs.configured == 'true' && steps.commit.outcome != 'success'
-        run: scripts/commit-data.sh "data: jeton Netatmo renouvelé ($(date -u +%Y-%m-%d))" data/netatmo-token.enc.json
+        run: |
+          scripts/commit-data.sh "data: jeton Netatmo renouvelé ($(date -u +%Y-%m-%d))" data/netatmo-token.enc.json
 
       # One open issue while the collection fails (GitHub e-mails the owner), closed on success.
       - name: Alerte en cas d'échec
