@@ -84,7 +84,7 @@ async function drawComparison() {
   out.innerHTML = html('<p class="hint muted">Chargement des données horaires…</p>');
   let hourly;
   try {
-    hourly = await loadHourly(ds);
+    hourly = await loadHourly(ds, addDays(minusYears(lastDay()), 1)); // #251: the 12 months compared below
   } catch {
     out.innerHTML = html('<p class="hint muted">Données horaires indisponibles.</p>');
     return;

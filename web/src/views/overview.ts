@@ -58,10 +58,11 @@ function kpi(label: string, from: string, to: string, records: DayRecord[], cls 
     <p class="kpi-sub">${costSentence(cost)} ${comparedToLastYear(now, hasBefore ? before : null)}</p>
   </article>`;
   }
+  const eur = eurOf(records, from, to);
   return `<article class="kpi${cls}">
     <h3>${esc(label)}</h3>
     <p class="kpi-value">${fmtKwh(now)}</p>
-    <p class="kpi-sub">${eurOf(records, from, to) ? `${eurOf(records, from, to)} · ` : ''}${hasBefore ? delta(now, before) : '<span class="delta neutral">pas de référence N-1</span>'}</p>
+    <p class="kpi-sub">${eur ? `${eur} · ` : ''}${hasBefore ? delta(now, before) : '<span class="delta neutral">pas de référence N-1</span>'}</p>
   </article>`;
 }
 
@@ -95,6 +96,7 @@ export function renderOverview(view: HTMLElement, records: DayRecord[]) {
     .map((c) => ({ c, v: byCat.get(c)!, p: (byCat.get(c)! / periodTotal) * 100 }));
 
   const simple = state.simple;
+  const periodEur = eurOf(records, from, to);
   const plain = (k: Parameters<typeof kpiTitle>[0]) => (simple ? kpiTitle(k, last) : null);
   view.innerHTML = html`
   ${simple ? plainVerdictCard(records, monthStart, last) : verdictCard(records, monthStart, last)}
@@ -123,7 +125,7 @@ export function renderOverview(view: HTMLElement, records: DayRecord[]) {
         ${seg('split', split, [['category', 'Par usage'], ['room', 'Par pièce']], 'Détail')}
       </div>
     </div>
-    <p class="period-total"><strong>${fmtKwh(periodTotal)}</strong> ${eurOf(records, from, to) ? `· ${eurOf(records, from, to)} ` : ''}du ${longDate(from)} au ${longDate(to)}${estimatedNote(records, from, to)}</p>
+    <p class="period-total"><strong>${fmtKwh(periodTotal)}</strong> ${periodEur ? `· ${periodEur} ` : ''}du ${longDate(from)} au ${longDate(to)}${estimatedNote(records, from, to)}</p>
     ${
       shares.length > 1
         ? `<div class="share" aria-hidden="true">${shares

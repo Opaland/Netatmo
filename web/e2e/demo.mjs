@@ -108,6 +108,27 @@ async function keyboard(page, name) {
   await page.keyboard.press('Escape');
   check(!(await page.locator('.menu[open]').count()), `${name}/clavier : Échap ne ferme pas le menu`);
   check((await focused()).summary, `${name}/clavier : le focus ne revient pas au bouton du menu`);
+  // #256: typing a price then Tab goes on to the next field (the menu is not rebuilt).
+  await page.keyboard.press('Enter');
+  if (await page.locator('[data-pmode=manual]').count()) {
+    await page.check('[data-pmode=manual]');
+    check(
+      await page.evaluate(() => document.activeElement?.getAttribute('data-pmode') === 'manual'),
+      `${name}/clavier : le focus est perdu après le choix du mode de prix`,
+    );
+  }
+  const order = await page.locator('.menu [data-price]').evaluateAll((els) => els.map((e) => e.getAttribute('data-price')));
+  await page.fill('.menu [data-price=base]', '0.2516');
+  await page.keyboard.press('Tab');
+  await page.waitForTimeout(200);
+  const next = await page.evaluate(() => document.activeElement?.getAttribute('data-price') ?? document.activeElement?.tagName);
+  check(next === order[1], `${name}/clavier : après un prix et Tab, le focus est sur « ${next} » au lieu de « ${order[1]} »`);
+  check(await page.locator('.menu[open]').count(), `${name}/clavier : le menu se ferme après la saisie d'un prix`);
+  // back to the official tariffs and no manual price, for the following checks
+  await page.fill('.menu [data-price=base]', '');
+  await page.keyboard.press('Tab');
+  if (await page.locator('[data-pmode=trve]').count()) await page.check('[data-pmode=trve]');
+  await page.keyboard.press('Escape');
 }
 
 /** Synthetic touch swipe (pointer events, as a finger would send them). */

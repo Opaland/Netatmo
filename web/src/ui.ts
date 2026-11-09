@@ -1,10 +1,11 @@
 // Helpers shared by several views: formatting, HTML fragments, colours, rooms, costs.
 import { type Category, type DayRecord, MONTHS_LONG, addDays, applyFilter, minusYears, pctChange } from './aggregate';
-import { energyCost, energyCostTrve, hasPrices, offPeakColumn, offPeakShares, subscriptionCost, subscriptionTrve, trveAt } from './analysis';
+import { type PriceAt, energyCost, energyCostTrve, hasPrices, offPeakColumn, offPeakShares, subscriptionCost, subscriptionTrve, trveAt } from './analysis';
 import { type State, activeRooms, ds, state } from './app';
 import { cssVar, escapeHtml as esc, waterfallChart } from './charts';
 import { type ResolvedContract, resolveContract } from './contract';
 import { type ContractPeriod, periodAt } from './offers';
+import { type HcHp, flatPrice, hcHp, manualHcHp, manualPriceAt } from './pricing';
 import { tenant } from './tenant';
 
 export { esc };
@@ -96,8 +97,31 @@ export function offCol(): 1 | 2 {
   const water = ds!.meta.rooms.filter((r) => r.category === 'water_heater').map((r) => r.id);
   return offPeakColumn(ds!.tariffs, water) ?? 2;
 }
-/** Energy cost of these records in [from, to], subscription prorated when asked. */
+// #256: a cost depends on the records and on the price inputs only. Every input below keeps
+// its identity until it changes (setState copies a changed `prices`, contractInfo() is
+// memoised, setTenant() replaces the tenant object), so a change of identity empties the cache.
+let priceDeps: unknown[] = [];
+let costCache = new WeakMap<DayRecord[], Map<string, number | null>>();
+let avgCache: { value: number | null } | null = null;
+function freshPrices() {
+  const deps = [ds, contractInfo(), priceMode(), state.prices, tenant()];
+  if (deps.some((d, i) => d !== priceDeps[i])) {
+    priceDeps = deps;
+    costCache = new WeakMap();
+    avgCache = null;
+  }
+}
+
+/** Energy cost of these records in [from, to], subscription prorated when asked (memoised per array). */
 export function costOf(records: DayRecord[], from: string, to: string, withSub = false): number | null {
+  freshPrices();
+  let m = costCache.get(records);
+  if (!m) costCache.set(records, (m = new Map()));
+  const k = `${from}|${to}|${withSub}`;
+  if (!m.has(k)) m.set(k, computeCost(records, from, to, withSub));
+  return m.get(k)!;
+}
+function computeCost(records: DayRecord[], from: string, to: string, withSub: boolean): number | null {
   if (!costAvailable()) return null;
   const recs = records.filter((r) => r.day >= from && r.day <= to);
   if (useTrve()) {
@@ -112,15 +136,35 @@ export const eurOf = (records: DayRecord[], from: string, to: string) => {
   const c = costOf(records, from, to);
   return c === null ? '' : fmtEur(c);
 };
-/** Average €/kWh over the last 12 months, for chart tooltips. */
+/** Average €/kWh over the last 12 months, for chart tooltips (computed once per dataset and prices). */
 export function avgPrice(): number | null {
+  freshPrices();
+  if (avgCache) return avgCache.value;
   const last = lastDay();
   const from = addDays(minusYears(last), 1);
   const recs = ds!.records.filter((r) => r.day >= from);
   const kwh = recs.reduce((s, r) => s + r.kwh, 0);
-  const c = costOf(recs, from, last);
-  return c === null || !kwh ? null : c / kwh;
+  const c = computeCost(recs, from, last, false);
+  avgCache = { value: c === null || !kwh ? null : c / kwh };
+  return avgCache.value;
 }
+
+// #252: one price rule for the cards that price a kWh outside the day-by-day cost.
+/** Off-peak / peak €/kWh that day under the price mode in force (official or shared contract, manual prices, tenant). */
+export function hcHpAt(day: string): HcHp | null {
+  const trve = useTrve();
+  return hcHp({ trve, row: trve ? priceAt(day) : null, prices: state.prices, tenant: tenant().on, off: offCol() });
+}
+/** €/kWh of a consumption spread evenly over the day (16 h peak, 8 h off-peak): standby base load. */
+export function flatPriceAt(day: string): number | null {
+  const p = hcHpAt(day);
+  return p ? flatPrice(p) : null;
+}
+/** Price row of each day: the regulated tariff of the contract, or the manual prices. */
+export function dayPrices(): PriceAt {
+  return useTrve() ? priceAt : manualPriceAt(manualHcHp(state.prices, offCol(), tenant().on));
+}
+
 /** Names of the two tariff columns, from the detected off-peak column. */
 export function tariffNames(): [string, string] {
   const water = activeRooms().filter((r) => r.category === 'water_heater').map((r) => r.id);

@@ -5,6 +5,7 @@
 // conversion to watts divides by the number of real half hours behind a key.
 
 import type { Hourly } from './analysis';
+import { memo, setKey } from './memo';
 
 export type Curve = Map<string, number>; // "YYYY-MM-DDTHH:MM" -> Wh over that half hour
 
@@ -168,13 +169,15 @@ export interface Measured {
   last: string; // last day covered by the hourly data
 }
 
-export function measuredWatts(hourly: Hourly, rooms: Set<string>, tz: string): Measured {
+/** Over [from, to] only when given (the cards need 30 days, not the whole history). */
+export function measuredWatts(hourly: Hourly, rooms: Set<string>, tz: string, from = '', to = '\uffff'): Measured {
   const byHour = new Map<string, number>();
   let last = '';
   for (const [room, hours] of hourly) {
     if (!rooms.has(room)) continue;
     for (const [key, kwh] of hours) {
       const day = key.slice(0, 10);
+      if (day < from || day > to) continue;
       if (day > last) last = day;
       const n = halfHourCounts(tz, day)?.get(`${key.slice(11, 13)}:00`) ?? 1;
       byHour.set(key, (byHour.get(key) ?? 0) + (kwh * 1000) / n);
@@ -234,4 +237,16 @@ export function windowDays(curve: Curve, last: string, n = 30): { from: string; 
     if (d >= from && d <= last) days.add(d);
   }
   return { from, days };
+}
+
+// ------------------------------------------------------------------ memoised (#251)
+// The Synthèse rebuilds its Linky cards on every setState: the hourly data never change once
+// loaded, so these scans are done once per (hourly data, rooms, window) and shared by the
+// load-curve and the « autres usages » cards.
+export function measuredWattsCached(hourly: Hourly, rooms: Set<string>, tz: string, from: string, to: string): Measured {
+  return memo(hourly, `mw|${setKey(rooms)}|${tz}|${from}|${to}`, () => measuredWatts(hourly, rooms, tz, from, to));
+}
+
+export function typicalHourlyCached(hourly: Hourly, rooms: Set<string>, tz: string, days: Set<string>): { weekday: number[]; weekend: number[] } {
+  return memo(hourly, `th|${setKey(rooms)}|${tz}|${setKey(days)}`, () => typicalHourly(hourly, rooms, tz, days));
 }

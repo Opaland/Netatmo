@@ -184,21 +184,35 @@ export async function load(source: Source, key: CryptoKey): Promise<Dataset> {
   };
 }
 
-/** Hourly documents are big: loaded only when a view needs them, once per dataset. */
-const hourlyCache = new WeakMap<Dataset, Promise<Hourly>>();
-export function loadHourly(ds: Dataset): Promise<Hourly> {
-  let p = hourlyCache.get(ds);
-  if (!p) {
-    p = fetchHourly(ds);
-    hourlyCache.set(ds, p);
-    p.catch(() => hourlyCache.delete(ds));
+/**
+ * Hourly documents are big (≈ 9 000 points per room and per year): loaded only when a view
+ * needs them, once per dataset. `since` (YYYY-MM-DD) limits the load to the years from that
+ * day on (#251): the Synthèse cards need 30 days, the Analyse 12 months; the research export
+ * takes everything. A load already covering the asked years is reused.
+ */
+const hourlyCache = new WeakMap<Dataset, Map<string, Promise<Hourly>>>();
+export function hourlyYears(ds: Dataset, since?: string): number[] {
+  const all = (ds.meta as Meta & { hourly_years?: number[] }).hourly_years ?? [];
+  const from = since ? Number(since.slice(0, 4)) : -Infinity;
+  return all.filter((y) => y >= from);
+}
+export function loadHourly(ds: Dataset, since?: string): Promise<Hourly> {
+  const years = hourlyYears(ds, since);
+  let loads = hourlyCache.get(ds);
+  if (!loads) hourlyCache.set(ds, (loads = new Map()));
+  for (const [k, p] of loads) {
+    const have = new Set(k.split(','));
+    if (years.every((y) => have.has(String(y)))) return p;
   }
+  const key = years.join(',');
+  const p = fetchHourly(ds, years);
+  loads.set(key, p);
+  p.catch(() => loads.delete(key));
   return p;
 }
 
-async function fetchHourly(ds: Dataset): Promise<Hourly> {
+async function fetchHourly(ds: Dataset, years: number[]): Promise<Hourly> {
   const out: Hourly = new Map();
-  const years = (ds.meta as Meta & { hourly_years?: number[] }).hourly_years ?? [];
   const docs = await Promise.all(
     years.map((y) => optional<{ hourly?: Record<string, Record<string, number>> }>(ds.source, `${y}.hourly`, ds.key)),
   );

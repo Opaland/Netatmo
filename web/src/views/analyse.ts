@@ -294,7 +294,7 @@ function drawHourly(records: DayRecord[]) {
   if (!hourly) {
     if (!hourlyLoading) {
       hourlyLoading = true;
-      loadHourly(ds!)
+      loadHourly(ds!, addDays(minusYears(lastDay()), 1)) // #251: 12 months (water heater), 90 days (profile)
         .then((h) => {
           hourly = h;
           hourlyLoading = false;

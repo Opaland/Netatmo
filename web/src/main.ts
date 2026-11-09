@@ -48,9 +48,30 @@ const TABS: [View, string][] = [
 ];
 
 let slide: SwipeDir | null = null;
+/** #256: set while a menu setting that only the view uses is applied (prices, lock delay, pinned room). */
+let viewOnly = false;
+
+/** Selector finding the focused control again after a re-render: its id, else its data-* attributes. */
+function focusSelector(el: Element | null): string | null {
+  if (!el || el === document.body || !app.contains(el)) return null;
+  if (el.id) return `#${CSS.escape(el.id)}`;
+  const data = [...el.attributes].filter((a) => a.name.startsWith('data-'));
+  if (!data.length) return null;
+  return `${el.tagName.toLowerCase()}${data.map((a) => `[${a.name}="${CSS.escape(a.value)}"]`).join('')}`;
+}
 
 function render() {
   if (!ds) return;
+  const view = document.getElementById('view');
+  if (viewOnly && view) {
+    // The header, the menu and the filters stay as they are: the focus and the field being
+    // typed in are kept, and Tab goes on to the next field of the menu.
+    viewOnly = false;
+    disposeAll(view);
+    return renderView(view);
+  }
+  viewOnly = false;
+  const focus = focusSelector(document.activeElement);
   disposeAll(app);
   const { meta } = ds;
   const tabs = TABS;
@@ -103,7 +124,17 @@ function render() {
     </details>
   </section>
   <main id="view"></main>`;
-  const view = document.getElementById('view')!;
+  renderView(document.getElementById('view')!);
+  // #256: give the focus back to the control that had it (after the handler reopened its menu).
+  if (focus) {
+    queueMicrotask(() => {
+      if (document.activeElement && document.activeElement !== document.body) return;
+      app.querySelector<HTMLElement>(focus)?.focus({ preventScroll: true });
+    });
+  }
+}
+
+function renderView(view: HTMLElement) {
   const records = filtered();
   if (!records.length && state.view !== 'settings' && state.view !== 'comfort') {
     view.innerHTML = html`<p class="empty">Aucune donnée pour cette sélection.</p>`;
@@ -205,6 +236,16 @@ app.addEventListener('click', async (e) => {
 app.addEventListener('change', (e) => {
   const t = e.target as HTMLInputElement | HTMLSelectElement;
   if (!ds) return;
+  // #256: a price, the lock delay or the pinned room leave the menu as it is (only the view is redrawn).
+  viewOnly = !!t.closest('.menu') && (t.dataset.price !== undefined || t.dataset.lockAfter !== undefined || t.dataset.pin !== undefined);
+  try {
+    onChange(t);
+  } finally {
+    viewOnly = false;
+  }
+});
+
+function onChange(t: HTMLInputElement | HTMLSelectElement) {
   if (changeHandlers.some((h) => h(t))) return;
   if (t.dataset.lockAfter !== undefined) {
     setState({ lockAfter: Number(t.value) });
@@ -226,7 +267,7 @@ app.addEventListener('change', (e) => {
     setState({ rooms: rooms.length === all.length ? null : rooms });
     document.querySelector<HTMLDetailsElement>('.rooms-picker')?.setAttribute('open', '');
   }
-});
+}
 
 app.addEventListener('toggle', (e) => {
   const t = e.target as HTMLElement;

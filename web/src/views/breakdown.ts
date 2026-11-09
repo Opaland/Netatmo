@@ -7,8 +7,9 @@ import { ds, onDatasetLoaded } from '../app';
 import { type Breakdown, type Declared, breakdown, kwhPerYear, parseDeclared, plugsFrom, windowDays } from '../breakdown';
 import { cssVar, hbarChart } from '../charts';
 import { openLocal, sealLocal } from '../crypto';
-import { type Curve, lastCurveDay, measuredWatts, talon } from '../curve';
+import { type Curve, lastCurveDay, measuredWattsCached, talon } from '../curve';
 import { loadCurve, loadHourly } from '../data';
+import { memo } from '../memo';
 import { readPref, writePref } from '../money';
 import { html } from '../trusted';
 import { activeRooms, avgPrice, esc, fmtEur, lastDay, longDate, nf0, series, table } from '../ui';
@@ -50,20 +51,29 @@ async function saveDeclared(list: Declared[], card: HTMLElement) {
   renderBreakdownCard(card);
 }
 
-/** kWh per day of one category, from the radiator records. */
+/** kWh per day of one category, from the radiator records (once per dataset). */
 function perDay(cat: 'heating' | 'water_heater'): Map<string, number> {
-  const out = new Map<string, number>();
-  for (const r of ds!.records) if (r.cat === cat) out.set(r.day, (out.get(r.day) ?? 0) + r.kwh);
-  return out;
+  return memo(ds!.records, `perDay|${cat}`, () => {
+    const out = new Map<string, number>();
+    for (const r of ds!.records) if (r.cat === cat) out.set(r.day, (out.get(r.day) ?? 0) + r.kwh);
+    return out;
+  });
 }
+
+/** The 30 Linky days of the card (once per dataset). */
+const cardDays = () => memo(ds!.linky, `days|${lastDay()}`, () => windowDays(ds!.linky, lastDay()));
 
 /** Standby base load (W) over [from, to], radiators and water heater taken out when possible. */
 function talonWatts(from: string, to: string): number | null {
-  if (!curve || !lastCurveDay(curve)) return null;
+  const c = curve;
+  if (!c || !memo(c, 'last', () => lastCurveDay(c))) return null;
   const tz = ds!.meta.home.timezone || 'Europe/Paris';
   const measured = new Set(activeRooms().map((r) => r.id));
-  const minus = hourly && measured.size ? measuredWatts(hourly, measured, tz) : undefined;
-  const t = (minus?.byHour.size ? talon(curve, tz, from, to, minus) : null) ?? talon(curve, tz, from, to);
+  // #251: shared with the load-curve card, computed once per window.
+  const minus = hourly && measured.size ? measuredWattsCached(hourly, measured, tz, from, to) : undefined;
+  const t =
+    (minus?.byHour.size ? memo(minus, `talon|${from}|${to}`, () => talon(c, tz, from, to, minus)) : null) ??
+    memo(c, `talon|${tz}|${from}|${to}`, () => talon(c, tz, from, to));
   return t?.watts ?? null;
 }
 
@@ -75,7 +85,8 @@ export function renderBreakdownCard(card: HTMLElement) {
     loading ??= Promise.all([
       loadDeclared(),
       curveYears() ? loadCurve(ds) : Promise.resolve(new Map<string, number>()),
-      loadHourly(ds).catch(() => null),
+      // #251: only the hourly years of the 30-day window, not the whole history.
+      cardDays().length ? loadHourly(ds, cardDays()[0]).catch(() => null) : Promise.resolve(null),
     ]).then(([d, c, h]) => {
       declared = d;
       curve = c;
@@ -84,12 +95,12 @@ export function renderBreakdownCard(card: HTMLElement) {
     loading.then(() => card.isConnected && renderBreakdownCard(card)).catch(() => card.isConnected && card.remove());
     return;
   }
-  const days = windowDays(ds.linky, lastDay());
+  const days = cardDays();
   if (days.length < 7) {
     card.hidden = true;
     return;
   }
-  const { plugs, unusable } = plugsFrom(ds.shelly);
+  const { plugs, unusable } = memo(ds, 'plugs', () => plugsFrom(ds!.shelly));
   const b = breakdown({
     days,
     linky: ds.linky,

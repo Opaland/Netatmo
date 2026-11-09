@@ -2,12 +2,11 @@
 // Off-peak share over 12 months and per month, hours it runs, verdict and the extra
 // cost of its peak-hour kWh at the current prices.
 import { MONTHS_SHORT, addDays, minusYears } from '../aggregate';
-import { type Hourly, hasPrices } from '../analysis';
-import { ds, rerender, state } from '../app';
+import type { Hourly } from '../analysis';
+import { ds, rerender } from '../app';
 import { barChart, cssVar, gridHeatmap } from '../charts';
 import { belowThreshold, hcVerdict, hourByMonth, peakExtraCost, waterHeaterHc } from '../checks';
-import { activeRooms, esc, fmtEur, fmtKwh, lastDay, nf0, offCol, priceAt, priceMode, series, table, tableToggle } from '../ui';
-import { tenant } from '../tenant';
+import { activeRooms, esc, fmtEur, fmtKwh, hcHpAt, lastDay, nf0, offCol, series, table, tableToggle } from '../ui';
 import { html } from '../trusted';
 
 const LS_THRESHOLD = 'intuis-history:hc-threshold';
@@ -22,18 +21,10 @@ function threshold(): number {
 
 /** Current off-peak / peak prices (€/kWh): regulated tariff under today's contract, else manual prices. */
 export function currentHcHp(): { hc: number; hp: number; source: string } | null {
-  if (priceMode() === 'trve' && ds!.offers.size) {
-    const p = priceAt(lastDay());
-    if (p) return { hc: p.hc, hp: p.hp, source: 'tarif réglementé en vigueur' };
-  }
-  if (!hasPrices(state.prices)) return null;
-  const p = state.prices;
-  if (tenant().on) return p.base === null ? null : { hc: p.base, hp: p.base, source: 'prix moyen saisi (locataire)' }; // S-12.6
-  const base = p.base ?? p.t1 ?? p.t2 ?? 0;
-  const off = offCol();
-  const hc = (off === 1 ? p.t1 : p.t2) ?? base;
-  const hp = (off === 1 ? p.t2 : p.t1) ?? base;
-  return { hc, hp, source: 'prix saisis' };
+  const p = hcHpAt(lastDay()); // #252: one rule (ui.ts)
+  if (!p) return null;
+  const source = { trve: 'tarif réglementé en vigueur', manual: 'prix saisis', tenant: 'prix moyen saisi (locataire)' }[p.source];
+  return { hc: p.hc, hp: p.hp, source };
 }
 
 function waterRooms() {
