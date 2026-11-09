@@ -104,9 +104,15 @@ def test_daily_energy_from_counter_differences_with_reset_and_gap(tmp_path):
     doc = store.doc("shelly")
     assert {p["name"] for p in doc["plugs"].values()} == {"Réfrigérateur", "Lave-linge", "Box"}
     assert not doc.get("daily")
-    fridge = next(k for k, p in doc["plugs"].items() if p["id"] == DEV_FRIDGE)
-    gen1 = next(k for k, p in doc["plugs"].items() if p["id"] == DEV_GEN1)
-    box = next(k for k, p in doc["plugs"].items() if p["id"] == DEV_POWER_ONLY)
+    keys = shelly.plug_keys(store)
+    fridge, gen1, box = (keys.get(d) for d in (DEV_FRIDGE, DEV_GEN1, DEV_POWER_ONLY))
+    assert sorted(doc["plugs"]) == sorted([fridge, gen1, box])
+    # The Shelly ids (made of the MAC address) are never stored, only salted hashes.
+    # (the short test ids could appear by chance inside a random hash: the map is checked apart)
+    raw = json.dumps({k: v for k, v in doc.items() if k != "plug_keys"})
+    assert not any(d in raw for d in (DEV_FRIDGE, DEV_GEN1, DEV_POWER_ONLY, DEV_SENSOR))
+    assert set(doc["plug_keys"]) == {"salt", "keys"}
+    assert all(len(h) == 16 and h not in (DEV_FRIDGE, DEV_GEN1) for h in doc["plug_keys"]["keys"])
     assert doc["plugs"][box]["usable"] is False
 
     # 2nd night, 24 h later: 1.2 kWh for the fridge, 600 watt-minutes = 10 Wh for the washer.
