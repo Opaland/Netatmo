@@ -220,7 +220,8 @@ Indépendante d'Intuis : `api.netatmo.com`, application créée sur dev.netatmo.
 `read_station`, jeton de rafraîchissement renouvelé à chaque usage (`collector/station.py`).
 
 - `getstationsdata` : le module principal (`NAMain`, intérieur) puis ses modules radio, dans
-  l'ordre renvoyé. Ils deviennent les clés `m0`, `m1`, … (`m0` = module principal). Seuls
+  l'ordre renvoyé. Chacun reçoit une clé `m0`, `m1`, … **stable** : elle ne dépend pas de la
+  place du module dans la liste (voir « Clés des modules » plus bas). Seuls
   `NAMain` et `NAModule4` (intérieurs) mesurent le CO₂ ; `NAModule1` est l'extérieur ; `NAModule2`
   (vent) et `NAModule3` (pluie) n'ont pas de température.
 - `getmeasure` : au plus **1024 points par appel**. Débit documenté : 50 requêtes / 10 s et
@@ -241,7 +242,12 @@ maison** (`meta.home.timezone`).
 
 ```jsonc
 {
+  // Modules présents au dernier passage. Un module retiré n'y est plus, mais son historique
+  // (daily, nightly, hours, station_h) reste sous sa clé.
   "modules": {"m0": {"name": "Salon", "type": "NAMain", "indoor": true}, ...},
+  // Identifiant du module → clé. Jamais l'identifiant (adresse MAC) en clair : une empreinte
+  // SHA-256 tronquée (16 hex) de "<salt>:<_id>", salt aléatoire tiré une fois.
+  "module_keys": {"salt": "9f3c…", "keys": {"5d41402abc4b2a76": "m0", ...}},
   "daily":   {"m0": {"YYYY-MM-DD": [min °C, max °C, moyenne °C, humidité %, CO₂ ppm | null]}},
   // Nuit du jour D = D 22:00 → D+1 07:00 (7 h exclue), rangée sous D. Modules intérieurs seulement.
   "nightly": {"m2": {"YYYY-MM-DD": {"n": 9,             // heures de la nuit avec un CO₂ (9 = complète)
@@ -255,6 +261,23 @@ maison** (`meta.home.timezone`).
                                     "cold": 5}}}  // heures avec température < 19 °C
 }
 ```
+
+#### Clés des modules
+
+Les clés sont des chaînes opaques ; l'appli, les exports et les pseudonymes (« Capteur A… ») ne
+s'appuient que sur elles, et la correspondance pièce ↔ module enregistrée sur l'appareil
+(`roomModuleMap`) les garde telles quelles.
+
+- **Premier passage** (ou document sans `module_keys`) : les clés suivent l'ordre actuel de
+  l'API, comme avant (`m0` = module principal). Les archives existantes ne sont pas réécrites :
+  on suppose l'ordre inchangé depuis la dernière collecte. Une table `ids` d'une version
+  précédente (identifiant en clair → clé) est convertie en empreintes puis supprimée.
+- **Module ajouté** : il prend la première clé libre (`m4` après `m0`…`m3`), quelle que soit sa
+  place dans la liste. Il est relevé depuis le premier jour connu du logement.
+- **Module retiré** : les autres gardent leur clé ; le sien n'est jamais réattribué. S'il revient,
+  il retrouve sa clé et son historique.
+- Chaque module reprend ses relevés quotidiens depuis **son** dernier jour (moins 10 jours) : un
+  module retiré ne ramène pas les autres en arrière.
 
 `YYYY.station_h.enc.json` (un par année, chargé à la demande ; années listées dans
 `meta.station_hourly_years`) :

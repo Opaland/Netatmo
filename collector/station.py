@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import hashlib
 import logging
+import secrets
 import time
 from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
@@ -153,25 +154,33 @@ class Station:
         return out
 
     def module_keys(self, modules: list[dict]) -> list[str]:
-        """Stable storage key ("m0", "m1"…) per module, kept in the encrypted station document
-        under "ids" (module id → key). The first time, keys follow the current API order, which
-        is how they were assigned before; a module added later gets the next free key, so it
-        never takes over the history of another one, whatever its place in the API list."""
+        """Stable storage key ("m0", "m1"…) per module. The station document keeps, under
+        "module_keys", a random salt and a map from a salted hash of each module id to its key
+        (the MAC-like id itself is never stored). The first time, keys follow the current API
+        order, which is how they were assigned before; a module added later gets the next free
+        key, and a removed module keeps its key (and history) without shifting the others."""
         station = self.store.doc("station")
-        ids: dict[str, str] = dict(station.get("ids") or {})
-        uid = lambda m: m["module"] or m["id"]  # noqa: E731
-        if not ids:
-            ids = {uid(m): f"m{i}" for i, m in enumerate(modules)}
-        used = set(ids.values())
+        stored = station.get("module_keys") or {}
+        salt = stored.get("salt") or secrets.token_hex(8)
+        keys: dict[str, str] = dict(stored.get("keys") or {})
+        h = lambda raw: hashlib.sha256(f"{salt}:{raw}".encode()).hexdigest()[:16]  # noqa: E731
+        uid = lambda m: h(m["module"] or m["id"])  # noqa: E731
+        # Map of an earlier version, keyed by the raw module id: hash it once.
+        for raw, key in (station.get("ids") or {}).items():
+            keys.setdefault(h(raw), key)
+        self.store.drop_top("station", "ids")
+        if not keys:
+            keys = {uid(m): f"m{i}" for i, m in enumerate(modules)}
+        used = set(keys.values())
         n = 0
         for m in modules:
-            if uid(m) not in ids:
+            if uid(m) not in keys:
                 while f"m{n}" in used:
                     n += 1
-                ids[uid(m)] = f"m{n}"
+                keys[uid(m)] = f"m{n}"
                 used.add(f"m{n}")
-        self.store.set_top("station", "ids", ids)
-        return [ids[uid(m)] for m in modules]
+        self.store.set_top("station", "module_keys", {"salt": salt, "keys": keys})
+        return [keys[uid(m)] for m in modules]
 
     def _daily(self, device: str, module: str | None, types: str, begin: int, end: int) -> list[tuple[int, list]]:
         out = []
@@ -198,16 +207,16 @@ class Station:
         Stored in station.enc.json; the outdoor module also feeds weather.outdoor (DJU)."""
         self.login()
         zone = ZoneInfo(tz)
-        station = self.store.doc("station")
-        known = station.get("daily", {})
-        last_days = [max(d) for d in known.values() if d]
-        begin_day = min(last_days) if last_days else first_day
-        begin = int((datetime.fromisoformat(begin_day).replace(tzinfo=zone) - timedelta(days=10)).timestamp())
+        known = self.store.doc("station").get("daily", {})
         end = int(datetime.now(zone).timestamp())
         outdoor_days = 0
         names = {}
         modules = self.modules()
         for key, m in zip(self.module_keys(modules), modules, strict=True):
+            # Per module: a removed module's old last day must not pull the others back, and a
+            # new module starts from the first day.
+            begin_day = max(known[key]) if known.get(key) else first_day
+            begin = int((datetime.fromisoformat(begin_day).replace(tzinfo=zone) - timedelta(days=10)).timestamp())
             indoor = m["type"] in ("NAMain", "NAModule4")
             names[key] = {"name": m["name"], "type": m["type"], "indoor": indoor}
             types = "min_temp,max_temp,temperature,humidity" + (",co2" if indoor else "")

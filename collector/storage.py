@@ -15,8 +15,9 @@ data/
                            "curve_scan": "YYYY-MM-DD" (last day asked for the load curve)}
   2025.linky30.enc.json   {"curve":   {"YYYY-MM-DDTHH:MM": Wh}}  Linky load curve, local start of
                            each half hour (optional, loaded on demand)
-  station.enc.json        Netatmo weather station: modules, daily [min, max, mean, hum, co2] and
-                          small daily aggregates "nightly" / "hours" (see docs/api-notes.md)
+  station.enc.json        Netatmo weather station: modules, daily [min, max, mean, hum, co2],
+                          small daily aggregates "nightly" / "hours" and "module_keys" (salted
+                          hash of each module id → stable key "m0"…; see docs/api-notes.md)
   2025.station_h.enc.json {"hourly": {"m0": {"YYYY-MM-DDTHH": [°C, %, ppm]}}} (loaded on demand)
   netatmo-token.enc.json  rotating refresh token of the Netatmo weather station (optional)
   shelly.enc.json         Shelly plugs: daily Wh per plug from cumulative counters (collector/shelly.py)
@@ -94,6 +95,12 @@ class Store:
         doc = self.doc(name)
         if doc.get(key) != value:
             doc[key] = value
+            self._dirty.add(name)
+
+    def drop_top(self, name: str, key: str) -> None:
+        doc = self.doc(name)
+        if key in doc:
+            del doc[key]
             self._dirty.add(name)
 
     def replace(self, name: str, obj: dict) -> None:

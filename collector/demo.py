@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import math
 import random
 from datetime import date, datetime, timedelta
@@ -347,6 +348,24 @@ def generate(out_dir: Path, passphrase: str = "demo", start_year: int = 2022) ->
             "m1": {"name": "Extérieur", "type": "NAModule1", "indoor": False},
             "m2": {"name": "Chambre enfants", "type": "NAModule4", "indoor": True},
             "m3": {"name": "Cave", "type": "NAModule4", "indoor": True},
+        },
+    )
+    # Stable module keys (collector/station.py module_keys): salted hashes, never the ids.
+    salt = "d3m0d3m0d3m0d3m0"
+    store.set_top(
+        "station",
+        "module_keys",
+        {
+            "salt": salt,
+            "keys": {
+                hashlib.sha256(f"{salt}:{mid}".encode()).hexdigest()[:16]: key
+                for mid, key in (
+                    ("70:ee:50:00:00:00", "m0"),
+                    ("02:00:00:00:00:01", "m1"),
+                    ("03:00:00:00:00:02", "m2"),
+                    ("03:00:00:00:00:03", "m3"),
+                )
+            },
         },
     )
     rooms = [

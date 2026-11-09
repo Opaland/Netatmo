@@ -1041,3 +1041,124 @@ def test_station_keys_stay_stable_when_a_module_is_added(tmp_path):
     store.save({"id": "h"}, [])
     st2 = Station(Store(tmp_path, "pw"), "id", "secret", "tok", http=object())
     assert st2.module_keys([cellar, new, main, out, kids]) == ["m3", "m4", "m0", "m1", "m2"]
+
+
+def _changing_station(modules: list[dict], days: dict[str, list]):
+    """Mock station whose radio module list (``modules``) and daily values per module id
+    (``days``: id → [(ts, [min, max, mean, hum, co2?])]) can change between collects."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        path = request.url.path
+        if path == "/oauth2/token":
+            return httpx.Response(200, json={"access_token": "a", "refresh_token": "r"})
+        if path == "/api/getstationsdata":
+            device = {"_id": "70:ee:50:00:00:01", "type": "NAMain", "module_name": "Salon", "modules": modules}
+            return httpx.Response(200, json={"body": {"devices": [device]}})
+        if path == "/api/getmeasure":
+            p = request.url.params
+            if p["scale"] == "1hour":
+                return httpx.Response(200, json={"body": []})
+            module = p.get("module_id") or "70:ee:50:00:00:01"
+            begin, end = int(p["date_begin"]), int(p["date_end"])
+            body = {str(ts): v for ts, v in days.get(module, []) if begin <= ts <= end}
+            return httpx.Response(200, json={"body": body})
+        return httpx.Response(404)
+
+    return handler
+
+
+def _day_ts(day: str) -> int:
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+
+    return int(datetime.fromisoformat(f"{day}T12:00").replace(tzinfo=ZoneInfo(PARIS)).timestamp())
+
+
+def test_station_module_inserted_or_removed_keeps_every_key_and_history(tmp_path):
+    from datetime import datetime, timedelta
+    from zoneinfo import ZoneInfo
+
+    from collector.station import Station
+
+    today = datetime.now(ZoneInfo(PARIS)).date()
+    d1, d2, d3 = ((today - timedelta(days=n)).isoformat() for n in (30, 20, 1))
+    main, out, kids, cellar, new = (
+        "70:ee:50:00:00:01",
+        "02:00:00:00:00:aa",
+        "03:00:00:00:00:bb",
+        "03:00:00:00:00:cc",
+        "03:00:00:00:00:dd",
+    )
+    mod = lambda i, t, n: {"_id": i, "type": t, "module_name": n}  # noqa: E731
+    radio = [mod(out, "NAModule1", "Extérieur"), mod(kids, "NAModule4", "Chambre"), mod(cellar, "NAModule4", "Cave")]
+    value = {main: 20.0, out: 5.0, kids: 19.0, cellar: 12.0, new: 17.0}
+    days = {i: [(_day_ts(d1), [v - 1, v + 1, v, 50, 600])] for i, v in value.items() if i != new}
+    store = Store(tmp_path, "pw")
+    http = httpx.Client(transport=httpx.MockTransport(_changing_station(radio, days)))
+    run = lambda: Station(store, "id", "secret", "seed", http=http, min_interval=0).collect(PARIS, d1)  # noqa: E731
+
+    run()
+    daily = store.doc("station")["daily"]
+    before = {k: dict(v) for k, v in daily.items()}
+    assert {k: v[d1][2] for k, v in before.items()} == {"m0": 20.0, "m1": 5.0, "m2": 19.0, "m3": 12.0}
+
+    # The last free indoor module is installed and listed by the API in the middle.
+    radio.insert(1, mod(new, "NAModule4", "Bureau"))
+    for i, v in value.items():
+        days.setdefault(i, []).append((_day_ts(d2), [v - 1, v + 1, v, 50, 600]))
+    run()
+    station = store.doc("station")
+    daily = station["daily"]
+    for k, hist in before.items():  # every existing key keeps its history, then its own new day
+        assert daily[k][d1] == hist[d1]
+        assert daily[k][d2][2] == hist[d1][2]
+    assert daily["m4"] == {d2: [16.0, 18.0, 17.0, 50, 600]}  # the newcomer: next free key, own data only
+    assert {k: m["name"] for k, m in station["modules"].items()} == {
+        "m0": "Salon",
+        "m4": "Bureau",
+        "m1": "Extérieur",
+        "m2": "Chambre",
+        "m3": "Cave",
+    }
+
+    # The kids' module is removed: no key shifts, its history stays, the others go on.
+    radio[:] = [m for m in radio if m["_id"] != kids]
+    for i, v in value.items():
+        days[i].append((_day_ts(d3), [v - 1, v + 1, v, 50, 600]))
+    store.save({"id": "h"}, [])
+    store = Store(tmp_path, "pw")
+    run()
+    station = store.doc("station")
+    daily = station["daily"]
+    assert {k: daily[k][d3][2] for k in ("m0", "m1", "m3", "m4")} == {"m0": 20.0, "m1": 5.0, "m3": 12.0, "m4": 17.0}
+    assert d3 not in daily["m2"] and daily["m2"][d2][2] == 19.0
+    assert "m2" not in station["modules"]
+    # Next run: the removed module's older last day does not pull the others back to it.
+    calls = []
+    http = httpx.Client(transport=httpx.MockTransport(lambda r: calls.append(r) or _changing_station(radio, days)(r)))
+    run()
+    begins = [int(r.url.params["date_begin"]) for r in calls if r.url.params.get("scale") == "1day"]
+    assert len(begins) == 4 and min(begins) >= _day_ts(d3) - 11 * 86400
+
+    # Back again later: it finds its own key.
+    radio.append(mod(kids, "NAModule4", "Chambre"))
+    st = Station(store, "id", "secret", "seed", http=http, min_interval=0)
+    assert st.module_keys(st.modules()) == ["m0", "m1", "m4", "m3", "m2"]
+
+    # Module ids are never written in clear, only salted hashes.
+    raw = json.dumps(store.doc("station"))
+    assert not any(i in raw for i in value)
+    assert set(station["module_keys"]) == {"salt", "keys"}
+
+
+def test_station_key_map_of_the_previous_version_is_hashed_once(tmp_path):
+    from collector.station import Station
+
+    store = Store(tmp_path, "pw")
+    # Written by the previous version: raw id → key, with a module added in the middle.
+    store.set_top("station", "ids", {"main": "m0", "out": "m1", "new": "m2", "kids": "m3"})
+    st = Station(store, "id", "secret", "tok", http=object())
+    mods = [{"id": "main", "module": None}] + [{"id": "main", "module": i} for i in ("out", "kids", "new")]
+    assert st.module_keys(mods) == ["m0", "m1", "m3", "m2"]
+    assert "ids" not in store.doc("station")
+    assert "kids" not in json.dumps(store.doc("station"))
