@@ -118,7 +118,7 @@ function render() {
     <div class="title">
       <h1>${esc(meta.home.name)}${ds.source === 'demo' ? ' <span class="badge">démo</span>' : ''}</h1>
     </div>
-    <a class="status-pill ${s.level}" href="#etat" data-view="etat" title="État des données"><span class="dot" aria-hidden="true"></span>${esc(s.label)}<span class="sr-only"> : ${s.level === 'ok' ? 'à jour' : 'en retard'}, voir l'état des données</span></a>
+    <a class="status-pill ${s.level}" href="#etat" data-view="etat" title="État des données"><span class="dot" aria-hidden="true"></span>${esc(s.label)}<span class="sr-only"> : ${esc(s.text)}, voir l'état des données</span></a>
     <a class="icon-btn" href="#parametres" data-view="parametres" aria-label="Paramètres"${route.page === 'parametres' ? ' aria-current="page"' : ''}>${icon('settings')}</a>
   </header>
   <nav class="tabs${tabs.length === 3 ? ' three' : ''}" aria-label="Onglets" data-swipe="tab">
@@ -129,7 +129,7 @@ function render() {
       )
       .join('')}
   </nav>
-  ${s.level !== 'ok' ? `<p class="stale" role="alert"><span aria-hidden="true">⚠️</span> Données arrêtées au ${esc(s.label.replace('Données du ', ''))} (il y a ${s.days} jours) : la collecte est peut-être en panne. <a href="#etat">Voir pourquoi</a></p>` : ''}
+  ${s.stale ? `<p class="stale" role="alert"><span aria-hidden="true">⚠️</span> Données arrêtées au ${esc(s.label.replace('Données du ', ''))} (il y a ${s.days} jours) : la collecte est peut-être en panne. <a href="#etat">Voir pourquoi</a></p>` : ''}
   <p class="offline" id="net-status" role="status" hidden></p>
   ${
     sub

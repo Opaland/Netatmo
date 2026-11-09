@@ -342,7 +342,17 @@ try {
       // S-1.10: lost days rebuilt apart, on demand (lazy module), in État des données (header pill)
       await page.click('.top .status-pill');
       await page.waitForSelector('#view[data-page=etat][data-ready]', { state: 'attached' });
+      // #318 / #336: the quality report, year by year, with the causes (demo: 26 days lost at Intuis in 2024)
       try {
+        await page.waitForSelector('#quality-years .year-verdict', { timeout: 15000 });
+        const years = await page.locator('#quality-years').innerText();
+        if (!/2024/.test(years) || !/Trou de 26 jours|trou de 26 jours/.test(years) || !/Intuis n'a rien renvoyé/.test(years)) errors.push(`${name}/etat: bilan 2024 sans le trou de 26 jours ni sa cause`);
+        if (!/Récupérable \?/.test(await page.locator('#quality-sources').innerText())) errors.push(`${name}/etat: « récupérable ? » absent`);
+      } catch (err) {
+        errors.push(`${name}/etat: bilan qualité non rendu (${err})`);
+      }
+      try {
+        await page.click('#quality > summary');
         await page.check('[data-recon]');
         await page.waitForSelector('#recon-chart canvas', { timeout: 15000 });
         if (!(await page.getByText('Jours suspects').count())) errors.push(`${name}/etat: jours suspects absents`);

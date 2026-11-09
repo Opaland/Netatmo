@@ -7,7 +7,7 @@ import { alert, list, seg as segment, switchField } from './components';
 import type { Handlers } from './events';
 import { dayShort, fmt1 } from './glossary';
 import { glossarySection } from './plain';
-import { type Route, SETTINGS, type SettingsPage, TOOLS, type Tool, routeKey } from './router';
+import { type Route, SETTINGS, type SettingsPage, type Tool, routeKey } from './router';
 import { LOCK_CHOICES } from './session';
 import { tenant } from './tenant';
 import { html } from './trusted';
@@ -18,10 +18,12 @@ import * as analyse from './views/analyse';
 import * as compare from './views/compare';
 import * as home from './views/home';
 import * as household from './views/household';
+import * as outils from './views/outils';
 import * as overview from './views/overview';
 import { pinSelect, pinnedTiles } from './views/pinned';
 import * as prices from './views/prices';
-import { qualityHandlers } from './views/quality';
+import { qualityCard, qualityHandlers } from './views/quality';
+import { type Freshness, freshness } from './freshness';
 import * as report from './views/report';
 import * as rooms from './views/rooms';
 import * as settings from './views/settings';
@@ -152,34 +154,13 @@ function renderCompteur(view: HTMLElement) {
   ]);
 }
 
-// ------------------------------------------------------------------ Outils (#314 later)
-const row = (tool: Tool, sub: string) => ({ title: TOOLS[tool], sub, href: `#${routeKey({ page: 'outil', tool })}` });
-
-function renderOutils(view: HTMLElement) {
-  const t = tenant().on;
-  view.innerHTML = html`<h2 class="page-title" id="page-title" tabindex="-1">Outils</h2>
-  ${t ? alert('info', 'Mode locataire', 'L’onglet Compteur est masqué : la part du logement, la puissance et la courbe de charge supposent le compteur Linky et le contrat du titulaire.') : ''}
-  <p class="section-title">Simulateurs <span class="tag">et si…</span></p>
-  ${list([
-    ...(t ? [] : [row('offres', 'Base, heures creuses ou Tempo, sur votre consommation réelle')]),
-    row('consigne', 'économie estimée pour 1 °C de moins dans toutes les pièces'),
-    ...(t ? [] : [row('voiture', 'recharge, offre, dépassement de puissance')]),
-    row('pac', 'économie estimée selon le COP'),
-    row('teletravail', 'coût d’une journée au bureau chauffé'),
-  ])}
-  <p class="section-title">Vérifier</p>
-  ${list([row('facture', 'recouper le coût avec une facture'), { title: 'État des données', sub: 'jours estimés, sources, appareils', href: '#etat' }])}
-  <p class="section-title">Journaux</p>
-  ${list([row('absences', 'absences repérées et confirmées'), row('volets', 'soirs volets fermés'), ...(t ? [] : [{ title: 'Travaux', sub: 'saisis dans ⚙ Mon logement, avec les surfaces ; avant / après', href: '#parametres-logement' }])])}
-  <p class="section-title">Analyse du mois</p>
-  ${list([row('analyse', ds!.insights ? 'rédigée par l’IA, avec ce qui a été envoyé' : 'à activer (Sources de données)')])}
-  <p class="section-title">Rapports et exports</p>
-  ${list([
-    { title: 'Rapport annuel', sub: 'à imprimer ou en PDF, version anonymisée', href: '#rapport' },
-    row('questions', 'réponses calculées, sans IA'),
-    row('exports', 'CSV, export long, export recherche, sauvegarde chiffrée'),
-  ])}`;
+// ------------------------------------------------------------------ Outils (#314)
+/** Sources whose last attempt succeeded (meta.sources), for the État des données row. */
+function activeSources(): number {
+  const src = (ds!.meta as { sources?: Record<string, { ok?: string; error?: string }> }).sources ?? {};
+  return Object.values(src).filter((s) => s.ok && !(s.error && s.error > s.ok)).length;
 }
+const renderOutils = (view: HTMLElement) => outils.renderOutils(view, dataStatus(), activeSources());
 
 function renderExports(view: HTMLElement) {
   view.innerHTML = html`<section class="card">
@@ -201,10 +182,23 @@ function renderExports(view: HTMLElement) {
     <p class="hint">Le <a href="#rapport">rapport annuel</a> a une version anonymisée (bouton « Rapport anonymisé »).</p></section>`;
 }
 
+/** #314: the « et si… » tools look like simulations (dashed cards, label, assumptions recalled). */
+const SIMULATORS = new Set<Tool>(['offres', 'voiture', 'consigne', 'pac', 'teletravail']);
+
 function renderTool(view: HTMLElement, route: Route) {
   if (route.page !== 'outil') return;
+  drawTool(view, route.tool);
+  if (SIMULATORS.has(route.tool)) {
+    view.classList.add('sim-page');
+    view.insertAdjacentHTML(
+      'afterbegin',
+      html(`<p class="sim-note"><span class="tag">Simulation</span> Une estimation « et si… » calculée sur vos données réelles, pas une mesure : les hypothèses sont rappelées dans chaque carte.</p>`),
+    );
+  }
+}
+
+function drawTool(view: HTMLElement, t: Tool) {
   const records = filtered();
-  const t = route.tool;
   if (t === 'offres') return compare.renderCompare(view, records, 'offers');
   if (t === 'voiture') return compare.renderCompare(view, records, 'ev');
   if (t === 'facture') return overview.renderOverview(view, records, 'invoice');
@@ -218,30 +212,47 @@ function renderTool(view: HTMLElement, route: Route) {
   analyse.renderAnalyse(view, records, part);
 }
 
-// ------------------------------------------------------------------ État des données (#318 later)
+// ------------------------------------------------------------------ État des données (#318, #336)
 function renderEtat(view: HTMLElement) {
   const last = ds!.meta.last_day;
   const s = dataStatus();
-  stack(
-    view,
-    `${
-      last
-        ? s.level === 'ok'
-          ? alert('good', `Données à jour : jusqu'au ${dayShort(last, true)}`, ds!.source === 'demo' ? 'Démo : données d’exemple.' : 'La collecte passe chaque nuit.')
-          : alert(s.level === 'bad' ? 'bad' : 'warn', `Données arrêtées au ${dayShort(last, true)} (il y a ${s.days} jours)`, 'La collecte est peut-être en panne : une alerte est ouverte dans les issues GitHub du dépôt ; vous pouvez la relancer depuis ⚙ Paramètres → Sources de données.')
-        : ''
-    }`,
-    [(el) => overview.renderOverview(el, filtered(), 'quality'), (el) => settings.renderSettings(el, 'etat')],
-  );
+  const failing = s.failing.length ? `En échec : ${s.failing.map((k) => SOURCE_NAME[k] ?? k).join(', ')}. Le détail est dans « État des sources », plus bas.` : '';
+  const head = last
+    ? s.stale
+      ? alert('bad', `Données arrêtées au ${dayShort(last, true)} (il y a ${s.days} jours)`, 'La collecte est peut-être en panne : une alerte est ouverte dans les issues GitHub du dépôt ; vous pouvez la relancer depuis ⚙ Paramètres → Sources de données.')
+      : s.level === 'warn'
+        ? alert('warn', `Données du ${dayShort(last, true)} : ${s.text}`, failing || 'Intuis a gardé le total du mois mais pas le détail de ces jours : la collecte les a estimés.')
+        : alert('good', `Données à jour : jusqu'au ${dayShort(last, true)}`, ds!.source === 'demo' ? 'Démo : données d’exemple.' : 'La collecte passe chaque nuit.')
+    : '';
+  stack(view, `${head}<div id="etat-bilan" aria-busy="true"><p class="hint muted" role="status">Bilan des données : calcul…</p></div>`, [
+    (el) => settings.renderSettings(el, 'etat'),
+    (el) => (el.innerHTML = html(qualityCard(false) || '<section class="card"><p class="hint">Tous les mois sont complets : aucun jour estimé ni perdu.</p></section>')),
+  ]);
+  void lazyCard(() => import('./views/etat'), (m) => m.mountEtat(document.getElementById('etat-bilan')), { zone: 'etat-bilan', what: 'Bilan des données' });
 }
 
-/** Freshness of the data, for the header pill and the État page. */
-export function dataStatus(): { level: 'ok' | 'warn' | 'bad'; days: number; label: string } {
+const SOURCE_NAME: Record<string, string> = {
+  intuis: 'Intuis',
+  'open-meteo': 'météo',
+  netatmo: 'station Netatmo',
+  linky: 'Linky',
+  'linky-30min': 'Linky à la demi-heure',
+  shelly: 'prises Shelly',
+  'releve-horaire': 'relevé horaire',
+  appareils: 'état des appareils',
+  ia: 'analyse IA',
+};
+
+/** Freshness of the data, for the header pill and the État page (#318). */
+export function dataStatus(): Freshness & { label: string } {
   const last = ds!.meta.last_day;
-  if (!last) return { level: 'warn', days: 0, label: 'Pas encore de données' };
-  const days = Math.max(0, Math.floor((Date.now() - Date.parse(`${last}T12:00:00Z`)) / 86400000));
-  const level = ds!.source === 'demo' || days <= 3 ? 'ok' : days <= 7 ? 'warn' : 'bad';
-  return { level, days, label: `Données du ${dayShort(last)}` };
+  const month = last ? `${last.slice(0, 8)}01` : '';
+  const days = new Set<string>();
+  if (last) for (const k of ds!.estimated) if (k.slice(k.indexOf('|') + 1) >= month) days.add(k.slice(k.indexOf('|') + 1));
+  const sources = (ds!.meta as { sources?: Record<string, { ok?: string; error?: string }> }).sources;
+  const f = freshness({ last, now: Date.now(), demo: ds!.source === 'demo', sources, uncertain: days.size });
+  const label = last ? `Données du ${dayShort(last)}${f.level === 'ok' ? '' : f.stale ? ' · en retard' : ' · à vérifier'}` : 'Pas encore de données';
+  return { ...f, label };
 }
 
 // ------------------------------------------------------------------ Paramètres (#309)
