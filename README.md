@@ -331,6 +331,46 @@ l'intervalle d'incertitude à 95 %. C'est la mesure prévue par l'étude
 Si la collecte nocturne échoue (mot de passe changé, serveur indisponible…), une *issue* GitHub
 s'ouvre et GitHub vous prévient par e-mail. Elle se ferme toute seule à la prochaine collecte réussie.
 
+### Alerte froid prolongé (facultative, désactivée par défaut)
+
+Pour un proche âgé vivant seul ou une résidence secondaire : quand une pièce choisie reste **sous un
+seuil sur une journée entière** (moyenne journalière de la sonde du radiateur ou d'un module intérieur
+de la station), la collecte de la nuit ouvre une *issue* « 🥶 Alerte froid prolongé » (GitHub vous
+prévient par e-mail) ; elle se ferme seule au retour au-dessus du seuil.
+
+Réglage : Paramètres → **Alerte froid prolongé** (pièces, seuil, durée de 1 à 3 jours), qui écrit la
+**variable** du dépôt `COLD_ALERT_JSON`, par exemple `{"threshold": 14, "days": 1, "rooms": ["1234567890"]}`
+(identifiants Intuis ou de modules de la station, dans l'ordre des pseudonymes). L'issue étant
+publique, elle ne donne **ni température ni nom de pièce** : seulement « Pièce A », « Pièce B »… dans
+l'ordre de la liste ; la correspondance n'est affichée que dans l'application. Le journal public
+n'indique que des nombres (pièces suivies, sous le seuil, sans mesure récente). La vue Confort
+affiche aussi l'alerte, avec les vrais noms.
+
+> **Ce n'est pas un dispositif de sécurité.** Avec une collecte par nuit, le délai peut atteindre
+> **24 h** après la journée froide (davantage si la collecte échoue ou si une sonde ne remonte plus).
+> Pour une personne fragile, gardez un autre moyen de contact.
+
+### Mode locataire
+
+Paramètres → **Mode locataire** (réglage propre à l'appareil) : sans le Linky ni le contrat du
+titulaire, les coûts utilisent **votre prix moyen au kWh** (menu ⋮ → Prix) ; les cartes Linky, le
+comparateur d'offres, la simulation de recharge et le contrat partagé sont masqués avec une phrase
+d'explication. Avec la date de début (et de fin) du bail, le **rapport anonymisé** couvre la seule
+période du bail, sans comparaison avec l'année d'avant.
+
+### Simulations : voiture électrique et pompe à chaleur
+
+- **Voiture électrique** (onglet Comparer) : énergie rechargée par semaine, heure de début et puissance
+  de charge ; coût par offre (Base, heures creuses, Tempo) avec et sans voiture sur 12 mois, et, avec
+  la courbe de charge Linky, le nombre de demi-heures où la puissance souscrite serait dépassée.
+- **Pompe à chaleur air-air** (onglet Analyse) : à partir de la signature énergétique de la dernière
+  saison et de la température extérieure de chaque jour, l'électricité qu'aurait consommée une PAC
+  (fourchette de COP saisonnier saisie, ou COP selon la température, valeurs indicatives à vérifier) et
+  l'économie en kWh et en euros. C'est une estimation, pas une étude thermique : un conseiller
+  [France Rénov'](https://france-renov.gouv.fr/) peut vérifier le projet.
+
+Chaque carte détaille sa méthode et ses hypothèses (« Comment c'est calculé »).
+
 ### Format des API et nombre d'appels
 
 Chaque réponse d'Intuis, de la station Netatmo, de Conso API (Linky) et d'Open-Meteo est comparée à

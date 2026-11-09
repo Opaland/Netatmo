@@ -34,6 +34,7 @@ import {
   yearColor,
 } from '../ui';
 import { html } from '../trusted';
+import { tenant, tenantNote } from '../tenant';
 
 export function renderCompare(view: HTMLElement, records: DayRecord[]) {
   const years = ds!.meta.years;
@@ -125,6 +126,8 @@ export function renderCompare(view: HTMLElement, records: DayRecord[]) {
 
   view.insertAdjacentHTML('beforeend', html(comparatorCard()));
   drawComparator();
+  // S-2.14: electric-vehicle charging simulator, lazy module
+  void import('./ev').then((m) => m.mountEv(view)).catch(() => {});
   const el = document.getElementById('cmp-chart')!;
   let ser: Series[] = [];
   let labels: string[] = [];
@@ -227,6 +230,7 @@ function simWarning() {
 }
 
 function comparatorCard() {
+  if (tenant().on) return tenantNote('Le comparateur d\'offres est masqué'); // S-12.6
   if (!ds!.offers.size || !ds!.tempo.rows.length) return '';
   const { all, scope } = comparison();
   if (!all.hphc.days) return '';

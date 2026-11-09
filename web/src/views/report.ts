@@ -119,7 +119,7 @@ export function renderReport(view: HTMLElement) {
 export function handleClick(btn: HTMLElement): boolean {
   if (btn.id === 'report-anon') {
     // S-6.4: anonymised report for a third party, lazy module
-    void import('./annual-share').then((m) => m.renderAnonymised(document.getElementById('view')!, Number(btn.dataset.yearAnon)));
+    void import('./annual-share').then((m) => m.renderAnonymised(document.getElementById('view')!, m.anonDefault(Number(btn.dataset.yearAnon))));
     return true;
   }
   if (btn.id !== 'print') return false;
