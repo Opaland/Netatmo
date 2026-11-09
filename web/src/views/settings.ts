@@ -19,6 +19,7 @@ import {
   invalidFields,
 } from '../settings';
 import { contractInfo, esc, longDate, table } from '../ui';
+import { localDateTime } from '../glossary';
 import { html } from '../trusted';
 import { lazyAction, lazyCard } from '../lazy';
 import { showBuild } from '../build';
@@ -40,7 +41,7 @@ export function renderSettings(view: HTMLElement) {
     const when = e.date ? `expiration ${e.estimated ? 'estimée ' : ''}le ${longDate(e.date)}` : 'expiration inconnue';
     return ` <span class="${e.renew ? 'ko-red' : 'muted'}">· ${when}${e.renew ? ' — <strong>⚠️ à renouveler</strong>' : ''}</span>`;
   };
-  const when = (iso?: string) => (iso ? `${longDate(iso.slice(0, 10))} à ${iso.slice(11, 16)} UTC` : '');
+  const when = (iso?: string) => (iso ? localDateTime(iso) : '');
   const status = (on: boolean, label: string, key?: string, withExpiry = true) => {
     const s = key ? src[key] : undefined;
     const failing = s?.error && (!s.ok || s.error > s.ok);

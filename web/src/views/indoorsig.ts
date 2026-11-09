@@ -5,7 +5,7 @@ import { ds, state } from '../app';
 import { scatterChart } from '../charts';
 import { effectiveMapping } from '../comfort';
 import { type CiFit, MIN_DAYS, indoorModule, seasonSignatures, signatureDays } from '../indoorsig';
-import { activeRooms, esc, lastDay, series, table } from '../ui';
+import { activeRooms, esc, lastDay, table, measureColor } from '../ui';
 import { uncertainDays } from './quality';
 import { html } from '../trusted';
 
@@ -63,7 +63,7 @@ export function renderIndoorSignature(card: HTMLElement, records: DayRecord[]) {
     series: [
       {
         name: latest.season.replace('-', '–'),
-        color: series(0),
+        color: measureColor(),
         points: pts,
         fit: { slope: f.slope, intercept: f.intercept, from: Math.max(Math.min(...xs), f.threshold ?? Math.min(...xs)), to: Math.max(...xs) },
       },

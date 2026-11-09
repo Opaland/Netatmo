@@ -1,0 +1,307 @@
+/* Design system v1.6 (#310), semantic tokens: the only colours, sizes and radii the views use.
+   Themes: light (default), dark (system preference or [data-theme='dark']), high contrast
+   (prefers-contrast: more, 7:1 for every text) light and dark, forced colours (system keywords,
+   in style.css). Contrast of each text / surface pair: src/tokens.test.ts. */
+@import './tokens.primitives.css';
+
+:root {
+  color-scheme: light;
+  /* surfaces and lines */
+  --surface-page: var(--sand-2);
+  --surface-card: #ffffff;
+  --surface-sunken: var(--sand-3);
+  --surface-raised: #ffffff;
+  --border: var(--sand-6);
+  --border-strong: var(--sand-9); /* field and control outlines: 3:1 */
+  --grid: var(--sand-4);
+  /* text */
+  --text: var(--sand-12);
+  --text-muted: var(--sand-11);
+  /* accent: iris (never orange or blue, kept for the usages) */
+  --accent: var(--iris-9);
+  --accent-hover: var(--iris-10);
+  --accent-text: var(--iris-11);
+  --accent-soft: var(--iris-3);
+  --accent-ink: #ffffff;
+  --focus: var(--iris-9);
+  /* usages: one meaning, one colour */
+  --usage-heating: var(--orange-10); /* step 10: 3:1 on white (step 9 is 2.97) */
+  --usage-heating-text: var(--orange-11);
+  --usage-heating-soft: var(--orange-3);
+  --usage-water: var(--blue-9);
+  --usage-water-text: var(--blue-11);
+  --usage-water-soft: var(--blue-3);
+  --usage-other: var(--sand-8);
+  --usage-standby: var(--sand-10);
+  --series-measure: var(--sand-12);
+  --series-reference: var(--sand-9);
+  /* years: the current one (year-0) in full iris, then lighter; never orange nor blue */
+  --year-0: var(--iris-9);
+  --year-1: var(--iris-7);
+  --year-2: var(--sand-9);
+  --year-3: var(--sand-8);
+  /* rooms: fixed colour per room (order of the house), 3:1 on the cards */
+  --room-1: var(--teal-11);
+  --room-2: var(--crimson-10);
+  --room-3: var(--gold-11);
+  --room-4: var(--plum-10);
+  --room-5: var(--grass-10);
+  --room-6: var(--brown-11);
+  --room-7: var(--cyan-11);
+  --room-8: var(--red-11);
+  /* sequential ramp (calendar, heat maps): light → dark */
+  --seq-1: #e0e1fc;
+  --seq-2: #b8baf8;
+  --seq-3: #8c8fec;
+  --seq-4: #5b5bd6;
+  --seq-5: #272962;
+  /* states: down is good (less spent), up is bad; a temperature is never green or red */
+  --state-good: var(--grass-11);
+  --state-good-soft: var(--grass-3);
+  --state-warn: #8f5500; /* amber 11 darkened: 4.5:1 on its soft fill */
+  --state-warn-soft: var(--amber-3);
+  --state-bad: #b8290d; /* tomato 11 darkened: 4.5:1 on its soft fill */
+  --state-bad-soft: var(--tomato-3);
+  --state-info: var(--iris-11);
+  --state-info-soft: var(--iris-3);
+  /* elevation */
+  --shadow-1: 0 1px 2px rgb(33 32 28 / 0.06), 0 1px 3px rgb(33 32 28 / 0.06);
+  --shadow-3: 0 8px 24px rgb(33 32 28 / 0.14);
+  --hatch-ink: rgb(255 255 255 / 0.75);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:where(:not([data-theme='light'])) {
+    color-scheme: dark;
+    --surface-page: var(--sand-d1);
+    --surface-card: var(--sand-d2);
+    --surface-sunken: var(--sand-d3);
+    --surface-raised: var(--sand-d3);
+    --border: var(--sand-d6);
+    --border-strong: var(--sand-d9);
+    --grid: var(--sand-d4);
+    --text: var(--sand-d12);
+    --text-muted: var(--sand-d11);
+    --accent: var(--iris-d9);
+    --accent-hover: #4b4bc0;
+    --accent-text: var(--iris-d11);
+    --accent-soft: var(--iris-d3);
+    --accent-ink: #ffffff;
+    --focus: var(--iris-d11);
+    --usage-heating: var(--orange-d9);
+    --usage-heating-text: var(--orange-d11);
+    --usage-heating-soft: var(--orange-d3);
+    --usage-water: var(--blue-d9);
+    --usage-water-text: var(--blue-d11);
+    --usage-water-soft: var(--blue-d3);
+    --usage-other: var(--sand-d8);
+    --usage-standby: var(--sand-d10);
+    --series-measure: var(--sand-d12);
+    --series-reference: var(--sand-d10);
+    --year-0: var(--iris-d11);
+    --year-1: var(--iris-d10);
+    --year-2: var(--sand-d10);
+    --year-3: var(--sand-d8);
+    --room-1: var(--teal-d10);
+    --room-2: var(--crimson-d10);
+    --room-3: var(--gold-d11);
+    --room-4: var(--plum-d11);
+    --room-5: var(--grass-d10);
+    --room-6: var(--brown-d11);
+    --room-7: var(--cyan-d10);
+    --room-8: var(--red-d10);
+    --seq-1: #202248;
+    --seq-2: #3d3e82;
+    --seq-3: #5b5bd6;
+    --seq-4: #9b9ef0;
+    --seq-5: #e0dffe;
+    --state-good: var(--grass-d11);
+    --state-good-soft: var(--grass-d3);
+    --state-warn: var(--amber-d11);
+    --state-warn-soft: var(--amber-d3);
+    --state-bad: var(--tomato-d11);
+    --state-bad-soft: var(--tomato-d3);
+    --state-info: var(--iris-d11);
+    --state-info-soft: var(--iris-d3);
+    --shadow-1: none;
+    --shadow-3: 0 8px 24px rgb(0 0 0 / 0.5);
+    --hatch-ink: rgb(0 0 0 / 0.6);
+  }
+}
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --surface-page: var(--sand-d1);
+  --surface-card: var(--sand-d2);
+  --surface-sunken: var(--sand-d3);
+  --surface-raised: var(--sand-d3);
+  --border: var(--sand-d6);
+  --border-strong: var(--sand-d9);
+  --grid: var(--sand-d4);
+  --text: var(--sand-d12);
+  --text-muted: var(--sand-d11);
+  --accent: var(--iris-d9);
+  --accent-hover: #4b4bc0;
+  --accent-text: var(--iris-d11);
+  --accent-soft: var(--iris-d3);
+  --accent-ink: #ffffff;
+  --focus: var(--iris-d11);
+  --usage-heating: var(--orange-d9);
+  --usage-heating-text: var(--orange-d11);
+  --usage-heating-soft: var(--orange-d3);
+  --usage-water: var(--blue-d9);
+  --usage-water-text: var(--blue-d11);
+  --usage-water-soft: var(--blue-d3);
+  --usage-other: var(--sand-d8);
+  --usage-standby: var(--sand-d10);
+  --series-measure: var(--sand-d12);
+  --series-reference: var(--sand-d10);
+  --year-0: var(--iris-d11);
+  --year-1: var(--iris-d10);
+  --year-2: var(--sand-d10);
+  --year-3: var(--sand-d8);
+  --room-1: var(--teal-d10);
+  --room-2: var(--crimson-d10);
+  --room-3: var(--gold-d11);
+  --room-4: var(--plum-d11);
+  --room-5: var(--grass-d10);
+  --room-6: var(--brown-d11);
+  --room-7: var(--cyan-d10);
+  --room-8: var(--red-d10);
+  --seq-1: #202248;
+  --seq-2: #3d3e82;
+  --seq-3: #5b5bd6;
+  --seq-4: #9b9ef0;
+  --seq-5: #e0dffe;
+  --state-good: var(--grass-d11);
+  --state-good-soft: var(--grass-d3);
+  --state-warn: var(--amber-d11);
+  --state-warn-soft: var(--amber-d3);
+  --state-bad: var(--tomato-d11);
+  --state-bad-soft: var(--tomato-d3);
+  --state-info: var(--iris-d11);
+  --state-info-soft: var(--iris-d3);
+  --shadow-1: none;
+  --shadow-3: 0 8px 24px rgb(0 0 0 / 0.5);
+  --hatch-ink: rgb(0 0 0 / 0.6);
+}
+
+/* High contrast (S-7.7): every text reaches 7:1, lines become visible, colours deepen. */
+@media (prefers-contrast: more) {
+  :root {
+    --surface-page: #ffffff;
+    --surface-card: #ffffff;
+    --surface-sunken: #f1f0ef;
+    --surface-raised: #ffffff;
+    --border: #5c5b57;
+    --border-strong: #3a3936;
+    --grid: #b5b3ad;
+    --text: #000000;
+    --text-muted: #3a3936;
+    --accent: var(--iris-12);
+    --accent-hover: #1b1c4a;
+    --accent-text: var(--iris-12);
+    --accent-soft: var(--iris-3);
+    --focus: var(--iris-12);
+    --usage-heating: #c2410c;
+    --usage-heating-text: var(--orange-12);
+    --usage-water: var(--blue-11);
+    --usage-water-text: var(--blue-12);
+    --usage-other: #8d8b84;
+    --year-0: var(--iris-12);
+    --year-1: var(--iris-9);
+    --year-2: #5c5b57;
+    --year-3: #8d8b84;
+    --room-1: #00594d;
+    --room-2: #a8124f;
+    --room-3: #4f4433;
+    --room-4: #6e2479;
+    --room-5: #1f6a2c;
+    --room-6: #6f4b2f;
+    --room-7: #0b566a;
+    --room-8: #9a1d22;
+    --state-good: var(--grass-12);
+    --state-warn: var(--amber-12);
+    --state-bad: var(--tomato-12);
+    --state-info: var(--iris-12);
+  }
+}
+@media (prefers-contrast: more) and (prefers-color-scheme: dark) {
+  :root:where(:not([data-theme='light'])) {
+    --surface-page: #000000;
+    --surface-card: #000000;
+    --surface-sunken: #111110;
+    --surface-raised: #111110;
+    --border: #a3a29a;
+    --border-strong: #d2d1c9;
+    --grid: #4d4d48;
+    --text: #ffffff;
+    --text-muted: #d2d1c9;
+    --accent: var(--iris-d12);
+    --accent-hover: #ffffff;
+    --accent-text: var(--iris-d12);
+    --accent-soft: var(--iris-d3);
+    --accent-ink: #000000;
+    --focus: var(--iris-d12);
+    --usage-heating: #f6894f;
+    --usage-heating-text: var(--orange-d12);
+    --usage-water: #7ab3f2;
+    --usage-water-text: var(--blue-d12);
+    --usage-other: #77766f;
+    --year-0: var(--iris-d12);
+    --year-1: var(--iris-d11);
+    --year-2: #a3a29a;
+    --year-3: #77766f;
+    --room-1: #3fd1bc;
+    --room-2: #ff8fb3;
+    --room-3: #e0d2bb;
+    --room-4: #f2b4fa;
+    --room-5: #86e086;
+    --room-6: #ecc9a8;
+    --room-7: #6fd3ec;
+    --room-8: #ffa3a3;
+    --state-good: var(--grass-d12);
+    --state-warn: var(--amber-d12);
+    --state-bad: var(--tomato-d12);
+    --state-info: var(--iris-d12);
+  }
+}
+@media (prefers-contrast: more) {
+  :root[data-theme='dark'] {
+    --surface-page: #000000;
+    --surface-card: #000000;
+    --surface-sunken: #111110;
+    --surface-raised: #111110;
+    --border: #a3a29a;
+    --border-strong: #d2d1c9;
+    --grid: #4d4d48;
+    --text: #ffffff;
+    --text-muted: #d2d1c9;
+    --accent: var(--iris-d12);
+    --accent-hover: #ffffff;
+    --accent-text: var(--iris-d12);
+    --accent-soft: var(--iris-d3);
+    --accent-ink: #000000;
+    --focus: var(--iris-d12);
+    --usage-heating: #f6894f;
+    --usage-heating-text: var(--orange-d12);
+    --usage-water: #7ab3f2;
+    --usage-water-text: var(--blue-d12);
+    --usage-other: #77766f;
+    --year-0: var(--iris-d12);
+    --year-1: var(--iris-d11);
+    --year-2: #a3a29a;
+    --year-3: #77766f;
+    --room-1: #3fd1bc;
+    --room-2: #ff8fb3;
+    --room-3: #e0d2bb;
+    --room-4: #f2b4fa;
+    --room-5: #86e086;
+    --room-6: #ecc9a8;
+    --room-7: #6fd3ec;
+    --room-8: #ffa3a3;
+    --state-good: var(--grass-d12);
+    --state-warn: var(--amber-d12);
+    --state-bad: var(--tomato-d12);
+    --state-info: var(--iris-d12);
+  }
+}

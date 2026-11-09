@@ -7,6 +7,7 @@ import { ds, rerender } from '../app';
 import { barChart, cssVar, gridHeatmap } from '../charts';
 import { belowThreshold, hcVerdict, hourByMonth, peakExtraCost, waterHeaterHc } from '../checks';
 import { activeRooms, esc, fmtEur, fmtKwh, hcHpAt, lastDay, nf0, offCol, series, table, tableToggle } from '../ui';
+import { hour } from '../glossary';
 import { html } from '../trusted';
 import { lsKey } from '../scope';
 import { lazyCard } from '../lazy';
@@ -114,7 +115,7 @@ export function drawWaterHeater(hourly: Hourly | null) {
         name: 'Part en heures creuses',
         color: series(2),
         data: hc.months.map((m) => (m.share === null ? null : Math.round(m.share * 100))),
-        colors: hc.months.map((m) => (belowThreshold(m.share, thr) ? cssVar('--bad') : series(2))),
+        colors: hc.months.map((m) => (belowThreshold(m.share, thr) ? cssVar('--state-bad') : series(2))),
       },
     ],
     stacked: false,
@@ -150,7 +151,7 @@ export function drawWaterHeater(hourly: Hourly | null) {
   zone.innerHTML = html`<p class="hint">80 % de l'énergie passe entre ces heures : <strong>${top.map((h) => `${h} h`).join(', ')}</strong>. Si des heures de journée apparaissent, le chauffe-eau chauffe hors des heures creuses.</p>
     <div class="chart" id="wh-hour-grid" style="height:${Math.max(200, 26 * g.months.length + 60)}px" role="img" aria-label="Consommation du chauffe-eau par heure et par mois"></div>`;
   gridHeatmap(document.getElementById('wh-hour-grid')!, {
-    xLabels: Array.from({ length: 24 }, (_, h) => `${h}h`),
+    xLabels: Array.from({ length: 24 }, (_, h) => hour(h)),
     yLabels: g.months.map(monthLabel),
     data: g.grid.flatMap((row, y) => row.map((v, x) => [x, y, Math.round(v * 100) / 100] as [number, number, number])),
     unit: 'kWh',

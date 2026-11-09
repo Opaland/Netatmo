@@ -10,6 +10,7 @@
     "test": "vitest run",
     "e2e": "node e2e/demo.mjs",
     "e2e:features": "node e2e/features.mjs",
+    "e2e:composants": "node e2e/composants.mjs",
     "size": "node scripts/size-budget.mjs"
   },
   "dependencies": {

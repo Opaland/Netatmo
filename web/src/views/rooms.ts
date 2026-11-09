@@ -117,11 +117,11 @@ export function renderRooms(view: HTMLElement, records: DayRecord[]) {
     series: [
       {
         name: String(year),
-        color: cssVar('--text-secondary'),
+        color: cssVar('--text-muted'),
         data: sorted.map((r) => Math.round(now.get(r.id) ?? 0)),
         colors: sorted.map((r) => roomColor(r.id)),
       },
-      { name: `${year - 1} (même période)`, color: cssVar('--ghost'), data: sorted.map((r) => Math.round(before.get(r.id) ?? 0)) },
+      { name: `${year - 1} (même période)`, color: cssVar('--usage-other'), data: sorted.map((r) => Math.round(before.get(r.id) ?? 0)) },
     ],
     price: avgPrice(),
     onClick: (i) => setState({ focusRoom: sorted[i].id }),

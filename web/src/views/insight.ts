@@ -3,7 +3,8 @@
 import { ds } from '../app';
 import { type Vote, loadVotes, pseudonymLegend, saveVote, usageLine } from '../insight';
 import { renderMarkdown } from '../markdown';
-import { esc } from '../ui';
+import { esc, longDate } from '../ui';
+import { localDateTime } from '../glossary';
 import { html } from '../trusted';
 
 export function mountInsight(el: HTMLElement | null) {
@@ -16,7 +17,7 @@ export function mountInsight(el: HTMLElement | null) {
   el.removeAttribute('aria-busy');
   el.innerHTML = html`<div class="card-head"><h2>Analyse du mois <small class="muted">rédigée par l'IA</small></h2></div>
     <div class="md">${renderMarkdown(ins.markdown)}</div>
-    <p class="hint muted">Générée le ${esc(ins.generated.slice(0, 10))} à partir des chiffres calculés par l'application${
+    <p class="hint muted">Générée le ${esc(ins.generated.length > 10 ? localDateTime(ins.generated) : longDate(ins.generated))} à partir des chiffres calculés par l'application${
       ins.verified === false ? ' — <strong>attention : certains nombres du texte n\'ont pas pu être vérifiés</strong>' : ''
     }. Les chiffres font foi : l'IA ne fait que les commenter.</p>
     <p class="hint muted insight-usage">${esc(usageLine(ins.model, ins.usage))}</p>

@@ -12,7 +12,7 @@ import {
   TooltipComponent,
   VisualMapComponent,
 } from 'echarts/components';
-import { getInstanceByDom, init, use } from 'echarts/core';
+import { getInstanceByDom, init, registerTheme, use } from 'echarts/core';
 import { CanvasRenderer } from 'echarts/renderers';
 
 use([
@@ -30,4 +30,4 @@ use([
   CanvasRenderer,
 ]);
 
-export { getInstanceByDom, init };
+export { getInstanceByDom, init, registerTheme };

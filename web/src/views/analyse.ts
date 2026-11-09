@@ -7,7 +7,8 @@ import { calendarChart, cssVar, gridHeatmap, lineChart, scatterChart } from '../
 import { loadHourly, loadRoomState } from '../data';
 import { lazyCard } from '../lazy';
 import { unavailable } from '../offline';
-import { activeRooms, catColor, esc, fmtKwh, lastDay, longDate, seg, series, table, tariffNames } from '../ui';
+import { activeRooms, catColor, esc, fmtKwh, lastDay, longDate, seg, series, table, tariffNames, measureColor, referenceColor } from '../ui';
+import { hour } from '../glossary';
 import { SUSPECT_RATIO } from '../reconstitute';
 import { uncertainDays } from './quality';
 import { drawSetpoint, setpointCard } from './setpoint';
@@ -92,8 +93,8 @@ export function renderAnalyse(view: HTMLElement, records: DayRecord[]) {
   ${
     ds!.meta.has_tariffs && split[1] + split[2] > 0
       ? `<section class="card"><h2>Heures pleines / heures creuses <small class="muted">12 derniers mois</small></h2>
-      <div class="share" aria-hidden="true"><span style="flex:${split[1]};background:${series(0)}"></span><span style="flex:${split[2]};background:${series(2)}"></span>${split[0] + split[3] > 0 ? `<span style="flex:${split[0] + split[3]};background:${cssVar('--ghost')}"></span>` : ''}</div>
-      <p class="share-legend"><span><i style="background:${series(0)}"></i>${n1} ${fmtKwh(split[1])}</span><span><i style="background:${series(2)}"></i>${n2} ${fmtKwh(split[2])}</span>${split[0] + split[3] > 0 ? `<span><i style="background:${cssVar('--ghost')}"></i>Sans détail ${fmtKwh(split[0] + split[3])}</span>` : ''}</p>
+      <div class="share" aria-hidden="true"><span style="flex:${split[1]};background:${series(0)}"></span><span style="flex:${split[2]};background:${series(2)}"></span>${split[0] + split[3] > 0 ? `<span style="flex:${split[0] + split[3]};background:${cssVar('--usage-other')}"></span>` : ''}</div>
+      <p class="share-legend"><span><i style="background:${series(0)}"></i>${n1} ${fmtKwh(split[1])}</span><span><i style="background:${series(2)}"></i>${n2} ${fmtKwh(split[2])}</span>${split[0] + split[3] > 0 ? `<span><i style="background:${cssVar('--usage-other')}"></i>Sans détail ${fmtKwh(split[0] + split[3])}</span>` : ''}</p>
       <p class="hint muted">Détection automatique : la colonne où le chauffe-eau consomme le plus est considérée comme les heures creuses.</p></section>`
       : ''
   }
@@ -165,9 +166,9 @@ export function renderAnalyse(view: HTMLElement, records: DayRecord[]) {
     lineChart(document.getElementById('temp-chart')!, {
       labels: days.map((d) => bucketLabel(d, 'day')),
       series: [
-        { name: 'Mesurée', color: series(0), data: days.map((d) => t.get(d)?.[0] ?? null) },
-        { name: 'Consigne', color: series(3), data: days.map((d) => t.get(d)?.[1] ?? null) },
-        ...(ds!.weather ? [{ name: 'Extérieure', color: cssVar('--text-muted'), data: days.map((d) => ds!.weather!.get(d)?.[2] ?? null) }] : []),
+        { name: 'Mesurée', color: measureColor(), data: days.map((d) => t.get(d)?.[0] ?? null) },
+        { name: 'Consigne', color: cssVar('--accent'), data: days.map((d) => t.get(d)?.[1] ?? null) },
+        ...(ds!.weather ? [{ name: 'Extérieure', color: referenceColor(), data: days.map((d) => ds!.weather!.get(d)?.[2] ?? null) }] : []),
       ],
       price: null,
       unit: '°C',
@@ -294,7 +295,7 @@ function drawHourly(records: DayRecord[]) {
   const from = addDays(last, -89);
   const rooms = new Set(records.map((r) => r.room));
   const grid = weekHourGrid(hourly, rooms, from, last);
-  const hours = Array.from({ length: 24 }, (_, h) => `${h}h`);
+  const hours = Array.from({ length: 24 }, (_, h) => hour(h));
   const dows = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
   zone.innerHTML = html`<div class="chart" id="hour-grid" style="height:280px" role="img" aria-label="Consommation moyenne par jour de semaine et par heure"></div>
     <div class="chart" id="hour-profile" style="height:240px" role="img" aria-label="Journée type"></div>`;

@@ -39,6 +39,7 @@ import {
   yearColor,
 } from '../ui';
 import { html } from '../trusted';
+import { switchField } from '../components';
 import { lazyCard } from '../lazy';
 import { tenant, tenantNote } from '../tenant';
 
@@ -97,7 +98,7 @@ export function renderCompare(view: HTMLElement, records: DayRecord[]) {
         ${seg('compareMode', state.compareMode, [['monthly', 'Mois par mois'], ['cumul', 'Cumul annuel'], ['season', 'Saison de chauffe']], 'Mode')}
         ${
           ds!.weather && state.compareMode !== 'cumul'
-            ? `<label class="toggle"><input type="checkbox" data-toggle="climate" ${state.climate ? 'checked' : ''}> À climat égal</label>`
+            ? switchField('À climat égal', state.climate, { 'data-toggle': 'climate' })
             : ''
         }
       </div>

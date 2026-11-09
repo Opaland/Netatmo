@@ -24,6 +24,7 @@ import {
   table,
   yearColor,
 } from '../ui';
+import { localDay } from '../glossary';
 import { html } from '../trusted';
 import { lazyAction, lazyCard } from '../lazy';
 
@@ -89,7 +90,7 @@ export function renderReport(view: HTMLElement) {
     </div>
     <h1 class="report-title">${esc(ds!.meta.home.name)} — bilan énergie ${year}${end < `${year}-12-31` ? ` <small>(au ${longDate(end)})</small>` : ''}</h1>
     <div class="kpis">
-      <article class="kpi"><h3>Consommation</h3><p class="kpi-value">${fmtKwh(tot)}</p><p class="kpi-sub">${win ? delta(sum(cmp), sum(prev)) : delta(tot, 0)}${caveatHtml}</p></article>
+      <article class="kpi"><h3>Consommation</h3><p class="kpi-value">${fmtKwh(tot)}</p><p class="kpi-sub">${win ? delta(sum(cmp), sum(prev), `vs ${year - 1}${fullYear ? '' : ' à date'}`) : delta(tot, 0)}${caveatHtml}</p></article>
       ${
         cost !== null && months > 0
           ? `<article class="kpi"><h3>Coût estimé (${WITH_SUBSCRIPTION})</h3><p class="kpi-value">${fmtEur(cost)}</p><p class="kpi-sub">${fmtEur(cost / months)} par mois en moyenne${
@@ -98,7 +99,7 @@ export function renderReport(view: HTMLElement) {
           : ''
       }
       <article class="kpi"><h3>Chauffage / chauffe-eau</h3><p class="kpi-value">${nf0.format((sum(yr, 'heating') / Math.max(tot, 1)) * 100)} % / ${nf0.format((sum(yr, 'water_heater') / Math.max(tot, 1)) * 100)} %</p><p class="kpi-sub">${fmtKwh(sum(yr, 'heating'))} · ${fmtKwh(sum(yr, 'water_heater'))}</p></article>
-      ${w && wPrev ? `<article class="kpi"><h3>Rigueur de l'hiver (DJU)</h3><p class="kpi-value">${nf0.format(w.dju)}</p><p class="kpi-sub">${delta(w.dju, wPrev.dju).replace('vs N-1', 'de froid vs N-1')}</p></article>` : ''}
+      ${w && wPrev ? `<article class="kpi"><h3>Rigueur de l'hiver (DJU)</h3><p class="kpi-value">${nf0.format(w.dju)}</p><p class="kpi-sub">${delta(w.dju, wPrev.dju, "de froid vs l'hiver précédent")}</p></article>` : ''}
     </div>
     <h3>Faits marquants</h3>
     <ul class="facts">
@@ -123,7 +124,7 @@ export function renderReport(view: HTMLElement) {
       }),
     )}
     <div id="report-extras"></div>
-    <p class="hint muted">Rapport généré le ${longDate(new Date().toISOString().slice(0, 10))} par l'application Historique énergie. Données Intuis${ds!.weather ? ', météo ' + (ds!.meta.weather_source === 'netatmo' ? 'station Netatmo' : 'Open-Meteo') : ''}${ds!.linky.size ? ', compteur Linky' : ''}.</p>
+    <p class="hint muted">Rapport généré le ${longDate(localDay())} par l'application Historique énergie. Données Intuis${ds!.weather ? ', météo ' + (ds!.meta.weather_source === 'netatmo' ? 'station Netatmo' : 'Open-Meteo') : ''}${ds!.linky.size ? ', compteur Linky' : ''}.</p>
   </section>
   <section class="card no-print" id="questions-card" aria-busy="true"><h2>Questions types</h2></section>`;
   const m = monthlyByYear(all);

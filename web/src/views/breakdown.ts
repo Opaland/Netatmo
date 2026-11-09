@@ -219,7 +219,7 @@ function drawChart(b: Breakdown) {
   const el = document.getElementById('bd-chart');
   if (!el) return;
   const color = (k: string, i: number) =>
-    k === 'talon' ? series(0) : k === 'unexplained' ? cssVar('--ghost') : series(i + 2);
+    k === 'talon' ? cssVar('--usage-standby') : k === 'unexplained' ? cssVar('--usage-other') : series(i + 2);
   hbarChart(el, {
     labels: b.parts.map((p) => p.name),
     series: [{ name: `kWh sur ${b.days.length} jours`, color: series(2), data: b.parts.map((p) => Math.round(p.kwh * 10) / 10), colors: b.parts.map((p, i) => color(p.kind, i)) }],

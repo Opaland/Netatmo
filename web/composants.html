@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>Composants · design system v1.6</title>
+    <meta name="robots" content="noindex" />
+    <!-- #310: living demo of the components (docs/design/composants.md). Development only:
+         `npm run dev` then /composants.html. Not an input of `vite build` (index.html only), so it
+         never ships and is outside the size budget. Same CSP as the app. -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' ws:; require-trusted-types-for 'script'; trusted-types energie default"
+    />
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module" src="/src/demo-composants.ts"></script>
+  </body>
+</html>
