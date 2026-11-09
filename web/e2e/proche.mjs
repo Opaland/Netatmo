@@ -42,6 +42,33 @@ async function layout(p, where) {
       .map(([el, r]) => `${el.textContent.trim().slice(0, 30)} ${Math.round(r.height)} px`),
   );
   if (small.length) errors.push(`${where} : cibles < 44 px → ${small.slice(0, 4).join(', ')}`);
+  // no word of a title or of a tab label is cut over two lines, and none is wider than its box
+  const cut = await p.evaluate(() => {
+    const out = [];
+    for (const el of document.querySelectorAll('#view :is(h2, h3, .proche-strong, .onb-hero), .tabs a span')) {
+      if (!el.getClientRects().length || el.classList.contains('sr-only')) continue;
+      if (el.scrollWidth > el.clientWidth + 1) out.push(`« ${el.textContent.trim().slice(0, 30)} » déborde`);
+      const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+      for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+        for (const m of n.data.matchAll(/\S+/g)) {
+          const r = document.createRange();
+          r.setStart(n, m.index);
+          r.setEnd(n, m.index + m[0].length);
+          const tops = new Set([...r.getClientRects()].filter((q) => q.width > 0).map((q) => Math.round(q.top)));
+          if (tops.size > 1) out.push(`« ${m[0]} » coupé`);
+        }
+      }
+    }
+    return out;
+  });
+  if (cut.length) errors.push(`${where} : mots coupés → ${cut.slice(0, 5).join(', ')}`);
+  // #316: the tab labels of the simple view are at least the size of the body text (1rem)
+  const tabs = await p.evaluate(() =>
+    document.body.classList.contains('simple-nav')
+      ? [...document.querySelectorAll('.tabs a span')].map((s) => parseFloat(getComputedStyle(s).fontSize) / parseFloat(getComputedStyle(document.documentElement).fontSize))
+      : [],
+  );
+  if (tabs.some((r) => r < 0.99)) errors.push(`${where} : libellés d’onglets plus petits que le texte (${tabs.map((r) => r.toFixed(2)).join(', ')} rem)`);
 }
 
 /** Light and dark, then 360 px at 200 %: axe and layout on the screen shown. */

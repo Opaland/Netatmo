@@ -11,12 +11,31 @@ body.simple-nav #view > .card,
 body.simple-nav #view > .simple-exit {
   margin-bottom: var(--space-3);
 }
+/* Long words are hyphenated (lang="fr"), never cut anywhere: titles are capped by the width so
+   that each of their words fits on a line (e2e/proche.mjs checks it at 360 px and 200 %). */
 body.simple-nav #view .card {
-  overflow-wrap: anywhere;
+  hyphens: auto;
+  overflow-wrap: break-word;
+}
+body.simple-nav #view :is(h2, h3, .proche-strong, .page-title) {
+  font-size: clamp(var(--font-sm), 9vw, var(--font-xl));
+  hyphens: manual;
+  overflow-wrap: normal;
+}
+/* the labels of the three tabs follow the text size (at least the body size) */
+body.simple-nav .tabs a span {
+  font-size: max(1rem, min(var(--font-sm), 3.3vw));
+  overflow-wrap: normal;
+  hyphens: manual;
+}
+@media (min-width: 760px) {
+  body.simple-nav .tabs a span {
+    font-size: var(--font-md);
+  }
 }
 body.simple-nav #view .card h3.muted {
   margin: 0 0 var(--space-1);
-  font-size: var(--font-md);
+  font-size: min(var(--font-md), 7vw);
   font-weight: 400;
   color: var(--text-muted);
 }
@@ -51,7 +70,7 @@ body.simple-nav #view .card h3.muted {
   margin: 0 0 var(--space-1);
 }
 .proche-strong {
-  font-size: var(--font-xl);
+  display: block;
   font-weight: 600;
   line-height: 1.25;
 }
@@ -97,7 +116,8 @@ main.onboarding {
 .onb-step > * {
   margin: 0;
   min-width: 0;
-  overflow-wrap: anywhere;
+  hyphens: auto;
+  overflow-wrap: break-word;
 }
 .onb-steps {
   display: flex;
@@ -121,7 +141,9 @@ main.onboarding {
   color: var(--text-muted);
 }
 .onb-hero {
-  font-size: var(--font-xl);
+  font-size: clamp(var(--font-sm), 9vw, var(--font-xl));
+  hyphens: manual;
+  overflow-wrap: normal;
   font-weight: 600;
   line-height: 1.3;
 }
