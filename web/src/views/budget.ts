@@ -23,15 +23,16 @@ import {
   writePref,
 } from '../money';
 import { contracts, costAvailable, costOf, esc, fmtEur, fmtKwh, lastDay, longDate, nf0, offCol, pct, priceMode } from '../ui';
+import { html } from '../trusted';
 
 const signedEur = (v: number) => `${v > 0 ? '+' : v < 0 ? '−' : ''}${fmtEur(Math.abs(v))}`;
 const num = (v: number, d = 2) => v.toLocaleString('fr-FR', { minimumFractionDigits: d, maximumFractionDigits: d });
 
 /** Replace a placeholder by its content (cards must stay direct children of #view for the simple mode). */
-function put(id: string, html: string) {
+function put(id: string, markup: string) {
   const el = document.getElementById(id);
   if (!el) return;
-  if (html) el.outerHTML = html;
+  if (markup) el.outerHTML = html(markup);
   else el.remove();
 }
 
@@ -56,7 +57,7 @@ export function fillOverview() {
   const tile = document.getElementById('budget-kpi');
   if (tile && b) {
     tile.hidden = false;
-    tile.innerHTML = `<h3>Budget ${b.year}</h3>
+    tile.innerHTML = html`<h3>Budget ${b.year}</h3>
       <p class="kpi-value">${signedEur(b.gap)}</p>
       <p class="kpi-sub"><span class="delta ${b.over ? 'up' : 'down'}"><span aria-hidden="true">${b.over ? '▲' : '▼'}</span> ${b.over ? 'au-dessus du budget' : 'dans le budget'}</span> · ${fmtEur(b.projected)} projetés pour ${fmtEur(b.budget)}</p>`;
   } else tile?.remove();

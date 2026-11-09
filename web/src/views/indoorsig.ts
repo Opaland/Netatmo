@@ -7,6 +7,7 @@ import { effectiveMapping } from '../comfort';
 import { type CiFit, MIN_DAYS, indoorModule, seasonSignatures, signatureDays } from '../indoorsig';
 import { activeRooms, esc, lastDay, series, table } from '../ui';
 import { uncertainDays } from './quality';
+import { html } from '../trusted';
 
 const n1 = (v: number) => v.toFixed(1).replace('.', ',').replace('-', '−');
 const n2 = (v: number) => v.toFixed(2).replace('.', ',').replace('-', '−');
@@ -32,7 +33,7 @@ export function renderIndoorSignature(card: HTMLElement, records: DayRecord[]) {
   const latest = withDelta[withDelta.length - 1];
   const name = esc(st.modules[indoor].name);
   card.hidden = false;
-  card.innerHTML = `<div class="card-head"><h2>Signature intérieur − extérieur <small class="muted">${name} − dehors</small></h2></div>
+  card.innerHTML = html`<div class="card-head"><h2>Signature intérieur − extérieur <small class="muted">${name} − dehors</small></h2></div>
     <p class="hint muted">Même nuage de jours, mais selon l'<strong>écart</strong> entre ${name} (station Netatmo) et l'extérieur. La <strong>pente</strong>
     (kWh par degré d'écart) mesure les pertes du logement (isolation, renouvellement d'air), quel que soit le réglage du thermostat ;
     le <strong>seuil</strong> est l'écart couvert par les apports gratuits (soleil, occupants, appareils) : en dessous, pas de chauffage.

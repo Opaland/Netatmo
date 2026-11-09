@@ -4,6 +4,7 @@
 // view loads, so they are there offline. Requests are conditional (cache: 'no-cache' → ETag,
 // 304 when unchanged), so an unchanged file is not downloaded again.
 import type { Dataset } from './data';
+import { html } from './trusted';
 
 export const DATA_CACHE = 'energy-data';
 
@@ -64,7 +65,7 @@ export async function updateNetStatus(ds: Dataset | null) {
   }
   const files = hourlyFiles(ds);
   const hourly = files.length > 0 && (await Promise.all(files.map(cached))).every(Boolean);
-  el.innerHTML = `<strong>Hors ligne.</strong> Disponible sur cet appareil : toutes les vues, données au ${ds.meta.last_day ? dayLabel(ds.meta.last_day) : '—'}${
+  el.innerHTML = html`<strong>Hors ligne.</strong> Disponible sur cet appareil : toutes les vues, données au ${ds.meta.last_day ? dayLabel(ds.meta.last_day) : '—'}${
     files.length ? (hourly ? ', profil horaire compris.' : ' ; profil horaire disponible au prochain accès réseau.') : '.'
   }`;
   el.hidden = false;

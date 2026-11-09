@@ -26,14 +26,15 @@ import {
 import { readPref, writePref } from '../money';
 import { activeRooms, avgPrice, costOf, esc, firstDay, fmtEur, fmtKwh, lastDay, nf0, table } from '../ui';
 import { currentHcHp } from './waterheater';
+import { html } from '../trusted';
 
 const num1 = (v: number) => v.toLocaleString('fr-FR', { maximumFractionDigits: 1 });
 const shortDate = (d: string) => `${Number(d.slice(8, 10))} ${MONTHS_SHORT[Number(d.slice(5, 7)) - 1]} ${d.slice(0, 4)}`;
 
-function put(id: string, html: string) {
+function put(id: string, markup: string) {
   const el = document.getElementById(id);
   if (!el) return;
-  if (html) el.outerHTML = html;
+  if (markup) el.outerHTML = html(markup);
   else el.remove();
 }
 function on(id: string, type: 'change' | 'click', fn: (el: HTMLInputElement) => void) {

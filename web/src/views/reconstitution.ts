@@ -6,6 +6,7 @@ import { ds } from '../app';
 import { barChart } from '../charts';
 import { rebuildLost, rebuildTotals, suspectDays } from '../reconstitute';
 import { activeRooms, esc, fmtKwh, longDate, roomName, series, table } from '../ui';
+import { html } from '../trusted';
 
 const monthLabel = (m: string) => `${MONTHS_SHORT[Number(m.slice(5, 7)) - 1]} ${m.slice(2, 4)}`;
 const kwh = (v: number | null) => (v === null ? '—' : fmtKwh(v));
@@ -23,7 +24,7 @@ export function renderReconstitution(zone: HTMLElement) {
     extérieure du jour, au prorata de la part habituelle des pièces (chauffe-eau : sa valeur médiane des jours voisins). Ces valeurs
     <strong>ne sont jamais ajoutées</strong> aux données mesurées : elles restent dans cette carte, en série distincte.</p>`;
   if (!rebuilt.length) {
-    zone.innerHTML = `${method}<p class="notice">Aucun jour perdu ne peut être reconstitué : il faut Linky ou la météo ces jours-là.</p>${suspectsBlock(suspects)}`;
+    zone.innerHTML = html`${method}<p class="notice">Aucun jour perdu ne peut être reconstitué : il faut Linky ou la météo ces jours-là.</p>${suspectsBlock(suspects)}`;
     return;
   }
   // Monthly chart over the months that have rebuilt days.
@@ -36,7 +37,7 @@ export function renderReconstitution(zone: HTMLElement) {
   }
   for (const r of rebuilt) rebuiltM.set(r.day.slice(0, 7), (rebuiltM.get(r.day.slice(0, 7)) ?? 0) + r.kwh);
   const round = (v: number | undefined) => Math.round((v ?? 0) * 10) / 10;
-  zone.innerHTML = `${method}
+  zone.innerHTML = html`${method}
     <h3 class="sub">Totaux par année</h3>
     ${table(
       ['Année', 'Mesuré', 'Reconstitué (à part)', 'Mesuré + reconstitué', 'Jours (Linky / signature)'],

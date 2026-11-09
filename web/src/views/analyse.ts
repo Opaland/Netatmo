@@ -11,6 +11,7 @@ import { SUSPECT_RATIO } from '../reconstitute';
 import { uncertainDays } from './quality';
 import { drawSetpoint, setpointCard } from './setpoint';
 import { drawWaterHeater, hcAlerts, waterHeaterCard } from './waterheater';
+import { html } from '../trusted';
 
 let hourly: Hourly | null = null;
 let hourlyLoading = false;
@@ -32,7 +33,7 @@ export function renderAnalyse(view: HTMLElement, records: DayRecord[]) {
   const tempRoom = tempRooms.find((r) => r.id === state.tempRoom)?.id ?? tempRooms[0]?.id ?? null;
   const split = tariffSplit(records.filter((r) => r.day >= addDays(minusYears(last), 1)), ds!.tariffs);
   const [n1, n2] = tariffNames();
-  view.innerHTML = `
+  view.innerHTML = html`
   ${ds!.insights ? '<section class="card insight" id="insight-card" aria-busy="true"><h2>Analyse du mois</h2></section>' : ''}
   ${
     ds!.weather
@@ -111,9 +112,9 @@ export function renderAnalyse(view: HTMLElement, records: DayRecord[]) {
         };
       }),
     });
-    document.getElementById('sig-table')!.innerHTML = rows.length
-      ? table(['Saison', 'Pente (kWh par °C en moins)', 'Plus de chauffe au-dessus de', 'Fiabilité (R²)'], rows.reverse())
-      : '';
+    document.getElementById('sig-table')!.innerHTML = html(
+      rows.length ? table(['Saison', 'Pente (kWh par °C en moins)', 'Plus de chauffe au-dessus de', 'Fiabilité (R²)'], rows.reverse()) : '',
+    );
   }
   // calendar
   const perDay = new Map<string, number>();
@@ -231,7 +232,7 @@ function drawStation() {
   const fmt = (v: number | null) => (v === null ? '—' : `${(state.stationMetric === 'co2' ? Math.round(v) : Math.round(v * 10) / 10).toString().replace('.', ',')} ${unit}`);
   const comfort = state.stationMetric !== 'temp';
   const [thr, thrLabel] = state.stationMetric === 'co2' ? [1000, '> 1 000 ppm'] : [65, '> 65 % (risque de moisissure)'];
-  document.getElementById('station-table')!.innerHTML = table(
+  document.getElementById('station-table')!.innerHTML = html(table(
     ['Module', `Hiver ${lastSeason - 1}–${lastSeason}`, `Hiver ${lastSeason}–${lastSeason + 1}`, ...(comfort ? [`Jours ${thrLabel}, 12 mois`] : [])],
     keys.map((k) => [
       `<span class="swatch" style="background:${color(k)}"></span>${esc(st.modules[k].name)}`,
@@ -239,7 +240,7 @@ function drawStation() {
       fmt(seasonAvg(k, lastSeason)),
       ...(comfort ? [st.modules[k].indoor || state.stationMetric === 'hum' ? daysAbove(st.daily[k] ?? {}, col, thr, from, last) : '—'] : []),
     ]),
-  );
+  ));
 }
 
 // ------------------------------------------------------------------ hourly profile
@@ -257,7 +258,7 @@ function drawHourly(records: DayRecord[]) {
         })
         .catch(() => {
           hourlyLoading = false;
-          zone.innerHTML = `<p class="hint muted">${unavailable('Données horaires')}</p>`;
+          zone.innerHTML = html`<p class="hint muted">${unavailable('Données horaires')}</p>`;
         });
     }
     return;
@@ -268,7 +269,7 @@ function drawHourly(records: DayRecord[]) {
   const grid = weekHourGrid(hourly, rooms, from, last);
   const hours = Array.from({ length: 24 }, (_, h) => `${h}h`);
   const dows = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
-  zone.innerHTML = `<div class="chart" id="hour-grid" style="height:280px" role="img" aria-label="Consommation moyenne par jour de semaine et par heure"></div>
+  zone.innerHTML = html`<div class="chart" id="hour-grid" style="height:280px" role="img" aria-label="Consommation moyenne par jour de semaine et par heure"></div>
     <div class="chart" id="hour-profile" style="height:240px" role="img" aria-label="Journée type"></div>`;
   gridHeatmap(document.getElementById('hour-grid')!, {
     xLabels: hours,

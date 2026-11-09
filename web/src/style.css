@@ -1229,3 +1229,9 @@ body.is-simple #grid-card {
   font-size: 0.85rem;
   text-decoration: underline;
 }
+
+/* S-8.10: SHA-256 of the deployed manifest (Paramètres) */
+code.hash {
+  word-break: break-all;
+  font-size: 0.85em;
+}

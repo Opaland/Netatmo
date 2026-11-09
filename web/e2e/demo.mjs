@@ -4,7 +4,7 @@
 // S-7.8, S-7.11, S-7.12: pinned room, swipe, offline.
 // Run after `npm run build`: node e2e/demo.mjs  (starts `vite preview` itself; port: E2E_PORT).
 import { spawn } from 'node:child_process';
-import { mkdirSync, readFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, readdirSync } from 'node:fs';
 import AxeBuilder from '@axe-core/playwright';
 import { chromium, devices } from 'playwright';
 
@@ -128,6 +128,17 @@ async function swipe(page, selector, dx) {
 }
 
 let failed = false;
+
+// S-8.9: every CSP violation (Trusted Types included) is recorded in the page and fails the run.
+const recordViolations = () => {
+  window.__csp = [];
+  document.addEventListener('securitypolicyviolation', (e) =>
+    window.__csp.push(`${e.violatedDirective} ${e.blockedURI || ''} ${(e.sample || '').slice(0, 60)}`.trim()),
+  );
+};
+const checkViolations = async (page, where) => {
+  for (const v of await page.evaluate(() => window.__csp ?? [])) errors.push(`${where}: violation CSP ${v}`);
+};
 try {
   await waitForServer();
   const browser = await chromium.launch();
@@ -139,6 +150,7 @@ try {
     ['mobile-360', { viewport: { width: 360, height: 740 }, hasTouch: true }],
   ]) {
     const ctx = await browser.newContext({ ...opts, deviceScaleFactor: 1, acceptDownloads: true });
+    await ctx.addInitScript(recordViolations);
     const page = await ctx.newPage();
     page.on('pageerror', (e) => errors.push(`${name}: ${e.message}`));
     page.on('console', (m) => m.type() === 'error' && errors.push(`${name}: ${m.text()}`));
@@ -181,6 +193,17 @@ try {
       const charts = await page.locator('.chart canvas').count();
       if (!charts) errors.push(`${name}/${view}: aucun graphique rendu`);
       if (view === 'analyse' && !(await page.locator('#insight-card .insight-usage').count())) errors.push(`${name}/analyse: carte IA (S-5.8) non rendue`);
+      // Tooltip (ECharts) shown then hidden: goes through the Trusted Types policy.
+      if (charts && !opts.isMobile) {
+        const canvas = page.locator('.chart canvas').first();
+        const { width, height } = (await canvas.boundingBox()) ?? { width: 0, height: 0 };
+        await canvas.hover({ position: { x: width * 0.6, y: height * 0.6 } });
+        await page.waitForTimeout(400);
+        if (view === 'overview' && !(await page.locator('.tt').count())) errors.push(`${name}/${view}: infobulle ECharts absente`);
+        await page.mouse.move(0, 0);
+        await page.evaluate(() => window.scrollTo(0, 0));
+      }
+      await checkViolations(page, `${name}/${view}`);
       await page.screenshot({ path: `${OUT}/${name}-${view}.png`, fullPage: true });
       await audit(page, `${name}/${view}`);
     }
@@ -292,6 +315,7 @@ try {
       await page.click('.menu summary');
       await page.uncheck('.menu-panel [data-toggle=simple]');
     }
+    await checkViolations(page, `${name}/report+settings`);
     await ctx.close();
   }
 
@@ -302,9 +326,18 @@ try {
     ['couleurs-forcees', { viewport: { width: 1280, height: 900 }, forcedColors: 'active' }],
   ]) {
     const ctx = await browser.newContext({ ...opts, deviceScaleFactor: 1 });
+    await ctx.addInitScript(recordViolations);
     const page = await ctx.newPage();
     page.on('pageerror', (e) => errors.push(`${name}: ${e.message}`));
     await openDemo(page);
+    // S-7.8: pinned room in simple mode under Trusted Types (insertAdjacentHTML path).
+    await page.click('.menu summary');
+    await page.selectOption('select[data-pin]', { index: 1 });
+    await page.check('.menu-panel [data-toggle=simple]');
+    await page.waitForSelector('.kpi.pinned');
+    await page.click('.menu summary');
+    await page.uncheck('.menu-panel [data-toggle=simple]');
+    await checkViolations(page, `${name}/épingle`);
     for (const view of ['overview', 'compare']) {
       await page.click(`[data-view=${view}]`);
       await page.waitForTimeout(800);
@@ -344,6 +377,34 @@ try {
     await page.click('[data-view=analyse]');
     await page.waitForSelector('#hour-grid canvas', { timeout: 20000 }).catch(() => errors.push('hors-ligne : profil horaire absent'));
     await page.screenshot({ path: `${OUT}/hors-ligne-analyse.png`, fullPage: true });
+    await ctx.close();
+  }
+  // S-8.9: Trusted Types enforced (a raw string is refused) and libsodium still works under it.
+  {
+    const ctx = await browser.newContext();
+    await ctx.addInitScript(recordViolations);
+    const page = await ctx.newPage();
+    await page.goto(base);
+    await page.waitForSelector('#demo');
+    const raw = await page.evaluate(() => {
+      try {
+        document.body.insertAdjacentHTML('beforeend', '<b>brut</b>');
+        return 'accepté';
+      } catch (e) {
+        return e.name;
+      }
+    });
+    if (raw !== 'TypeError') errors.push(`Trusted Types non appliqué : innerHTML brut ${raw}`);
+    const seen = await page.evaluate(() => window.__csp);
+    if (!seen.some((v) => v.startsWith('require-trusted-types-for'))) errors.push('Trusted Types : aucune violation signalée pour un innerHTML brut');
+    const sodium = readdirSync('dist/assets').find((f) => f.startsWith('libsodium-wrappers-') && f.endsWith('.js'));
+    const sealed = await page.evaluate(async (path) => {
+      const { default: s } = await import(path);
+      await s.ready;
+      const kp = s.crypto_box_keypair();
+      return s.crypto_box_seal(s.from_string('test'), kp.publicKey).length;
+    }, `./assets/${sodium}`);
+    if (sealed !== 4 + 48) errors.push(`libsodium sous Trusted Types : scellement inattendu (${sealed})`);
     await ctx.close();
   }
   await browser.close();

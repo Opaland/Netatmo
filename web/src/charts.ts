@@ -12,6 +12,7 @@ import {
 } from 'echarts/components';
 import * as echarts from 'echarts/core';
 import { CanvasRenderer } from 'echarts/renderers';
+import { node } from './trusted';
 
 echarts.use([
   BarChart,
@@ -47,6 +48,12 @@ export const fmtKwh = (v: number) => `${(Math.abs(v) < 100 ? nf1 : nf0).format(v
 export function escapeHtml(s: string): string {
   return s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
 }
+
+/** S-8.9: tooltips handed to ECharts as DOM built through the Trusted Types policy (no innerHTML in ECharts). */
+const tip =
+  <P>(f: (p: P) => string) =>
+  (p: P) =>
+    node(f(p));
 
 const observed = new WeakSet<HTMLElement>();
 
@@ -107,7 +114,7 @@ function tooltip(price: number | null, showTotal: boolean, unit = 'kWh') {
     borderColor: cssVar('--border'),
     textStyle: { color: cssVar('--text-primary'), fontFamily: 'inherit', fontSize: 12 },
     axisPointer: { type: 'line' as const, lineStyle: { color: cssVar('--text-muted'), width: 1 } },
-    formatter: (params: unknown) => {
+    formatter: tip((params: unknown) => {
       const list = (params as { seriesName: string; value: number | null; color: string; axisValueLabel: string }[]).filter(
         (p) => p.value !== null && p.value !== undefined,
       );
@@ -126,7 +133,7 @@ function tooltip(price: number | null, showTotal: boolean, unit = 'kWh') {
             ? `<div class="tt-row tt-total"><span class="tt-name">${nf0.format(sum * price)} €</span></div>`
             : '';
       return `<div class="tt"><div class="tt-title">${escapeHtml(list[0].axisValueLabel)}</div>${rows}${totalRow}</div>`;
-    },
+    }),
   };
 }
 
@@ -332,7 +339,7 @@ export function comboChart(
       legend: legend(all),
       tooltip: {
         ...tooltip(null, false, opts.barUnit),
-        formatter: (params: unknown) => {
+        formatter: tip((params: unknown) => {
           const list = (params as { seriesIndex: number; seriesName: string; value: number | null; color: string; axisValueLabel: string }[]).filter(
             (p) => p.value !== null && p.value !== undefined,
           );
@@ -344,7 +351,7 @@ export function comboChart(
             )
             .join('');
           return `<div class="tt"><div class="tt-title">${escapeHtml(list[0].axisValueLabel)}</div>${rows}</div>`;
-        },
+        }),
       },
       series: [
         ...opts.bars.map((s) => ({
@@ -410,10 +417,11 @@ export function scatterChart(el: HTMLElement, opts: { series: ScatterSeries[]; x
       tooltip: {
         ...ttBase(),
         trigger: 'item',
-        formatter: (p: { seriesName: string; value: [number, number, string] }) =>
+        formatter: tip((p: { seriesName: string; value: [number, number, string] }) =>
           Array.isArray(p.value) && p.value.length === 3
             ? `<div class="tt"><div class="tt-title">${escapeHtml(p.value[2])}</div><div class="tt-row"><strong>${fmtKwh(p.value[1])}</strong><span class="tt-name">${nf1.format(p.value[0])} °C</span></div></div>`
             : escapeHtml(p.seriesName),
+        ),
       },
       xAxis: {
         type: 'value',
@@ -471,10 +479,12 @@ export function calendarChart(el: HTMLElement, opts: { year: number; data: [stri
     {
       tooltip: {
         ...ttBase(),
-        formatter: (p: { value: [string, number]; seriesIndex: number }) =>
-          p.seriesIndex === 1
-            ? `<div class="tt"><div class="tt-title">${escapeHtml(p.value[0])}</div>${escapeHtml(opts.markLabel ?? '')}</div>`
-            : `<div class="tt"><div class="tt-title">${escapeHtml(p.value[0])}</div><strong>${fmtKwh(p.value[1])}</strong></div>`,
+        formatter: tip(
+          (p: { value: [string, number]; seriesIndex: number }) =>
+            p.seriesIndex === 1
+              ? `<div class="tt"><div class="tt-title">${escapeHtml(p.value[0])}</div>${escapeHtml(opts.markLabel ?? '')}</div>`
+              : `<div class="tt"><div class="tt-title">${escapeHtml(p.value[0])}</div><strong>${fmtKwh(p.value[1])}</strong></div>`,
+        ),
       },
       visualMap: {
         seriesIndex: 0,
@@ -525,8 +535,10 @@ export function gridHeatmap(
     {
       tooltip: {
         ...ttBase(),
-        formatter: (p: { value: [number, number, number] }) =>
-          `<div class="tt"><div class="tt-title">${escapeHtml(opts.yLabels[p.value[1]])} ${escapeHtml(opts.xLabels[p.value[0]])}</div><strong>${nf1.format(p.value[2])} ${escapeHtml(opts.unit)}</strong></div>`,
+        formatter: tip(
+          (p: { value: [number, number, number] }) =>
+            `<div class="tt"><div class="tt-title">${escapeHtml(opts.yLabels[p.value[1]])} ${escapeHtml(opts.xLabels[p.value[0]])}</div><strong>${nf1.format(p.value[2])} ${escapeHtml(opts.unit)}</strong></div>`,
+        ),
       },
       grid: { left: 8, right: 8, top: 8, bottom: 44, containLabel: true },
       xAxis: { type: 'category', data: opts.xLabels, axisLabel: { color: muted, interval: 2 }, axisTick: { show: false }, axisLine: { show: false } },
@@ -630,12 +642,12 @@ export function waterfallChart(
         ...ttBase(),
         trigger: 'axis',
         axisPointer: { type: 'shadow' },
-        formatter: (ps: { dataIndex: number }[]) => {
+        formatter: tip((ps: { dataIndex: number }[]) => {
           const i = ps[0].dataIndex;
           const v = i === 0 ? opts.start : i === labels.length - 1 ? acc : opts.steps[i - 1].delta;
           const txt = i === 0 || i === labels.length - 1 ? fmtKwh(v) : `${v > 0 ? '+' : '−'}${fmtKwh(Math.abs(v))}`;
           return `<div class="tt"><div class="tt-title">${escapeHtml(labels[i])}</div><strong>${txt}</strong></div>`;
-        },
+        }),
       },
       xAxis: { type: 'category', data: labels, axisLabel: { color: muted, interval: 0, rotate: labels.length > 6 ? 35 : 0 }, axisTick: { show: false } },
       yAxis: {
