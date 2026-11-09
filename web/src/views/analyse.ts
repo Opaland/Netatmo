@@ -52,6 +52,7 @@ export function renderAnalyse(view: HTMLElement, records: DayRecord[]) {
       : `<section class="card"><h2>Signature énergétique</h2><p class="hint muted">Disponible dès que la collecte a récupéré la météo (prochaine collecte).</p></section>`
   }
   ${setpointCard(records)}
+  <div id="shutters-zone"></div>
   ${anomaliesCard(records)}
   <section class="card">
     <div class="card-head"><h2>Calendrier <small class="muted">kWh par jour</small></h2>
@@ -150,6 +151,8 @@ export function renderAnalyse(view: HTMLElement, records: DayRecord[]) {
   drawHourly(records);
   drawWaterHeater(hourly);
   drawSetpoint(records);
+  // S-9.6: « volets fermés » journal, lazy module
+  void import('./shutters').then((m) => document.getElementById('shutters-zone') && m.renderShutters(document.getElementById('shutters-zone')!));
 }
 
 function anomaliesCard(records: DayRecord[]) {

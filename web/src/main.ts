@@ -9,6 +9,7 @@ import { IdleLock, LOCK_CHOICES, idleSince } from './session';
 import { esc, filtered, keepMenuOpen, lastDay, longDate, roomColor, seg } from './ui';
 import * as analyse from './views/analyse';
 import * as compare from './views/compare';
+import * as household from './views/household';
 import { renderLoading, renderLock } from './views/lock';
 import * as overview from './views/overview';
 import * as prices from './views/prices';
@@ -57,6 +58,7 @@ function render() {
         ${prices.pricesForm()}
         <button type="button" data-view="report">${icon('report')} Rapport annuel imprimable</button>
         <button type="button" data-view="settings">${icon('settings')} Paramètres et connexions</button>
+        ${household.householdMenu()}
         <label class="check"><input type="checkbox" data-toggle="simple" ${state.simple ? 'checked' : ''}> Mode simple (grands caractères, l'essentiel)</label>
         <label class="lock-after">Verrouiller sans activité
           <select data-lock-after>${LOCK_CHOICES.map((m) => `<option value="${m}" ${m === state.lockAfter ? 'selected' : ''}>${m ? (m < 60 ? `après ${m} min` : `après ${m / 60} h`) : 'jamais sur cet appareil'}</option>`).join('')}</select>
@@ -110,8 +112,8 @@ function staleBanner() {
 
 // ------------------------------------------------------------------ events (delegated)
 /** View-specific handlers: each returns true when the event was its own. */
-const clickHandlers = [compare.handleClick, rooms.handleClick, report.handleClick, settings.handleClick, prices.handleClick];
-const changeHandlers = [overview.handleChange, rooms.handleChange, prices.handleChange, compare.handleChange, analyse.handleChange, report.handleChange];
+const clickHandlers = [compare.handleClick, rooms.handleClick, report.handleClick, settings.handleClick, prices.handleClick, household.handleClick];
+const changeHandlers = [overview.handleChange, rooms.handleChange, prices.handleChange, compare.handleChange, analyse.handleChange, report.handleChange, household.handleChange];
 
 app.addEventListener('submit', (e) => settings.handleSubmit(e));
 
