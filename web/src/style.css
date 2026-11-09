@@ -755,6 +755,22 @@ fieldset.prices legend {
   gap: 4px;
   font-size: 0.92rem;
 }
+/* S-5.8 / S-5.9: vote on the AI analysis, canned questions */
+.insight-vote,
+.question-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin: 8px 0;
+}
+.question-list button {
+  text-align: left;
+  white-space: normal;
+}
+.question-answer {
+  margin-top: 8px;
+}
 @media print {
   .top,
   .filters,

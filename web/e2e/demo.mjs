@@ -59,6 +59,7 @@ try {
       }
       const charts = await page.locator('.chart canvas').count();
       if (!charts) errors.push(`${name}/${view}: aucun graphique rendu`);
+      if (view === 'analyse' && !(await page.locator('#insight-card .insight-usage').count())) errors.push(`${name}/analyse: carte IA (S-5.8) non rendue`);
       await page.screenshot({ path: `${OUT}/${name}-${view}.png`, fullPage: true });
     }
     // S-11 / S-3.8: comfort view (lazy chunk), bedroom detail on a deliberate gesture, other threshold
@@ -84,6 +85,9 @@ try {
     await page.click('.menu summary');
     await page.click('.menu-panel [data-view=report]');
     await page.waitForSelector('.report');
+    // S-5.9: a canned question answered by code
+    await page.click('[data-question=normal]');
+    await page.waitForSelector('.question-answer li', { timeout: 5000 });
     await page.screenshot({ path: `${OUT}/${name}-report.png`, fullPage: true });
     await ctx.close();
   }
