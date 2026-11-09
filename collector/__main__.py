@@ -54,8 +54,12 @@ def cmd_discover(s: Settings, args: argparse.Namespace) -> None:
 
 
 def cmd_diagnose(s: Settings, args: argparse.Namespace) -> None:
-    from .diagnose import history, history_deep, probe_history, run
+    from .diagnose import history, history_deep, inventory, probe_history, run
 
+    if args.inventory:  # S-1.19: every configured source, Intuis optional
+        has_intuis = all((s.username, s.password, s.client_id, s.client_secret))
+        inventory(s, IntuisClient(s) if has_intuis else None)
+        return
     client = _client(s)
     if args.probe_history:
         probe_history(client)
@@ -664,6 +668,11 @@ def main(argv: list[str] | None = None) -> None:
     dg.add_argument("--status", action="store_true", help="seulement les noms des champs de homestatus")
     dg.add_argument(
         "--probe-history", action="store_true", help="types de mesure candidats pour l'historique des fenêtres (S-13.1)"
+    )
+    dg.add_argument(
+        "--inventory",
+        action="store_true",
+        help="inventaire des champs, types de mesure, échelles et profondeur par source (S-1.19)",
     )
     sn = sub.add_parser("snapshot", help="relevé horaire chiffré de l'état des pièces (S-13.2)")
     sn.add_argument("--out", required=True, metavar="DOSSIER")
