@@ -121,6 +121,7 @@ fonctionner après l'arrêt des API Enedis historiques (mi-octobre 2026). Source
 | Puissance maximale quotidienne | oui | `linky.pmax` (kVA) ; **l'heure du pic est jetée** (`_readings` ne garde que `[:10]`, G5) | `prices.ts`, `compare.ts`, `overview.ts`, `windows.ts` (délestage) | heure du pic : quel appareil le provoque | S | moyen |
 | Production quotidienne et courbe de production | seulement avec des panneaux ; **à confirmer par le diagnostic** | non | — | autoconsommation (si le foyer produit) | M | faible |
 | Index, identité, adresse, contrat | non servis par la Conso API ou hors du besoin | non | — | puissance souscrite : saisie à la main dans le contrat (`contract.ts`) | — | élevé |
+| **Index** (`index_consommation`, API v2) | **oui** d'après [la page de migration 2026](https://conso.boris.sh/migration-2026), format à confirmer par l'inventaire (correction de la ligne précédente, voir [etudes/audit-appareils.md](etudes/audit-appareils.md) § 4) | non | — | recouper la facture, part HP/HC ou Tempo réelle par jour | S-M | faible |
 
 ### 2.6 Autres sources
 
