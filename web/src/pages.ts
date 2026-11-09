@@ -2,24 +2,23 @@
 // entry: how it is drawn, from the v1.5 cards moved there (architecture-cible.md § 3), and the
 // event handlers that apply while it is shown. main.ts draws the shell (header, tab bar, back
 // arrow) and dispatches the events to the entry of the page shown only.
-import { MONTHS_LONG, total } from './aggregate';
 import { activeRooms, ds, householdStatus, state } from './app';
-import { alert, list, seg as segment, switchField, tile } from './components';
+import { alert, list, seg as segment, switchField } from './components';
 import type { Handlers } from './events';
-import { PERIOD, dayShort, fmt1 } from './glossary';
+import { dayShort, fmt1 } from './glossary';
 import { glossarySection } from './plain';
 import { type Route, SETTINGS, type SettingsPage, TOOLS, type Tool, routeKey } from './router';
 import { LOCK_CHOICES } from './session';
 import { tenant } from './tenant';
 import { html } from './trusted';
-import { costOf, esc, filtered, fmtEur, fmtKwh, lastDay, roomColor } from './ui';
+import { esc, filtered, roomColor } from './ui';
 import { lazyCard } from './lazy';
 import { CATEGORY_LABEL } from './aggregate';
 import * as analyse from './views/analyse';
 import * as compare from './views/compare';
 import * as household from './views/household';
 import * as overview from './views/overview';
-import { pinSelect, pinnedTiles, meanTemp } from './views/pinned';
+import { pinSelect, pinnedTiles } from './views/pinned';
 import * as prices from './views/prices';
 import { qualityHandlers } from './views/quality';
 import * as report from './views/report';
@@ -92,18 +91,32 @@ function roomsPicker(): string {
     </details>`;
 }
 
-// ------------------------------------------------------------------ Pièces, Pièce
+// ------------------------------------------------------------------ Pièces, Pièce (#313, lazy)
+let piece: typeof import('./views/piece') | null = null;
+function withPiece(view: HTMLElement, draw: (m: typeof import('./views/piece')) => void) {
+  if (piece) return draw(piece);
+  view.innerHTML = html('<p class="empty">Chargement…</p>');
+  void lazyCard(
+    () => import('./views/piece'),
+    (m) => {
+      piece = m;
+      if (view.isConnected) draw(m);
+    },
+    { zone: view, what: 'Pièces' },
+  );
+}
+
 function renderPieces(view: HTMLElement) {
-  const water = activeRooms().filter((r) => r.category === 'water_heater');
-  const records = filtered();
-  stack(view, `<h2 class="page-title" id="page-title" tabindex="-1">Pièces</h2>${roomsPicker()}${filterChip()}`, [
-    (el) => (records.length ? rooms.renderRooms(el, records, 'list') : (el.innerHTML = html('<p class="empty">Aucune donnée pour cette sélection.</p>'))),
-    (el) =>
-      (el.innerHTML = html(`<section class="card"><div class="card-head"><h2>Aussi dans Pièces</h2></div>${list([
-        { title: 'Air et confort', sub: 'CO₂ des nuits, humidité, heures sous le seuil, fenêtres, sondes', href: '#confort' },
-        ...(water.length ? [{ title: 'Chauffe-eau', sub: 'heures creuses, heures de chauffe, contacteur', href: '#chauffe-eau', color: roomColor(water[0].id) }] : []),
-      ])}</section>`)),
-  ]);
+  withPiece(view, (m) =>
+    m.renderPieces(view, {
+      picker: `${roomsPicker()}${filterChip()}`,
+      compare: (el) => {
+        const records = filtered();
+        if (records.length) rooms.renderRooms(el, records, 'list');
+        else el.innerHTML = html('<p class="empty">Aucune donnée pour cette sélection.</p>');
+      },
+    }),
+  );
 }
 
 function renderPiece(view: HTMLElement, route: Route) {
@@ -113,32 +126,9 @@ function renderPiece(view: HTMLElement, route: Route) {
     view.innerHTML = html`<section class="card"><p class="hint">Cette pièce n'est pas affichée (renommée, regroupée dans la vue foyer ou sans donnée).</p><a class="link" href="#pieces">Voir toutes les pièces</a></section>`;
     return;
   }
-  const last = lastDay();
-  const monthStart = `${last.slice(0, 8)}01`;
-  const yearStart = `${last.slice(0, 4)}-01-01`;
-  const mine = ds!.records.filter((r) => r.room === room.id);
-  const kwhM = total(mine, monthStart, last);
-  const kwhY = total(mine, yearStart, last);
-  const eurM = costOf(mine, monthStart, last);
-  const eurY = costOf(mine, yearStart, last);
-  const temp = meanTemp(ds!.temps.get(room.id), monthStart, last);
-  const month = MONTHS_LONG[Number(last.slice(5, 7)) - 1];
-  const tiles = `<section class="kpis">
-    ${tile({ label: `${PERIOD.month} (${month}, au ${dayShort(last)})`, value: eurM === null ? fmtKwh(kwhM) : fmtEur(eurM), sub: eurM === null ? '' : esc(fmtKwh(kwhM)) })}
-    ${tile({ label: PERIOD.ytd, value: eurY === null ? fmtKwh(kwhY) : fmtEur(eurY), sub: eurY === null ? '' : esc(fmtKwh(kwhY)) })}
-    ${temp === null ? '' : tile({ label: `Température moyenne en ${month}`, value: `${fmt1(temp)} °C`, sub: esc(`seuil de confort ${fmt1(state.comfortThreshold)} °C`) })}
-  </section>`;
-  stack(view, `<p class="hint muted">${esc(CATEGORY_LABEL[room.category])} · ${state.simple ? 'votre pièce' : 'détail complet à venir (#313)'}</p>${tiles}`, [
-    (el) => rooms.renderRooms(el, mine, 'room', room.id),
-    (el) => analyse.renderAnalyse(el, mine, 'temps', room.id),
-    (el) =>
-      (el.innerHTML = html(`<section class="card"><div class="card-head"><h2>Pour aller plus loin</h2></div>${list([
-        { title: 'Air et confort', sub: 'heures sous le seuil, fenêtres, CO₂ et humidité (module lié)', href: '#confort' },
-        ...(room.category === 'water_heater' ? [{ title: 'Chauffe-eau : heures creuses', href: '#chauffe-eau' }] : []),
-        { title: 'Qu’est-ce qui a changé ?', sub: 'pièce par pièce, dans Historique', href: '#historique' },
-      ])}</section>`)),
-  ]);
+  withPiece(view, (m) => m.renderPiece(view, room.id));
 }
+const pieceHandlers: Handlers = { click: (el) => piece?.handleClick(el) ?? false };
 
 // ------------------------------------------------------------------ Historique, Compteur
 function renderHistorique(view: HTMLElement) {
@@ -416,7 +406,7 @@ const settingsHandlers: Handlers[] = [h(settings.handleClick), h(prices.handleCl
 export const PAGES: Record<Route['page'], Page> = {
   accueil: { render: renderAccueil, handlers: [accueilHandlers], needsData: true },
   pieces: { render: renderPieces, handlers: [h(undefined, rooms.handleChange)] },
-  piece: { render: renderPiece, handlers: [h(undefined, rooms.handleChange)] },
+  piece: { render: renderPiece, handlers: [pieceHandlers] },
   confort: { render: renderComfort, handlers: [comfortHandlers] },
   'chauffe-eau': { render: (v) => analyse.renderAnalyse(v, filtered(), 'chauffe-eau'), needsData: true },
   historique: { render: renderHistorique, handlers: [h(compare.handleClick, compare.handleChange), h(undefined, analyse.handleChange), h(undefined, rooms.handleChange)] },

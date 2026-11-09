@@ -1837,3 +1837,49 @@ code.hash {
     transition: none;
   }
 }
+/* #313: comfort pill of the Pièces list, cold days of a room. */
+.pill {
+  display: inline-block;
+  padding: 0 var(--space-2);
+  border-radius: var(--radius-full);
+  font-size: var(--font-xs);
+  font-weight: 600;
+  line-height: 1.6;
+  white-space: nowrap;
+}
+.pill.ok {
+  background: var(--state-good-soft);
+  color: var(--state-good);
+}
+.pill.warn {
+  background: var(--state-warn-soft);
+  color: var(--state-warn);
+}
+.row .v .s {
+  font-weight: 400;
+}
+.cold-days {
+  margin: 0;
+  padding-left: 1.2em;
+  display: grid;
+  gap: var(--space-2);
+}
+/* the facts of a room page: label over value, never squeezed at 360 px or with text at 200 % */
+#piece-now .now dl {
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 10rem), 1fr));
+  gap: var(--space-3);
+}
+#piece-now .now dl > div {
+  min-width: 0;
+}
+#piece-now .now dd {
+  overflow-wrap: anywhere;
+}
+.now ~ .section-title {
+  margin-top: var(--space-4);
+}
+@media (forced-colors: active) {
+  .pill {
+    border: 1px solid CanvasText;
+  }
+}
