@@ -1,11 +1,11 @@
 // Rooms ("Pièces"): consumption per room, year-over-year waterfall and per-room detail.
-import { CATEGORY_LABEL, type DayRecord, MONTHS_SHORT, monthlyByYear, pctChange, totalsBy } from '../aggregate';
+import { CATEGORY_LABEL, type DayRecord, pctChange, totalsBy } from '../aggregate';
 import { roomDeltas } from '../analysis';
 import { ds, setState, state } from '../app';
-import { barChart, cssVar, hbarChart } from '../charts';
+import { cssVar, hbarChart } from '../charts';
 import { uncertainDays } from '../checks';
 import { coldWinterDays, effectiveMapping, seasonOf as seasonOfWinter } from '../comfort';
-import { bucketMarks, monthKeys, windowSuffix, yoyCaveat, yoyWindow } from '../periods';
+import { windowSuffix, yoyCaveat, yoyWindow } from '../periods';
 import {
   activeRooms,
   avgPrice,
@@ -18,17 +18,16 @@ import {
   nf0,
   pct,
   roomColor,
-  roomName,
   table,
-  yearColor,
 } from '../ui';
 import { html } from '../trusted';
 
 /**
- * #308: « list » (Pièces: the rooms by cost, each opening its page), « changes » (Historique:
- * what changed, room by room) or « room » (the page of one room, month by month; #313 fills it).
+ * #308: « list » (Pièces, under the list by cost of #313: this year against the last one, room
+ * by room, each opening its page) or « changes » (Historique: what changed, room by room).
+ * The page of one room is views/piece.ts.
  */
-export function renderRooms(view: HTMLElement, records: DayRecord[], part: 'list' | 'changes' | 'room' = 'list', room: string | null = null) {
+export function renderRooms(view: HTMLElement, records: DayRecord[], part: 'list' | 'changes' = 'list') {
   const years = ds!.meta.years;
   const year = state.roomsYear ?? years[years.length - 1];
   const last = lastDay();
@@ -49,7 +48,6 @@ export function renderRooms(view: HTMLElement, records: DayRecord[], part: 'list
   const winterLabel = `hiver ${winter}–${year}`;
   const rooms = activeRooms().filter((r) => now.has(r.id) || before.has(r.id));
   const sorted = rooms.slice().sort((a, b) => (now.get(b.id) ?? 0) - (now.get(a.id) ?? 0));
-  const focus = part === 'room' && room && rooms.some((r) => r.id === room) ? room : null;
   const hasTemps = activeRooms().some((r) => ds!.temps.has(r.id));
   const thr = state.comfortThreshold;
   const thrLabel = `${thr.toString().replace('.', ',')} °C`;
@@ -57,7 +55,7 @@ export function renderRooms(view: HTMLElement, records: DayRecord[], part: 'list
   const listCard = () => `
   <section class="card">
     <div class="card-head">
-      <h2>Par pièce <small class="muted">kWh</small></h2>
+      <h2>Par pièce, comparé à l'an dernier <small class="muted">kWh</small></h2>
       <div class="controls">
         <label class="select"><span class="sr-only">Année</span><select data-set="roomsYear">${years
           .slice()
@@ -109,15 +107,7 @@ export function renderRooms(view: HTMLElement, records: DayRecord[], part: 'list
     <p class="hint muted">Chaque barre montre de combien une pièce a fait monter (rouge) ou baisser (vert) le total.</p>
     <div class="chart" id="rooms-waterfall" role="img" aria-label="Évolution par pièce"></div>
   </section>`;
-  const roomCard = () =>
-    focus
-      ? `<section class="card">
-    <div class="card-head"><h2>Mois par mois <small class="muted">kWh, ${year - 2} à ${year}</small></h2></div>
-    <div class="chart" id="room-detail" role="img" aria-label="Détail mensuel de la pièce, ${esc(roomName(focus))}"></div>
-  </section>`
-      : `<section class="card"><p class="hint">Pas de consommation de cette pièce en ${year}${room ? '' : ''}.</p></section>`;
-  view.innerHTML = html(part === 'list' ? listCard() : part === 'changes' ? changesCard() : roomCard());
-  if (part === 'room') return drawRoom();
+  view.innerHTML = html(part === 'list' ? listCard() : changesCard());
 
   if (part === 'changes') {
     drawWaterfall(document.getElementById('rooms-waterfall')!, roomDeltas(records, win?.from ?? `${year}-01-01`, win?.to ?? end), year, suffix);
@@ -137,31 +127,6 @@ export function renderRooms(view: HTMLElement, records: DayRecord[], part: 'list
     price: avgPrice(),
     onClick: (i) => (location.hash = `#piece-${encodeURIComponent(sorted[i].id)}`),
   });
-  function drawRoom() {
-    if (!focus) return;
-    const mine = records.filter((r) => r.room === focus);
-    const m = monthlyByYear(mine);
-    const shown = years.filter((y) => y >= year - 2 && y <= year);
-    // #297: partial months and months with estimated or lost days of this room
-    const roomFirst = mine[0]?.day ?? first;
-    const roomUncertain = uncertainDays(mine, ds!.estimated, roomFirst, last);
-    barChart(document.getElementById('room-detail')!, {
-      labels: MONTHS_SHORT,
-      series: shown.map((y) => {
-        const marks = bucketMarks(monthKeys(y), 'month', roomFirst, last, roomUncertain);
-        return {
-          name: String(y),
-          color: yearColor(y),
-          data: (m.get(y) ?? []).map((v) => (v === null ? null : Math.round(v))),
-          raw: m.get(y) ?? [],
-          notes: marks.map((k) => k.note),
-          marks: marks.map((k) => k.partial || k.uncertain > 0),
-        };
-      }),
-      stacked: false,
-      price: avgPrice(),
-    });
-  }
 }
 
 /** Average measured temperature and setpoint over the winter `season` (Nov → Mar, #294). */
