@@ -43,15 +43,17 @@ qui travaillent sur le dépôt.
 ## 4. Jalons et versions
 
 - Versions **sémantiques** : `vMAJEUR.MINEUR` (la PWA et le collecteur partagent le numéro).
-- Un **jalon GitHub par version** (`v1.2`, `v1.3`, `v2`) ; la priorité dans un jalon suit MoSCoW.
+- Un **jalon GitHub par version** (`v1.2`, `v1.3`, `v1.4`, `v1.5`, `v1.6`, `v2`) ; la priorité dans un
+  jalon suit MoSCoW. Les issues de personas sont rangées dans le jalon de la prochaine revue.
 - Une version est **livrée** quand toutes ses issues `P: must` sont fermées, le `CHANGELOG.md` est à
   jour et la revue multi-personas de la version est écrite.
 
 ## 5. Revue multi-personas (obligatoire à chaque version)
 
-- **50 personas**, répartis en familles (foyer, énergie, domotique, UX et accessibilité, sécurité et
-  juridique, dev et exploitation, diffusion, IA et données). La liste de référence est dans
-  `docs/bmad/02-revue-50-personas.md` ; on peut en ajouter, jamais en retirer sans le noter.
+- **62 personas** depuis le cadrage v1.4 (50 initiaux, 2 ajoutés en v1.2, 10 en v1.4), répartis en
+  familles (foyer, énergie, domotique, UX et accessibilité, sécurité et juridique, dev et exploitation,
+  diffusion, IA et données). La liste de référence est dans `docs/bmad/02-revue-50-personas.md`
+  (§ 12 pour les ajouts) ; on peut en ajouter, jamais en retirer sans le noter.
 - À chaque version : un fichier `docs/bmad/revues/vX.Y.md` avec, pour chaque persona, son verdict sur
   la version livrée (👍/👎) et une proposition ; puis la synthèse « besoins × impact ».
 - **Chaque persona a son issue** (étiquette `persona` + famille, titre « Persona #N · … ») : elle porte
@@ -89,5 +91,19 @@ Reprise de `docs/bmad/06-qa-strategy.md` :
 |---|---|
 | Chaque nuit | Collecte automatique ; une issue s'ouvre si elle échoue |
 | Chaque mois | Lecture de l'analyse IA ; tri des issues (nouveau, priorité, jalon) |
-| Chaque version | Revue 50 personas, CHANGELOG, démonstration sur téléphone |
+| Chaque version | Revue multi-personas (cadrage et fin), CHANGELOG, démonstration sur téléphone |
 | Chaque hiver | Contrôle des totaux contre l'application Intuis et une facture |
+
+## 9. Feuille de route v1.4 à v1.6
+
+Décidée par le propriétaire en novembre 2026, à la fin de la v1.3. Détail dans
+[`feuille-de-route.md`](feuille-de-route.md) et les jalons GitHub.
+
+| Version | Nature | Contenu | Livrée quand |
+|---|---|---|---|
+| **v1.4** | Fonctions | Cadrage par 62 personas ([`revues/v1.4-cadrage.md`](bmad/revues/v1.4-cadrage.md)), puis développement : fenêtres ouvertes et états des radiateurs (E13), prises Shelly, étude Home Assistant + Zigbee, processus de revue par agents (S-1.16), récits restants | Must fermés, revue de fin v1.4 écrite |
+| **v1.5** | Qualité du code | Revue de code **complète** (tout le code, pas seulement le diff) par des agents de revue, selon le processus de S-1.16 ; chaque constat devient une issue du jalon v1.5, puis est corrigé ; **aucune nouvelle fonction** | Aucun constat critique ou majeur ouvert, CI verte |
+| **v1.6** | Design | Revue design et UI/UX **complète** par des agents (toutes les vues, mobile et bureau, clair, sombre, contraste élevé), corrections, puis **nouveau design system** (jetons, typographie, espacements, composants partagés) appliqué à toute l'application | axe-core sans violation, aucune couleur ni taille hors jetons, captures de référence régénérées |
+
+Pendant la v1.5 et la v1.6, les revues multi-personas continuent (cadrage et fin de version), mais leurs
+propositions de **nouvelles fonctions** vont au jalon suivant (v1.7 ou v2), pas à la version en cours.

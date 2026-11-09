@@ -122,6 +122,18 @@ Effort : S = une demi-journée, M = 1 à 2 jours, L = plus.
 | 19 | Publication sur les stores : Play Store via TWA, App Store via Capacitor | L |
 | 20 | Demande d'accès officiel à Netatmo / Intuis (contact-api@netatmo.com) | — |
 
+### Versions 1.4 à 1.6 (décidées en novembre 2026)
+
+Les versions 1.1 à 1.3 ont livré l'essentiel des tableaux ci-dessus (voir `CHANGELOG.md` et
+[`bmad/revues/`](bmad/revues/)). La suite alterne une version de fonctions et deux versions de qualité.
+
+| Version | Thème | Contenu | Jalon |
+|---|---|---|---|
+| **1.4** | Expliquer par pièce | Nouveau cadrage par **62 personas** (les 52 existants + 10 nouveaux, une issue chacun) ; historique des **fenêtres ouvertes**, du boost et des états des radiateurs (`homestatus`, #162), avec minimisation des données de présence ; **prises Shelly** (#158) ; étude Home Assistant + Zigbee ; processus de **revue par agents** (#157) ; récits v1.3 restants (facture, surfaces et travaux, Safari, branche `data`, mesure des volets, QR code) ; récits des nouveaux personas (alerte froid, langage clair, VE, PAC, locataire) | [v1.4](https://github.com/Opaland/Netatmo/milestone/4) |
+| **1.5** | Revue de code | **Tout le code** relu par des agents de revue (collecteur, PWA, workflows, scripts, tests, dépendances), constats en issues puis corrigés ; pas de nouvelle fonction | [v1.5](https://github.com/Opaland/Netatmo/milestone/5) |
+| **1.6** | Design et UI/UX | Revue **design et UI/UX complète** par des agents, corrections, puis **nouveau design system** (jetons, typographie, espacements, composants) appliqué partout ; feuille « Réglages du graphique » | [v1.6](https://github.com/Opaland/Netatmo/milestone/6) |
+| **2** | Diffuser | Dépôt modèle, assistant, chat IA conditionnel, Argon2id, copie NAS | [v2](https://github.com/Opaland/Netatmo/milestone/3) |
+
 ## 4. Ordre recommandé
 
 1. **#5 Alerte d'échec** : petite tâche qui protège tout le reste.
@@ -130,3 +142,8 @@ Effort : S = une demi-journée, M = 1 à 2 jours, L = plus.
 3. **#6 Calendrier**, **#7 Cascade** et **#11 Verdict** : trois visualisations à fort effet pour peu
    d'effort.
 4. Le reste selon l'usage réel au fil de l'hiver.
+
+**À partir de la v1.4** : d'abord S-1.16 (méthode de revue, prérequis de la v1.5 et de la v1.6) et
+S-13.1 (l'API sert-elle déjà un historique de fenêtre ouverte ?), puis S-13.5 avant toute collecte de
+données d'occupation, puis S-13.2 et S-13.3. Le détail et les priorités sont dans
+[`bmad/revues/v1.4-cadrage.md`](bmad/revues/v1.4-cadrage.md).
