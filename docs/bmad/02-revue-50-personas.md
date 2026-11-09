@@ -154,3 +154,26 @@ en lecture seule (E9). Sinon, s'arrêter là.
 **Ce qui vaut vraiment la peine** : l'IA comme rédactrice d'un résumé dont tous les nombres viennent
 du code, avec affichage de ce qui a été envoyé. Le reste (anomalies, prévisions) relève de statistiques
 simples, déjà en cours.
+
+## 12. Personas ajoutés
+
+Le panel s'agrandit sans retirer personne (`docs/PROJET.md` § 5). Les personas 51 et 52 ont été
+ajoutés par la [revue v1.2](revues/v1.2.md) pour l'écran Paramètres ; les personas 53 à 62 par le
+[cadrage v1.4](revues/v1.4-cadrage.md), pour couvrir des regards absents : domotique locale, location,
+aidant, électricité, pompe à chaleur, recherche, langage clair, voiture électrique, droit du
+numérique, design system. Le verdict porte sur l'application v1.3.
+
+| # | Persona | Famille | Besoin principal | Verdict | Proposition concrète |
+|---|---|---|---|---|---|
+| 51 | Propriétaire qui reconfigure depuis son téléphone | IA et données | Renouveler un secret sans le site GitHub | 👍 | Liste des secrets avec date, jamais les valeurs (livré, S-8.4) |
+| 52 | Attaquant XSS / extension malveillante | IA et données | Une surface d'injection pour voler le jeton | 👍 | CSP stricte puis Trusted Types (livrés, S-8.5, S-8.9) |
+| 53 | Intégrateur Home Assistant et Zigbee | Technophiles et domotique | Faire entrer des capteurs locaux (ouverture, prises, sondes) dans l'archive | 👎 | Étude HA + Zigbee (hôte, clé, capteurs utiles), puis import chiffré des statistiques HA |
+| 54 | Locataire équipé de radiateurs Intuitiv | Business et diffusion | Suivre son chauffage sans être titulaire du Linky ni du contrat | 👎 | Mode locataire : prix moyen saisi, cartes Linky masquées avec explication, rapport limité à la période du bail |
+| 55 | Aidant à distance d'un parent âgé vivant seul | Foyer et famille | Être prévenu si le logement d'un proche reste froid, sans le surveiller | 👎 | Alerte « froid prolongé » par issue GitHub, sur consentement, sans valeur ni nom de pièce |
+| 56 | Électricien | Énergie et climat | Relier puissance, délestage et contacteurs pour conseiller le bon calibre | ➖ | Compter les délestages par pièce et les rapprocher du pic Linky ; afficher le mode du contacteur |
+| 57 | Candidat à la pompe à chaleur | Énergie et climat | Savoir ce que coûterait le même confort avec une PAC air-air | 👎 | Estimation PAC à partir de la signature et d'un COP saisi, hypothèses affichées |
+| 58 | Chercheur en thermique du bâtiment | IA et données | Des séries horaires propres (énergie, températures, ouvertures) pour caler un modèle | ➖ | Relevé horaire des fenêtres ; export de recherche anonymisé |
+| 59 | Personne dyslexique ou avec des troubles cognitifs | UX et accessibilité | Comprendre sans décoder du jargon | 👎 | Mode simple écrit en langage clair (FALC) avec glossaire au toucher |
+| 60 | Conducteur de voiture électrique | Énergie et climat | Savoir ce que la recharge coûterait selon l'offre et si le compteur tient | 👎 | Simulateur de recharge : kWh par semaine, plage horaire, effet sur l'offre et le pic |
+| 61 | Avocate en droit du numérique | Sécurité, vie privée, juridique | Que les données d'occupation soient traitées comme sensibles | 👎 | Minimisation (présence non conservée), regroupement des chambres, analyse d'impact courte |
+| 62 | Responsable de design system | UX et accessibilité | Des jetons et des composants communs plutôt que des styles vue par vue | 👎 | Inventaire des composants et jetons en v1.4, base du design system v1.6 |

@@ -8,18 +8,19 @@ dans les [issues GitHub](https://github.com/Opaland/Netatmo/issues) (une par ré
 
 | Épopée | Objectif | Version | Statut global |
 |---|---|---|---|
-| E1 | Collecte fiable et observable | 1.0-1.2 | Fait / À faire |
+| E1 | Collecte fiable et observable | 1.0-1.4 | Fait ; Shelly, revues par agents en v1.4 |
 | E2 | Coût réel en euros | 1.1 | Fait (tarif réglementé EDF, open data CRE) |
 | E3 | Météo, DJU, signature, station Netatmo complète | 1.1-1.2 | Fait / En cours |
 | E4 | Visualisations « comprendre » | 1.1 | Fait |
 | E5 | Synthèse IA | 1.1-2 | Fait / conditionnel |
-| E6 | Rapport annuel | 1.1-1.3 | Fait / À faire |
-| E7 | Accessibilité, performance, UX famille | 1.2 | À faire |
-| E8 | Sécurité et confidentialité | 1.2 | À faire |
-| E9 | Domotique : volets Wiser (étude), pont local | 1.2-1.3 | Étude en cours, conditionnel |
+| E6 | Rapport annuel | 1.1-1.4 | Fait ; surfaces et travaux en v1.4 |
+| E7 | Accessibilité, performance, UX famille | 1.2-1.6 | Fait ; langage clair en v1.4, design system en v1.6 |
+| E8 | Sécurité et confidentialité | 1.2-1.3 | Fait ; branche `data` en v1.4 |
+| E9 | Domotique : volets Wiser (étude), pont local, Home Assistant | 1.2-1.4 | Mesure d'hiver ; étude HA + Zigbee en v1.4 |
 | E10 | Diffusion | 2 | À faire |
-| E11 | Confort et santé de l'air (station Netatmo) | 1.3 | À faire |
-| E12 | Partage et famille | 1.3-2 | À faire |
+| E11 | Confort et santé de l'air (station Netatmo) | 1.3 | Fait |
+| E12 | Partage et famille | 1.3-2 | Fait ; alerte froid, mode locataire en v1.4 |
+| E13 | Fenêtres ouvertes et états des radiateurs (`homestatus`) | 1.4 | À faire |
 
 ## E1 · Collecte fiable et observable
 
@@ -31,7 +32,7 @@ dans les [issues GitHub](https://github.com/Opaland/Netatmo/issues) (une par ré
 | S-1.4 | En tant que mainteneur, je veux un résumé de job (jours collectés, méthode retenue, fichiers modifiés), afin de diagnostiquer sans relancer | G un job réussi · Q j'ouvre le run · A le `GITHUB_STEP_SUMMARY` liste ces éléments sans aucune donnée en clair | S | S | Fait (v1.2) |
 | S-1.5 | En tant que membre du foyer, je veux voir « données de plus de 3 jours », afin de ne pas croire des chiffres périmés | G `last_day` < aujourd'hui − 3 · Q j'ouvre l'appli · A un bandeau texte + icône l'indique | S | S | Fait (v1.2) |
 | S-1.7 | En tant que mainteneur, je veux l'état de chaque source (Intuis, Netatmo, Linky, IA) avec sa dernière réussite, afin de voir laquelle est en panne | G une source en échec · Q j'ouvre Paramètres ou le résumé de job · A date du dernier succès par source, sans valeur personnelle | M | S | Fait (v1.2) |
-| S-1.8 | En tant que testeur, je veux des données de démo complètes (station, Tempo, contrats), afin de montrer toutes les vues | G le mode démo · Q je parcours l'appli · A chaque vue a des données | S | C | À faire |
+| S-1.8 | En tant que testeur, je veux des données de démo complètes (station, Tempo, contrats), afin de montrer toutes les vues | G le mode démo · Q je parcours l'appli · A chaque vue a des données | S | C | Fait (v1.3) |
 | S-1.9 | En tant que mainteneur, je veux des tests Playwright sur la démo (5 vues, clair et sombre), afin d'éviter les régressions visuelles | G une PR · Q la CI tourne · A captures et absence d'erreur console vérifiées | M | S | Fait (v1.2) |
 | S-1.6 | En tant que mainteneur, je veux Dependabot et des versions figées, afin d'éviter une casse silencieuse | G une dépendance vulnérable · Q Dependabot tourne · A une PR est ouverte et la CI la valide | S | S | Fait (v1.2) |
 
@@ -87,7 +88,7 @@ dans les [issues GitHub](https://github.com/Opaland/Netatmo/issues) (une par ré
 | ID | Récit | Critères d'acceptation | T | P | Statut |
 |---|---|---|---|---|---|
 | S-6.1 | En tant que propriétaire, je veux un rapport annuel imprimable, afin de garder une trace et le partager | G une année complète · Q j'imprime (A4) · A bilan, faits marquants, comparatif N-1, sans contrôles d'interface, lisible en noir et blanc | M | S | Fait (v1.1) |
-| S-6.3 | En tant que propriétaire, je veux le comparateur d'offres et le pic de puissance dans le rapport annuel, afin d'avoir le bilan complet | G une année · Q j'imprime | A les deux sections apparaissent | S | C | À faire |
+| S-6.3 | En tant que propriétaire, je veux le comparateur d'offres et le pic de puissance dans le rapport annuel, afin d'avoir le bilan complet | G une année · Q j'imprime | A les deux sections apparaissent | S | C | Fait (v1.3) |
 | S-6.2 | En tant qu'auditeur, je veux saisir surfaces et marqueurs « travaux », afin de comparer avant / après | G un marqueur daté · Q j'ouvre la signature · A deux droites (avant / après) et kWh/m² | M | C | À faire |
 
 ## E7 · Accessibilité, performance, UX famille
@@ -138,3 +139,44 @@ Les 49 récits proposés par la revue de cadrage sont décrits dans
 [`revues/v1.3-cadrage.md`](revues/v1.3-cadrage.md) et suivis en issues GitHub (une par récit, jalon v1.3 ou v2).
 S-2.9 (comparateur sur le total Linky) était déjà livré en v1.2 : le comparateur utilise le Linky dès qu'il
 est disponible.
+
+## Backlog v1.4 (cadrage, 62 personas)
+
+Les 17 récits nouveaux, avec leurs critères, sont décrits dans
+[`revues/v1.4-cadrage.md`](revues/v1.4-cadrage.md) et suivis en issues (jalon v1.4). La v1.3 est jugée
+dans [`revues/v1.3.md`](revues/v1.3.md).
+
+### E13 · Fenêtres ouvertes et états des radiateurs
+
+Le diagnostic de #162 a confirmé que `homestatus` expose, **en instantané**, `open_window`, `presence`,
+`boost_status`, `therm_setpoint_mode` (pièces) et `radiator_state`, `offload`, `contactor_mode` (modules).
+
+| ID | Récit (abrégé) | T | P | Statut |
+|---|---|---|---|---|
+| S-13.1 | Chercher un historique déjà servi par `getroommeasure` (étude) | S | M | À faire (#172) |
+| S-13.2 | Relevé horaire léger de `homestatus`, agrégé chaque nuit, sans commit horaire | M | M | À faire, conditionnel (#173) |
+| S-13.3 | Heures de fenêtre ouverte par pièce et leur effet (pièce froide, jours inhabituels, signature) | M | S | À faire (#174) |
+| S-13.4 | Boost et mode de consigne par pièce | S | C | À faire (#175) |
+| S-13.5 | Minimiser les données d'occupation (présence jamais conservée) | S | M | À faire (#176) |
+| S-13.6 | Délestage et contacteur | S | C | À faire (#177) |
+
+### Autres récits v1.4
+
+| ID | Épopée | Récit (abrégé) | T | P | Issue |
+|---|---|---|---|---|---|
+| S-1.16 | E1 | Revues par agents (code et design) à chaque version | M | S → M au cadrage | #157 |
+| S-1.17 | E1 | Prises Shelly via le Shelly Cloud | M | S | #158 |
+| S-1.18 | E1 | Importer des statistiques Home Assistant chiffrées | M | C | #178 |
+| S-2.14 | E2 | Simuler la recharge d'une voiture électrique | S | C | #181 |
+| S-2.15 | E2 | Estimer le chauffage avec une pompe à chaleur | M | C | #182 |
+| S-3.10 | E3 | Étude : emplacement du module intérieur libre de la station | S | C | #180 |
+| S-5.10 | E5 | Fenêtres ouvertes et boost dans les faits de l'analyse IA | S | C | #188 |
+| S-6.6 | E6 | Export de recherche anonymisé | S | C | #187 |
+| S-7.13 | E7 | Mode simple en langage clair (FALC) | S | S | #183 |
+| S-7.14 | E7 | Inventaire des composants, couleurs, typographies (entrée de la v1.6) | S | C | #184 |
+| S-9.9 | E9 | Étude : Home Assistant et Zigbee au service de l'archive | S | S | #179 |
+| S-12.5 | E12 | Alerte « froid prolongé » dans une pièce de vie | M | S | #185 |
+| S-12.6 | E12 | Utiliser l'application en locataire | S | C | #186 |
+
+Repris des versions précédentes dans le jalon v1.4 : S-2.3, S-4.12, S-6.2, S-7.9, S-8.3, S-9.0 à S-9.2,
+S-12.3. S-7.5 passe en v1.6 (design system).
