@@ -513,18 +513,49 @@ def test_silent_rooms_alert_after_48_hours_without_reading(tmp_path):
     assert devices.silent_rooms(store, rooms[:1]) == []  # a single room: nothing to compare with
 
 
-def test_demo_has_a_room_offline_since_a_given_day(tmp_path):
-    """#346 / #337: the demo kitchen radiator answers no more from OFFLINE_ROOM's day: no energy,
-    no temperature, no half hours, while the meter keeps seeing it."""
-    from collector.demo import OFFLINE_ROOM, generate
+def test_stopped_rooms_variable_and_no_alert_for_them(tmp_path):
+    """#346: a radiator switched off on purpose (STOPPED_ROOMS_JSON, set from ⚙ Mon logement) is
+    expected to be silent: no alert; an invalid value is refused without quoting it."""
+    store = Store(tmp_path, "pw")
+    rooms = [{"id": "100", "category": "heating"}, {"id": "200", "category": "heating"}]
+    for d in ("2026-01-08", "2026-01-09", "2026-01-10"):
+        store.merge("100", d, 1200.0)
+    store.merge("200", "2026-01-08", 900.0)
+    raw = json.dumps([{"room": "200", "from": "2026-01-09", "reason": "poele", "label": "chauffé par un poêle"}])
+    stopped = devices.parse_stopped(raw)
+    assert stopped == [{"room": "200", "from": "2026-01-09", "reason": "poele", "label": "chauffé par un poêle"}]
+    assert devices.silent_rooms(store, rooms, stopped=stopped) == []
+    # stopped later than the silence began: the first days are still a room out of reach
+    late = [{**stopped[0], "from": "2026-01-10"}]
+    assert len(devices.silent_rooms(store, rooms, stopped=late)) == 1
+    for bad in (
+        "{",
+        '{"room": "1"}',
+        '[{"room": "1", "from": "9 janvier"}]',
+        '[{"room": "1", "from": "2026-01-09", "reason": "x"}]',
+    ):
+        with pytest.raises(devices.StoppedError) as err:
+            devices.parse_stopped(bad)
+        assert "9 janvier" not in str(err.value)
+
+
+def test_demo_has_a_room_stopped_and_a_room_offline(tmp_path):
+    """#346 / #337: in the demo the living room radiator is switched off on purpose (a stove, in
+    meta.stopped_rooms: the meter sees nothing of it), the kitchen one answers no more without
+    explanation (the meter still sees it): only the kitchen raises the alert."""
+    from collector.demo import OFFLINE_ROOM, STOPPED, STOPPED_ROOM, generate
 
     generate(tmp_path)
     s = Store(tmp_path, "demo")
-    rid, since = OFFLINE_ROOM
-    days = [d for y in s.years() for d in s.year(y).get(rid, {})]
-    assert max(days) < since.isoformat()
-    assert max(d for y in s.years() for d in s.year(y).get("r-salon", {})) > since.isoformat()
-    assert not any(d >= since.isoformat() for y in s.years() for d in s.doc(str(y)).get("temps", {}).get(rid, {}))
-    assert devices.silent_rooms(s, s.meta["rooms"]) == [
-        f"1 radiateur sans relevé de consommation depuis le {since.isoformat()} (48 h ou plus)"
+    for rid, since in (OFFLINE_ROOM, STOPPED_ROOM):
+        days = [d for y in s.years() for d in s.year(y).get(rid, {})]
+        assert max(days) < since.isoformat()
+        temps = [d for y in s.years() for d in s.doc(str(y)).get("temps", {}).get(rid, {})]
+        assert not any(d >= since.isoformat() for d in temps)
+    assert max(d for y in s.years() for d in s.year(y).get("r-bureau", {})) > OFFLINE_ROOM[1].isoformat()
+    assert s.meta["stopped_rooms"] == STOPPED
+    assert devices.silent_rooms(s, s.meta["rooms"], stopped=s.meta["stopped_rooms"]) == [
+        f"1 radiateur sans relevé de consommation depuis le {OFFLINE_ROOM[1].isoformat()} (48 h ou plus)"
     ]
+    assert len(devices.silent_rooms(s, s.meta["rooms"])) == 1  # both, as two radiators
+    assert devices.silent_rooms(s, s.meta["rooms"])[0].startswith("2 radiateurs")

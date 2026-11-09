@@ -4,6 +4,8 @@
 //   consignes    the temperature asked of the radiators (≈ 7 % of heating per °C, ADEME rule);
 //   pièces       what each room measured beyond weather and setpoints (room by room);
 //   hors ligne   the rooms without reading (#346): their share estimated from the meter;
+//   mode         a change of heating: a radiator switched off on purpose (a stove in the living
+//                room…, ⚙ Mon logement): its whole change, never « vos réglages »;
 //   eau chaude   the water heater;
 //   autres usages the meter minus heating and hot water (cooking, lights, appliances).
 // With the Linky meter the total is the whole home; without it, radiators and water heater only.
@@ -12,12 +14,13 @@ import { type DayRecord, addDays, minusYears } from './aggregate';
 import { type Weather, djuBetween } from './analysis';
 import { ADEME_PER_DEGREE } from './checks';
 import { MONTHS_LONG, monthLong, signedPct } from './glossary';
-import { type OfflineEstimate, type OfflineRun, estimatedIn, offlineDaysIn } from './room-offline';
+import { type OfflineEstimate, type OfflineRun, type StoppedRoom, estimatedIn, offlineDaysIn, offlineText } from './room-offline';
 
-export type StepKey = 'meteo' | 'consignes' | 'pieces' | 'horsligne' | 'eau' | 'autres';
+export type StepKey = 'meteo' | 'consignes' | 'mode' | 'pieces' | 'horsligne' | 'eau' | 'autres';
 export const STEP_LABEL: Record<StepKey, string> = {
   meteo: 'Météo',
   consignes: 'Températures demandées',
+  mode: 'Changement de mode de chauffage',
   pieces: 'Pièces',
   horsligne: 'Pièces hors ligne',
   eau: 'Eau chaude',
@@ -43,6 +46,8 @@ export interface RoomPart {
   rest: number;
   setpoint: number;
   offline: boolean;
+  /** Switched off on purpose (a stove…): its change is a change of heating. */
+  stopped?: StoppedRoom;
   /** kWh estimated from the meter this month (offline days). */
   estimated: number;
 }
@@ -68,6 +73,8 @@ export interface Explanation {
   other: { now: number; ref: number } | null;
   water: { now: number; ref: number };
   offline: { id: string; name: string; since: string; ongoing: boolean; estimated: number | null }[];
+  /** Rooms switched off on purpose over the month or a year earlier. */
+  stopped: { id: string; name: string; text: string; stop: StoppedRoom }[];
 }
 
 export interface ExplainInput {
@@ -145,7 +152,14 @@ export function explainMonth(i: ExplainInput): Explanation | null {
     const estRef = estimatedIn(i.estimate, r.id, refFrom, refTo) ?? 0;
     const now = sum(r.id, from, to) + estNow;
     const ref = sum(r.id, refFrom, refTo) + estRef;
-    const offline = offlineDaysIn(i.runs, r.id, from, to) > 0 || offlineDaysIn(i.runs, r.id, refFrom, refTo) > 0;
+    const live = i.runs.filter((x) => !x.stopped);
+    const offline = offlineDaysIn(live, r.id, from, to) > 0 || offlineDaysIn(live, r.id, refFrom, refTo) > 0;
+    const stopped = i.runs.find((x) => x.stopped && x.room === r.id && x.to >= refFrom && x.from <= to)?.stopped;
+    if (stopped) {
+      // a change of heating: all of it, not the weather nor the setpoints
+      if (now || ref) rooms.push({ id: r.id, name: r.name, now, ref, rest: now - ref, setpoint: 0, offline: false, stopped, estimated: 0 });
+      continue;
+    }
     const expected = ref * wf;
     let setpoint = 0;
     if (!offline) {
@@ -173,11 +187,13 @@ export function explainMonth(i: ExplainInput): Explanation | null {
   const ref = basis === 'linky' ? lRef! : H('ref') + water.ref;
   if (ref <= 0) return null;
   const other = basis === 'linky' ? { now: now - H('now') - water.now, ref: ref - H('ref') - water.ref } : null;
-  const meteo = rooms.reduce((s, r) => s + r.ref * (wf - 1), 0);
+  const meteo = rooms.filter((r) => !r.stopped).reduce((s, r) => s + r.ref * (wf - 1), 0);
+  const changed = rooms.filter((r) => r.stopped);
   const steps: Step[] = [
     { key: 'meteo', label: STEP_LABEL.meteo, kwh: meteo },
     { key: 'consignes', label: STEP_LABEL.consignes, kwh: rooms.reduce((s, r) => s + r.setpoint, 0) },
-    { key: 'pieces', label: STEP_LABEL.pieces, kwh: rooms.filter((r) => !r.offline).reduce((s, r) => s + r.rest, 0) },
+    ...(changed.length ? [{ key: 'mode' as const, label: modeLabel(changed), kwh: changed.reduce((s, r) => s + r.rest, 0) }] : []),
+    { key: 'pieces', label: STEP_LABEL.pieces, kwh: rooms.filter((r) => !r.offline && !r.stopped).reduce((s, r) => s + r.rest, 0) },
   ];
   const offRooms = rooms.filter((r) => r.offline);
   if (offRooms.length) steps.push({ key: 'horsligne', label: STEP_LABEL.horsligne, kwh: offRooms.reduce((s, r) => s + r.rest, 0), estimated: offRooms.some((r) => r.estimated > 0) });
@@ -186,7 +202,7 @@ export function explainMonth(i: ExplainInput): Explanation | null {
   const offline = heat
     .concat(waterRooms)
     .flatMap((r) => {
-      const run = i.runs.filter((x) => x.room === r.id && x.to >= refFrom && x.from <= to).pop();
+      const run = i.runs.filter((x) => !x.stopped && x.room === r.id && x.to >= refFrom && x.from <= to).pop();
       if (!run) return [];
       return [{ id: r.id, name: r.name, since: run.from, ongoing: run.ongoing, estimated: estimatedIn(i.estimate, r.id, from, to) }];
     });
@@ -209,7 +225,16 @@ export function explainMonth(i: ExplainInput): Explanation | null {
     other,
     water,
     offline,
+    stopped: changed.map((r) => ({ id: r.id, name: r.name, stop: r.stopped!, text: offlineText({ from: r.stopped!.from, to, ongoing: true, stopped: r.stopped }) })),
   };
+}
+
+/** « Changement de mode de chauffage (poêle au Salon) », « … (Bureau arrêté) ». */
+function modeLabel(rooms: RoomPart[]): string {
+  const stove = rooms.filter((r) => r.stopped!.reason === 'poele').map((r) => r.name);
+  const other = rooms.filter((r) => r.stopped!.reason !== 'poele').map((r) => r.name);
+  const parts = [stove.length ? `poêle au ${and(stove)}` : '', other.length ? `${and(other)} arrêté${other.length > 1 ? 's' : ''}` : ''].filter(Boolean);
+  return `${STEP_LABEL.mode} (${parts.join(', ')})`;
 }
 
 const nf0 = new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 0 });
@@ -228,6 +253,8 @@ export function stepNote(e: Explanation, s: Step): string {
       return e.weather ? `${e.weather.now > e.weather.ref ? 'plus froid' : e.weather.now < e.weather.ref ? 'plus doux' : 'aussi froid'} : ${nf0.format(e.weather.now)} degrés-jours contre ${nf0.format(e.weather.ref)}` : 'météo inconnue sur l’une des deux périodes';
     case 'consignes':
       return e.setpoint ? `${(e.setpoint.now >= e.setpoint.ref ? '+' : '−') + Math.abs(e.setpoint.now - e.setpoint.ref).toFixed(1).replace('.', ',')} °C demandés en moyenne` : 'températures demandées non relevées';
+    case 'mode':
+      return e.stopped.map((x) => `radiateur ${x.text}${x.stop.label ? ` : ${x.stop.label}` : ''}`).join(' ; ');
     case 'pieces':
       return 'à météo et températures demandées égales';
     case 'horsligne':
@@ -246,8 +273,12 @@ function stepPhrase(e: Explanation, s: Step): string {
       return s.kwh > 0 ? 'un mois plus froid' : 'un mois plus doux';
     case 'consignes':
       return s.kwh > 0 ? 'des températures demandées plus hautes' : 'des températures demandées plus basses';
+    case 'mode': {
+      const stove = e.stopped.filter((x) => x.stop.reason === 'poele').map((x) => x.name);
+      return stove.length === e.stopped.length ? `le poêle au ${and(stove)}` : `l’arrêt des radiateurs (${and(e.stopped.map((x) => x.name))})`;
+    }
     case 'pieces': {
-      const top = e.rooms.filter((r) => !r.offline && Math.sign(r.rest) === Math.sign(s.kwh)).slice(0, 2);
+      const top = e.rooms.filter((r) => !r.offline && !r.stopped && Math.sign(r.rest) === Math.sign(s.kwh)).slice(0, 2);
       return top.length ? `${s.kwh > 0 ? 'la hausse' : 'la baisse'} des pièces, surtout ${and(top.map((r) => r.name))}` : 'les pièces';
     }
     case 'horsligne': {

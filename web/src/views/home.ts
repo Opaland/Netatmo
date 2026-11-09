@@ -35,7 +35,7 @@ import { projectedCost } from '../synthese';
 import { html } from '../trusted';
 import { avgPrice, costAvailable, costOf, esc, firstDay, fmtEur, fmtKwh, lastDay, table, tableToggle } from '../ui';
 import { chartMarks, yoyGapNote } from './quality';
-import { comparableRecords, offlineEstimate, offlineLine, offlineNow, offlineRun } from './offline-rooms';
+import { comparableRecords, offlineEstimate, offlineLine, offlineNow, offlineRun, stoppedIn } from './offline-rooms';
 import { offlineText } from '../room-offline';
 
 const ord = (day: string) => (Number(day.slice(8, 10)) === 1 ? '1er' : String(Number(day.slice(8, 10))));
@@ -111,6 +111,12 @@ function explainLink(r: HomeRange): string {
   return `<p class="verdict-link"><a class="link" href="#${routeKey({ page: 'outil', tool: 'expliquer', month: ym })}" aria-label="Pourquoi ? Expliquer l’écart de ${esc(monthLong(ym))} avec ${esc(monthLong(before))}">Pourquoi ? Expliquer l’écart</a></p>`;
 }
 
+/** #346: a room switched off on purpose stays compared: its fall is a change of heating, said so. */
+function stoveNote(r: HomeRange): string {
+  const s = [...stoppedIn(r.from, r.to), ...stoppedIn(minusYears(r.from), minusYears(r.to))].filter((x, i, a) => a.findIndex((y) => y.id === x.id) === i);
+  return s.map((x) => (x.run.stopped!.reason === 'poele' ? ` ; ${x.name} chauffé au poêle depuis le ${dayShort(x.run.from, true)}` : ` ; ${x.name} : ${offlineText(x.run)}`)).join('');
+}
+
 /** #346: the rooms left out of the verdict, said under it. */
 function leftNote(left: string[]): string {
   return left.length ? `<p class="verdict-sub muted">Sans ${esc(left.join(', '))} (hors ligne).</p>` : '';
@@ -148,7 +154,7 @@ function verdictBlock(records: DayRecord[], r: HomeRange, v: Verdict | null, cmp
     <span class="verdict-icon" aria-hidden="true">${icon}</span>
     <div>
       <h2 class="verdict-title" id="verdict-title">${esc(verdictHeadline(m))}</h2>
-      <p class="verdict-sub">${what}, pour ${esc(fmtMoney(m.expected, m.unit))} attendus ${esc(ref)} (${esc(signedPct(m.pct))})${cmp.left.length ? `, sans ${esc(cmp.left.join(', '))} (hors ligne)` : ''}.</p>
+      <p class="verdict-sub">${what}, pour ${esc(fmtMoney(m.expected, m.unit))} attendus ${esc(ref)} (${esc(signedPct(m.pct))})${cmp.left.length ? `, sans ${esc(cmp.left.join(', '))} (hors ligne)` : ''}${esc(stoveNote(r))}.</p>
       ${g}
       ${explainLink(r)}
       ${howDetails(
@@ -248,7 +254,7 @@ function countedCard(records: DayRecord[], r: HomeRange): string {
         }),
         ...silent.map((x) => ({
           title: x.name,
-          sub: `${offlineLine(x.id, r.from, r.to)} · plus mesurée`,
+          sub: offlineLine(x.id, r.from, r.to),
           value: '—',
           color: x.category === 'water_heater' ? '--usage-water' : '--usage-heating',
           href: `#${routeKey({ page: 'piece', room: x.id })}`,

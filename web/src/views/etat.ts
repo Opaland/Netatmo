@@ -26,6 +26,7 @@ import { MONTHS_LONG, dayShort } from '../glossary';
 import { suspectDays } from '../reconstitute';
 import { html } from '../trusted';
 import { esc } from '../ui';
+import { stoppedRooms } from './offline-rooms';
 
 const pct = (v: number | null) => (v === null ? '—' : `${Math.floor(v * 100)} %`);
 const plural = (n: number, w: string) => `${n} ${w}${n > 1 ? 's' : ''}`;
@@ -53,15 +54,22 @@ function input(): QualityInput {
         .map((s) => s.day),
     },
     suspects,
+    // #346: radiators switched off on purpose (⚙ Mon logement): no data expected, not missing
+    stopped: stoppedRooms().map((x) => ({
+      room: x.room,
+      from: x.from,
+      text: `radiateur arrêté volontairement depuis le ${dayShort(x.from, true)}${x.label ? ` (${x.label})` : ''}`,
+    })),
   };
 }
 
-let cache: { key: unknown; report: QualityReport; input: QualityInput } | null = null;
+let cache: { key: unknown; stopped: string; report: QualityReport; input: QualityInput } | null = null;
 function report() {
   const d = rawDataset() ?? ds!;
-  if (cache?.key !== d) {
+  const key = `${JSON.stringify(stoppedRooms())}`;
+  if (cache?.key !== d || cache.stopped !== key) {
     const i = input();
-    cache = { key: d, report: qualityReport(i), input: i };
+    cache = { key: d, stopped: key, report: qualityReport(i), input: i };
   }
   return cache;
 }

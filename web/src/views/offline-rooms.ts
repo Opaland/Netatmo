@@ -1,31 +1,77 @@
 // #346: the rooms « hors ligne » of the dataset shown, computed once per dataset (raw rooms, then
-// the display ids of the household view), and the few words every screen uses for them.
+// the display ids of the household view), and the few words every screen uses for them. A
+// radiator switched off on purpose (⚙ Mon logement: « chauffée par un poêle ») is « arrêté »:
+// no alert, no estimate, and its fall stays in the comparisons as a change of heating.
 import { type DayRecord, minusYears } from '../aggregate';
 import { activeRooms, ds, rawDataset } from '../app';
 import type { Dataset } from '../data';
-import { type OfflineEstimate, type OfflineRun, displayEstimate, displayRuns, estimateOffline, estimatedIn, notComparable, offlineRuns, offlineText, runIn } from '../room-offline';
+import {
+  type OfflineEstimate,
+  type OfflineRun,
+  type StoppedRoom,
+  applyStopped,
+  displayEstimate,
+  displayRuns,
+  estimateOffline,
+  estimatedIn,
+  notComparable,
+  offlineRuns,
+  offlineText,
+  parseStopped,
+  runIn,
+} from '../room-offline';
+import { lsKey } from '../scope';
 import { fmtKwh } from '../ui';
 
+// ------------------------------------------------------------------ stopped on purpose (foyer)
+const LS = lsKey('stopped-draft');
+
+/** The list recorded by the collection (repository variable STOPPED_ROOMS_JSON → meta). */
+export const sharedStopped = (): StoppedRoom[] => parseStopped(((rawDataset() ?? ds)?.meta as { stopped_rooms?: unknown } | undefined)?.stopped_rooms);
+
+/** This device's version, while it is not yet saved for the household (null: none). */
+export function stoppedDraft(): StoppedRoom[] | null {
+  try {
+    const v = localStorage.getItem(LS);
+    return v === null ? null : parseStopped(JSON.parse(v));
+  } catch {
+    return null;
+  }
+}
+export function setStoppedDraft(list: StoppedRoom[] | null) {
+  try {
+    if (list === null) localStorage.removeItem(LS);
+    else localStorage.setItem(LS, JSON.stringify(parseStopped(list)));
+  } catch {
+    /* kept for this visit only: nothing to do */
+  }
+}
+/** What the app applies: this device's draft, else the household's list. */
+export const stoppedRooms = (): StoppedRoom[] => stoppedDraft() ?? sharedStopped();
+
+// ------------------------------------------------------------------ runs and estimate
 export interface OfflineInfo {
   /** Runs with the display ids. */
   runs: OfflineRun[];
   estimate: OfflineEstimate;
-  /** Raw runs and estimate (explanation of a month, État des données). */
+  /** Raw runs and estimate. */
   raw: { runs: OfflineRun[]; estimate: OfflineEstimate };
 }
 
-const memo = new WeakMap<Dataset, OfflineInfo>();
+const memo = new WeakMap<Dataset, { key: string; info: OfflineInfo }>();
 
-/** The offline rooms of the dataset shown (cached per dataset: the household view is another). */
+/** The offline rooms of the dataset shown (cached per dataset and list of stopped rooms). */
 export function offlineInfo(): OfflineInfo {
   const d = ds!;
-  let info = memo.get(d);
-  if (info) return info;
+  const stopped = stoppedRooms();
+  const key = JSON.stringify(stopped);
+  const hit = memo.get(d);
+  if (hit?.key === key) return hit.info;
   const r = rawDataset() ?? d;
-  const runs = offlineRuns(r.records, r.meta.rooms, r.meta.last_day ?? '');
+  const runs = applyStopped(offlineRuns(r.records, r.meta.rooms, r.meta.last_day ?? ''), stopped);
   const estimate = estimateOffline(r.records, runs, r.linky, r.weather);
-  info = { runs: displayRuns(runs, d.roomMap), estimate: displayEstimate(estimate, d.roomMap), raw: { runs, estimate } };
-  memo.set(d, info);
+  const info = { runs: displayRuns(runs, d.roomMap), estimate: displayEstimate(estimate, d.roomMap), raw: { runs, estimate } };
+  memo.set(d, { key, info });
   return info;
 }
 
@@ -35,12 +81,13 @@ export const offlineRun = (room: string, from: string, to: string) => runIn(offl
 /** kWh estimated from the meter for a room shown over [from, to], or null. */
 export const offlineEstimate = (room: string, from: string, to: string) => estimatedIn(offlineInfo().estimate, room, from, to);
 
-/** « hors ligne depuis le 14 oct. 2025 · ≈ 230 kWh estimés » for a room shown, or ''. */
+/** « hors ligne depuis le 14 oct. 2025 · ≈ 230 kWh estimés », « arrêté depuis le … (poêle) », or ''. */
 export function offlineLine(room: string, from: string, to: string): string {
   const run = offlineRun(room, from, to);
   if (!run) return '';
+  if (run.stopped) return `${offlineText(run)} · pas de données attendues`;
   const est = offlineEstimate(room, from, to);
-  return `${offlineText(run)}${est !== null ? ` · ≈ ${fmtKwh(est)} estimés d’après le compteur` : ''}`;
+  return `${offlineText(run)}${est !== null ? ` · ≈ ${fmtKwh(est)} estimés d’après le compteur` : ' · plus mesurée'}`;
 }
 
 /** The records of [from, to] and its year-ago window without the rooms offline in either (#346). */
@@ -53,10 +100,18 @@ export function comparableRecords(records: DayRecord[], from: string, to: string
   return { records: records.filter((r) => !out.has(r.room)), left: [...out].filter((id) => names.has(id)).map((id) => names.get(id)!) };
 }
 
-/** Rooms shown that are offline right now (ongoing run), with their run. */
+/** Rooms shown out of reach right now (ongoing run, not switched off on purpose): the alerts. */
 export function offlineNow(): { id: string; name: string; run: OfflineRun }[] {
   const names = new Map(activeRooms().map((r) => [r.id, r.name]));
   return offlineInfo()
-    .runs.filter((r) => r.ongoing && names.has(r.room))
+    .runs.filter((r) => r.ongoing && !r.stopped && names.has(r.room))
+    .map((run) => ({ id: run.room, name: names.get(run.room)!, run }));
+}
+
+/** Rooms shown switched off on purpose over [from, to] (a change of heating), with their run. */
+export function stoppedIn(from: string, to: string): { id: string; name: string; run: OfflineRun }[] {
+  const names = new Map(activeRooms().map((r) => [r.id, r.name]));
+  return offlineInfo()
+    .runs.filter((r) => r.stopped && r.to >= from && r.from <= to && names.has(r.room))
     .map((run) => ({ id: run.room, name: names.get(run.room)!, run }));
 }

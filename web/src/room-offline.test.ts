@@ -6,6 +6,7 @@ import { type DayRecord, addDays } from './aggregate';
 import type { Weather } from './analysis';
 import { demoDataset } from './__fixtures__/demo';
 import {
+  applyStopped,
   displayEstimate,
   displayRuns,
   estimateOffline,
@@ -14,7 +15,9 @@ import {
   offlineDaysIn,
   offlineRuns,
   offlineText,
+  parseStopped,
   runIn,
+  stoppedJson,
 } from './room-offline';
 
 const rec = (day: string, room: string, kwh = 1): DayRecord => ({ day, room, kwh, cat: room === 'ce' ? 'water_heater' : 'heating' });
@@ -108,17 +111,63 @@ describe('estimate from the meter', () => {
   });
 });
 
-describe('on the demo: the kitchen offline since 14 October 2025', () => {
-  it('found, ongoing, and estimated near what the meter saw (≈ 1.5 × its usual consumption)', async () => {
+describe('radiators switched off on purpose (⚙ Mon logement)', () => {
+  const run = { room: 'b', from: '2026-01-06', to: '2026-01-31', days: 26, ongoing: true };
+  const stove = { room: 'b', from: '2026-01-10', reason: 'poele' as const, label: 'chauffée par un poêle' };
+
+  it('the list is cleaned: bad dates dropped, unknown reason → « autre », one entry per room, label cut', () => {
+    expect(parseStopped('x')).toEqual([]);
+    const list = parseStopped([
+      { room: 'b', from: '2026-01-10', reason: 'poele', label: 'x'.repeat(80) },
+      { room: 'c', from: '10/01/2026' },
+      { room: 'a', from: '2025-12-01', reason: 'n/a' },
+      { room: 'b', from: '2026-01-11', reason: 'poele', label: 'second' },
+    ]);
+    expect(list.map((x) => [x.room, x.from, x.reason])).toEqual([
+      ['a', '2025-12-01', 'autre'],
+      ['b', '2026-01-11', 'poele'],
+    ]);
+    expect(parseStopped([{ room: 'b', from: '2026-01-10', label: 'y'.repeat(80) }])[0].label).toHaveLength(60);
+    expect(JSON.parse(stoppedJson(list))).toHaveLength(2);
+  });
+
+  it('from the declared day the run is « arrêté (poêle) »; the days before stay « hors ligne » when 2 or more', () => {
+    const out = applyStopped([run], [stove]);
+    expect(out).toEqual([
+      { ...run, to: '2026-01-09', days: 4, ongoing: false },
+      { ...run, from: '2026-01-10', days: 22, stopped: stove },
+    ]);
+    expect(offlineText(out[1])).toBe('arrêté depuis le 10 janv. 2026 (poêle)');
+    expect(applyStopped([run], [{ ...stove, from: '2026-01-07' }])).toHaveLength(1); // 1 day before: not a run
+    expect(applyStopped([run], [{ ...stove, room: 'z' }])).toEqual([run]);
+    expect(offlineText({ ...run, stopped: { ...stove, reason: 'autre' } })).toBe('arrêté depuis le 6 janv. 2026');
+  });
+
+  it('no estimate and still compared: its fall is a change of heating', () => {
+    const runs = applyStopped([run], [{ ...stove, from: run.from }]);
+    expect([...notComparable(runs, '2026-01-01', '2026-01-31')]).toEqual([]);
+    const linky = new Map([['2026-01-20', 30]]);
+    expect(estimateOffline([rec('2026-01-20', 'a', 5)], runs, linky, null).days.size).toBe(0);
+  });
+});
+
+describe('on the demo: the living room stove and the kitchen offline', () => {
+  it('the living room is « arrêté (poêle) », the kitchen « hors ligne » and estimated from the meter', async () => {
     const ds = await demoDataset();
     const last = ds.meta.last_day!;
-    const runs = offlineRuns(ds.records, ds.meta.rooms, last);
-    const kitchen = runs.filter((r) => r.room === 'r-cuisine');
-    expect(kitchen.at(-1)).toMatchObject({ from: '2025-10-14', to: last, ongoing: true });
-    expect(offlineText(kitchen.at(-1)!)).toBe('hors ligne depuis le 14 oct. 2025');
+    const stopped = parseStopped((ds.meta as { stopped_rooms?: unknown }).stopped_rooms);
+    expect(stopped).toEqual([{ room: 'r-salon', from: '2025-10-14', reason: 'poele', label: 'chauffé par un poêle à granulés' }]);
+    const runs = applyStopped(offlineRuns(ds.records, ds.meta.rooms, last), stopped);
+    const salon = runs.filter((r) => r.room === 'r-salon').at(-1)!;
+    expect(offlineText(salon)).toBe('arrêté depuis le 14 oct. 2025 (poêle)');
+    const kitchen = runs.filter((r) => r.room === 'r-cuisine').at(-1)!;
+    expect(kitchen).toMatchObject({ from: '2025-12-01', to: last, ongoing: true });
+    expect(kitchen.stopped).toBeUndefined();
+    expect(offlineText(kitchen)).toBe('hors ligne depuis le 1er déc. 2025');
     // the November 2024 gap of the demo (two rooms, 14 days) is found as well, over
-    expect(runs.some((r) => r.room === 'r-salon' && r.from === '2024-11-04' && !r.ongoing)).toBe(true);
+    expect(runs.some((r) => r.room === 'r-salon' && r.from === '2024-11-04' && !r.ongoing && !r.stopped)).toBe(true);
     const est = estimateOffline(ds.records, runs, ds.linky, ds.weather);
+    expect(estimatedIn(est, 'r-salon', '2025-10-14', last)).toBeNull();
     const jan = estimatedIn(est, 'r-cuisine', '2026-01-01', '2026-01-31')!;
     // January 2025 measured 170 kWh; colder January 2026, 1.5 × on its last local setting
     expect(jan).toBeGreaterThan(200);

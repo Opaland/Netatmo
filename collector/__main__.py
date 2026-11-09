@@ -193,13 +193,27 @@ def _silent_rooms(store: Store, syncer: Syncer) -> list[str]:
     try:
         home = syncer.last_home
         rooms = [{"id": r.id, "category": r.category} for r in home.rooms] if home else store.meta.get("rooms") or []
-        lines = silent_rooms(store, rooms)
+        lines = silent_rooms(store, rooms, stopped=stopped_config())
     except Exception as err:  # optional: never lose the night's data because of it
         _warn(f"Pièces sans relevé non vérifiées ({type(err).__name__})")
         return []
     for line in lines:
         _warn(line)
     return lines
+
+
+def stopped_config() -> list[dict]:
+    """#346: STOPPED_ROOMS_JSON (radiators switched off on purpose); [] when unset or invalid."""
+    from .devices import StoppedError, parse_stopped
+
+    raw = os.environ.get("STOPPED_ROOMS_JSON", "").strip()
+    if not raw:
+        return []
+    try:
+        return parse_stopped(raw)
+    except StoppedError as err:
+        _warn(f"Variable STOPPED_ROOMS_JSON ignorée ({err})")
+        return []
 
 
 def write_device_file(lines: list[str]) -> None:
@@ -530,6 +544,9 @@ def cmd_sync(s: Settings, args: argparse.Namespace, backfill: bool = False) -> N
         _warn(alert)
     write_renew_file(alerts)
     # S-12.5: prolonged cold in the rooms chosen (repository variable), pseudonyms only.
+    stopped = stopped_config()
+    if stopped or "STOPPED_ROOMS_JSON" in os.environ:
+        extra["stopped_rooms"] = stopped  # #346: shown by the app, set from ⚙ Mon logement
     cold = cold_config(_warn)
     if cold:
         extra["cold_alert"] = cold
@@ -827,7 +844,8 @@ def cmd_demo(s: Settings, args: argparse.Namespace) -> None:
     out = Path(args.output)
     for f in out.glob("*.json"):
         f.unlink()
-    print("Fichiers : " + ", ".join(generate(out, args.passphrase)))
+    today = date.fromisoformat(args.today) if args.today else None
+    print("Fichiers : " + ", ".join(generate(out, args.passphrase, today=today)))
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -876,6 +894,7 @@ def main(argv: list[str] | None = None) -> None:
     dm = sub.add_parser("demo")
     dm.add_argument("-o", "--output", default="web/public/demo")
     dm.add_argument("--passphrase", default="demo")
+    dm.add_argument("--today", help="AAAA-MM-JJ : regénérer la démo comme ce jour-là (données jusqu'à la veille)")
     args = p.parse_args(argv)
     # S-1.16: defence in depth for the public logs (every log record, uncaught exceptions and,
     # in GitHub Actions, stdout / stderr are redacted). The first defence is errors.SourceError.

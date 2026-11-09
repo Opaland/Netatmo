@@ -59,7 +59,7 @@ export function renderExplain(view: HTMLElement, asked?: string) {
     <div><h2 class="verdict-title" id="explain-title">${esc(cap(monthLong(month)))} : ${esc(head)}</h2>
     <p class="verdict-sub" id="explain-sentence">${esc(explainSentence(e, price))}</p></div>
   </section>
-  ${offlineBlock(e)}
+  ${offlineBlock(e)}${stoppedBlock(e)}
   <section class="card" id="explain-steps" aria-labelledby="explain-steps-title">
     <div class="card-head"><h2 id="explain-steps-title">D’où vient l’écart</h2><span class="sub muted">kWh, de ${esc(monthShort(e.refFrom))} à ${esc(monthShort(e.from))}</span></div>
     <p class="card-sub">Chaque barre part de 0 : à droite ce qui a fait monter la consommation, à gauche ce qui l’a fait baisser. Les barres s’additionnent : ${esc(fmtKwh(e.ref))} ${esc(kwhSigned(e.delta).replace(/^([+−])/, '$1 '))} = ${esc(fmtKwh(e.now))}.</p>
@@ -78,7 +78,7 @@ export function renderExplain(view: HTMLElement, asked?: string) {
   </section>
   ${roomsCard(e)}
   <section class="card"><div class="card-head"><h2>Comment c’est calculé</h2></div>
-    ${howDetails('Le détail des six parts', howText(e))}
+    ${howDetails('Le détail des parts', howText(e))}
     <p class="hint muted">Pour un autre mois : la liste ci-dessus. Pour le détail jour par jour : <a class="link" href="#historique">Historique</a>.</p>
   </section>`);
   const el = document.getElementById('explain-chart');
@@ -118,6 +118,19 @@ function offlineBlock(e: Explanation): string {
     .join('');
 }
 
+/** #346: a radiator switched off on purpose (a stove…): a change of heating, said once. */
+function stoppedBlock(e: Explanation): string {
+  return e.stopped
+    .map((s) =>
+      alert(
+        'info',
+        `${s.name} : radiateur ${s.text}`,
+        `${s.stop.label ? `${s.stop.label.charAt(0).toUpperCase()}${s.stop.label.slice(1)}. ` : ''}Pas de données attendues : sa consommation électrique d’avant compte dans « ${STEP_LABEL.mode} », pas dans vos réglages.`,
+      ),
+    )
+    .join('');
+}
+
 function roomsCard(e: Explanation): string {
   if (!e.rooms.length) return '';
   return `<section class="card" id="explain-rooms" aria-labelledby="explain-rooms-title">
@@ -125,7 +138,9 @@ function roomsCard(e: Explanation): string {
     ${list(
       e.rooms.map((r) => ({
         title: r.name,
-        sub: r.offline
+        sub: r.stopped
+          ? `radiateur ${offlineText({ from: r.stopped.from, to: e.to, ongoing: true, stopped: r.stopped })} · changement de mode de chauffage`
+          : r.offline
           ? `${offlineText(offlineInfo().runs.filter((x) => x.room === r.id).pop() ?? { from: e.from, to: e.to, ongoing: false })}${r.estimated ? ` · ≈ ${fmtKwh(r.estimated)} estimés` : ' · plus mesurée'}`
           : `${fmtKwh(r.now)} contre ${fmtKwh(r.ref)}${r.setpoint ? ` · températures demandées ${kwhSigned(r.setpoint)}` : ''}`,
         value: kwhSigned(r.rest),
@@ -144,12 +159,13 @@ function howText(e: Explanation): string {
       w ? `, ${Math.round(w.now)} contre ${Math.round(w.ref)} (${esc(signedPct(((w.now - w.ref) / w.ref) * 100))})` : ' ; météo inconnue sur l’une des périodes : pas de correction'
     }.</li>
     <li><strong>${STEP_LABEL.consignes}</strong> : l’écart de température demandée aux radiateurs, pièce par pièce (moyenne du jour, absences et plannings compris), compté environ 7 % du chauffage par degré (règle de l’ADEME).</li>
+    <li><strong>${STEP_LABEL.mode}</strong> : une pièce dont le radiateur est arrêté volontairement (⚙ Mon logement, par exemple chauffée par un poêle) : tout son écart, sans météo ni température demandée.</li>
     <li><strong>${STEP_LABEL.pieces}</strong> : ce que chaque pièce a consommé de plus ou de moins une fois la météo et les températures demandées retirées (fenêtres, habitudes, isolation, radiateur).</li>
     <li><strong>${STEP_LABEL.horsligne}</strong> : les pièces sans relevé pendant au moins 48 h. Leur part est estimée chaque jour : compteur Linky − pièces mesurées − autres usages habituels (ajustés au froid sur l’année d’avant), marquée « estimée ».</li>
     <li><strong>${STEP_LABEL.eau}</strong> : le chauffe-eau, mesuré par Intuis.</li>
     <li><strong>${STEP_LABEL.autres}</strong> : ${e.basis === 'linky' ? 'compteur Linky − chauffage − eau chaude (cuisine, éclairage, appareils, veille)' : 'non comptés sans compteur Linky'}.</li>
   </ul>
-  <p class="hint muted">Les six parts s’additionnent exactement à l’écart. Comparé jour pour jour : ${esc(dayShort(e.from))} – ${esc(dayShort(e.to, true))} contre ${esc(dayShort(e.refFrom))} – ${esc(dayShort(e.refTo, true))}.</p>`;
+  <p class="hint muted">Les parts s’additionnent exactement à l’écart. Comparé jour pour jour : ${esc(dayShort(e.from))} – ${esc(dayShort(e.to, true))} contre ${esc(dayShort(e.refFrom))} – ${esc(dayShort(e.refTo, true))}.</p>`;
 }
 
 /** Month chosen in the list: a new address (shareable, Back returns to the previous month). */

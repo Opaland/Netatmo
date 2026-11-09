@@ -143,7 +143,7 @@ export function renderPieces(view: HTMLElement, o: PiecesOpts) {
     const open = rs ? sumState(rs, members(x.room.id), from30, last, (c) => c.open_window_h) : null;
     const pill = comfortPill(cold, open, thr);
     const sub = x.run
-      ? `<span class="pill warn">${esc(offlineText(x.run))}</span>${x.est ? ' · en partie estimé' : ''}`
+      ? `<span class="pill${x.run.stopped ? '' : ' warn'}">${esc(offlineText(x.run))}</span>${x.est ? ' · en partie estimé' : ''}`
       : t
         ? `${fmt1(t.mean)} °C · <span class="pill ${pill.level}">${esc(pill.text)}</span>`
         : '<span class="muted">pas de température relevée</span>';
@@ -190,7 +190,18 @@ export function renderPiece(view: HTMLElement, id: string) {
   const parts: string[] = [];
   // #346: a room without reading says so first, with its estimate from the meter
   const run = offlineRun(id, minusYears(yearStart), last);
-  if (run) {
+  if (run?.stopped) {
+    // switched off on purpose (⚙ Mon logement): expected, not a failure
+    const st = run.stopped;
+    parts.push(
+      alert(
+        'info',
+        `Radiateur ${offlineText(run)}`,
+        '',
+        `<p>${esc(`${st.label ? `${st.label.charAt(0).toUpperCase()}${st.label.slice(1)}. ` : ''}Pas de données attendues : la baisse de sa consommation électrique vient du changement de mode de chauffage, pas de vos réglages.`)} <a class="link" href="#parametres-logement">Réglage</a></p>`,
+      ),
+    );
+  } else if (run) {
     const line = offlineLine(id, yearStart, last);
     parts.push(
       alert(
@@ -355,7 +366,7 @@ function tilesRow(
     tile({
       label: run ? `${PERIOD.ytd}, jours mesurés` : PERIOD.ytd,
       value: eur === null ? fmtKwh(kwh) : fmtEur(eur),
-      sub: `${eur === null ? '' : `${esc(fmtKwh(kwh))} · `}${comparison(delta, vsLabel(yearStart, last), { none: run ? `${offlineText(run)} : non comparé` : NO_REFERENCE })}`,
+      sub: `${eur === null ? '' : `${esc(fmtKwh(kwh))} · `}${comparison(delta, vsLabel(yearStart, last), { none: run ? `${offlineText(run)} : ${run.stopped ? 'changement de mode de chauffage' : 'non comparé'}` : NO_REFERENCE })}`,
       id: 'piece-cost',
     }),
   ];

@@ -29,6 +29,7 @@ import * as rooms from './views/rooms';
 import * as settings from './views/settings';
 import { sharedOriginWarning } from './views/settings';
 import { renderAide } from './views/proche';
+import { mountStopped } from './views/stopped';
 import { onboardingHandlers, renderOnboarding } from './views/onboarding';
 
 export interface Page {
@@ -349,6 +350,8 @@ function renderSettingsPage(view: HTMLElement, route: Route) {
           (el.innerHTML = html(`<section class="card"><div class="card-head"><h2>Pièces</h2>${scopeTag('foyer')}</div>
           <p class="hint muted">Noms et catégories viennent d'Intuis (collecte). Liaison d'une pièce au module de la station : dans <a href="#confort">Air et confort</a>.</p>
           ${list(activeRooms().map((r) => ({ title: r.name, sub: CATEGORY_LABEL[r.category], color: roomColor(r.id), href: `#${routeKey({ page: 'piece', room: r.id })}` })))}</section>`)),
+        // #346: a radiator switched off on purpose (a stove…) is not « hors ligne »
+        (el) => mountStopped(el, settings.currentRepo),
         (el) => analyse.renderAnalyse(el, records, 'travaux'),
         (el) =>
           (el.innerHTML = html(`<section class="card"><div class="card-head"><h2>Appareils saisis à la main</h2>${scopeTag('appareil')}</div>

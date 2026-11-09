@@ -6,7 +6,7 @@ import { type DayRecord, addDays } from './aggregate';
 import type { Weather } from './analysis';
 import { demoDataset } from './__fixtures__/demo';
 import { type ExplainInput, explainMonth, explainSentence, explainableMonths, kwhSigned, stepNote } from './explain';
-import { estimateOffline, offlineRuns } from './room-offline';
+import { applyStopped, estimateOffline, offlineRuns, parseStopped } from './room-offline';
 
 const ROOMS = [
   { id: 'a', name: 'Salon', category: 'heating' },
@@ -122,23 +122,45 @@ describe('explain a month', () => {
   });
 });
 
+describe('a change of heating (a radiator switched off on purpose)', () => {
+  it('the stopped room goes whole to « Changement de mode de chauffage (poêle au …) », never to the setpoints', () => {
+    const i = input({ offline: true, cold: 2 });
+    const stop = { room: 'b', from: '2026-01-01', reason: 'poele' as const, label: 'chauffée par un poêle' };
+    const runs = applyStopped(i.runs, [stop]);
+    // the stove uses no electricity: the meter does not see the room either
+    const linky = new Map([...i.linky].map(([d, v]) => [d, d >= '2026-01-01' ? v - 0.25 * (18 - i.weather!.get(d)![2]) * 1.5 : v]));
+    const e = explainMonth({ ...i, runs, linky, estimate: estimateOffline(i.records, runs, linky, i.weather) })!;
+    const mode = e.steps.find((x) => x.key === 'mode')!;
+    expect(mode.label).toBe('Changement de mode de chauffage (poêle au Cuisine)');
+    expect(mode.kwh).toBeCloseTo(-0.25 * 13 * 31, 6); // all of January 2025, not scaled by the weather
+    expect(e.steps.find((x) => x.key === 'horsligne')).toBeUndefined();
+    expect(step(e, 'consignes')).toBeCloseTo(0, 6);
+    expect(step(e, 'meteo')).toBeCloseTo(0.5 * 31 * 2, 6); // the living room only
+    expect(sumSteps(e)).toBeCloseTo(e.delta, 6);
+    expect(e.stopped.map((x) => x.text)).toEqual(['arrêté depuis le 1er janv. 2026 (poêle)']);
+    expect(stepNote(e, mode)).toBe('radiateur arrêté depuis le 1er janv. 2026 (poêle) : chauffée par un poêle');
+    expect(explainSentence(e)).toMatch(/le poêle au Cuisine \(−101 kWh\)/);
+  });
+});
+
 describe('on the demo: January 2026, the owner’s question', () => {
-  it('more than January 2025: colder, warmer living room, the kitchen offline; the parts add up', async () => {
+  it('the stove in the living room, a colder month, the kitchen offline: the parts add up', async () => {
     const ds = await demoDataset();
     const last = ds.meta.last_day!;
-    const runs = offlineRuns(ds.records, ds.meta.rooms, last);
+    const runs = applyStopped(offlineRuns(ds.records, ds.meta.rooms, last), parseStopped((ds.meta as { stopped_rooms?: unknown }).stopped_rooms));
     const estimate = estimateOffline(ds.records, runs, ds.linky, ds.weather);
     const e = explainMonth({ month: '2026-01', last, records: ds.records, rooms: ds.meta.rooms, weather: ds.weather, linky: ds.linky, temps: ds.temps, runs, estimate })!;
     expect(e.basis).toBe('linky');
-    expect(Math.round(e.delta)).toBe(112);
     expect(sumSteps(e)).toBeCloseTo(e.delta, 6);
-    expect(step(e, 'meteo')).toBeGreaterThan(50);
-    expect(step(e, 'consignes')).toBeGreaterThan(10);
+    expect(step(e, 'mode')).toBeCloseTo(-366, 0); // all of the living room of January 2025
+    expect(e.steps.find((x) => x.key === 'mode')!.label).toBe('Changement de mode de chauffage (poêle au Salon)');
+    expect(step(e, 'meteo')).toBeGreaterThan(30);
+    expect(step(e, 'consignes')).toBeGreaterThan(5); // the parents' bedroom asked 1 °C more
     expect(step(e, 'horsligne')).toBeGreaterThan(20);
-    expect(e.offline).toMatchObject([{ id: 'r-cuisine', since: '2025-10-14', ongoing: true }]);
-    expect(e.rooms.find((r) => r.id === 'r-salon')!.setpoint).toBeGreaterThan(10);
+    expect(e.offline).toMatchObject([{ id: 'r-cuisine', since: '2025-12-01', ongoing: true }]);
+    expect(e.stopped.map((x) => x.id)).toEqual(['r-salon']);
     const s = explainSentence(e, 0.2);
-    expect(s).toMatch(/^En janvier 2026, le logement a consommé 112 kWh de plus qu’en janvier 2025 \(\+6 %, ≈ 22 €\)\. Surtout un mois plus froid \(\+77 kWh\), Cuisine hors ligne \(\+70 kWh, estimé\) et des températures demandées plus hautes \(\+27 kWh\) ; en partie compensé par les autres usages \(−66 kWh\)\.$/);
-    expect(s).toMatch(/un mois plus froid/);
+    expect(s).toMatch(/^En janvier 2026, le logement a consommé \d+ kWh de moins qu’en janvier 2025 \(−\d+ %, ≈ \d+ €\)\. Surtout le poêle au Salon \(−366 kWh\)/);
+    expect(s).toMatch(/ ; en partie compensé par Cuisine hors ligne \(\+\d+ kWh, estimé\) et un mois plus froid \(\+\d+ kWh\)\.$/);
   });
 });

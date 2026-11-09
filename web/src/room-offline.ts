@@ -5,8 +5,11 @@
 //     have theirs, ongoing or over;
 //   - estimateOffline: their share estimated from the meter, Linky − the rooms still measured −
 //     the usual « autres usages », marked « estimée » wherever it is shown;
-//   - comparable: the rooms left out of a comparison with last year because one of the two
-//     periods has days without reading.
+//   - notComparable: the rooms left out of a comparison with last year because one of the two
+//     periods has days without reading;
+//   - stopped rooms: a radiator switched off ON PURPOSE (a stove heats the room…), declared in
+//     ⚙ Mon logement: « arrêté depuis le … (poêle) », no alert, no estimate (a stove uses next to
+//     no electricity), and its fall is a change of heating, not « vos réglages ».
 import { type DayRecord, addDays, minusYears } from './aggregate';
 import { type Weather, dju, linearFit } from './analysis';
 import { dayShort } from './glossary';
@@ -24,6 +27,71 @@ export interface OfflineRun {
   days: number;
   /** Still without a reading on the last day of the archive. */
   ongoing: boolean;
+  /** Switched off on purpose (⚙ Mon logement), not out of reach. */
+  stopped?: StoppedRoom;
+}
+
+// ------------------------------------------------------------------ stopped on purpose
+export type StopReason = 'poele' | 'autre-chauffage' | 'inoccupee' | 'autre';
+export const STOP_REASONS: Record<StopReason, string> = {
+  poele: 'Chauffée par un poêle (bois, granulés)',
+  'autre-chauffage': 'Chauffée autrement (sans électricité)',
+  inoccupee: 'Pièce inoccupée, non chauffée',
+  autre: 'Autre raison',
+};
+/** In parentheses after « arrêté depuis le … ». */
+const STOP_SHORT: Record<StopReason, string> = { poele: 'poêle', 'autre-chauffage': 'autre chauffage', inoccupee: 'inoccupée', autre: '' };
+
+export interface StoppedRoom {
+  room: string;
+  /** First day switched off. */
+  from: string;
+  reason: StopReason;
+  /** Free text of the owner (« chauffé par un poêle à granulés »), 60 characters at most. */
+  label: string;
+}
+
+const DAY_RE = /^\d{4}-\d{2}-\d{2}$/;
+/** The list kept in the meta (STOPPED_ROOMS_JSON) or on this device, cleaned (never trusted). */
+export function parseStopped(v: unknown): StoppedRoom[] {
+  if (!Array.isArray(v)) return [];
+  const out = new Map<string, StoppedRoom>();
+  for (const x of v as Partial<StoppedRoom>[]) {
+    if (!x || typeof x.room !== 'string' || !x.room || x.room.length > 64 || typeof x.from !== 'string' || !DAY_RE.test(x.from)) continue;
+    const reason = (x.reason && x.reason in STOP_REASONS ? x.reason : 'autre') as StopReason;
+    out.set(x.room, { room: x.room, from: x.from, reason, label: typeof x.label === 'string' ? x.label.slice(0, 60) : '' });
+  }
+  return [...out.values()].sort((a, b) => (a.from < b.from ? -1 : a.from > b.from ? 1 : a.room.localeCompare(b.room)));
+}
+/** Value of the repository variable STOPPED_ROOMS_JSON. */
+export const stoppedJson = (list: StoppedRoom[]) => JSON.stringify(parseStopped(list));
+
+/** « poêle », « inoccupée »… (empty for « autre »). */
+export const stopShort = (s: Pick<StoppedRoom, 'reason'>) => STOP_SHORT[s.reason] ?? '';
+
+/**
+ * The runs with the rooms switched off on purpose: from the declared day on, a run is « arrêté »
+ * (stopped), not « hors ligne »; the days before it, if 2 or more, stay a room out of reach.
+ */
+export function applyStopped(runs: OfflineRun[], stopped: StoppedRoom[], minDays = OFFLINE_MIN_DAYS): OfflineRun[] {
+  if (!stopped.length) return runs;
+  const by = new Map(stopped.map((x) => [x.room, x]));
+  const out: OfflineRun[] = [];
+  const span = (a: string, b: string) => Math.round((Date.parse(b) - Date.parse(a)) / 86400000) + 1;
+  for (const r of runs) {
+    const st = by.get(r.room);
+    if (!st || r.to < st.from) {
+      out.push(r);
+      continue;
+    }
+    if (r.from < st.from) {
+      const to = addDays(st.from, -1);
+      if (span(r.from, to) >= minDays) out.push({ ...r, to, days: span(r.from, to), ongoing: false });
+    }
+    const from = r.from > st.from ? r.from : st.from;
+    out.push({ ...r, from, days: span(from, r.to), stopped: st });
+  }
+  return out;
 }
 
 /**
@@ -89,21 +157,26 @@ export function runIn(runs: OfflineRun[], room: string, from: string, to: string
   return out;
 }
 
-/** « hors ligne depuis le 14 oct. 2025 », « hors ligne du 4 au 17 nov. 2024 ». */
-export function offlineText(run: Pick<OfflineRun, 'from' | 'to' | 'ongoing'>): string {
-  if (run.ongoing) return `hors ligne depuis le ${dayShort(run.from, true)}`;
+/**
+ * « hors ligne depuis le 14 oct. 2025 », « hors ligne du 4 au 17 nov. 2024 »; a room switched off
+ * on purpose: « arrêté depuis le 14 oct. 2025 (poêle) ».
+ */
+export function offlineText(run: Pick<OfflineRun, 'from' | 'to' | 'ongoing' | 'stopped'>): string {
+  const what = run.stopped ? 'arrêté' : 'hors ligne';
+  const why = run.stopped && stopShort(run.stopped) ? ` (${stopShort(run.stopped)})` : '';
+  if (run.ongoing) return `${what} depuis le ${dayShort(run.from, true)}${why}`;
   const sameYear = run.from.slice(0, 4) === run.to.slice(0, 4);
-  return `hors ligne du ${dayShort(run.from, !sameYear)} au ${dayShort(run.to, true)}`;
+  return `${what} du ${dayShort(run.from, !sameYear)} au ${dayShort(run.to, true)}${why}`;
 }
 
 /**
  * Rooms to leave out of a comparison of [from, to] with the same days a year earlier: those
  * with days without reading in either window (#346: a room that is no longer measured is not
- * « en baisse »).
+ * « en baisse »). A room switched off on purpose stays: its fall is real (a change of heating).
  */
 export function notComparable(runs: OfflineRun[], from: string, to: string): Set<string> {
   const out = new Set<string>();
-  for (const r of runs) if (offlineDaysIn([r], r.room, from, to) || offlineDaysIn([r], r.room, minusYears(from), minusYears(to))) out.add(r.room);
+  for (const r of runs) if (!r.stopped && (offlineDaysIn([r], r.room, from, to) || offlineDaysIn([r], r.room, minusYears(from), minusYears(to)))) out.add(r.room);
   return out;
 }
 
@@ -127,6 +200,7 @@ const MIN_REF_DAYS = 30;
  */
 export function estimateOffline(records: DayRecord[], runs: OfflineRun[], linky: Map<string, number>, weather: Weather | null): OfflineEstimate {
   const out: OfflineEstimate = { days: new Map(), baseline: null };
+  runs = runs.filter((r) => !r.stopped); // a stove uses next to no electricity: nothing to estimate
   if (!runs.length || !linky.size) return out;
   const measured = new Map<string, number>();
   for (const r of records) measured.set(r.day, (measured.get(r.day) ?? 0) + r.kwh);

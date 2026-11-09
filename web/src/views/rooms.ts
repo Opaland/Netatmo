@@ -108,14 +108,18 @@ export function renderRooms(view: HTMLElement, records: DayRecord[], part: 'list
   // #346: the rooms offline over either window are left out of « Qu'est-ce qui a changé ? »
   const cFrom = win?.from ?? `${year}-01-01`;
   const cTo = win?.to ?? end;
-  const offRooms = activeRooms().filter((r) => offlineRun(r.id, minusYears(cFrom), cTo));
+  const offRooms = activeRooms().filter((r) => offlineRun(r.id, minusYears(cFrom), cTo) && !offlineRun(r.id, minusYears(cFrom), cTo)!.stopped);
+  const stoveRooms = activeRooms().filter((r) => offlineRun(r.id, minusYears(cFrom), cTo)?.stopped);
   const offNote = offRooms.length
     ? ` Sans ${esc(offRooms.map((r) => r.name).join(', '))} (${esc(offRooms.map((r) => offlineText(offlineRun(r.id, minusYears(cFrom), cTo)!)).join(' ; '))}) : ${offRooms.length > 1 ? 'elles ne sont' : 'elle n’est'} pas mesurée${offRooms.length > 1 ? 's' : ''} sur toute la période.`
+    : '';
+  const stoveNote = stoveRooms.length
+    ? ` ${esc(stoveRooms.map((r) => `${r.name} : ${offlineText(offlineRun(r.id, minusYears(cFrom), cTo)!)}`).join(' ; '))}, sa baisse vient du changement de mode de chauffage.`
     : '';
   const changesCard = () => `
   <section class="card">
     <h2>Qu'est-ce qui a changé ? <small class="muted">${year - 1} → ${year}${suffix}</small></h2>
-    <p class="hint muted">Chaque barre montre de combien une pièce a fait monter (rouge) ou baisser (vert) le total.${offNote}</p>
+    <p class="hint muted">Chaque barre montre de combien une pièce a fait monter (rouge) ou baisser (vert) le total.${offNote}${stoveNote}</p>
     <div class="chart" id="rooms-waterfall" role="img" aria-label="Évolution par pièce"></div>
   </section>`;
   view.innerHTML = html(part === 'list' ? listCard() : changesCard());

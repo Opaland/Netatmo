@@ -31,6 +31,7 @@ Public log: counts and module types only, never an id, a name or a value.
 
 from __future__ import annotations
 
+import json
 import re
 from datetime import UTC, datetime, timedelta
 from zoneinfo import ZoneInfo
@@ -239,12 +240,54 @@ def collect_status(
 SILENT_DAYS = 2  # 48 h without a daily reading of a room while the others have theirs
 
 
-def silent_rooms(store: Store, rooms: list[dict], today: str | None = None) -> list[str]:
+STOPPED_REASONS = ("poele", "autre-chauffage", "inoccupee", "autre")
+MAX_STOPPED = 20
+
+
+class StoppedError(ValueError):
+    """Invalid STOPPED_ROOMS_JSON. Messages never quote the values (public log)."""
+
+
+def parse_stopped(raw: str) -> list[dict]:
+    """#346: radiators switched off on purpose (repository variable STOPPED_ROOMS_JSON, set from
+    ⚙ Mon logement): [{"room": "<Intuis id>", "from": "YYYY-MM-DD", "reason": "poele",
+    "label": "chauffé par un poêle à granulés"}]. Such a room sends nothing from that day on: no
+    alert, no estimate from the meter, « arrêté depuis le … » in the app."""
+    try:
+        data = json.loads(raw)
+    except ValueError as err:
+        raise StoppedError("JSON illisible") from err
+    if not isinstance(data, list) or len(data) > MAX_STOPPED:
+        raise StoppedError(f"liste de {MAX_STOPPED} pièces au plus attendue")
+    out: dict[str, dict] = {}
+    for item in data:
+        if not isinstance(item, dict):
+            raise StoppedError("objet attendu")
+        room, day, reason = item.get("room"), item.get("from"), item.get("reason", "autre")
+        if not isinstance(room, str) or not 0 < len(room) <= 64:
+            raise StoppedError("pièce attendue")
+        if not isinstance(day, str) or not _DAY.fullmatch(day):
+            raise StoppedError("date AAAA-MM-JJ attendue")
+        if reason not in STOPPED_REASONS:
+            raise StoppedError("motif inconnu")
+        label = item.get("label", "")
+        out[room] = {"room": room, "from": day, "reason": reason, "label": label[:60] if isinstance(label, str) else ""}
+    return sorted(out.values(), key=lambda x: (x["from"], x["room"]))
+
+
+_DAY = re.compile(r"\d{4}-\d{2}-\d{2}")
+
+
+def silent_rooms(
+    store: Store, rooms: list[dict], today: str | None = None, stopped: list[dict] | None = None
+) -> list[str]:
     """#346: alert lines for the rooms whose radiator (or water heater) has sent no daily reading
     for SILENT_DAYS days or more while the other rooms have theirs: the module is out of reach,
     unplugged or removed, and the room would otherwise show 0 kWh. Module types and dates only
-    (public issue), never a room name. `today`: the last day of the archive by default."""
+    (public issue), never a room name. `today`: the last day of the archive by default. A room
+    switched off on purpose (`stopped`, STOPPED_ROOMS_JSON) is expected to be silent: no alert."""
     category = {str(r.get("id")): r.get("category") for r in rooms if isinstance(r, dict)}
+    off = {s["room"]: s["from"] for s in stopped or []}
     last: dict[str, str] = {}
     for y in store.years():
         for rid, days in store.year(y).items():
@@ -256,6 +299,8 @@ def silent_rooms(store: Store, rooms: list[dict], today: str | None = None) -> l
     limit = (datetime.fromisoformat(ref).date() - timedelta(days=SILENT_DAYS)).isoformat()
     by_type: dict[str, list[str]] = {}
     for rid, day in last.items():
+        if rid in off and off[rid] <= (datetime.fromisoformat(day).date() + timedelta(days=1)).isoformat():
+            continue  # switched off on purpose from then on
         if day <= limit:
             since = (datetime.fromisoformat(day).date() + timedelta(days=1)).isoformat()
             label = "chauffe-eau" if category[rid] == "water_heater" else "radiateur"
