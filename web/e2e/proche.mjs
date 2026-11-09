@@ -80,7 +80,8 @@ async function screens(p, where) {
   await p.screenshot({ path: `${OUT}/proche-${where}-sombre.png`, fullPage: true });
   await p.emulateMedia({ colorScheme: 'light' });
   await p.setViewportSize({ width: 360, height: 800 });
-  const style = await p.addStyleTag({ content: 'html { font-size: 200% !important; }' });
+  // worst case: system text at 200 % and a wide font (DejaVu Sans, the default of the CI runner)
+  const style = await p.addStyleTag({ content: "html { font-size: 200% !important; } * { font-family: 'DejaVu Sans', sans-serif !important; }" });
   await frame(p);
   await layout(p, `${where} 360 px 200 %`);
   await p.screenshot({ path: `${OUT}/proche-${where}-200.png`, fullPage: true });

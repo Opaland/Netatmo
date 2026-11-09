@@ -27,6 +27,20 @@ body.simple-nav .tabs a span {
   font-size: max(1rem, min(var(--font-sm), 3.3vw));
   overflow-wrap: normal;
   hyphens: manual;
+  letter-spacing: -0.02em;
+}
+/* three wide tabs: the whole width goes to the labels (the current one is shown by its icon pill
+   and its colour, not by a wider bold text) */
+@media (max-width: 759px) {
+  body.simple-nav .tabs {
+    padding-inline: 0;
+  }
+  body.simple-nav .tabs a {
+    padding-inline: 0;
+  }
+  body.simple-nav .tabs a[aria-current='page'] {
+    font-weight: 500;
+  }
 }
 @media (min-width: 760px) {
   body.simple-nav .tabs a span {
