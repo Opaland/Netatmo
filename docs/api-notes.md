@@ -68,8 +68,10 @@ une colonne par type demandé ; ou forme simple `{"<timestamp>": [v, ...]}`. Les
 - **Profondeur d'historique** : aucune limite documentée. Le `backfill` remonte année par année jusqu'à
   deux années vides de suite (ou 2015).
 - **Débit** : aucune limite publiée par Intuis (Netatmo documente 50 requêtes / 10 s et 500 / h pour son
-  API publique). Le collecteur fait au plus un appel par seconde, respecte `Retry-After` et ralentit
-  sur les réponses 429. Une collecte quotidienne coûte une poignée d'appels.
+  API publique). Le collecteur fait au plus un appel par seconde, respecte `Retry-After` (plafonné à
+  120 s) et ralentit sur les réponses 429, 5xx et les erreurs réseau (délai d'attente, connexion
+  coupée) : 5 tentatives par appel au plus, toutes comptées dans le plafond d'appels. Une collecte
+  quotidienne coûte une poignée d'appels.
 
 ## Fenêtre ouverte (`open_window`, #162)
 
@@ -190,6 +192,13 @@ objets « à plat » portant une date (des relevés) mais qu'aucun n'est reconnu
 format, et le message liste les **noms** des champs vus (ex. `champs vus : jour, wh`). Aucun relevé :
 pas de données.
 
+**Unité des relevés (#266).** Le contrat de Conso API est le Wh pour la consommation quotidienne et
+le VA pour la puissance maximale. L'unité est lue dans la réponse (`unite` au format 2026, `unit` de
+`reading_type` dans l'ancien) ; sinon on garde celle retenue précédemment ; à défaut, la première
+fois seulement, une valeur décimale signale des kWh / kVA (Enedis donne des Wh / VA entiers), sinon
+Wh / VA. Elle est conservée dans `linky.unit` et `linky.pmax_unit` : la taille des valeurs n'est
+jamais utilisée, si bien qu'une semaine de logement vide (300 Wh par jour) n'est plus lue en kWh.
+
 Conséquences : Intuis en échec arrête la collecte (issue d'alerte, résumé « Collecte interrompue ») ;
 une source facultative en échec est notée dans `meta.sources.<source>.format` (point d'accès et champ)
 et dans la section « Format de réponse changé » du résumé de la collecte. Limite connue : `measures`
@@ -217,7 +226,10 @@ Si c'était une récupération d'historique Intuis, `meta.backfill_pending` la r
 ## Station météo Netatmo (API publique)
 
 Indépendante d'Intuis : `api.netatmo.com`, application créée sur dev.netatmo.com, scope
-`read_station`, jeton de rafraîchissement renouvelé à chaque usage (`collector/station.py`).
+`read_station`, jeton de rafraîchissement renouvelé à chaque usage (`collector/station.py`). Le
+nouveau jeton est écrit, chiffré, dans `data/netatmo-token.enc.json` dès la connexion, et l'étape
+« Sauvegarde du jeton Netatmo renouvelé » de `collect.yml` le versionne même si la collecte échoue
+ensuite (#262).
 
 - `getstationsdata` : le module principal (`NAMain`, intérieur) puis ses modules radio, dans
   l'ordre renvoyé. Ils deviennent les clés `m0`, `m1`, … (`m0` = module principal). Seuls

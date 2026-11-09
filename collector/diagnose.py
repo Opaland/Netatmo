@@ -637,20 +637,13 @@ class _Paced:
     """GET with a bearer token, spaced calls, counted under `source`."""
 
     def __init__(self, http, token: str, source: str, min_interval: float) -> None:
-        self.http, self.token, self.source, self.min_interval = http, token, source, min_interval
-        self.last = 0.0
+        from .http import Paced
+
+        self.token = token
+        self.api = Paced(http, source, min_interval)
 
     def get(self, url: str, params: dict):
-        from .budget import METER
-
-        wait = self.last + self.min_interval - time.monotonic()
-        if wait > 0:
-            time.sleep(wait)
-        try:
-            with METER.call(self.source):
-                return self.http.get(url, params=params, headers={"Authorization": f"Bearer {self.token}"})
-        finally:
-            self.last = time.monotonic()
+        return self.api.get(url, params=params, headers={"Authorization": f"Bearer {self.token}"})
 
 
 def _json_or_none(resp) -> object:
