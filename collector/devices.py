@@ -235,6 +235,39 @@ def collect_status(
     return counts
 
 
+# ---------------------------------------------------------------- rooms without readings (#346)
+SILENT_DAYS = 2  # 48 h without a daily reading of a room while the others have theirs
+
+
+def silent_rooms(store: Store, rooms: list[dict], today: str | None = None) -> list[str]:
+    """#346: alert lines for the rooms whose radiator (or water heater) has sent no daily reading
+    for SILENT_DAYS days or more while the other rooms have theirs: the module is out of reach,
+    unplugged or removed, and the room would otherwise show 0 kWh. Module types and dates only
+    (public issue), never a room name. `today`: the last day of the archive by default."""
+    category = {str(r.get("id")): r.get("category") for r in rooms if isinstance(r, dict)}
+    last: dict[str, str] = {}
+    for y in store.years():
+        for rid, days in store.year(y).items():
+            if category.get(rid) in ("heating", "water_heater") and days:
+                last[rid] = max(last.get(rid, ""), max(days))
+    if len(last) < 2:
+        return []
+    ref = today or max(last.values())
+    limit = (datetime.fromisoformat(ref).date() - timedelta(days=SILENT_DAYS)).isoformat()
+    by_type: dict[str, list[str]] = {}
+    for rid, day in last.items():
+        if day <= limit:
+            since = (datetime.fromisoformat(day).date() + timedelta(days=1)).isoformat()
+            label = "chauffe-eau" if category[rid] == "water_heater" else "radiateur"
+            by_type.setdefault(label, []).append(since)
+    out = []
+    for label, starts in sorted(by_type.items()):
+        n = len(starts)
+        plural = "s" if n > 1 else ""
+        out.append(f"{n} {label}{plural} sans relevé de consommation depuis le {min(starts)} (48 h ou plus)")
+    return out
+
+
 # ---------------------------------------------------------------- tariff seen by Intuis (#278)
 CONTRACT_FIELDS = ("tariff", "tariff_option", "price_type")
 

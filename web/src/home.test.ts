@@ -2,6 +2,7 @@
 // (public/demo, last day 8 November 2026: the numbers of the maquette accueil.html).
 import { beforeAll, describe, expect, it } from 'vitest';
 import type { DayRecord } from './aggregate';
+import { notComparable, offlineRuns } from './room-offline';
 import { verdict } from './analysis';
 import type { Dataset } from './data';
 import { demoDataset } from './__fixtures__/demo';
@@ -120,12 +121,20 @@ describe('on the demo (maquette accueil.html)', () => {
   beforeAll(async () => {
     ds = await demoDataset();
   });
-  it('the month: −7 % vs expected at comparable weather, 170 kWh', () => {
+  it('the month: the kitchen offline is left out, not counted as a fall (#346)', () => {
     const records = ds.records.filter((r) => r.cat !== 'ignore');
     const r = homeRange('month', ds.meta.last_day!);
-    const v = verdict(records, r.from, r.to, ds.weather)!;
-    expect(Math.round(v.actual)).toBe(170);
-    expect(Math.round(v.pct)).toBe(-7);
+    // all rooms: the kitchen sends nothing since October 2025, the month looks 16 % below
+    const raw = verdict(records, r.from, r.to, ds.weather)!;
+    expect(Math.round(raw.actual)).toBe(150);
+    expect(Math.round(raw.pct)).toBe(-16);
+    // without the rooms offline over the month or a year earlier: what the Accueil verdict shows
+    const runs = offlineRuns(ds.records, ds.meta.rooms, ds.meta.last_day!);
+    const left = notComparable(runs, r.from, r.to);
+    expect([...left]).toEqual(['r-cuisine']);
+    const v = verdict(records.filter((x) => !left.has(x.room)), r.from, r.to, ds.weather)!;
+    expect(Math.round(v.actual)).toBe(150);
+    expect(Math.abs(v.pct)).toBeLessThan(Math.abs(raw.pct));
     expect(v.climate).toBe(true);
   });
 });

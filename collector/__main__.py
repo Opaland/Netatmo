@@ -186,6 +186,22 @@ def _devices(store: Store, syncer: Syncer, sources: Sources) -> tuple[list[str],
     return [f"| Appareils Intuis | {note} |"], counts["alerts"]
 
 
+def _silent_rooms(store: Store, syncer: Syncer) -> list[str]:
+    """#346: rooms without a daily reading for 48 h while the others have theirs (alert issue)."""
+    from .devices import silent_rooms
+
+    try:
+        home = syncer.last_home
+        rooms = [{"id": r.id, "category": r.category} for r in home.rooms] if home else store.meta.get("rooms") or []
+        lines = silent_rooms(store, rooms)
+    except Exception as err:  # optional: never lose the night's data because of it
+        _warn(f"Pièces sans relevé non vérifiées ({type(err).__name__})")
+        return []
+    for line in lines:
+        _warn(line)
+    return lines
+
+
 def write_device_file(lines: list[str]) -> None:
     """Optional alert issue (#214, #215): module types, counts and dates, never a name or an id."""
     path = os.environ.get("DEVICE_FILE")
@@ -478,6 +494,7 @@ def cmd_sync(s: Settings, args: argparse.Namespace, backfill: bool = False) -> N
     station_note = sources.state.get("netatmo", {}).get("note") if s.netatmo_refresh_token else None
     if station_note and "pile" in station_note:
         dev_alerts.append(f"Station Netatmo : {station_note}")
+    dev_alerts += _silent_rooms(store, syncer)
     write_device_file(dev_alerts)
     intuis_contract = _intuis_contract(syncer)
     if intuis_contract:

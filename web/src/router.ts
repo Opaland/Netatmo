@@ -24,6 +24,7 @@ export const TOOLS = {
   absences: 'Absences',
   volets: 'Volets fermés le soir',
   analyse: 'Analyse du mois',
+  expliquer: 'Expliquer un mois',
   questions: 'Questions types',
   exports: 'Exporter mes données',
 } as const;
@@ -55,7 +56,7 @@ export type Route =
   | { page: Tab }
   | { page: 'piece'; room: string }
   | { page: 'confort' | 'chauffe-eau' | 'etat' | 'rapport' | 'aide' }
-  | { page: 'outil'; tool: Tool }
+  | { page: 'outil'; tool: Tool; month?: string }
   | { page: 'compteur-detail'; sub: MeterPage }
   | { page: 'parametres'; section: SettingsPage | null }
   | { page: 'bienvenue'; step: OnboardingStep };
@@ -79,6 +80,8 @@ export function parseRoute(hash: string): Route | null {
   if (m) return m[1] in SETTINGS ? { page: 'parametres', section: m[1] as SettingsPage } : null;
   m = /^compteur-(.+)$/.exec(h);
   if (m) return m[1] in METER_PAGES ? { page: 'compteur-detail', sub: m[1] as MeterPage } : null;
+  m = /^outils-expliquer-(\d{4}-(?:0[1-9]|1[0-2]))$/.exec(h); // #337: « expliquer » a month
+  if (m) return { page: 'outil', tool: 'expliquer', month: m[1] };
   m = /^outils-(.+)$/.exec(h);
   if (m) return m[1] in TOOLS ? { page: 'outil', tool: m[1] as Tool } : null;
   m = /^piece-(.+)$/.exec(h);
@@ -98,7 +101,7 @@ export function routeKey(r: Route): string {
     case 'piece':
       return `piece-${encodeURIComponent(r.room)}`;
     case 'outil':
-      return `outils-${r.tool}`;
+      return `outils-${r.tool}${r.month ? `-${r.month}` : ''}`;
     case 'compteur-detail':
       return `compteur-${r.sub}`;
     case 'parametres':

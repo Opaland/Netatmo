@@ -1,5 +1,5 @@
 // Rooms ("Pièces"): consumption per room, year-over-year waterfall and per-room detail.
-import { CATEGORY_LABEL, type DayRecord, pctChange, totalsBy } from '../aggregate';
+import { CATEGORY_LABEL, type DayRecord, minusYears, pctChange, totalsBy } from '../aggregate';
 import { roomDeltas } from '../analysis';
 import { ds, setState, state } from '../app';
 import { cssVar, hbarChart } from '../charts';
@@ -21,6 +21,8 @@ import {
   table,
 } from '../ui';
 import { html } from '../trusted';
+import { offlineText } from '../room-offline';
+import { offlineRun } from './offline-rooms';
 
 /**
  * #308: « list » (Pièces, under the list by cost of #313: this year against the last one, room
@@ -80,7 +82,9 @@ export function renderRooms(view: HTMLElement, records: DayRecord[], part: 'list
       sorted.map((r) => {
         const v = now.get(r.id) ?? 0;
         const b = before.get(r.id) ?? 0;
-        const d = win ? pctChange(nowCmp.get(r.id) ?? 0, b) : null;
+        // #346: a room offline over either window is not « en baisse », it is not measured
+        const run = win ? offlineRun(r.id, win.prevFrom, win.to) : null;
+        const d = win && !run ? pctChange(nowCmp.get(r.id) ?? 0, b) : null;
         const tm = winterTemps(r.id, winter);
         const cold = r.category === 'heating' ? coldDays(r.id, winter, thr) : null;
         return [
@@ -88,7 +92,7 @@ export function renderRooms(view: HTMLElement, records: DayRecord[], part: 'list
           v,
           sum ? `${nf0.format((v / sum) * 100)} %` : '—',
           b,
-          d === null ? '—' : pct(d),
+          run ? `<small>${esc(offlineText(run))}</small>` : d === null ? '—' : pct(d),
           ...(hasTemps
             ? [
                 tm ? `${fmt1(tm[0])} °C` : '—',
@@ -101,16 +105,25 @@ export function renderRooms(view: HTMLElement, records: DayRecord[], part: 'list
     )}
     ${hasTemps ? `<p class="hint muted">Températures et jours froids : ${winterLabel} (1er novembre ${winter} → 31 mars ${year}), comme dans Air et confort. Jours à moyenne sous ${thrLabel} : jours dont la température moyenne est sous le seuil, sur les jours relevés de l'hiver ; mesurée par la station Netatmo quand la pièce y est liée (« station »), sinon par la sonde du radiateur. Seuil dans ⚙ Paramètres → Objectifs et alertes, heures détaillées dans Air et confort.</p>` : ''}
   </section>`;
+  // #346: the rooms offline over either window are left out of « Qu'est-ce qui a changé ? »
+  const cFrom = win?.from ?? `${year}-01-01`;
+  const cTo = win?.to ?? end;
+  const offRooms = activeRooms().filter((r) => offlineRun(r.id, minusYears(cFrom), cTo));
+  const offNote = offRooms.length
+    ? ` Sans ${esc(offRooms.map((r) => r.name).join(', '))} (${esc(offRooms.map((r) => offlineText(offlineRun(r.id, minusYears(cFrom), cTo)!)).join(' ; '))}) : ${offRooms.length > 1 ? 'elles ne sont' : 'elle n’est'} pas mesurée${offRooms.length > 1 ? 's' : ''} sur toute la période.`
+    : '';
   const changesCard = () => `
   <section class="card">
     <h2>Qu'est-ce qui a changé ? <small class="muted">${year - 1} → ${year}${suffix}</small></h2>
-    <p class="hint muted">Chaque barre montre de combien une pièce a fait monter (rouge) ou baisser (vert) le total.</p>
+    <p class="hint muted">Chaque barre montre de combien une pièce a fait monter (rouge) ou baisser (vert) le total.${offNote}</p>
     <div class="chart" id="rooms-waterfall" role="img" aria-label="Évolution par pièce"></div>
   </section>`;
   view.innerHTML = html(part === 'list' ? listCard() : changesCard());
 
   if (part === 'changes') {
-    drawWaterfall(document.getElementById('rooms-waterfall')!, roomDeltas(records, win?.from ?? `${year}-01-01`, win?.to ?? end), year, suffix);
+    const deltas = roomDeltas(records, cFrom, cTo);
+    for (const r of offRooms) deltas.delete(r.id);
+    drawWaterfall(document.getElementById('rooms-waterfall')!, deltas, year, suffix);
     return;
   }
   hbarChart(document.getElementById('rooms-chart')!, {
