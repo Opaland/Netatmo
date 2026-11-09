@@ -17,6 +17,7 @@ import { compareOffers, daySplits, djuBetween, monthlyDju, offPeakShares } from 
 import { ds, setState, state } from '../app';
 import { type Series, barChart, lineChart } from '../charts';
 import { uncertainDays } from '../checks';
+import { WITH_SUBSCRIPTION } from '../synthese';
 import { bucketMarks, monthKeys, shortDate, yoyCaveat, yoyWindow } from '../periods';
 import { periodAt } from '../offers';
 import {
@@ -139,7 +140,7 @@ export function renderCompare(view: HTMLElement, records: DayRecord[]) {
         'Total kWh',
         'Chauffage',
         'Chauffe-eau',
-        ...(costAvailable() ? ['Coût'] : []),
+        ...(costAvailable() ? [`Coût (${WITH_SUBSCRIPTION})`] : []),
         ...(ds!.weather ? ['DJU', 'kWh chauffage / DJU'] : []),
         'Évolution',
       ],
@@ -253,7 +254,15 @@ export function renderCompare(view: HTMLElement, records: DayRecord[]) {
 }
 
 // ------------------------------------------------------------------ EDF offer comparator
+// #256: the comparator card and its chart both need it; the year chips do not change it.
+let lastComparison: { deps: unknown[]; value: ReturnType<typeof computeComparison> } | null = null;
 function comparison() {
+  const deps = [ds, state.simKva, contracts()];
+  if (!lastComparison || deps.some((d, i) => d !== lastComparison!.deps[i])) lastComparison = { deps, value: computeComparison() };
+  return lastComparison.value;
+}
+
+function computeComparison() {
   const off = offCol();
   const linky = ds!.linky.size ? ds!.linky : null;
   const splits = daySplits(ds!.records, ds!.tariffs, off, offPeakShares(ds!.tariffs, off), linky);
@@ -289,7 +298,7 @@ function comparatorCard() {
   const names = { base: 'Base', hphc: 'Heures pleines / creuses', tempo: 'Tempo' };
   const diff = tot('hphc') - tot(best);
   return `<section class="card">
-    <h2>Quelle offre EDF aurait coûté le moins ? <small class="muted">tarifs réglementés, ${all.hphc.days} jours</small></h2>
+    <h2>Quelle offre EDF aurait coûté le moins ? <small class="muted">tarifs réglementés, ${WITH_SUBSCRIPTION}, ${scope === 'logement' ? 'tout le logement' : 'radiateurs et chauffe-eau'}, ${all.hphc.days} jours</small></h2>
     <p class="period-total">${
       best === 'hphc'
         ? 'Votre option <strong>heures pleines / creuses</strong> a été la moins chère.'

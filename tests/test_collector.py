@@ -54,7 +54,7 @@ def test_chunk_ranges_respects_point_limit():
 
 
 def test_crypto_roundtrip_and_wrong_passphrase():
-    env = encrypt_json({"a": 1}, "secret", b"0" * 16, iterations=1000)
+    env = encrypt_json({"a": 1}, "secret", b"0" * 16, iterations=100_000)
     assert decrypt_json(env, "secret") == {"a": 1}
     with pytest.raises(DecryptError):
         decrypt_json(env, "nope")

@@ -2,7 +2,21 @@ import { describe, expect, it } from 'vitest';
 import { BACKUP_FORMAT, backupFileName, backupNames, buildBundle } from './backup';
 import type { Meta } from './aggregate';
 import { decryptEnvelope, deriveKey } from './crypto';
-import { type Curve, SLOTS, dayCurve, halfHourCounts, measuredWatts, peakHalfHour, percentile, talon, typicalDay, typicalHourly } from './curve';
+import {
+  type Curve,
+  SLOTS,
+  dayCurve,
+  halfHourCounts,
+  measuredWatts,
+  measuredWattsCached,
+  peakHalfHour,
+  percentile,
+  talon,
+  typicalDay,
+  typicalHourly,
+  typicalHourlyCached,
+} from './curve';
+import { memo } from './memo';
 import vector from './__fixtures__/python-vector.json';
 
 const TZ = 'Europe/Paris';
@@ -146,5 +160,45 @@ describe('encrypted backup bundle (S-1.15)', () => {
 
   it('names the file after the local date', () => {
     expect(backupFileName(new Date(2026, 0, 5, 12))).toBe('sauvegarde-energie-2026-01-05.json');
+  });
+});
+
+describe('derived series memoised per hourly dataset (#251)', () => {
+  const hours = new Map<string, number>();
+  for (const d of ['2025-01-01', '2025-01-02', '2025-02-01']) for (let hh = 0; hh < 24; hh++) hours.set(`${d}T${String(hh).padStart(2, '0')}`, 0.5);
+  const hourly = new Map([
+    ['r1', hours],
+    ['r2', new Map(hours)],
+  ]);
+
+  it('measuredWatts can stop at a window', () => {
+    const m = measuredWatts(hourly, new Set(['r1']), TZ, '2025-01-01', '2025-01-31');
+    expect(m.byHour.size).toBe(48);
+    expect(m.last).toBe('2025-01-02');
+    expect(m.byHour.get('2025-01-01T03')).toBeCloseTo(500, 6);
+  });
+
+  it('two renders of the cards scan the hourly data once', () => {
+    const a = measuredWattsCached(hourly, new Set(['r1', 'r2']), TZ, '2025-01-01', '2025-01-31');
+    const b = measuredWattsCached(hourly, new Set(['r2', 'r1']), TZ, '2025-01-01', '2025-01-31'); // same set, other order
+    expect(b).toBe(a);
+    expect(a.byHour.get('2025-01-01T03')).toBeCloseTo(1000, 6);
+    expect(measuredWattsCached(hourly, new Set(['r1']), TZ, '2025-01-01', '2025-01-31')).not.toBe(a);
+    const days = new Set(['2025-01-01', '2025-01-02']);
+    const t = typicalHourlyCached(hourly, new Set(['r1']), TZ, days);
+    expect(typicalHourlyCached(hourly, new Set(['r1']), TZ, new Set(['2025-01-02', '2025-01-01']))).toBe(t);
+    expect(t).toEqual(typicalHourly(hourly, new Set(['r1']), TZ, days));
+    // another dataset (new object) is computed afresh
+    expect(measuredWattsCached(new Map(hourly), new Set(['r1', 'r2']), TZ, '2025-01-01', '2025-01-31')).not.toBe(a);
+  });
+
+  it('memo: one computation per (source, key), bounded', () => {
+    const src = {};
+    let n = 0;
+    const f = () => ++n;
+    expect(memo(src, 'k', f)).toBe(1);
+    expect(memo(src, 'k', f)).toBe(1);
+    for (let i = 0; i < 70; i++) memo(src, `x${i}`, f);
+    expect(memo(src, 'k', f)).toBe(72); // the oldest key was dropped past 64
   });
 });

@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Contrat et prix · maquette v1.6</title>
+<link rel="stylesheet" href="ds.css">
+</head>
+<body class="">
+<div class="screen">
+<header class="top"><a class="back" href="parametres.html" aria-label="Retour">←</a><h1>Contrat et prix</h1><a class="icon-btn" href="parametres.html" aria-label="Paramètres"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/></svg></a></header>
+<main>
+
+<div class="card-head"><span class="sub">Utilisé par tous les appareils du foyer</span><span class="tag shared">foyer</span></div>
+<section class="card">
+  <h2>Mon contrat, période par période</h2>
+  <div class="card" style="box-shadow:none;background:var(--surface-sunken)">
+    <h3>Depuis le 1ᵉʳ octobre 2023</h3>
+    <div class="field"><label for="o2">Offre</label><select id="o2"><option>EDF Tarif Bleu — Heures creuses</option><option>EDF Tarif Bleu — Base</option><option>EDF Tempo</option></select></div>
+    <div class="field"><label for="k2">Puissance souscrite</label><span class="help">sur votre facture, en kVA</span><select id="k2"><option>12 kVA</option><option>9 kVA</option></select></div>
+  </div>
+  <div class="card" style="box-shadow:none;background:var(--surface-sunken)">
+    <h3>Du 1ᵉʳ janvier 2022 au 30 septembre 2023</h3>
+    <p class="sub">EDF Tarif Bleu — Base · 12 kVA</p>
+  </div>
+  <button class="btn secondary" type="button">Ajouter un changement de contrat</button>
+  <p class="sub">Aujourd'hui : heures pleines 0,2142 €/kWh, heures creuses 0,1589 €/kWh, abonnement 24 € par mois. Chaque jour est compté au tarif en vigueur ce jour-là.</p>
+</section>
+<section class="card">
+  <h2>Mes propres prix</h2>
+  <label class="switch"><span>Utiliser mes prix au lieu des tarifs officiels</span><input type="checkbox"></label>
+  <p class="sub">Réglage propre à cet appareil.</p>
+</section>
+<button class="btn primary block" type="button">Enregistrer pour tout le foyer</button>
+
+<button type="button" class="btn secondary theme-toggle" id="theme">Thème clair / sombre</button>
+</main>
+<nav class="tabs" aria-label="Onglets"><a href="accueil.html"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg><span>Accueil</span></a><a href="pieces.html"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="8" height="8" rx="1"/><rect x="13" y="3" width="8" height="8" rx="1"/><rect x="3" y="13" width="8" height="8" rx="1"/><rect x="13" y="13" width="8" height="8" rx="1"/></svg><span>Pièces</span></a><a href="historique.html"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 17l5-5 4 3 8-8"/><path d="M3 21h18"/></svg><span>Historique</span></a><a href="compteur.html"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="13" r="8"/><path d="M12 13l4-4M8 5l-1-2M16 5l1-2"/></svg><span>Compteur</span></a><a href="outils.html"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18l3 3 6.3-6.3a4 4 0 0 0 5.4-5.4l-2.5 2.5-2.4-.6-.6-2.4z"/></svg><span>Outils</span></a></nav>
+</div>
+<script>
+(function(){var r=document.documentElement,b=document.getElementById('theme');
+try{var t=localStorage.getItem('maquette-theme');if(t)r.dataset.theme=t;}catch(e){}
+b.addEventListener('click',function(){var d=r.dataset.theme==='dark'||(!r.dataset.theme&&matchMedia('(prefers-color-scheme: dark)').matches);
+r.dataset.theme=d?'light':'dark';try{localStorage.setItem('maquette-theme',r.dataset.theme);}catch(e){}});})();
+</script>
+</body>
+</html>

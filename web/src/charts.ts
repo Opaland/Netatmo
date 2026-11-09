@@ -136,9 +136,9 @@ function tooltip(price: number | null, showTotal: boolean, unit = 'kWh', series:
       const sum = list.reduce((s, p) => s + (p.value ?? 0), 0);
       const totalRow =
         showTotal && list.length > 1
-          ? `<div class="tt-row tt-total"><strong>${fmtKwh(sum)}</strong><span class="tt-name">Total${price ? ` · ${nf0.format(sum * price)} €` : ''}</span></div>`
+          ? `<div class="tt-row tt-total"><strong>${fmtKwh(sum)}</strong><span class="tt-name">Total${price ? ` · ≈ ${nf0.format(sum * price)} €` : ''}</span></div>`
           : price && list.length === 1
-            ? `<div class="tt-row tt-total"><span class="tt-name">${nf0.format(sum * price)} €</span></div>`
+            ? `<div class="tt-row tt-total"><span class="tt-name">≈ ${nf0.format(sum * price)} €</span></div>`
             : '';
       return `<div class="tt"><div class="tt-title">${escapeHtml(list[0].axisValueLabel)}</div>${note(notes?.[list[0].dataIndex])}${rows}${totalRow}</div>`;
     }),

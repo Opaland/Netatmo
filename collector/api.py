@@ -16,6 +16,7 @@ import httpx
 
 from . import schema
 from .config import Settings
+from .errors import SourceError, error_code
 from .http import Paced
 
 log = logging.getLogger(__name__)
@@ -28,8 +29,10 @@ ATTEMPTS = 5  # per call; every attempt counts in the call budget (MAX_CALLS_INT
 MAX_RETRY_AFTER = 120  # seconds: a larger Retry-After would hold the nightly runner for hours (#270)
 
 
-class ApiError(RuntimeError):
-    pass
+class ApiError(SourceError):
+    """S-1.16 #263: never the response body (it may echo the home, room and module ids)."""
+
+    source = "Intuis"
 
 
 class IntuisClient:
@@ -54,13 +57,14 @@ class IntuisClient:
             resp = self.api.post(f"{self.base}/oauth2/token", data=payload)
         except httpx.TransportError as exc:
             if self.base != FALLBACK_API_BASE:
-                log.warning("%s injoignable (%s), essai de %s", self.base, exc, FALLBACK_API_BASE)
+                log.warning("%s injoignable (%s), essai de %s", self.base, type(exc).__name__, FALLBACK_API_BASE)
                 self.base = FALLBACK_API_BASE
                 return self._token_request(data)
-            raise ApiError(f"Serveur injoignable : {exc}") from exc
+            category = "timeout" if isinstance(exc, httpx.TimeoutException) else "network"
+            raise ApiError(endpoint="/oauth2/token", category=category, code=type(exc).__name__) from None
         if resp.status_code != 200:
-            # Never echo the request (it holds the password); the body only has an error code.
-            raise ApiError(f"Authentification refusée (HTTP {resp.status_code}) : {resp.text[:200]}")
+            # Never echo the request (it holds the password) nor the body: a validated error code only.
+            raise ApiError(endpoint="/oauth2/token", status=resp.status_code, code=error_code(resp))
         body = schema.check("Intuis", "/oauth2/token", schema.INTUIS_TOKEN, resp.json())
         self._access_token = body["access_token"]
         self._refresh_token = body.get("refresh_token", self._refresh_token)
@@ -107,7 +111,8 @@ class IntuisClient:
             except httpx.TransportError as exc:
                 # Timeout, reset connection…: transient, retried like a 5xx (#270).
                 if last:
-                    raise ApiError(f"{path} : serveur injoignable ({type(exc).__name__})") from None
+                    category = "timeout" if isinstance(exc, httpx.TimeoutException) else "network"
+                    raise ApiError(endpoint=path, category=category, code=type(exc).__name__) from None
                 delay = self._delay(None, attempt)
                 log.warning("%s → erreur réseau (%s), nouvelle tentative dans %ss", path, type(exc).__name__, delay)
                 time.sleep(delay)
@@ -126,12 +131,12 @@ class IntuisClient:
                 time.sleep(delay)
                 continue
             if resp.status_code != 200:
-                raise ApiError(f"{path} → HTTP {resp.status_code} : {resp.text[:300]}")
+                raise ApiError(endpoint=path, status=resp.status_code, code=error_code(resp))
             body = resp.json()
             if isinstance(body, dict) and "error" in body:
-                raise ApiError(f"{path} → {body['error']}")
+                raise ApiError(endpoint=path, category="api", code=error_code(resp))
             return body
-        raise ApiError(f"{path} : échec après {ATTEMPTS} tentatives")
+        raise ApiError(endpoint=path, hint=f"échec après {ATTEMPTS} tentatives")
 
     def _checked(self, spec: Any, method: str, path: str, **kw: Any) -> Any:
         """S-1.13: a response whose shape changed raises schema.FormatError (never ApiError,

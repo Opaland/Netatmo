@@ -2,11 +2,11 @@
 // Fills the placeholder #invoice-zone left by overview.ts. The invoices typed here stay on
 // this device, encrypted with the data key (local-store.ts), and are never sent anywhere.
 import type { DayRecord } from '../aggregate';
-import { type PriceAt, offPeakShares } from '../analysis';
-import { ds, onDatasetLoaded, state } from '../app';
+import { offPeakShares } from '../analysis';
+import { ds, onDatasetLoaded } from '../app';
 import { type Invoice, type Reconciliation, invoiceKey, reconcile, validInvoice } from '../invoice';
 import { loadNote, saveNote } from '../local-store';
-import { costAvailable, costOf, esc, fmtKwh, firstDay, lastDay, longDate, nf0, offCol, priceAt, priceMode } from '../ui';
+import { costAvailable, costOf, dayPrices, esc, fmtKwh, firstDay, lastDay, longDate, nf0, offCol } from '../ui';
 import { html } from '../trusted';
 
 const NOTE = 'invoices';
@@ -38,23 +38,6 @@ function draw() {
   bind();
 }
 
-/** Price of each day: regulated tariff of the contract, or the prices typed in the menu. */
-function priceFn(): PriceAt {
-  if (priceMode() === 'trve' && ds!.offers.size) return priceAt;
-  const p = state.prices;
-  const base = p.base ?? p.t1 ?? p.t2 ?? 0;
-  const off = offCol();
-  const row = {
-    from: '0000-01-01',
-    to: null,
-    kva: 0,
-    fixedYear: (p.sub ?? 0) * 12,
-    hc: (off === 2 ? p.t2 : p.t1) ?? base,
-    hp: (off === 2 ? p.t1 : p.t2) ?? base,
-  };
-  return () => row;
-}
-
 function compute(inv: Invoice): Reconciliation {
   const heat = new Map<string, number>();
   const water = new Map<string, number>();
@@ -67,7 +50,7 @@ function compute(inv: Invoice): Reconciliation {
     (r.cat === 'water_heater' ? waterRecs : heatRecs).push(r);
   }
   const off = offCol();
-  const p = priceFn();
+  const p = dayPrices(); // #252: same rule as the rest of the app (shared contract, tenant)
   // Off-peak share of the whole home: the radiators' and water heater's, the only one known
   // (irrelevant for a single-price offer, whose two prices are equal).
   const offShare = offPeakShares(ds!.tariffs, off).overall;

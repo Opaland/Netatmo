@@ -7,6 +7,8 @@ from dataclasses import asdict, dataclass, field
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
+from . import redact
+
 HEATING = "heating"
 WATER_HEATER = "water_heater"
 IGNORE = "ignore"
@@ -124,7 +126,21 @@ def parse_homes(payload: dict, overrides: dict[str, str] | None = None) -> list[
                 longitude=_coord(h, 0),
             )
         )
+        _register_private(h, homes[-1])
     return homes
+
+
+def _register_private(raw: dict, home: Home) -> None:
+    """S-1.16: ids, names and coordinates of the home never reach a public log (redact)."""
+    redact.register(home.id, raw.get("name"), home.bridge_id)
+    redact.register_coordinate(home.latitude)
+    redact.register_coordinate(home.longitude)
+    for r in raw.get("rooms", []) or []:
+        if isinstance(r, dict):
+            redact.register(r.get("id"), r.get("name"))
+    for m in raw.get("modules", []) or []:
+        if isinstance(m, dict):
+            redact.register(m.get("id"), m.get("name"))
 
 
 Columns = list[float | None]

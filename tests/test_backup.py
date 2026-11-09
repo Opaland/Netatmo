@@ -16,14 +16,14 @@ PASS = "phrase de test"
 def _data(tmp_path):
     src = tmp_path / "src"
     src.mkdir()
-    (src / "keyinfo.json").write_text(json.dumps({"salt": base64.b64encode(b"s" * 16).decode(), "iter": 1000}))
+    (src / "keyinfo.json").write_text(json.dumps({"salt": base64.b64encode(b"s" * 16).decode(), "iter": 100_000}))
     store = Store(src, PASS)
     store.merge("r1", "2025-01-02", 1500.0)
     store.merge("r1", "2026-01-02", 700.0)
     store.put("2026.linky30", "curve", "2026-01-02T19:00", None, 900.0)
     store.put("linky", "daily", "2026-01-02", None, 12000.0)
     store.save({"id": "h", "name": "Maison"}, [{"id": "r1", "name": "Salon", "category": "heating"}])
-    (src / "netatmo-token.enc.json").write_text(json.dumps(encrypt_json({"t": "x"}, PASS, b"s" * 16, 1000)))
+    (src / "netatmo-token.enc.json").write_text(json.dumps(encrypt_json({"t": "x"}, PASS, b"s" * 16, 100_000)))
     return src
 
 

@@ -26,10 +26,12 @@ from zoneinfo import ZoneInfo
 
 import httpx
 
+from . import redact
 from .api import IntuisClient
 from .budget import METER, CallCapReached, caps_from_env
 from .cold import cold_alerts, cold_config, write_cold_file
 from .config import Settings
+from .errors import SourceError
 from .schema import FormatError
 from .storage import Store
 from .sync import Syncer
@@ -126,7 +128,8 @@ def _room_states(s: Settings, store: Store, syncer: Syncer, sources: Sources) ->
 
 
 def _warn(msg: str) -> None:
-    # "::warning::" shows up as an annotation on the GitHub Actions run.
+    # "::warning::" shows up as an annotation on the GitHub Actions run (public log: redacted).
+    msg = redact.redact(msg)
     print(f"::warning::{msg}" if os.environ.get("GITHUB_ACTIONS") else f"Attention : {msg}")
 
 
@@ -183,7 +186,8 @@ class Sources:
             st["format"] = f"{err.endpoint} · {err.field}"[:120]
 
     def error(self, name: str, err: Exception) -> None:
-        self.failed(name, str(err), auth=getattr(err, "auth", False), err=err)
+        # S-1.16 #263: only the messages of the safe error types (never a URL, body or id).
+        self.failed(name, redact.safe_message(err), auth=getattr(err, "auth", False), err=err)
 
     def expiry(self, name: str, expires: str | None, issued: str | None = None, days: int | None = None) -> None:
         """Expiry date from the token itself, else estimated from its issue date or first success."""
@@ -295,7 +299,7 @@ def _weather(s: Settings, store: Store, home, sources: Sources, keep: dict | Non
             return "netatmo"
         except (StationError, httpx.HTTPError, FormatError, CallCapReached) as err:
             sources.error("netatmo", err)
-            _warn(f"{err} — repli sur Open-Meteo")
+            _warn(f"{redact.safe_message(err)} — repli sur Open-Meteo")
     if home.latitude is None or home.longitude is None:
         _warn("Coordonnées de la maison inconnues : pas de météo")
         return None
@@ -305,9 +309,10 @@ def _weather(s: Settings, store: Store, home, sources: Sources, keep: dict | Non
         open_meteo(store, home.latitude, home.longitude, home.timezone, first)
         sources.ok("open-meteo")
         return store.doc("weather").get("source")
-    except (httpx.HTTPError, FormatError, CallCapReached) as err:
+    except (SourceError, httpx.HTTPError, FormatError, CallCapReached) as err:
+        # S-1.16 #261: never str() of an httpx error (its URL holds the home's coordinates).
         sources.error("open-meteo", err)
-        _warn(f"Météo Open-Meteo indisponible : {err}")
+        _warn(f"Météo Open-Meteo indisponible : {redact.safe_message(err)}")
         return store.meta.get("weather_source")
 
 
@@ -322,7 +327,7 @@ def _linky(s: Settings, store: Store, tz: str, sources: Sources) -> None:
         sources.ok("linky")
     except (LinkyError, httpx.HTTPError, FormatError, CallCapReached) as err:
         sources.error("linky", err)
-        _warn(str(err))
+        _warn(redact.safe_message(err))
     issued, expires = token_dates(s.enedis_token)
     sources.expiry("linky", expires, issued, LINKY_CONSENT_DAYS)
     if sources.state["linky"].get("auth_expired") or "linky" in METER.capped:
@@ -338,8 +343,8 @@ def _linky(s: Settings, store: Store, tz: str, sources: Sources) -> None:
         sources.ok("linky-30min", note)
     except (LinkyError, httpx.HTTPError, FormatError, CallCapReached) as err:
         # Usually no consent for the load curve: the daily totals are unaffected.
-        sources.failed("linky-30min", str(err), err=err)
-        _warn(f"{err} — la consommation quotidienne Linky n'est pas affectée")
+        sources.failed("linky-30min", redact.safe_message(err), err=err)
+        _warn(f"{redact.safe_message(err)} — la consommation quotidienne Linky n'est pas affectée")
 
 
 def _shelly(s: Settings, store: Store, tz: str, sources: Sources) -> None:
@@ -351,7 +356,7 @@ def _shelly(s: Settings, store: Store, tz: str, sources: Sources) -> None:
         sources.ok("shelly", note(collect(store, s.shelly_auth_key, s.shelly_server, tz)))
     except (ShellyError, FormatError, CallCapReached) as err:
         sources.error("shelly", err)
-        _warn(str(err))
+        _warn(redact.safe_message(err))
 
 
 def cmd_sync(s: Settings, args: argparse.Namespace, backfill: bool = False) -> None:
@@ -373,10 +378,10 @@ def cmd_sync(s: Settings, args: argparse.Namespace, backfill: bool = False) -> N
             raise
         # Clean stop: keep what was fetched, resume tomorrow.
         sources.error("intuis", err)
-        _warn(str(err))
+        _warn(redact.safe_message(err))
         pending = first_run
     except Exception as err:
-        sources.failed("intuis", str(err), err=err)
+        sources.failed("intuis", redact.safe_message(err), err=err)
         _failure_summary(err)
         raise
     home = syncer.last_home
@@ -405,8 +410,9 @@ def cmd_sync(s: Settings, args: argparse.Namespace, backfill: bool = False) -> N
             generate(store)
             sources.ok("ia")
         except Exception as err:  # never lose a night of data because of the optional AI step
-            sources.failed("ia", str(err))
-            _warn(f"Analyse IA non rédigée : {err}")
+            # S-1.16 #263: the type only (an SDK message may quote the request or the answer).
+            sources.failed("ia", f"erreur {type(err).__name__}")
+            _warn(f"Analyse IA non rédigée ({type(err).__name__})")
     extra["sources"] = sources.state
     if pending:
         extra["backfill_pending"] = True
@@ -517,8 +523,8 @@ def _failure_summary(err: Exception) -> None:
     path = os.environ.get("GITHUB_STEP_SUMMARY")
     if not path:
         return
-    if isinstance(err, FormatError | CallCapReached):
-        why = str(err)
+    if isinstance(err, SourceError | FormatError | CallCapReached):
+        why = redact.safe_message(err)
     else:
         why = f"erreur {type(err).__name__} (détail dans le journal)"
     lines = ["## Collecte interrompue", "", f"- {why}", *_calls_table()]
@@ -742,10 +748,16 @@ def main(argv: list[str] | None = None) -> None:
     dm.add_argument("-o", "--output", default="web/public/demo")
     dm.add_argument("--passphrase", default="demo")
     args = p.parse_args(argv)
+    # S-1.16: defence in depth for the public logs (every log record, uncaught exceptions and,
+    # in GitHub Actions, stdout / stderr are redacted). The first defence is errors.SourceError.
+    redact.install()
     logging.basicConfig(level=logging.INFO if args.verbose else logging.WARNING, format="%(levelname)s %(message)s")
-    # httpx logs each request URL at INFO: query strings (Shelly key, Linky PRM) stay out of public logs.
+    # httpx logs each request URL at INFO: query strings (Shelly key, Linky PRM, coordinates) stay
+    # out of public logs.
     logging.getLogger("httpx").setLevel(logging.WARNING)
+    logging.getLogger("httpcore").setLevel(logging.WARNING)
     s = Settings.from_env()
+    redact.register(*s.secret_values())
     {
         "discover": cmd_discover,
         "diagnose": cmd_diagnose,

@@ -4,6 +4,7 @@ import { djuBetween, fitSeason, roomDeltas, signaturePoints } from '../analysis'
 import { ds, setState, state } from '../app';
 import { barChart } from '../charts';
 import { uncertainDays } from '../checks';
+import { WITH_SUBSCRIPTION } from '../synthese';
 import { bucketMarks, monthKeys, monthsCovered, shortDate, windowSuffix, yoyCaveat, yoyWindow } from '../periods';
 import { CO2_DEFAULT, CO2_SOURCE, co2Factor, fmtCo2, fmtFactor } from '../money';
 import {
@@ -90,7 +91,7 @@ export function renderReport(view: HTMLElement) {
       <article class="kpi"><h3>Consommation</h3><p class="kpi-value">${fmtKwh(tot)}</p><p class="kpi-sub">${win ? delta(sum(cmp), sum(prev)) : delta(tot, 0)}${caveatHtml}</p></article>
       ${
         cost !== null && months > 0
-          ? `<article class="kpi"><h3>Coût estimé (abonnement inclus)</h3><p class="kpi-value">${fmtEur(cost)}</p><p class="kpi-sub">${fmtEur(cost / months)} par mois en moyenne${
+          ? `<article class="kpi"><h3>Coût estimé (${WITH_SUBSCRIPTION})</h3><p class="kpi-value">${fmtEur(cost)}</p><p class="kpi-sub">${fmtEur(cost / months)} par mois en moyenne${
               fullYear ? '' : ` <small class="muted">sur ${nf1(months)} mois (du ${shortDate(covFrom)} au ${shortDate(end)})</small>`
             }</p></article>`
           : ''

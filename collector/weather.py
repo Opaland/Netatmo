@@ -12,8 +12,9 @@ from zoneinfo import ZoneInfo
 
 import httpx
 
-from . import schema
+from . import redact, schema
 from .budget import METER
+from .errors import SourceError, endpoint_of, guarded, raise_for_status
 from .storage import Store
 
 log = logging.getLogger(__name__)
@@ -23,10 +24,18 @@ FORECAST = "https://api.open-meteo.com/v1/forecast"
 DAILY = "temperature_2m_min,temperature_2m_max,temperature_2m_mean"
 
 
+class WeatherError(SourceError):
+    """S-1.16 #261: never httpx's raise_for_status(), whose message holds the URL, hence the
+    home's coordinates (latitude / longitude in the query string)."""
+
+    source = "Open-Meteo"
+
+
 def _get(http: httpx.Client, url: str, params: dict) -> dict:
-    with METER.call("open-meteo"):
+    path = endpoint_of(url)
+    with guarded(WeatherError, path), METER.call("open-meteo"):
         resp = http.get(url, params=params)
-    resp.raise_for_status()
+    raise_for_status(resp, WeatherError, path)
     endpoint = url.rsplit("/", 1)[-1]
     return schema.check("Open-Meteo", endpoint, schema.OPEN_METEO_DAILY, resp.json())
 
@@ -56,6 +65,8 @@ def open_meteo(store: Store, lat: float, lon: float, tz: str, first_day: str, ht
     missing_from = min(
         (date.fromisoformat(d) for d in _missing_days(have, start, today - timedelta(days=10))), default=None
     )
+    redact.register_coordinate(lat)  # S-1.16 #261: never in a public log, even by accident
+    redact.register_coordinate(lon)
     params = {"latitude": round(lat, 2), "longitude": round(lon, 2), "daily": DAILY, "timezone": tz}
     rows: list[tuple[str, list[float]]] = []
     if missing_from:

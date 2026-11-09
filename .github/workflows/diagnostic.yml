@@ -24,20 +24,23 @@ permissions:
 jobs:
   diagnose:
     runs-on: ubuntu-latest
-    env:
-      INTUIS_USERNAME: ${{ secrets.INTUIS_USERNAME }}
-      INTUIS_PASSWORD: ${{ secrets.INTUIS_PASSWORD }}
-      INTUIS_CLIENT_ID: ${{ secrets.INTUIS_CLIENT_ID }}
-      INTUIS_CLIENT_SECRET: ${{ secrets.INTUIS_CLIENT_SECRET }}
-      # Inventory only (S-1.19): Intuis + Linky. The Netatmo station is inventoried by
-      # « Collecte quotidienne » (input « inventaire »), the only job that can save its rotating
-      # refresh token.
-      ENEDIS_TOKEN: ${{ inputs.inventory && secrets.ENEDIS_TOKEN || '' }}
-      ENEDIS_PRM: ${{ inputs.inventory && secrets.ENEDIS_PRM || '' }}
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
-      - run: pip install .
-      - run: python -m collector diagnose ${{ inputs.history && '--history' || '' }} ${{ inputs.probe_history && '--probe-history' || '' }} ${{ inputs.inventory && '--inventory' || '' }}
+      # S-1.16 #265: locked versions with hashes, and no secret in this step's environment
+      # (a compromised package would run here). The collector runs from the checkout, not installed.
+      - run: pip install --require-hashes -r requirements-lock.txt
+      - name: Diagnostic
+        env:
+          INTUIS_USERNAME: ${{ secrets.INTUIS_USERNAME }}
+          INTUIS_PASSWORD: ${{ secrets.INTUIS_PASSWORD }}
+          INTUIS_CLIENT_ID: ${{ secrets.INTUIS_CLIENT_ID }}
+          INTUIS_CLIENT_SECRET: ${{ secrets.INTUIS_CLIENT_SECRET }}
+          # Inventory only (S-1.19): Intuis + Linky. The Netatmo station is inventoried by
+          # « Collecte quotidienne » (input « inventaire »), the only job that can save its rotating
+          # refresh token.
+          ENEDIS_TOKEN: ${{ inputs.inventory && secrets.ENEDIS_TOKEN || '' }}
+          ENEDIS_PRM: ${{ inputs.inventory && secrets.ENEDIS_PRM || '' }}
+        run: python -m collector diagnose ${{ inputs.history && '--history' || '' }} ${{ inputs.probe_history && '--probe-history' || '' }} ${{ inputs.inventory && '--inventory' || '' }}

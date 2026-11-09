@@ -21,6 +21,7 @@ from zoneinfo import ZoneInfo
 import httpx
 
 from . import schema
+from .errors import SourceError, error_code, raise_for_status
 from .http import Paced
 from .model import parse_measure_columns
 from .schema import FormatError
@@ -48,10 +49,11 @@ HUMID_ABOVE = 65  # %, strictly above
 COLD_BELOW = 19  # °C, strictly below (indoor modules only)
 
 
-class StationError(RuntimeError):
-    def __init__(self, message: str, auth: bool = False) -> None:
-        super().__init__(message)
-        self.auth = auth  # refresh token refused: it must be generated again
+class StationError(SourceError):
+    """`auth`: refresh token refused, it must be generated again. Never the response body
+    (S-1.16 #263: it may echo the station's MAC address)."""
+
+    source = "Station Netatmo"
 
 
 class Station:
@@ -71,7 +73,7 @@ class Station:
         self.http = http or httpx.Client(timeout=30.0)
         self.access = ""
         # Gentle with the public API (50 requests / 10 s, 500 / h per user).
-        self.api = Paced(self.http, "netatmo", min_interval)
+        self.api = Paced(self.http, "netatmo", min_interval, StationError)
 
     # ------------------------------------------------------------ auth (rotating refresh token)
     def _refresh_token(self) -> str:
@@ -93,10 +95,7 @@ class Station:
             },
         )
         if resp.status_code != 200:
-            try:
-                code = resp.json().get("error", "")
-            except ValueError:
-                code = ""
+            code = error_code(resp)
             hint = {
                 "invalid_client": "client_id / client_secret refusés : vérifiez NETATMO_CLIENT_ID "
                 "et NETATMO_CLIENT_SECRET",
@@ -104,7 +103,10 @@ class Station:
                 "et mettez-le dans NETATMO_REFRESH_TOKEN",
             }.get(code, "régénérez un jeton sur dev.netatmo.com et mettez-le dans NETATMO_REFRESH_TOKEN")
             raise StationError(
-                f"Station Netatmo : HTTP {resp.status_code} {code} — {hint}",
+                endpoint="/oauth2/token",
+                status=resp.status_code,
+                code=code,
+                hint=hint,
                 auth=code == "invalid_grant" or resp.status_code in (401, 403),
             )
         try:
@@ -121,8 +123,7 @@ class Station:
 
     def _get(self, path: str, params: dict, spec: object = None) -> dict:
         resp = self.api.get(f"{API}{path}", params=params, headers={"Authorization": f"Bearer {self.access}"})
-        if resp.status_code != 200:
-            raise StationError(f"Station Netatmo : {path} → HTTP {resp.status_code} {resp.text[:150]}")
+        raise_for_status(resp, StationError, path)
         try:
             body = resp.json()
         except ValueError:
