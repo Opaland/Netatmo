@@ -43,6 +43,7 @@ import {
 import { qualityCard, uncertainBuckets, uncertainDays } from './quality';
 import { html } from '../trusted';
 import { tenant, tenantNote } from '../tenant';
+import { ENERGY_ONLY, costScope, linkyMonths, pmaxMonths, projectedCost, twelveMonths } from '../synthese';
 import { comparedToLastYear, costSentence, glossarySection, kpiTitle, plainNum, term, verdictSentences, verdictTitle } from '../plain';
 
 function kpi(label: string, from: string, to: string, records: DayRecord[], cls = '', simple: string | null = null) {
@@ -108,6 +109,7 @@ export function renderOverview(view: HTMLElement, records: DayRecord[]) {
     ${projectionTile(records, last, simple)}
     <article class="kpi kpi-budget" id="budget-kpi" hidden></article>
   </section>
+  ${periodEur ? `<p class="hint muted cost-scope">${esc(costScope(state.cat))}</p>` : ''}
   ${simple ? glossarySection() : ''}
   <div id="money-zone"></div>
   ${linkyCard()}
@@ -125,7 +127,7 @@ export function renderOverview(view: HTMLElement, records: DayRecord[]) {
         ${seg('split', split, [['category', 'Par usage'], ['room', 'Par pièce']], 'Détail')}
       </div>
     </div>
-    <p class="period-total"><strong>${fmtKwh(periodTotal)}</strong> ${periodEur ? `· ${periodEur} ` : ''}du ${longDate(from)} au ${longDate(to)}${estimatedNote(records, from, to)}</p>
+    <p class="period-total"><strong>${fmtKwh(periodTotal)}</strong> ${periodEur ? `· ${periodEur} ${ENERGY_ONLY} ` : ''}du ${longDate(from)} au ${longDate(to)}${estimatedNote(records, from, to)}</p>
     ${
       shares.length > 1
         ? `<div class="share" aria-hidden="true">${shares
@@ -159,7 +161,7 @@ export function renderOverview(view: HTMLElement, records: DayRecord[]) {
   }));
   const labels = set.keys.map((k) => bucketLabel(k, state.gran));
   const muted = uncertainBuckets(records, set.keys, from, to);
-  barChart(document.getElementById('main-chart')!, { labels, series: ser, stacked: true, price: avgPrice(), zoom: labels.length > 60, muted });
+  barChart(document.getElementById('main-chart')!, { labels, series: ser, stacked: true, price: avgPrice(records), zoom: labels.length > 60, muted });
   document.getElementById('main-table')!.innerHTML = html(tableToggle(
     table(
       ['Période', ...ser.map((s) => s.name), 'Total'],
@@ -181,7 +183,7 @@ function verdictCard(records: DayRecord[], from: string, to: string) {
   if (!v) return '';
   const label = { low: 'Plus économe que d\'habitude', normal: 'Conforme à d\'habitude', high: 'Plus élevé que d\'habitude' }[v.level];
   const iconTxt = { low: '▼', normal: '=', high: '▲' }[v.level];
-  const price = avgPrice();
+  const price = avgPrice(records); // #291: price of the selection, not of the whole home
   const money = price ? ` · ${v.actual > v.expected ? '+' : '−'}${fmtEur(Math.abs(v.actual - v.expected) * price)}` : '';
   return `<section class="verdict verdict-${v.level}" aria-live="polite">
     <span class="verdict-icon" aria-hidden="true">${iconTxt}</span>
@@ -198,7 +200,7 @@ function verdictCard(records: DayRecord[], from: string, to: string) {
 function plainVerdictCard(records: DayRecord[], from: string, to: string) {
   const v = verdict(records, from, to, ds!.weather);
   if (!v) return '';
-  const price = avgPrice();
+  const price = avgPrice(records); // #291: price of the selection, not of the whole home
   const iconTxt = { low: '▼', normal: '=', high: '▲' }[v.level];
   const [first, ...rest] = verdictSentences({ ...v, eur: price ? (v.actual - v.expected) * price : null }, from, '{kwh}');
   const sentences = [esc(first).replace('{kwh}', term('kwh')), ...rest.map((s) => esc(s))];
@@ -216,18 +218,19 @@ function projectionTile(records: DayRecord[], last: string, simple = false) {
   if (!p) return '';
   const year = last.slice(0, 4);
   const prev = total(records, `${Number(year) - 1}-01-01`, `${Number(year) - 1}-12-31`);
-  const price = avgPrice();
+  // #291: real cost so far + the kWh to come at the selection's price (not the whole home's)
+  const eur = projectedCost(costOf(records, `${year}-01-01`, last), p.ytd, p.projected, avgPrice(records));
   if (simple) {
     return `<article class="kpi kpi-detail">
     <h3>${esc(kpiTitle('projection', last))}</h3>
     <p class="kpi-value">Environ ${plainNum(p.projected)}\u00a0kWh</p>
-    <p class="kpi-sub">${costSentence(price ? p.projected * price : null)} ${comparedToLastYear(p.projected, prev || null)}</p>
+    <p class="kpi-sub">${costSentence(eur)} ${comparedToLastYear(p.projected, prev || null)}</p>
   </article>`;
   }
   return `<article class="kpi kpi-detail">
     <h3>Fin ${year} estimée</h3>
     <p class="kpi-value">≈ ${fmtKwh(p.projected)}</p>
-    <p class="kpi-sub">${price ? `≈ ${fmtEur(p.projected * price)} · ` : ''}${prev ? delta(p.projected, prev) : ''}</p>
+    <p class="kpi-sub">${eur !== null ? `≈ ${fmtEur(eur)} · ` : ''}${prev ? delta(p.projected, prev) : ''}</p>
   </article>`;
 }
 
@@ -276,25 +279,14 @@ function drawBreakdown() {
 function drawLinky() {
   const el = document.getElementById('linky-chart');
   if (!el) return;
-  const last = lastDay();
-  const from = `${addDays(minusYears(last), 1).slice(0, 7)}-01`;
-  const keys = [...new Set([...ds!.linky.keys()].filter((d) => d >= from && d <= last).map((d) => d.slice(0, 7)))].sort();
-  const heat = new Map<string, number>();
-  const water = new Map<string, number>();
-  const home = new Map<string, number>();
-  const linkyDays = new Set(ds!.linky.keys());
-  for (const r of ds!.records) {
-    if (r.day < from || r.day > last || !linkyDays.has(r.day)) continue; // same days on both sides
-    const m = r.day.slice(0, 7);
-    const target = r.cat === 'water_heater' ? water : heat;
-    target.set(m, (target.get(m) ?? 0) + r.kwh);
-  }
-  for (const [d, kwh] of ds!.linky) if (d >= from && d <= last) home.set(d.slice(0, 7), (home.get(d.slice(0, 7)) ?? 0) + kwh);
+  // #290: the same 365 days as the main chart and the « 12 derniers mois » tile (not 13 months).
+  const [from, last] = twelveMonths(lastDay());
+  const { keys, heat, water, home } = linkyMonths(ds!.records, ds!.linky, from, last);
   const other = keys.map((k) => Math.max(0, (home.get(k) ?? 0) - (heat.get(k) ?? 0) - (water.get(k) ?? 0)));
   const sum = (m: Map<string, number>) => keys.reduce((s, k) => s + (m.get(k) ?? 0), 0);
   const tot = sum(home);
   if (tot > 0) {
-    document.getElementById('linky-summary')!.innerHTML = html`Sur 12 mois : chauffage <strong>${nf0.format((sum(heat) / tot) * 100)} %</strong>, chauffe-eau <strong>${nf0.format((sum(water) / tot) * 100)} %</strong>, autres usages <strong>${nf0.format(Math.max(0, 1 - (sum(heat) + sum(water)) / tot) * 100)} %</strong> de ${fmtKwh(tot)} relevés par le compteur.`;
+    document.getElementById('linky-summary')!.innerHTML = html`Du ${longDate(from)} au ${longDate(last)} : chauffage <strong>${nf0.format((sum(heat) / tot) * 100)} %</strong>, chauffe-eau <strong>${nf0.format((sum(water) / tot) * 100)} %</strong>, autres usages <strong>${nf0.format(Math.max(0, 1 - (sum(heat) + sum(water)) / tot) * 100)} %</strong> de ${fmtKwh(tot)} relevés par le compteur.`;
   }
   drawPmax();
   drawOffload();
@@ -313,12 +305,9 @@ function drawLinky() {
 function drawPmax() {
   const el = document.getElementById('pmax-chart');
   if (!el) return;
-  const months = new Map<string, { max: number; day: string }>();
-  for (const [d, v] of ds!.pmax) {
-    const m = d.slice(0, 7);
-    if (!months.has(m) || v > months.get(m)!.max) months.set(m, { max: v, day: d });
-  }
-  const keys = [...months.keys()].sort().slice(-24);
+  // #290: the chart and its sentence cover the same 12 months (365 days) as the rest of the screen.
+  const months = pmaxMonths(ds!.pmax, ...twelveMonths(lastDay()));
+  const keys = [...months.keys()];
   const subscribed = keys.map((k) => periodAt(contracts(), `${k}-15`)?.kva ?? null);
   lineChart(el, {
     labels: keys.map((k) => bucketLabel(k, 'month')),
@@ -329,7 +318,7 @@ function drawPmax() {
     price: null,
     unit: 'kVA',
   });
-  const last12 = keys.slice(-12).map((k) => months.get(k)!);
+  const last12 = [...months.values()];
   const peak = last12.reduce((a, b) => (b.max > a.max ? b : a), last12[0]);
   const kva = periodAt(contracts(), lastDay())?.kva;
   if (peak && kva) {

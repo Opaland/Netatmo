@@ -102,13 +102,13 @@ export function offCol(): 1 | 2 {
 // memoised, setTenant() replaces the tenant object), so a change of identity empties the cache.
 let priceDeps: unknown[] = [];
 let costCache = new WeakMap<DayRecord[], Map<string, number | null>>();
-let avgCache: { value: number | null } | null = null;
+let avgCache = new WeakMap<DayRecord[], { value: number | null }>();
 function freshPrices() {
   const deps = [ds, contractInfo(), priceMode(), state.prices, tenant()];
   if (deps.some((d, i) => d !== priceDeps[i])) {
     priceDeps = deps;
     costCache = new WeakMap();
-    avgCache = null;
+    avgCache = new WeakMap();
   }
 }
 
@@ -136,17 +136,23 @@ export const eurOf = (records: DayRecord[], from: string, to: string) => {
   const c = costOf(records, from, to);
   return c === null ? '' : fmtEur(c);
 };
-/** Average €/kWh over the last 12 months, for chart tooltips (computed once per dataset and prices). */
-export function avgPrice(): number | null {
+/**
+ * Average €/kWh (energy, no subscription) of these records over the last 12 months, for
+ * estimates (projection, tooltips, verdict). #291: pass the filtered selection, so that the
+ * water heater's off-peak kWh are not priced at the whole home's average. Memoised.
+ */
+export function avgPrice(records: DayRecord[] = ds!.records): number | null {
   freshPrices();
-  if (avgCache) return avgCache.value;
+  const hit = avgCache.get(records);
+  if (hit) return hit.value;
   const last = lastDay();
   const from = addDays(minusYears(last), 1);
-  const recs = ds!.records.filter((r) => r.day >= from);
+  const recs = records.filter((r) => r.day >= from && r.day <= last);
   const kwh = recs.reduce((s, r) => s + r.kwh, 0);
   const c = computeCost(recs, from, last, false);
-  avgCache = { value: c === null || !kwh ? null : c / kwh };
-  return avgCache.value;
+  const value = c === null || !kwh ? null : c / kwh;
+  avgCache.set(records, { value });
+  return value;
 }
 
 // #252: one price rule for the cards that price a kWh outside the day-by-day cost.
