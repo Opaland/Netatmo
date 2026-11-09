@@ -1,6 +1,6 @@
 # Export long (JSON et CSV) — format version 1
 
-Menu ⋮ → **Export long (CSV)** ou **Export long (JSON)**. Le fichier est construit **dans le
+Outils → Exporter mes données → **Export long (CSV)** ou **Export long (JSON)**. Le fichier est construit **dans le
 navigateur**, à partir des données déjà déchiffrées : rien n'est envoyé nulle part. Il contient
 tout l'historique, sans tenir compte des filtres (pièces, catégorie) de l'écran.
 

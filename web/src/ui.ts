@@ -11,6 +11,8 @@ import { NO_REFERENCE, dayLong, signedPct } from './glossary';
 import { tenant } from './tenant';
 
 export { esc };
+export { fmt1 } from './glossary';
+export { downloadBlob } from './download';
 export { fmtKwh } from './charts';
 
 // ------------------------------------------------------------------ formatting
@@ -237,7 +239,3 @@ export function drawWaterfall(el: HTMLElement, deltas: Map<string, { now: number
   waterfallChart(el, { startLabel: `${year - 1}${suffix}`, endLabel: `${year}${suffix}`, start, steps });
 }
 
-/** Keep the menu open across the re-render that follows a change made inside it. */
-export function keepMenuOpen() {
-  document.querySelector<HTMLDetailsElement>('.menu')?.setAttribute('open', '');
-}

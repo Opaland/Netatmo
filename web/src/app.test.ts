@@ -77,17 +77,30 @@ describe('default state and what older versions saved', () => {
     const { app } = await boot();
     expect(app.state).toEqual(app.DEFAULT);
     expect(app.state.groupBedrooms).toBe(false);
-    expect(app.state.view).toBe('overview');
+    expect(app.state.view).toBe('accueil');
     expect(app.state.prices).toEqual({ base: null, t1: null, t2: null, sub: null });
   });
 
   it('v1.0 single price becomes the base price; v1.4 `household: true` is dropped', async () => {
     const { app } = await boot({ 'intuis-history:state': JSON.stringify({ price: 0.21, household: true, view: 'compare' }) });
     expect(app.state.prices).toEqual({ base: 0.21, t1: null, t2: null, sub: null });
-    expect(app.state.view).toBe('compare');
+    expect(app.state.view).toBe('historique'); // v1.6 (#308): the v1.5 view is mapped to its page
     expect(app.state.groupBedrooms).toBe(false);
     expect('household' in app.state).toBe(false);
     expect('price' in app.state).toBe(false);
+  });
+
+  it('v1.6 (#308, #309): every v1.5 view reopens its page, the other settings are kept as saved', async () => {
+    const saved = { view: 'analyse', simple: true, pinnedRoom: 'r1', lockAfter: 60, comfortThreshold: 18, priceMode: 'manual', prices: { base: 0.25 }, groupBedrooms: true };
+    const { app } = await boot({ 'intuis-history:state': JSON.stringify(saved) });
+    expect(app.state.view).toBe('historique');
+    expect(app.state.theme).toBe('system');
+    for (const k of ['simple', 'pinnedRoom', 'lockAfter', 'comfortThreshold', 'priceMode', 'groupBedrooms'] as const) expect(app.state[k]).toEqual(saved[k]);
+    expect(app.state.prices.base).toBe(0.25);
+    for (const [old, page] of Object.entries(app.LEGACY_VIEWS)) {
+      const { app: again } = await boot({ 'intuis-history:state': JSON.stringify({ view: old }) });
+      expect(again.state.view).toBe(page);
+    }
   });
 
   it('partial prices are completed, new fields take their default', async () => {
@@ -105,7 +118,7 @@ describe('default state and what older versions saved', () => {
 
   it('#229: under /Netatmo/ the state moves to the scoped name and is saved there', async () => {
     const { app, storage } = await boot({ 'intuis-history:state': JSON.stringify({ view: 'rooms', simple: true }) }, '/Netatmo/');
-    expect(app.state.view).toBe('rooms');
+    expect(app.state.view).toBe('pieces');
     expect(app.state.simple).toBe(true);
     expect(storage.getItem('intuis-history:state')).toBeNull();
     const render = vi.fn();

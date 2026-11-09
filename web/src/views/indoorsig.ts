@@ -8,8 +8,8 @@ import { type CiFit, MIN_DAYS, indoorModule, seasonSignatures, signatureDays } f
 import { activeRooms, esc, lastDay, table, measureColor } from '../ui';
 import { uncertainDays } from './quality';
 import { html } from '../trusted';
+import { fmt1 as n1 } from '../glossary';
 
-const n1 = (v: number) => v.toFixed(1).replace('.', ',').replace('-', '−');
 const n2 = (v: number) => v.toFixed(2).replace('.', ',').replace('-', '−');
 const pm = (v: number, ci: [number, number], f: (x: number) => string) => `${f(v)} <small class="muted">[${f(ci[0])} ; ${f(ci[1])}]</small>`;
 

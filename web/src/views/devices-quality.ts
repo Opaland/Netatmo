@@ -15,9 +15,11 @@ import {
 } from '../devices';
 import { OFFERS, periodAt } from '../offers';
 import { contracts, esc, lastDay, longDate, table } from '../ui';
+import { fmt1 } from '../glossary';
 
 export const roomLabel = (id?: string) => (id ? ((rawDataset() ?? ds!).meta.rooms.find((r) => r.id === id)?.name ?? 'pièce inconnue') : '—');
-export const f1 = (v: number) => v.toFixed(1).replace('.', ',');
+/** #258: the shared one-decimal format (typographic minus). */
+export const f1 = fmt1;
 export const plural = (n: number, word: string) => `${n} ${word}${n > 1 ? 's' : ''}`;
 
 /** #278: « Intuis indique : … » and the warning when it differs from the shared contract. */

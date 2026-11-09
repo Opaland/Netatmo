@@ -93,20 +93,24 @@ code {
   padding: 0 var(--space-4) calc(84px + env(safe-area-inset-bottom));
 }
 
-/* ---------------------------------------------------------------- header */
+/* ---------------------------------------------------------------- header (#308) */
+/* Home name, data-status pill (→ État des données) and ⚙ Paramètres; the tab bar under it
+   (bottom of the screen on a phone, top from 760 px); a sub-page has a back arrow and a title. */
 .top {
   display: flex;
   align-items: center;
-  gap: var(--space-3);
+  flex-wrap: wrap;
+  gap: var(--space-2);
   padding: calc(var(--space-3) + env(safe-area-inset-top)) 0 var(--space-3);
 }
 .top .title {
-  flex: 1;
+  flex: 1 1 8em;
   min-width: 0;
 }
-.top .title p {
-  margin: 2px 0 0;
-  font-size: var(--font-sm);
+.top .title h1 {
+  margin: 0;
+  font-size: var(--font-lg);
+  overflow-wrap: anywhere;
 }
 .badge {
   font-size: var(--font-xs);
@@ -117,74 +121,127 @@ code {
   color: var(--accent-text);
   vertical-align: middle;
 }
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: var(--target-min);
+  padding: 0 var(--space-3);
+  border-radius: var(--radius-full);
+  border: 1px solid var(--border);
+  background: var(--surface-card);
+  color: var(--text);
+  font-size: var(--font-sm);
+  text-decoration: none;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+.status-pill .dot {
+  flex: none;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--state-good);
+}
+.status-pill.warn .dot {
+  background: var(--state-warn);
+}
+.status-pill.bad .dot {
+  background: var(--state-bad);
+}
+.icon-btn {
+  min-width: var(--target-min);
+  min-height: var(--target-min);
+  display: grid;
+  place-items: center;
+  border-radius: var(--radius-full);
+  color: var(--text);
+}
+.icon-btn[aria-current='page'] {
+  background: var(--accent-soft);
+  color: var(--accent-text);
+}
 
+/* Tab bar: icon + label, 44 px targets at least; five tabs fit 360 px at 200 % text (labels wrap). */
 .tabs {
   position: fixed;
   left: 0;
   right: 0;
   bottom: 0;
   z-index: 10;
-  display: flex;
-  justify-content: space-around;
-  padding: var(--space-1) var(--space-2) calc(var(--space-1) + env(safe-area-inset-bottom));
+  display: grid;
+  grid-template-columns: repeat(var(--tab-count, 5), minmax(0, 1fr));
+  padding: var(--space-1) 2px calc(var(--space-1) + env(safe-area-inset-bottom));
   background: var(--surface-card);
   border-top: 1px solid var(--border);
 }
-.tabs button {
-  flex: 1;
+.tabs.three {
+  --tab-count: 3;
+}
+.tabs:has(> a:nth-child(4):last-child) {
+  --tab-count: 4;
+}
+.tabs a {
   display: flex;
   flex-direction: column;
   align-items: center;
+  justify-content: center;
   gap: 2px;
+  min-width: 0;
   min-height: 56px;
-  padding: 6px var(--space-1);
-  border: 0;
-  background: none;
+  padding: 6px 2px;
   color: var(--text-muted);
   font-size: var(--font-xs);
+  text-decoration: none;
+  text-align: center;
   border-radius: var(--radius-md);
-  cursor: pointer;
 }
-.tabs button[aria-current='page'] {
+.tabs a span {
+  max-width: 100%;
+  font-size: min(var(--font-xs), 3.3vw);
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+}
+.tabs .icon {
+  width: 22px;
+  height: 22px;
+}
+.tabs a[aria-current='page'] {
   color: var(--accent-text);
   font-weight: 600;
 }
-/* #319: five labels must fit a 360 px phone even at 200 % text (the tab bar is redesigned in v1.6 step 2). */
-.tabs button span {
-  max-width: 100%;
-  font-size: min(var(--font-xs), 3.3vw);
-  overflow-wrap: anywhere;
-}
-.tabs button[aria-current='page'] .icon {
+.tabs a[aria-current='page'] .icon {
   background: var(--accent-soft);
   border-radius: var(--radius-full);
   padding: 2px 14px;
   box-sizing: content-box;
 }
-
 @media (min-width: 760px) {
   #app {
     padding-bottom: var(--space-6);
   }
   .tabs {
     position: static;
+    margin-bottom: var(--space-3);
     border: 1px solid var(--border);
     border-radius: var(--radius-md);
     padding: var(--space-1);
     gap: var(--space-1);
   }
-  .tabs button {
+  .tabs a {
     flex-direction: row;
-    justify-content: center;
     min-height: var(--target-min);
     font-size: var(--font-sm);
     padding: 6px var(--space-3);
     gap: 6px;
   }
-  .tabs button[aria-current='page'] {
+  .tabs a span {
+    font-size: var(--font-sm);
+  }
+  .tabs a[aria-current='page'] {
     background: var(--accent-soft);
   }
-  .tabs button[aria-current='page'] .icon {
+  .tabs a[aria-current='page'] .icon {
     padding: 0;
     background: none;
   }
@@ -194,61 +251,95 @@ code {
   }
 }
 
-.menu {
-  position: relative;
+/* Sub-page: back arrow and title (focused on arrival). */
+.subhead {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0 0 var(--space-3);
 }
-.menu summary {
-  list-style: none;
-  cursor: pointer;
+.subhead h2 {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.subhead .back {
+  flex: none;
   min-width: var(--target-min);
   min-height: var(--target-min);
-  border-radius: var(--radius-full);
   display: grid;
   place-items: center;
-}
-.menu summary::-webkit-details-marker {
-  display: none;
-}
-.menu-panel {
-  position: absolute;
-  right: 0;
-  top: 48px;
-  z-index: 20;
-  width: min(330px, calc(100vw - 32px));
-  max-height: 80vh;
-  overflow: auto;
-  display: grid;
-  gap: 10px;
-  padding: 14px;
-  background: var(--surface-raised);
+  border-radius: var(--radius-full);
+  color: var(--text);
   border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  box-shadow: var(--shadow-3);
+  background: var(--surface-card);
 }
-.menu-panel label {
-  display: grid;
-  gap: var(--space-1);
+.page-title {
+  margin: 0 0 var(--space-3);
+}
+.page-title:focus,
+.subhead h2:focus {
+  outline: none;
+}
+.page-title:focus-visible,
+.subhead h2:focus-visible {
+  outline: 3px solid var(--focus, var(--accent));
+  outline-offset: 2px;
+}
+.section-title {
+  margin: var(--space-4) 0 var(--space-2);
   font-size: var(--font-sm);
+  font-weight: 600;
   color: var(--text-muted);
 }
-.menu-panel button {
-  text-align: left;
-  min-height: var(--target-min);
-  padding: 10px var(--space-3);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  background: var(--surface-card);
-  cursor: pointer;
+.tag.scope {
+  white-space: nowrap;
 }
-
-/* ---------------------------------------------------------------- filters, segments, chips */
-.filters {
+.filter-chip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0 0 var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--accent-soft);
+  font-size: var(--font-sm);
+}
+.part:empty {
+  display: none;
+}
+.kpis-one {
+  grid-template-columns: minmax(0, 1fr);
+}
+.actions {
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-2);
-  align-items: center;
+}
+.simple-exit {
+  margin: var(--space-4) 0;
+}
+.simple-confirm {
+  margin-top: var(--space-3);
+  padding: var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-card);
+}
+.simple-confirm[hidden] {
+  display: none;
+}
+.list + .hint,
+.list + .btn {
+  margin-top: var(--space-3);
+}
+#view > .list,
+#view > .alert {
   margin-bottom: var(--space-3);
 }
+
+/* ---------------------------------------------------------------- filters, segments, chips */
 /* #319: a segment wraps instead of overflowing (200 % text, 360 px). */
 .seg {
   display: inline-flex;
@@ -292,6 +383,8 @@ code {
 }
 .rooms-picker {
   position: relative;
+  display: inline-block;
+  margin: 0 0 var(--space-3);
 }
 .rooms-picker summary {
   list-style: none;
@@ -840,12 +933,6 @@ fieldset.prices legend {
   color: var(--text-muted);
   padding: 0 4px;
 }
-.menu-panel button .icon {
-  width: 16px;
-  height: 16px;
-  vertical-align: -3px;
-  margin-right: 4px;
-}
 .primary.small {
   padding: 0 14px;
   font-size: var(--font-sm);
@@ -896,8 +983,8 @@ fieldset.prices legend {
 }
 @media print {
   .top,
-  .filters,
   .tabs,
+  .subhead,
   .no-print {
     display: none !important;
   }
@@ -919,26 +1006,6 @@ fieldset.prices legend {
   }
   .chart {
     break-inside: avoid;
-  }
-}
-body.is-report .filters,
-body.is-comfort .filters {
-  display: none;
-}
-/* Five tabs on a 360 px phone: tighter labels so none is cut. */
-@media (max-width: 400px) {
-  .tabs {
-    padding-left: 2px;
-    padding-right: 2px;
-  }
-  .tabs button {
-    padding: 6px 2px;
-    font-size: var(--font-xs);
-    min-width: 0;
-  }
-  .tabs .icon {
-    width: 20px;
-    height: 20px;
   }
 }
 .sub-title {
@@ -981,6 +1048,28 @@ fieldset.prices input {
   width: 100%;
   min-width: 0;
   box-sizing: border-box;
+}
+fieldset.prices input[type='radio'],
+fieldset.prices input[type='checkbox'] {
+  width: auto;
+}
+/* #309: the form now lives in its card (⚙ Contrat et prix): no second frame, labels above fields. */
+#prices-card fieldset.prices {
+  border: 0;
+  padding: 0;
+}
+#prices-card fieldset.prices legend {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+}
+fieldset.prices label:not(.check) {
+  display: grid;
+  gap: var(--space-1);
+  font-size: var(--font-sm);
+  color: var(--text-muted);
 }
 .contract-row .link {
   justify-self: end;
@@ -1065,9 +1154,7 @@ fieldset.secrets input,
 }
 
 /* simple mode (S-7.1): verdict + key figures only, large type */
-body.is-simple .filters,
-body.is-simple #view > .card,
-body.is-simple .tabs {
+body.is-simple #view > .card:not(.insight) {
   display: none;
 }
 body.is-simple {
@@ -1090,9 +1177,6 @@ body.is-simple .verdict > div {
 }
 body.is-simple .kpi-value {
   font-size: min(2.2rem, 13vw);
-}
-.top .title h1 {
-  overflow-wrap: anywhere;
 }
 .kpi.pinned {
   border-color: var(--accent);
@@ -1180,7 +1264,7 @@ body.is-simple .kpi-value {
   :focus-visible {
     outline-width: 3px;
   }
-  .tabs button[aria-current='page'] span,
+  .tabs a[aria-current='page'] span,
   .seg button[aria-checked='true'] {
     text-decoration: underline 2px;
     text-underline-offset: 3px;
@@ -1203,7 +1287,7 @@ body.is-simple .kpi-value {
 /* Windows high contrast and other forced palettes: keep state and colour keys visible. */
 @media (forced-colors: active) {
   .seg button[aria-checked='true'],
-  .tabs button[aria-current='page'],
+  .tabs a[aria-current='page'],
   .chip[aria-pressed='true'] {
     forced-color-adjust: none;
     background: Highlight;
@@ -1270,12 +1354,6 @@ body.is-simple .kpi-value {
   .sk { animation: none; }
 }
 
-/* S-7.6: a primary button inside the menu keeps its colours (was white on white). */
-.menu-panel .primary {
-  border: 0;
-  background: var(--accent);
-  color: var(--accent-ink);
-}
 
 /* S-1.10: suspect days (very low against the signature) */
 .badge-suspect {

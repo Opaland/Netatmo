@@ -1,6 +1,6 @@
 # Export recherche anonymisé — format version 1
 
-Menu ⋮ → **Export recherche (anonymisé)**. Pour un chercheur ou un étudiant qui veut caler un modèle
+Outils → Exporter mes données → **Export recherche (anonymisé)**. Pour un chercheur ou un étudiant qui veut caler un modèle
 thermique sur un vrai logement, sans donnée personnelle. Le fichier est construit **dans le
 navigateur**, à partir des données déjà déchiffrées : rien n'est envoyé nulle part. Avant d'être
 proposé, il passe par le **détecteur** du rapport anonymisé (S-6.4) : s'il y trouve un nom de

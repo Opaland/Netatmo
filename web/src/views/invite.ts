@@ -4,6 +4,7 @@
 import { inviteUrl, installSteps } from '../invite';
 import { qrSvg } from '../qr';
 import { esc } from '../ui';
+import { onCard } from '../events';
 
 export function inviteHtml(href = location.href): string {
   const url = inviteUrl(href);
@@ -26,14 +27,18 @@ export function inviteHtml(href = location.href): string {
     <p class="hint muted">Le QR code ne contient que l'adresse publique de l'appli : <strong>ni phrase de passe, ni jeton</strong>. Sans la phrase, on ne voit que l'écran de déverrouillage. Ne l'envoyez pas avec le lien dans le même message (un SMS ou un courriel se transfère, se sauvegarde et se lit par-dessus l'épaule).</p>`;
 }
 
-export function bindInvite(card: HTMLElement) {
-  const btn = card.querySelector<HTMLButtonElement>('#invite-copy');
-  const url = inviteUrl(location.href);
-  if (!btn || !url) return;
-  btn.onclick = () => {
+/** Kept for the callers: the copy button is handled by the registered handler below (#257). */
+export function bindInvite(_card: HTMLElement) {}
+
+onCard({
+  click(el) {
+    if (el.id !== 'invite-copy') return false;
+    const url = inviteUrl(location.href);
+    if (!url) return true;
     navigator.clipboard?.writeText(url).then(
-      () => (btn.textContent = 'Lien copié'),
-      () => (btn.textContent = 'Copie impossible : recopiez le lien'),
+      () => (el.textContent = 'Lien copié'),
+      () => (el.textContent = 'Copie impossible : recopiez le lien'),
     );
-  };
-}
+    return true;
+  },
+});

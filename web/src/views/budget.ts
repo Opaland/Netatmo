@@ -1,4 +1,4 @@
-// Synthèse, loaded on demand (S-7.10): annual budget (S-2.12), CO₂ footprint (S-2.13)
+// Accueil and ⚙ Objectifs, loaded on demand (S-7.10): annual budget (S-2.12), CO₂ footprint (S-2.13)
 // and the effect of a new regulated tariff (S-2.11). Filled into placeholders left by
 // overview.ts; every figure carries its method.
 import { addDays, dayOfYear, minusYears, total } from '../aggregate';
@@ -25,6 +25,7 @@ import {
 } from '../money';
 import { contracts, costAvailable, costOf, esc, fmtEur, fmtKwh, lastDay, longDate, nf0, offCol, pct, priceMode } from '../ui';
 import { html } from '../trusted';
+import { onCard } from '../events';
 
 const signedEur = (v: number) => `${v > 0 ? '+' : v < 0 ? '−' : ''}${fmtEur(Math.abs(v))}`;
 const num = (v: number, d = 2) => v.toLocaleString('fr-FR', { minimumFractionDigits: d, maximumFractionDigits: d });
@@ -69,8 +70,11 @@ export function fillOverview() {
       <p class="kpi-value">${signedEur(b.gap)}</p>
       <p class="kpi-sub"><span class="delta ${b.over ? 'up' : 'down'}"><span aria-hidden="true">${b.over ? '▲' : '▼'}</span> ${b.over ? 'au-dessus du budget' : 'dans le budget'}</span> · ${fmtEur(b.projected)} projetés pour ${fmtEur(b.budget)}</p>`;
   } else tile?.remove();
-  put('money-zone', moneyCard(b));
-  bind();
+}
+
+/** #309: the budget and CO₂ inputs, on ⚙ Objectifs et alertes. */
+export function fillGoals() {
+  put('money-zone', moneyCard(yearBudget()));
 }
 
 // ------------------------------------------------------------------ budget + CO₂ card
@@ -86,7 +90,7 @@ function moneyCard(b: ReturnType<typeof yearBudget>): string {
   const f = co2Factor();
   let budgetHtml: string;
   if (!costAvailable()) {
-    budgetHtml = '<p class="hint muted">Renseignez votre contrat ou vos prix (menu ⋮) pour suivre un budget en euros.</p>';
+    budgetHtml = '<p class="hint muted">Renseignez votre contrat ou vos prix (⚙ Paramètres → Contrat et prix) pour suivre un budget en euros.</p>';
   } else if (b) {
     const share = Math.min(100, (b.spent / b.budget) * 100);
     budgetHtml = `<p>Dépensé depuis le 1<sup>er</sup> janvier : <strong>${fmtEur(b.spent)}</strong>${
@@ -100,7 +104,7 @@ function moneyCard(b: ReturnType<typeof yearBudget>): string {
     budgetHtml = '<p class="hint">Fixez un budget annuel pour le chauffage et l\'eau chaude : l\'écart projeté s\'affichera ici et dans le mode simple.</p>';
   }
   return `<section class="card" id="money-card">
-    <div class="card-head"><h2>Budget et empreinte ${year} <small class="muted">chauffage + eau chaude</small></h2></div>
+    <div class="card-head"><h2>Budget et empreinte ${year} <small class="muted">chauffage + eau chaude</small></h2><span class="tag scope" title="Cet appareil : gardé dans ce navigateur seulement">ce téléphone</span></div>
     ${budgetHtml}
     ${
       costAvailable()
@@ -154,32 +158,38 @@ function gridCard(): string {
   </section>`;
 }
 
-// ------------------------------------------------------------------ events (bound on the elements: this module is lazy)
-function on(id: string, type: 'change' | 'click', fn: (el: HTMLInputElement) => void) {
-  const el = document.getElementById(id) as HTMLInputElement | null;
-  if (el) el[type === 'change' ? 'onchange' : 'onclick'] = () => fn(el); // property: binding twice is harmless
-}
-
-function bind() {
-  on('budget-input', 'change', (el) => {
-    const v = Number(el.value);
-    writePref(LS_BUDGET, v > 0 ? String(Math.round(v)) : null);
-    rerender();
-  });
-  on('co2-input', 'change', (el) => {
-    const v = Number(el.value.replace(',', '.'));
-    if (!(v > 0 && v < 2)) return;
-    writePref(LS_CO2, v === CO2_DEFAULT ? null : String(v));
-    rerender();
-  });
-  on('co2-reset', 'click', () => {
-    writePref(LS_CO2, null);
-    rerender();
-  });
-  on('grid-seen', 'click', () => {
-    const c = periodAt(contracts(), lastDay());
-    const g = c ? newGrid(ds!.offers.get(c.offer) ?? [], c.kva, lastDay()) : null;
-    if (g) writePref(LS_GRID_SEEN, g.next.from);
-    rerender();
-  });
-}
+// ------------------------------------------------------------------ events (#257: registered, dispatched by main.ts)
+onCard({
+  change(t) {
+    if (t.id === 'budget-input') {
+      const v = Number(t.value);
+      writePref(LS_BUDGET, v > 0 ? String(Math.round(v)) : null);
+      rerender();
+      return true;
+    }
+    if (t.id === 'co2-input') {
+      const v = Number(t.value.replace(',', '.'));
+      if (v > 0 && v < 2) {
+        writePref(LS_CO2, v === CO2_DEFAULT ? null : String(v));
+        rerender();
+      }
+      return true;
+    }
+    return false;
+  },
+  click(el) {
+    if (el.id === 'co2-reset') {
+      writePref(LS_CO2, null);
+      rerender();
+      return true;
+    }
+    if (el.id === 'grid-seen') {
+      const c = periodAt(contracts(), lastDay());
+      const g = c ? newGrid(ds!.offers.get(c.offer) ?? [], c.kva, lastDay()) : null;
+      if (g) writePref(LS_GRID_SEEN, g.next.from);
+      rerender();
+      return true;
+    }
+    return false;
+  },
+});

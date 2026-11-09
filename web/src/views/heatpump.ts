@@ -11,6 +11,7 @@ import { currentHcHp } from './waterheater';
 import { html } from '../trusted';
 import '../simulators.css';
 import { lsKey } from '../scope';
+import { fmt1 as num1 } from '../glossary';
 
 const LS = lsKey('heatpump');
 const FRANCE_RENOV = 'https://france-renov.gouv.fr/';
@@ -49,7 +50,6 @@ function save(v: Inputs) {
   }
 }
 
-const num1 = (v: number) => v.toFixed(1).replace('.', ',');
 
 /** Price of a heating kWh: current HP/HC prices mixed with the heating's own off-peak share. */
 function heatingPrice(): { price: number; source: string } | null {
@@ -127,7 +127,7 @@ export function mountHeatPump(card: HTMLElement | null, records: DayRecord[]) {
         [`PAC prudente (COP ${num1(sim.copLow)})`, fmtKwh(sim.highKwh), eur(sim.highKwh), `−${eur(sim.savedLow)}`],
       ],
     )}
-    <p class="hint muted">Montants aux prix actuels. ${price ? `Prix du kWh de chauffage : ${num1(price.price * 100)} c€ (${esc(price.source)}).` : 'Ajoutez vos prix (menu ⋮ → Prix) pour voir les montants en euros.'} ${sim.days} jours avec météo.</p>`;
+    <p class="hint muted">Montants aux prix actuels. ${price ? `Prix du kWh de chauffage : ${num1(price.price * 100)} c€ (${esc(price.source)}).` : 'Ajoutez vos prix (⚙ Paramètres → Contrat et prix) pour voir les montants en euros.'} ${sim.days} jours avec météo.</p>`;
   };
   modeEl.addEventListener('change', show);
   lowEl.addEventListener('input', show);

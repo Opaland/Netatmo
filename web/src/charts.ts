@@ -680,6 +680,15 @@ export function waterfallChart(
   const chart = instance(el);
   const muted = cssVar('--text-muted');
   const labels = [opts.startLabel, ...opts.steps.map((s) => s.name), opts.endLabel];
+  // S-7.2 / #308: the sentence a screen reader reads instead of the canvas (it is now reached on its own in Historique)
+  const end = opts.start + opts.steps.reduce((a, s) => a + s.delta, 0);
+  const signedKwh = (v: number) => `${v >= 0 ? '+' : '−'}${fmtKwh(Math.abs(v))}`;
+  const base0 = el.getAttribute('data-label') ?? el.getAttribute('aria-label') ?? 'Évolution par pièce';
+  el.setAttribute('data-label', base0);
+  el.setAttribute(
+    'aria-label',
+    `${base0}, de ${opts.startLabel} (${fmtKwh(opts.start)}) à ${opts.endLabel} (${fmtKwh(end)}). ${opts.steps.map((s) => `${s.name} ${signedKwh(s.delta)}`).join(' ; ') || 'aucune pièce ne change de plus de 1 kWh'}.`,
+  );
   const base: (number | string)[] = [0];
   const up: (number | string)[] = ['-'];
   const down: (number | string)[] = ['-'];

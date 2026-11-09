@@ -78,7 +78,7 @@ export function anonReportHtml(r: AnonReport): string {
           .map((y) => `<option value="${y}" ${!lease && y === r.year ? 'selected' : ''}>${y}</option>`)
           .join('')}</select></label>
         <button type="button" class="primary small" id="print">Imprimer / PDF</button>
-        <button type="button" class="link" data-view="report">Rapport complet</button>
+        <a class="link" href="#rapport">Rapport complet</a>
       </div>
     </div>
     <p class="hint muted no-print">À remettre à un tiers (chauffagiste, conseiller, futur occupant${lease ? ', bailleur' : ''}) : ni nom de logement, ni adresse, ni coordonnées, ni identifiant, ni nom de pièce, ni donnée horaire, ni relevé de la station météo. Dans la boîte d'impression, décochez « En-têtes et pieds de page » si l'adresse du site s'y affiche.</p>

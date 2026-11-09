@@ -1,4 +1,5 @@
-// S-1.9: visual smoke test of the demo, every view, light and dark, mobile and desktop.
+// S-1.9: visual smoke test of the demo, every page, light and dark, mobile and desktop.
+// #308 / #309: the new navigation (tabs, ⚙, sub-pages, Back, simple view) and the settings centre.
 // S-7.6: axe-core audit of every view (fails on "serious" or "critical"), keyboard route.
 // S-7.7: high contrast (7:1 checked by axe), forced colours, system text at 200 % in simple mode.
 // S-7.8, S-7.11, S-7.12: pinned room, swipe, offline.
@@ -71,8 +72,18 @@ async function openDemo(page) {
   await page.click('#demo');
   await page.waitForSelector('header.top', { timeout: 30000 });
 }
+/**
+ * #308: open a page by its address: a click on its tab when it has one, else the address bar
+ * (as a shared link or the Back button would). Waits for that page to be drawn and settled.
+ */
+async function go(page, key) {
+  const tab = page.locator(`.tabs [data-view="${key}"]`);
+  if (await tab.count()) await tab.click();
+  else await page.evaluate((k) => (location.hash = `#${k}`), key);
+  await page.waitForSelector(`#view[data-page="${key}"][data-ready]`, { state: 'attached', timeout: 30000 });
+}
 
-/** Keyboard only: tabs, charts and menu (S-7.6). */
+/** Keyboard only: tabs, charts, ⚙ and a sub-page (title focused, Escape goes back) (S-7.6, #308). */
 async function keyboard(page, name) {
   const focused = () =>
     page.evaluate(() => {
@@ -80,27 +91,28 @@ async function keyboard(page, name) {
       const cs = el ? getComputedStyle(el) : null;
       return {
         view: el?.getAttribute('data-view') ?? null,
+        id: el?.id ?? '',
         chart: !!el?.classList.contains('chart'),
         label: el?.getAttribute('aria-label') ?? '',
-        summary: el?.tagName === 'SUMMARY' && !!el.closest('.menu'),
         outline: cs ? cs.outlineStyle !== 'none' && parseFloat(cs.outlineWidth) >= 2 : false,
       };
     });
-  await page.click('[data-view=overview]');
+  await go(page, 'accueil');
   await page.evaluate(() => document.activeElement?.blur());
   let f;
   for (let i = 0; i < 40; i++) {
     await page.keyboard.press('Tab');
     f = await focused();
-    if (f.view === 'compare') break;
+    if (f.view === 'historique') break;
   }
-  check(f?.view === 'compare', `${name}/clavier : l'onglet « Comparer » n'est pas atteignable au clavier`);
+  check(f?.view === 'historique', `${name}/clavier : l'onglet « Historique » n'est pas atteignable au clavier`);
   check(f?.outline, `${name}/clavier : focus invisible sur l'onglet`);
   await page.keyboard.press('Enter');
-  await page.waitForSelector('[data-view=compare][aria-current=page]');
+  await page.waitForSelector('.tabs [data-view=historique][aria-current=page]');
   await ready(page);
+  check((await focused()).view === 'historique', `${name}/clavier : le focus quitte l'onglet ouvert`);
   let charts = 0;
-  for (let i = 0; i < 80 && charts < 2; i++) {
+  for (let i = 0; i < 120 && charts < 2; i++) {
     await page.keyboard.press('Tab');
     f = await focused();
     if (f.chart) {
@@ -110,34 +122,44 @@ async function keyboard(page, name) {
     }
   }
   check(charts >= 2, `${name}/clavier : graphiques non atteignables au clavier`);
-  await page.focus('.menu summary');
+  // ⚙ then a settings page: each sub-page puts the focus on its title
+  await page.focus('.top [data-view=parametres]');
   await page.keyboard.press('Enter');
-  check(await page.locator('.menu[open]').count(), `${name}/clavier : le menu ne s'ouvre pas avec Entrée`);
-  await page.keyboard.press('Tab');
-  await page.keyboard.press('Escape');
-  check(!(await page.locator('.menu[open]').count()), `${name}/clavier : Échap ne ferme pas le menu`);
-  check((await focused()).summary, `${name}/clavier : le focus ne revient pas au bouton du menu`);
-  // #256: typing a price then Tab goes on to the next field (the menu is not rebuilt).
+  await page.waitForSelector('#view[data-page=parametres][data-ready]', { state: 'attached' });
+  check((await focused()).id === 'page-title', `${name}/clavier : le titre de Paramètres ne reçoit pas le focus`);
+  await page.focus('#view a[href="#parametres-contrat"]');
   await page.keyboard.press('Enter');
+  await page.waitForSelector('#view[data-page=parametres-contrat][data-ready]', { state: 'attached' });
+  check((await focused()).id === 'page-title', `${name}/clavier : le titre de « Contrat et prix » ne reçoit pas le focus`);
+  // #256: typing a price then Tab goes on to the next field (the page is redrawn around it).
   if (await page.locator('[data-pmode=manual]').count()) {
     await page.check('[data-pmode=manual]');
+    await ready(page);
     check(
       await page.evaluate(() => document.activeElement?.getAttribute('data-pmode') === 'manual'),
       `${name}/clavier : le focus est perdu après le choix du mode de prix`,
     );
   }
-  const order = await page.locator('.menu [data-price]').evaluateAll((els) => els.map((e) => e.getAttribute('data-price')));
-  await page.fill('.menu [data-price=base]', '0.2516');
+  const order = await page.locator('[data-price]').evaluateAll((els) => els.map((e) => e.getAttribute('data-price')));
+  await page.fill('[data-price=base]', '0.2516');
   await page.keyboard.press('Tab');
   await ready(page);
   const next = await page.evaluate(() => document.activeElement?.getAttribute('data-price') ?? document.activeElement?.tagName);
   check(next === order[1], `${name}/clavier : après un prix et Tab, le focus est sur « ${next} » au lieu de « ${order[1]} »`);
-  check(await page.locator('.menu[open]').count(), `${name}/clavier : le menu se ferme après la saisie d'un prix`);
+  check(/0[.,]2516/.test(await page.inputValue('[data-price=base]')), `${name}/clavier : le prix saisi n'est pas gardé`);
   // back to the official tariffs and no manual price, for the following checks
-  await page.fill('.menu [data-price=base]', '');
+  await page.fill('[data-price=base]', '');
   await page.keyboard.press('Tab');
-  if (await page.locator('[data-pmode=trve]').count()) await page.check('[data-pmode=trve]');
+  await ready(page);
+  if (await page.locator('[data-pmode=trve]').count()) {
+    await page.check('[data-pmode=trve]');
+    await ready(page);
+  }
+  // Escape on a sub-page (nothing open) goes back to its parent
+  await page.focus('#page-title');
   await page.keyboard.press('Escape');
+  await page.waitForSelector('#view[data-page=parametres]', { state: 'attached', timeout: 5000 }).catch(() => errors.push(`${name}/clavier : Échap ne revient pas à Paramètres`));
+  await ready(page);
 }
 
 /** Synthetic touch swipe (pointer events, as a finger would send them). */
@@ -189,25 +211,24 @@ try {
     await audit(page, `${name}/verrou`);
     await page.click('#demo');
     await page.waitForSelector('.kpi', { timeout: 30000 });
-    for (const view of name === 'mobile-360' ? [] : ['overview', 'compare', 'rooms', 'analyse']) {
-      await page.click(`[data-view=${view}]`);
-      await ready(page);
-      if (view === 'overview') {
+    for (const view of name === 'mobile-360' ? [] : ['accueil', 'pieces', 'historique', 'compteur', 'outils', 'parametres']) {
+      await go(page, view);
+      if (view === 'compteur') {
         // Linky 30-min load curve card (lazy module + lazy documents)
         try {
           await page.waitForSelector('#curve-day-chart canvas', { timeout: 15000 });
           const talon = await page.locator('#curve-talon').innerText();
-          if (!/\d\s?W/.test(talon)) errors.push(`${name}/overview: talon de veille absent (${talon})`);
-          if ((await page.locator('#curve-card canvas').count()) < 2) errors.push(`${name}/overview: courbe de charge incomplète`);
+          if (!/\d\s?W/.test(talon)) errors.push(`${name}/compteur: talon de veille absent (${talon})`);
+          if ((await page.locator('#curve-card canvas').count()) < 2) errors.push(`${name}/compteur: courbe de charge incomplète`);
         } catch (err) {
-          errors.push(`${name}/overview: carte « Courbe de charge » non rendue (${err})`);
+          errors.push(`${name}/compteur: carte « Courbe de charge » non rendue (${err})`);
         }
         // S-4.12 / S-1.17: other usages split into Shelly plugs, declared appliances, talon
         try {
           await page.waitForSelector('#bd-chart canvas', { timeout: 15000 });
           const text = await page.locator('#breakdown-card').innerText();
           for (const want of ['Réfrigérateur', 'Lave-linge', 'Veille non attribuée', 'Non attribué', 'non exploitable sans hub']) {
-            if (!text.includes(want)) errors.push(`${name}/overview: décomposition sans « ${want} »`);
+            if (!text.includes(want)) errors.push(`${name}/compteur: décomposition sans « ${want} »`);
           }
           await page.fill('#bd-form [name=name]', 'Box internet');
           await page.fill('#bd-form [name=watts]', '12');
@@ -215,58 +236,25 @@ try {
           await page.click('#bd-form button[type=submit]');
           await page.waitForSelector('[data-bd-remove]', { timeout: 5000 });
           if (!(await page.locator('#breakdown-card').innerText()).includes('Box internet'))
-            errors.push(`${name}/overview: poste saisi absent de la décomposition`);
+            errors.push(`${name}/compteur: poste saisi absent de la décomposition`);
           await page.click('[data-bd-remove]');
         } catch (err) {
-          errors.push(`${name}/overview: carte « Autres usages en détail » non rendue (${err})`);
+          errors.push(`${name}/compteur: carte « Autres usages en détail » non rendue (${err})`);
         }
-        // S-1.10: lost days rebuilt apart, on demand (lazy module)
-        try {
-          await page.click('#quality summary');
-          await page.check('[data-recon]');
-          await page.waitForSelector('#recon-chart canvas', { timeout: 15000 });
-          if (!(await page.getByText('Jours suspects').count())) errors.push(`${name}/overview: jours suspects absents`);
-        } catch (err) {
-          errors.push(`${name}/overview: reconstitution non rendue (${err})`);
-        }
-      }
-      if (view === 'overview') {
         // S-13.6: load shedding per room next to the Linky peak (lazy module + room states)
         try {
           await page.waitForSelector('#offload-zone:not([hidden]) table', { timeout: 15000 });
-          if (!/Pic Linky moyen/.test(await page.locator('#offload-summary').innerText())) errors.push(`${name}/overview: délestage sans pic Linky`);
+          if (!/Pic Linky moyen/.test(await page.locator('#offload-summary').innerText())) errors.push(`${name}/compteur: délestage sans pic Linky`);
         } catch (err) {
-          errors.push(`${name}/overview: délestage par pièce non rendu (${err})`);
+          errors.push(`${name}/compteur: délestage par pièce non rendu (${err})`);
         }
       }
-      if (view === 'compare') {
-        // S-2.14: EV charging simulator (lazy module), costs per offer and peaks on the Linky curve
-        try {
-          await page.waitForSelector('#ev-card #ev-result table', { timeout: 15000 });
-          await page.waitForSelector('#ev-peak h3', { timeout: 15000 });
-          const ev = await page.locator('#ev-card').innerText();
-          if (!/Avec la voiture/.test(ev) || !/demi-heure/.test(ev) || !/Comment c'est calculé/.test(ev)) errors.push(`${name}/compare: simulation de recharge incomplète`);
-        } catch (err) {
-          errors.push(`${name}/compare: simulation de recharge non rendue (${err})`);
-        }
-      }
-      if (view === 'analyse') {
-        // S-2.15: heat pump estimate (lazy module)
-        try {
-          await page.waitForSelector('#hp-card #hp-result table', { timeout: 15000 });
-          const hp = await page.locator('#hp-card').innerText();
-          if (!/pas une étude thermique/.test(hp) || !/France Rénov/.test(hp)) errors.push(`${name}/analyse: carte PAC sans avertissement ni lien France Rénov'`);
-          await page.selectOption('#hp-mode', 'curve');
-          await page.waitForFunction(() => /COP saisonnier/.test(document.querySelector('#hp-result')?.textContent ?? ''));
-          await page.selectOption('#hp-mode', 'scop');
-        } catch (err) {
-          errors.push(`${name}/analyse: estimation pompe à chaleur non rendue (${err})`);
-        }
+      if (view === 'historique') {
         // S-3.7: indoor − outdoor signature (lazy module)
         try {
           await page.waitForSelector('#indoor-sig-chart canvas', { timeout: 15000 });
         } catch (err) {
-          errors.push(`${name}/analyse: signature intérieur − extérieur non rendue (${err})`);
+          errors.push(`${name}/historique: signature intérieur − extérieur non rendue (${err})`);
         }
         // S-13.3: open windows as a possible explanation of the unusual days
         try {
@@ -275,28 +263,19 @@ try {
             return t.includes('Explication possible') && !document.querySelector('#unusual-card td:last-child')?.textContent?.includes('…');
           }, null, { timeout: 15000 });
         } catch (err) {
-          errors.push(`${name}/analyse: explication des jours inhabituels absente (${err})`);
-        }
-        // S-13.4: absences confirmed by the setpoint mode; S-13.6: contactor of the water heater
-        try {
-          await page.waitForSelector('#absence-card', { timeout: 15000 });
-          if (!(await page.locator('#absence-card').textContent()).includes('confirmée par le mode de consigne')) errors.push(`${name}/analyse: absence confirmée par le mode de consigne absente`);
-          await page.waitForSelector('#contactor-line:not([hidden])', { timeout: 15000 });
-        } catch (err) {
-          errors.push(`${name}/analyse: absences confirmées ou contacteur non rendus (${err})`);
+          errors.push(`${name}/historique: explication des jours inhabituels absente (${err})`);
         }
       }
       const charts = await page.locator('.chart canvas').count();
-      if (!charts) errors.push(`${name}/${view}: aucun graphique rendu`);
-      if (view === 'analyse' && !(await page.locator('#insight-card .insight-usage').count())) errors.push(`${name}/analyse: carte IA (S-5.8) non rendue`);
+      if (!charts && !['outils', 'parametres'].includes(view)) errors.push(`${name}/${view}: aucun graphique rendu`);
       // Tooltip (ECharts) shown then hidden: goes through the Trusted Types policy.
       if (charts && !opts.isMobile) {
         const canvas = page.locator('.chart canvas').first();
         const { width, height } = (await canvas.boundingBox()) ?? { width: 0, height: 0 };
         await canvas.hover({ position: { x: width * 0.6, y: height * 0.6 } });
-        // the tooltip goes through the Trusted Types policy; only the Synthèse chart is sure to show one there
-        const tip = await page.waitForSelector('.tt', { state: 'attached', timeout: view === 'overview' ? 5000 : 1000 }).catch(() => null);
-        if (view === 'overview' && !tip) errors.push(`${name}/${view}: infobulle ECharts absente`);
+        // the tooltip goes through the Trusted Types policy; only the Accueil chart is sure to show one there
+        const tip = await page.waitForSelector('.tt', { state: 'attached', timeout: view === 'accueil' ? 5000 : 1000 }).catch(() => null);
+        if (view === 'accueil' && !tip) errors.push(`${name}/${view}: infobulle ECharts absente`);
         await page.mouse.move(0, 0);
         await page.evaluate(() => window.scrollTo(0, 0));
       }
@@ -304,33 +283,86 @@ try {
       await page.screenshot({ path: `${OUT}/${name}-${view}.png`, fullPage: true });
       await audit(page, `${name}/${view}`);
     }
+    if (name !== 'mobile-360') {
+      // the tools moved out of Comparer and Analyse (#308), each on its own page of Outils
+      await go(page, 'outils');
+      await page.click('#view a[href="#outils-voiture"]');
+      await page.waitForSelector('#view[data-page=outils-voiture]', { state: 'attached' });
+      // S-2.14: EV charging simulator (lazy module), costs per offer and peaks on the Linky curve
+      try {
+        await page.waitForSelector('#ev-card #ev-result table', { timeout: 15000 });
+        await page.waitForSelector('#ev-peak h3', { timeout: 15000 });
+        const ev = await page.locator('#ev-card').innerText();
+        if (!/Avec la voiture/.test(ev) || !/demi-heure/.test(ev) || !/Comment c'est calculé/.test(ev)) errors.push(`${name}/outils-voiture: simulation de recharge incomplète`);
+      } catch (err) {
+        errors.push(`${name}/outils-voiture: simulation de recharge non rendue (${err})`);
+      }
+      // S-2.15: heat pump estimate (lazy module)
+      await go(page, 'outils-pac');
+      try {
+        await page.waitForSelector('#hp-card #hp-result table', { timeout: 15000 });
+        const hp = await page.locator('#hp-card').innerText();
+        if (!/pas une étude thermique/.test(hp) || !/France Rénov/.test(hp)) errors.push(`${name}/outils-pac: carte PAC sans avertissement ni lien France Rénov'`);
+        await page.selectOption('#hp-mode', 'curve');
+        await page.waitForFunction(() => /COP saisonnier/.test(document.querySelector('#hp-result')?.textContent ?? ''));
+        await page.selectOption('#hp-mode', 'scop');
+      } catch (err) {
+        errors.push(`${name}/outils-pac: estimation pompe à chaleur non rendue (${err})`);
+      }
+      // S-13.4: absences confirmed by the setpoint mode; S-13.6: contactor of the water heater
+      await go(page, 'outils-absences');
+      try {
+        await page.waitForSelector('#absence-card', { timeout: 15000 });
+        if (!(await page.locator('#absence-card').textContent()).includes('confirmée par le mode de consigne')) errors.push(`${name}/outils-absences: absence confirmée par le mode de consigne absente`);
+      } catch (err) {
+        errors.push(`${name}/outils-absences: absences confirmées non rendues (${err})`);
+      }
+      await go(page, 'chauffe-eau');
+      await page.waitForSelector('#contactor-line:not([hidden])', { timeout: 15000 }).catch((err) => errors.push(`${name}/chauffe-eau: contacteur non rendu (${err})`));
+      await go(page, 'outils-analyse');
+      if (!(await page.locator('#insight-card .insight-usage').count())) errors.push(`${name}/outils-analyse: carte IA (S-5.8) non rendue`);
+      // S-1.10: lost days rebuilt apart, on demand (lazy module), in État des données (header pill)
+      await page.click('.top .status-pill');
+      await page.waitForSelector('#view[data-page=etat][data-ready]', { state: 'attached' });
+      try {
+        await page.check('[data-recon]');
+        await page.waitForSelector('#recon-chart canvas', { timeout: 15000 });
+        if (!(await page.getByText('Jours suspects').count())) errors.push(`${name}/etat: jours suspects absents`);
+      } catch (err) {
+        errors.push(`${name}/etat: reconstitution non rendue (${err})`);
+      }
+      await ready(page);
+      await page.screenshot({ path: `${OUT}/${name}-etat.png`, fullPage: true });
+      await audit(page, `${name}/etat`);
+    }
     if (name === 'bureau') {
       try {
-        // S-9.6: « volets fermés » card (lazy module) in Analyse
+        // S-9.6: « volets fermés » card (lazy module) in Outils → Journaux
+        await go(page, 'outils-volets');
         await page.waitForSelector('#shutters-card', { timeout: 10000 });
         // S-12.2 (v1.5): the household view is opt-in; real per-room figures by default, the
-        // menu toggle merges the bedrooms (display only: same total), detail on demand until the lock
-        const picker = () => page.locator('.rooms-panel').textContent();
-        const total = () => page.locator('.period-total strong').first().textContent();
-        const openMenu = async () => (await page.locator('.menu').getAttribute('open')) === null && (await page.click('.menu summary'));
-        await page.click('[data-view=overview]');
+        // switch of ⚙ Affichage merges the bedrooms (display only: same total), detail on demand until the lock
+        const picker = async () => (await go(page, 'pieces'), page.locator('.rooms-panel').textContent());
+        const total = async () => (await go(page, 'accueil'), page.locator('.period-total strong').first().textContent());
+        const display = () => go(page, 'parametres-affichage');
         if (!(await picker()).includes('Chambre parentale') || (await picker()).includes('Chambres')) errors.push('vue foyer : active par défaut (doit être désactivée)');
         const before = await total();
-        await openMenu();
+        await display();
         await page.check('[data-toggle=household]');
+        await ready(page);
         if (!(await picker()).includes('Chambres') || (await picker()).includes('Chambre parentale')) errors.push('vue foyer : chambres non regroupées');
         if ((await total()) !== before) errors.push(`vue foyer : total changé par le regroupement (${before} → ${await total()})`);
-        await openMenu();
+        await display();
         await page.click('[data-household=reveal]');
         if (!(await picker()).includes('Chambre parentale')) errors.push('vue foyer : détail non affiché');
-        await openMenu();
+        await display();
         await page.click('[data-household=hide]');
-        await openMenu();
+        await ready(page);
         await page.uncheck('[data-toggle=household]');
         if (!(await picker()).includes('Chambre parentale')) errors.push('vue foyer : désactivation sans effet');
-        await openMenu();
-        // S-8.14: « Cadre juridique » from Paramètres (lazy module)
-        await page.click('.menu-panel [data-view=settings]');
+        await page.screenshot({ path: `${OUT}/${name}-pieces.png`, fullPage: true });
+        // S-8.14: « Cadre juridique » from ⚙ À propos (lazy module)
+        await go(page, 'parametres-apropos');
         await page.click('#legal-open');
         await page.waitForSelector('#legal-card .legal-list', { timeout: 10000 });
         await page.screenshot({ path: `${OUT}/${name}-juridique.png`, fullPage: true });
@@ -338,8 +370,9 @@ try {
         errors.push(`${name}: vue foyer / volets / cadre juridique (${err})`);
       }
     }
-    // S-11 / S-3.8: comfort view (lazy chunk), bedroom detail on a deliberate gesture, other threshold
-    await page.click('[data-view=comfort]');
+    // S-11 / S-3.8: Air et confort (lazy chunk), bedroom detail on a deliberate gesture, other threshold
+    await go(page, 'pieces');
+    await page.click('#view a[href="#confort"]');
     await page.waitForSelector('#cold-chart canvas', { timeout: 15000 });
     await page.click('[data-comfort=show-bedrooms]');
     await page.waitForSelector('#co2-0 canvas');
@@ -347,50 +380,56 @@ try {
     await page.waitForFunction(() => !document.querySelector('#view td.num')?.closest('table')?.textContent?.includes('…'), null, { timeout: 15000 });
     await ready(page);
     for (const id of ['co2-0', 'cellar-0', 'cold-chart', 'probe-0']) {
-      if (!(await page.locator(`#${id} canvas`).count())) errors.push(`${name}/comfort: graphique ${id} absent`);
+      if (!(await page.locator(`#${id} canvas`).count())) errors.push(`${name}/confort: graphique ${id} absent`);
     }
-    if (!(await page.getByText('Heures sous 18,0 °C').count())) errors.push(`${name}/comfort: seuil 18 °C non appliqué`);
+    if (!(await page.getByText('Heures sous 18,0 °C').count())) errors.push(`${name}/confort: seuil 18 °C non appliqué`);
     // E13 (S-13.3): open windows per room (lazy document), signature without the window days
     try {
       await page.waitForSelector('#windows-chart canvas', { timeout: 15000 });
-      if (!(await page.getByText('Pourquoi cette pièce était froide ?').count())) errors.push(`${name}/comfort: question « pièce froide » absente`);
+      if (!(await page.getByText('Pourquoi cette pièce était froide ?').count())) errors.push(`${name}/confort: question « pièce froide » absente`);
       await page.check('[data-windows=exclude]');
       await page.waitForSelector('#windows-signature', { timeout: 5000 });
-      if (!/jours? exclus?/.test(await page.locator('#windows-signature').innerText())) errors.push(`${name}/comfort: signature sans les jours fenêtre ouverte absente`);
+      if (!/jours? exclus?/.test(await page.locator('#windows-signature').innerText())) errors.push(`${name}/confort: signature sans les jours fenêtre ouverte absente`);
     } catch (err) {
-      errors.push(`${name}/comfort: carte « Fenêtres ouvertes » non rendue (${err})`);
+      errors.push(`${name}/confort: carte « Fenêtres ouvertes » non rendue (${err})`);
     }
     // S-1.18: Home Assistant import, agreement between the window contact and open_window
     try {
       await page.waitForSelector('#ha-card table', { timeout: 15000 });
       const ha = await page.locator('#ha-card').innerText();
-      for (const want of ['Fenêtre bureau', 'prise_frigo', 'Accord sur']) if (!ha.includes(want)) errors.push(`${name}/comfort: Home Assistant sans « ${want} »`);
+      for (const want of ['Fenêtre bureau', 'prise_frigo', 'Accord sur']) if (!ha.includes(want)) errors.push(`${name}/confort: Home Assistant sans « ${want} »`);
       await page.selectOption('select[data-ha-room]', '');
       await page.waitForFunction(() => document.querySelector('#ha-card')?.textContent?.includes('Choisissez la pièce'), null, { timeout: 5000 });
       await page.selectOption('select[data-ha-room]', 'r-bureau');
       await page.waitForFunction(() => document.querySelector('#ha-card')?.textContent?.includes('Accord sur'), null, { timeout: 5000 });
     } catch (err) {
-      errors.push(`${name}/comfort: carte Home Assistant non rendue (${err})`);
+      errors.push(`${name}/confort: carte Home Assistant non rendue (${err})`);
     }
     const overflow = await page.evaluate(() => {
       const t = document.querySelector('.tabs');
       return t ? t.scrollWidth > t.clientWidth + 1 : false;
     });
     if (overflow) errors.push(`${name}: barre d'onglets plus large que l'écran`);
-    await page.screenshot({ path: `${OUT}/${name}-comfort.png`, fullPage: true });
+    await page.screenshot({ path: `${OUT}/${name}-confort.png`, fullPage: true });
     await page.selectOption('select[data-comfort=threshold]', '19');
+    await ready(page);
+    // #308: the back arrow of a sub-page returns to its tab
+    await page.click('.subhead .back');
+    await page.waitForSelector('#view[data-page=pieces]', { state: 'attached', timeout: 5000 }).catch(() => errors.push(`${name}: la flèche retour d'Air et confort ne revient pas à Pièces`));
 
-    await page.click('.menu summary');
-    await page.click('.menu-panel [data-view=report]');
+    await go(page, 'outils');
+    await page.click('#view a[href="#rapport"]');
     await page.waitForSelector('.report');
     // S-6.3: offer comparator and maximum power in the annual report (lazy module)
     try {
       await page.waitForSelector('#report-offers table', { timeout: 15000 });
       await page.waitForSelector('#report-pmax table', { timeout: 15000 });
     } catch (err) {
-      errors.push(`${name}/report: comparateur ou pic de puissance absent (${err})`);
+      errors.push(`${name}/rapport: comparateur ou pic de puissance absent (${err})`);
     }
-    // S-5.9: a canned question answered by code
+    await page.screenshot({ path: `${OUT}/${name}-report.png`, fullPage: true });
+    // S-5.9: a canned question answered by code (Outils → Questions types)
+    await go(page, 'outils-questions');
     await page.click('[data-question=normal]');
     await page.waitForSelector('.question-answer li', { timeout: 5000 });
     // S-13.3: « pourquoi cette pièce était froide ? » (room states loaded on demand)
@@ -398,15 +437,16 @@ try {
     try {
       await page.waitForFunction(() => /sous 19 °C/.test(document.querySelector('.question-answer')?.textContent ?? ''), null, { timeout: 10000 });
     } catch (err) {
-      errors.push(`${name}/report: question « pièce froide » sans réponse (${err})`);
+      errors.push(`${name}/rapport: question « pièce froide » sans réponse (${err})`);
     }
     await page.click('[data-question=normal]');
     await page.waitForSelector('.question-answer li', { timeout: 5000 });
-    await page.screenshot({ path: `${OUT}/${name}-report.png`, fullPage: true });
+    await page.screenshot({ path: `${OUT}/${name}-questions.png`, fullPage: true });
+    await go(page, 'rapport');
     // S-6.4: anonymised report, without any room or home name of the demo
     const roomNames = await page.locator('#report-waterfall ~ .table-wrap').first().locator('tbody td:first-child').allInnerTexts();
     const homeName = (await page.locator('.top h1').innerText()).replace(/\s*démo$/i, '').trim();
-    if (roomNames.length < 2) errors.push(`${name}/report: tableau des pièces introuvable`);
+    if (roomNames.length < 2) errors.push(`${name}/rapport: tableau des pièces introuvable`);
     await page.click('#report-anon');
     await page.waitForSelector('.anon-report #anon-chart canvas', { timeout: 15000 });
     const anon = await page.locator('.anon-report').innerText();
@@ -415,41 +455,47 @@ try {
     }
     if (!/Pièce A/.test(anon) || !/Période/.test(anon)) errors.push(`${name}/anonymisé: pseudonymes ou période absents`);
     await page.screenshot({ path: `${OUT}/${name}-report-anonymise.png`, fullPage: true });
-    // S-9.7: long export, generated in the page
+    await audit(page, `${name}/rapport`);
+    // S-9.7: long export, generated in the page (Outils → Exporter mes données)
     if (name === 'bureau') {
-      await page.click('.menu summary');
+      await go(page, 'outils-exports');
       const [dl] = await Promise.all([page.waitForEvent('download'), page.click('[data-export-long=csv]')]);
       const head = readFileSync(await dl.path(), 'utf8').split('\n')[0];
       if (head !== 'date,source,entity,metric,value,unit') errors.push(`export long : en-tête inattendu (${head})`);
       if (!/^energie-long-v1-\d{4}-\d{2}-\d{2}\.csv$/.test(dl.suggestedFilename())) errors.push(`export long : nom ${dl.suggestedFilename()}`);
+      await audit(page, `${name}/outils-exports`);
     }
-    await audit(page, `${name}/report`);
-    if (!(await page.locator('.menu[open]').count())) await page.click('.menu summary');
-    await audit(page, `${name}/menu`);
-    await page.click('.menu-panel [data-view=settings]');
-    await ready(page);
-    // S-12.6 tenant mode, S-12.5 prolonged cold alert (lazy cards)
+    // #309: the settings centre, one page per subject
+    for (const p of ['contrat', 'logement', 'sources', 'objectifs', 'affichage', 'foyer', 'securite', 'apropos']) {
+      await go(page, `parametres-${p}`);
+      await audit(page, `${name}/parametres-${p}`);
+      if (name === 'bureau' || p === 'contrat') await page.screenshot({ path: `${OUT}/${name}-parametres-${p}.png`, fullPage: true });
+    }
+    // S-12.6 tenant mode (⚙ Foyer), S-12.5 prolonged cold alert (⚙ Objectifs) (lazy cards)
     try {
-      await page.waitForSelector('#tenant-card #tenant-on', { timeout: 15000 });
+      await go(page, 'parametres-objectifs');
       await page.waitForSelector('#cold-card [data-cold-room]', { timeout: 15000 });
       await page.locator('#cold-card [data-cold-room]').first().check();
       await page.waitForSelector('#cold-card td:text-is("Pièce A")', { timeout: 5000 });
-      if (!/pas un dispositif de sécurité/.test(await page.locator('#cold-card').innerText())) errors.push(`${name}/settings: avertissement « pas un dispositif de sécurité » absent`);
+      if (!/pas un dispositif de sécurité/.test(await page.locator('#cold-card').innerText())) errors.push(`${name}/objectifs: avertissement « pas un dispositif de sécurité » absent`);
+      await go(page, 'parametres-foyer');
+      await page.waitForSelector('#tenant-card #tenant-on', { timeout: 15000 });
     } catch (err) {
-      errors.push(`${name}/settings: cartes locataire ou alerte froid non rendues (${err})`);
+      errors.push(`${name}/parametres: cartes locataire ou alerte froid non rendues (${err})`);
     }
     // v1.5: state of the devices (station battery, gateway, Intuis contract, Shelly clamps)
     try {
+      await go(page, 'parametres-sources');
       await page.waitForSelector('#devices-card [data-shelly-role]', { timeout: 15000 });
       const text = await page.locator('#devices-card').innerText();
-      for (const want of [/Pile faible/, /Intuis indique/, /Redémarrée 1 fois/, /Heure du pic/]) if (!want.test(text)) errors.push(`${name}/settings: état des appareils sans ${want}`);
+      for (const want of [/Pile faible/, /Intuis indique/, /Redémarrée 1 fois/, /Heure du pic/]) if (!want.test(text)) errors.push(`${name}/sources: état des appareils sans ${want}`);
     } catch (err) {
-      errors.push(`${name}/settings: carte « État des appareils » non rendue (${err})`);
+      errors.push(`${name}/sources: carte « État des appareils » non rendue (${err})`);
     }
-    await audit(page, `${name}/settings`);
     await page.screenshot({ path: `${OUT}/${name}-settings.png`, fullPage: true }); // S-7.14: inventaire
     // S-12.3: invite a member of the household: a QR code of the address, never the passphrase
     try {
+      await go(page, 'parametres-foyer');
       await page.click('#invite-open');
       await page.waitForSelector('#invite-card svg.qr', { timeout: 10000 });
       const invite = await page.locator('#invite-card').innerText();
@@ -463,7 +509,8 @@ try {
       errors.push(`${name}/invitation: QR code non rendu (${err})`);
     }
     if (name === 'bureau') {
-      // S-12.6: tenant mode hides the comparator and Linky cards, costs at the average price, lease report
+      // S-12.6: tenant mode hides the comparator and the Compteur tab, costs at the average price, lease report
+      await go(page, 'parametres-foyer');
       await page.check('#tenant-on');
       await page.waitForSelector('#tenant-price');
       await page.fill('#tenant-price', '0.25');
@@ -472,26 +519,27 @@ try {
       await page.fill('#tenant-from', '2024-07-01');
       await page.locator('#tenant-from').blur();
       await ready(page);
-      await page.click('[data-view=compare]');
-      await ready(page); // the EV card is lazy: only absent once the view has settled
-      if (await page.locator('#offers-chart, #ev-card').count()) errors.push('locataire : comparateur ou recharge encore affichés');
-      if (!(await page.locator('.tenant-note').count())) errors.push('locataire : phrase d\'explication absente dans Comparer');
-      await audit(page, 'locataire/compare');
-      await page.click('[data-view=overview]');
-      await ready(page); // the Linky cards are lazy too
+      if (await page.locator('.tabs [data-view=compteur]').count()) errors.push('locataire : onglet Compteur encore affiché');
+      await go(page, 'outils');
+      if (!/Mode locataire/.test(await page.locator('#view').innerText())) errors.push("locataire : ligne d'explication absente dans Outils");
+      if (await page.locator('#view a[href="#outils-offres"], #view a[href="#outils-voiture"]').count()) errors.push('locataire : comparateur ou recharge encore proposés');
+      await go(page, 'outils-offres');
+      if (await page.locator('#offers-chart').count()) errors.push('locataire : comparateur encore affiché');
+      if (!(await page.locator('.tenant-note').count())) errors.push("locataire : phrase d'explication absente du comparateur");
+      await audit(page, 'locataire/outils-offres');
+      await page.evaluate(() => (location.hash = '#compteur'));
+      await page.waitForSelector('#view[data-page=outils][data-ready]', { state: 'attached' }).catch(() => errors.push('locataire : l’adresse #compteur ne mène pas à Outils'));
+      await go(page, 'accueil');
       if (await page.locator('#linky-chart, #curve-card').count()) errors.push('locataire : cartes Linky encore affichées');
       if (!/€/.test(await page.locator('.kpis').innerText())) errors.push('locataire : coûts absents malgré le prix moyen');
-      await page.click('.menu summary');
-      await page.click('.menu-panel [data-view=report]');
-      await page.waitForSelector('#report-anon');
+      await go(page, 'rapport');
       await page.click('#report-anon');
       await page.waitForSelector('.anon-report #anon-chart canvas', { timeout: 15000 });
       const lease = await page.locator('.anon-report').innerText();
       if (!/période du bail/i.test(lease) || !/1er juillet 2024/.test(lease)) errors.push('locataire : le rapport anonymisé ne couvre pas le bail');
       await page.screenshot({ path: `${OUT}/${name}-locataire-rapport.png`, fullPage: true });
       await audit(page, 'locataire/rapport');
-      await page.click('.menu summary');
-      await page.click('.menu-panel [data-view=settings]');
+      await go(page, 'parametres-foyer');
       await page.waitForSelector('#tenant-on');
       await page.uncheck('#tenant-on');
       await ready(page);
@@ -500,9 +548,8 @@ try {
     if (name === 'bureau') await keyboard(page, name);
 
     if (name === 'mobile-clair') {
-      // S-7.11: swipe on the header changes the period, on the tab bar the view.
-      await page.click('[data-view=overview]');
-      await ready(page);
+      // S-7.11: swipe on the header changes the period (Accueil), on the tab bar the tab.
+      await go(page, 'accueil');
       const period = () => page.$eval('select[data-set=period]', (s) => s.value);
       const before = await period();
       await swipe(page, '.top .title', 120);
@@ -511,15 +558,19 @@ try {
       await swipe(page, '.top .title', -120);
       check((await period()) === before, `${name}/glisser : retour impossible à la période ${before}`);
       await swipe(page, '.tabs', -120);
-      check(await page.locator('[data-view=compare][aria-current=page]').count(), `${name}/glisser : l'onglet ne change pas`);
-      check(/Comparer/.test(await page.textContent('#sr-status')), `${name}/glisser : changement non annoncé`);
+      check(await page.locator('.tabs [data-view=pieces][aria-current=page]').count(), `${name}/glisser : l'onglet ne change pas`);
+      check(/Pièces/.test(await page.textContent('#sr-status')), `${name}/glisser : changement non annoncé`);
 
-      // S-7.8 + S-7.7: pinned room in simple mode, system text at 200 %, nothing cut.
-      await page.click('.menu summary');
+      // S-7.8 + S-7.7 + #316: pinned room in the simple view, its 3 tabs, system text at 200 %, nothing cut.
+      await go(page, 'parametres-affichage');
       const room = await page.$eval('select[data-pin] option:nth-child(2)', (o) => o.value);
       await page.selectOption('select[data-pin]', room);
-      await page.check('.menu-panel [data-toggle=simple]');
+      await ready(page);
+      await page.check('[data-toggle=simple]');
+      await ready(page);
+      await go(page, 'accueil');
       await page.waitForSelector('body.is-simple');
+      check((await page.locator('.tabs a').count()) === 3, `${name}/vue simple : barre de 3 onglets attendue`);
       check((await page.locator('.kpi.pinned').count()) >= 1, `${name}/épingle : pièce épinglée absente du mode simple`);
       check(
         (await page.locator('.kpis > .kpi').first().getAttribute('class')).includes('pinned'),
@@ -531,14 +582,15 @@ try {
       await page.click('.glossary [data-term=dju]');
       check(await page.locator('.glossary [data-term=dju][aria-expanded=true] + .term-def:visible').count(), `${name}/FALC : définition non affichée`);
       check(/degrés-jours/.test(await page.textContent('#sr-status')), `${name}/FALC : définition non annoncée`);
+      await audit(page, `${name}/vue-simple`);
       await page.addStyleTag({ content: 'html { font-size: 200% !important; }' });
       await nextFrame(page);
       const cut = await page.evaluate(() => {
         const out = [];
         if (document.documentElement.scrollWidth > window.innerWidth + 1) out.push(`page ${document.documentElement.scrollWidth}px > ${window.innerWidth}px`);
-        for (const el of document.querySelectorAll('.top *, .verdict *, .kpi, .kpi *')) {
+        for (const el of document.querySelectorAll('.top *, .tabs *, .verdict *, .kpi, .kpi *')) {
           const cs = getComputedStyle(el);
-          if (cs.display === 'none' || cs.visibility === 'hidden' || el.closest('details:not([open]) > :not(summary)')) continue;
+          if (cs.display === 'none' || cs.visibility === 'hidden' || el.closest('details:not([open]) > :not(summary)') || el.classList.contains('sr-only')) continue;
           if (el.scrollWidth > el.clientWidth + 1 && el.clientWidth > 0 && cs.overflowX !== 'visible') out.push(el.className || el.tagName);
           const r = el.getBoundingClientRect();
           if (r.width && r.right > window.innerWidth + 1) out.push(`${el.className || el.tagName} déborde (${Math.round(r.right)}px)`);
@@ -547,10 +599,17 @@ try {
       });
       check(!cut.length, `${name}/texte 200 % : texte tronqué ou débordant → ${cut.slice(0, 5).join(', ')}`);
       await page.screenshot({ path: `${OUT}/${name}-simple-200.png`, fullPage: true });
-      await page.click('.menu summary');
-      await page.uncheck('.menu-panel [data-toggle=simple]');
+      // « Ma pièce » opens the pinned room; « Voir plus de détails » leaves the simple view after a confirmation
+      await page.click('.tabs a:nth-child(2)');
+      await page.waitForSelector(`#view[data-page="piece-${room}"][data-ready]`, { state: 'attached' }).catch(() => errors.push(`${name}/vue simple : « Ma pièce » n'ouvre pas la pièce épinglée`));
+      await go(page, 'accueil');
+      await page.click('[data-simple-exit=ask]');
+      check(await page.locator('body.is-simple').count(), `${name}/vue simple : quittée sans confirmation`);
+      await page.click('[data-simple-exit=yes]');
+      await page.waitForFunction(() => document.querySelectorAll('.tabs a').length === 5, null, { timeout: 5000 }).catch(() => errors.push(`${name}/vue simple : « Voir plus de détails » ne la quitte pas`));
+      await ready(page);
     }
-    await checkViolations(page, `${name}/report+settings`);
+    await checkViolations(page, `${name}/rapport+parametres`);
     if (name === 'bureau') {
       // S-12.3: the invited member lands on the lock screen with the installation help open
       await page.goto('about:blank');
@@ -571,26 +630,27 @@ try {
     page.on('pageerror', (e) => errors.push(`360-200: ${e.message}`));
     await openDemo(page);
     await page.addStyleTag({ content: 'html { font-size: 200% !important; }' });
-    for (const view of ['overview', 'rooms', 'analyse', 'compare', 'comfort']) {
+    for (const view of ['accueil', 'pieces', 'historique', 'compteur', 'outils', 'confort', 'parametres', 'parametres-contrat', 'parametres-affichage']) {
       progress(`360 px, texte 200 % : ${view}`);
-      await page.click(`[data-view=${view}]`);
-      await ready(page);
+      await go(page, view);
       await nextFrame(page);
       const out = await page.evaluate(() => {
         const found = [];
         if (document.documentElement.scrollWidth > window.innerWidth + 1) found.push(`page ${document.documentElement.scrollWidth}px > ${window.innerWidth}px`);
-        for (const el of document.querySelectorAll('#view .seg, #view .seg button, #view .controls, #view .card-head, #view .kpi, #view .chip, #view .verdict, #view .share-legend')) {
+        for (const el of document.querySelectorAll('#view .seg, #view .seg button, #view .controls, #view .card-head, #view .kpi, #view .chip, #view .verdict, #view .share-legend, #view .list .row, .top > *, .tabs a, .tabs a span, .subhead')) {
           const cs = getComputedStyle(el);
           if (cs.display === 'none' || el.closest('details:not([open])') || el.closest('[hidden]')) continue;
           const r = el.getBoundingClientRect();
           if (r.width && r.right > window.innerWidth + 1) found.push(`${el.className || el.tagName} déborde (${Math.round(r.right)} px)`);
-          if (el.matches('.seg button') && el.scrollWidth > el.clientWidth + 1) found.push(`« ${el.textContent} » coupé`);
+          if (el.matches('.seg button, .tabs a span') && el.scrollWidth > el.clientWidth + 1) found.push(`« ${el.textContent} » coupé`);
+          // #308: each tab keeps a 44 px target
+          if (el.matches('.tabs a') && (r.height < 44 || r.width < 44)) found.push(`onglet « ${el.textContent} » trop petit (${Math.round(r.width)} × ${Math.round(r.height)} px)`);
         }
         return found;
       });
       check(!out.length, `360 px, texte 200 %/${view} : ${out.slice(0, 5).join(', ')}`);
       await page.screenshot({ path: `${OUT}/mobile360-texte200-${view}.png`, fullPage: true });
-      if (view === 'overview' || view === 'compare') await audit(page, `360 px, texte 200 %/${view}`);
+      if (['accueil', 'historique', 'outils', 'parametres-contrat'].includes(view)) await audit(page, `360 px, texte 200 %/${view}`);
     }
     await ctx.close();
   }
@@ -607,23 +667,26 @@ try {
     page.on('pageerror', (e) => errors.push(`${name}: ${e.message}`));
     await openDemo(page);
     // S-7.8: pinned room in simple mode under Trusted Types (insertAdjacentHTML path).
-    await page.click('.menu summary');
+    await go(page, 'parametres-affichage');
     await page.selectOption('select[data-pin]', { index: 1 });
-    await page.check('.menu-panel [data-toggle=simple]');
+    await ready(page);
+    await page.check('[data-toggle=simple]');
+    await ready(page);
+    await go(page, 'accueil');
     await page.waitForSelector('.kpi.pinned');
-    await page.click('.menu summary');
-    await page.uncheck('.menu-panel [data-toggle=simple]');
+    await audit(page, `${name}/vue-simple`, { enhanced: name !== 'couleurs-forcees' });
+    await go(page, 'parametres-affichage');
+    await page.uncheck('[data-toggle=simple]');
+    await ready(page);
     await checkViolations(page, `${name}/épingle`);
-    for (const view of ['overview', 'compare']) {
-      await page.click(`[data-view=${view}]`);
-      await ready(page);
+    for (const view of ['accueil', 'historique', 'outils', 'parametres', 'parametres-contrat']) {
+      await go(page, view);
       await page.screenshot({ path: `${OUT}/${name}-${view}.png`, fullPage: true });
       await audit(page, `${name}/${view}`, { enhanced: name !== 'couleurs-forcees' });
     }
-    // S-7.14: captures of the other views for the design inventory (not audited at 7:1 yet: v1.6).
-    for (const view of ['rooms', 'analyse', 'comfort']) {
-      await page.click(`[data-view=${view}]`);
-      await ready(page);
+    // S-7.14: captures of the other pages for the design inventory (7:1 audited on the pages above).
+    for (const view of ['pieces', 'compteur', 'confort']) {
+      await go(page, view);
       await page.screenshot({ path: `${OUT}/${name}-${view}.png`, fullPage: true });
     }
     await ctx.close();
@@ -646,7 +709,7 @@ try {
       }
     });
     await openDemo(page); // through the service worker: files are cached
-    await page.click('[data-view=analyse]');
+    await go(page, 'compteur');
     await page.waitForSelector('#hour-grid canvas', { timeout: 20000 });
     await ctx.setOffline(true);
     progress('hors ligne : ouverture de la démo');
@@ -656,9 +719,9 @@ try {
     await page.waitForSelector('#net-status:not([hidden])', { timeout: 5000 });
     const banner = await page.textContent('#net-status');
     check(/Hors ligne/.test(banner) && /profil horaire compris/.test(banner), `hors-ligne : bandeau inattendu « ${banner} »`);
-    await page.click('[data-view=analyse]');
+    await go(page, 'compteur');
     await page.waitForSelector('#hour-grid canvas', { timeout: 20000 }).catch(() => errors.push('hors-ligne : profil horaire absent'));
-    await page.screenshot({ path: `${OUT}/hors-ligne-analyse.png`, fullPage: true });
+    await page.screenshot({ path: `${OUT}/hors-ligne-compteur.png`, fullPage: true });
     await ctx.close();
   }
   // v1.5 life cycle (#247, #255, #232): household view toggled while the Synthèse cards load,
@@ -674,38 +737,38 @@ try {
     page.on('request', (r) => /\.hourly\.enc\.json$/.test(r.url()) && hourlyRequests++);
     try {
       await openDemo(page);
-      await page.click('[data-view=overview]');
+      await page.evaluate(() => (location.hash = '#compteur'));
       await page.waitForSelector('#curve-card');
       // at once, before the load curve and the hourly data arrive (#247)
-      await page.click('.menu summary');
+      await page.evaluate(() => (location.hash = '#parametres-affichage'));
       await page.check('[data-toggle=household]');
+      await go(page, 'compteur');
       await page.waitForSelector('#curve-day-chart canvas', { timeout: 20000 });
       await page.waitForSelector('#bd-chart canvas', { timeout: 20000 });
       const talon = await page.locator('#curve-talon').innerText();
       check(/\d\s?W/.test(talon), `cycle de vie : talon de veille absent après la bascule (${talon})`);
-      await page.click('[data-view=analyse]');
       await page.waitForSelector('#hour-grid canvas', { timeout: 20000 });
       await ready(page); // offline prefetch (idle callback) included
       const before = hourlyRequests;
       for (let i = 0; i < 2; i++) {
-        if ((await page.locator('.menu').getAttribute('open')) === null) await page.click('.menu summary');
+        await go(page, 'parametres-affichage');
         await page.click('[data-toggle=household]');
+        await go(page, 'compteur');
         await page.waitForSelector('#hour-grid canvas', { timeout: 20000 });
       }
       await ready(page);
       check(hourlyRequests === before, `cycle de vie : la bascule de la vue foyer a retéléchargé ${hourlyRequests - before} fichier(s) horaire(s) (#255)`);
       // lock (« Quitter la démo »), then reopen: the views draw again from a clean slate
-      if ((await page.locator('.menu').getAttribute('open')) === null) await page.click('.menu summary');
+      await go(page, 'parametres');
       await page.click('#lock');
       await page.waitForSelector('#demo', { timeout: 10000 });
       check(!(await page.locator('header.top').count()), 'cycle de vie : l’appli reste affichée après le verrouillage');
       await page.click('#demo');
       await page.waitForSelector('header.top', { timeout: 30000 });
-      await page.click('[data-view=overview]');
+      await go(page, 'compteur');
       await page.waitForSelector('#curve-day-chart canvas', { timeout: 20000 }).catch(() => errors.push('cycle de vie : courbe de charge absente après réouverture'));
-      await page.click('[data-view=analyse]');
       await page.waitForSelector('#hour-grid canvas', { timeout: 20000 }).catch(() => errors.push('cycle de vie : profil horaire absent après réouverture'));
-      await page.click('[data-view=comfort]');
+      await go(page, 'confort');
       await page.waitForSelector('#cold-chart canvas', { timeout: 20000 }).catch(() => errors.push('cycle de vie : vue Confort absente après réouverture'));
       await checkViolations(page, 'cycle de vie');
     } catch (err) {
@@ -722,10 +785,10 @@ try {
     page.on('pageerror', (e) => errors.push(`carte hors ligne: ${e.message}`));
     try {
       await openDemo(page);
-      await page.click('[data-view=overview]');
+      await go(page, 'accueil');
       await page.waitForSelector('.kpi');
       await ctx.setOffline(true);
-      await page.click('[data-view=analyse]');
+      await page.evaluate(() => (location.hash = '#outils-volets'));
       const failed = page.locator('#shutters-zone .lazy-failed');
       await failed.waitFor({ timeout: 15000 });
       const text = await failed.innerText();
@@ -734,10 +797,12 @@ try {
       await checkViolations(page, 'carte hors ligne');
       // back online: the browser keeps the failed module until a reload, the card says so
       await ctx.setOffline(false);
-      await page.waitForSelector('#shutters-zone [data-lazy-retry=reload]', { timeout: 15000 });
+      // (#308: Outils → Volets loads no document that would redraw the page when the network comes back:
+      // the « Réessayer » button itself sees that the module failed offline and reloads the page)
+      await page.waitForSelector('#shutters-zone [data-lazy-retry]', { timeout: 15000 });
       await Promise.all([page.waitForEvent('load'), page.click('#shutters-zone [data-lazy-retry]')]);
       await openDemo(page);
-      await page.click('[data-view=analyse]');
+      await go(page, 'outils-volets');
       await page.waitForSelector('#shutters-card', { timeout: 15000 }).catch(() => errors.push('carte hors ligne : la carte ne revient pas après rechargement'));
     } catch (err) {
       errors.push(`carte hors ligne : ${err}`);

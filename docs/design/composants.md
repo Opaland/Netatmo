@@ -124,7 +124,14 @@ des champs, sur les cartes. Le test affiche ces minimums à chaque exécution
 (`npx vitest run src/tokens.test.ts`). En plus, axe (`color-contrast`, et `color-contrast-enhanced`
 en contraste élevé) passe sur l'appli et sur la page de démonstration.
 
-## Reste à faire (étapes 2 et 3)
+## Étape 2 (navigation, #308 #309 #257 #258)
+
+Fait : barre d'onglets et en-tête (pastille d'état, ⚙), sous-pages avec flèche retour et adresse
+(`web/src/router.ts`), registre des pages (`web/src/pages.ts`), délégation unique des événements
+(`web/src/events.ts`), centre de paramètres à 8 pages avec portée « foyer » / « ce téléphone »,
+`fmt1` (glossary.ts) et `downloadBlob` (download.ts) partagés.
+
+## Reste à faire (étape 3)
 
 Barre d'onglets et en-tête de la maquette, feuille (bottom sheet) et dialogue, sélecteur de période
 unique par écran avec sa feuille, centre de paramètres, page Pièce : les composants sont prêts, la

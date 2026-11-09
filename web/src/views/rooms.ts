@@ -11,6 +11,7 @@ import {
   avgPrice,
   drawWaterfall,
   esc,
+  fmt1,
   firstDay,
   lastDay,
   longDate,
@@ -23,7 +24,11 @@ import {
 } from '../ui';
 import { html } from '../trusted';
 
-export function renderRooms(view: HTMLElement, records: DayRecord[]) {
+/**
+ * #308: « list » (Pièces: the rooms by cost, each opening its page), « changes » (Historique:
+ * what changed, room by room) or « room » (the page of one room, month by month; #313 fills it).
+ */
+export function renderRooms(view: HTMLElement, records: DayRecord[], part: 'list' | 'changes' | 'room' = 'list', room: string | null = null) {
   const years = ds!.meta.years;
   const year = state.roomsYear ?? years[years.length - 1];
   const last = lastDay();
@@ -44,12 +49,12 @@ export function renderRooms(view: HTMLElement, records: DayRecord[]) {
   const winterLabel = `hiver ${winter}–${year}`;
   const rooms = activeRooms().filter((r) => now.has(r.id) || before.has(r.id));
   const sorted = rooms.slice().sort((a, b) => (now.get(b.id) ?? 0) - (now.get(a.id) ?? 0));
-  const focus = state.focusRoom && rooms.some((r) => r.id === state.focusRoom) ? state.focusRoom : null;
+  const focus = part === 'room' && room && rooms.some((r) => r.id === room) ? room : null;
   const hasTemps = activeRooms().some((r) => ds!.temps.has(r.id));
   const thr = state.comfortThreshold;
   const thrLabel = `${thr.toString().replace('.', ',')} °C`;
 
-  view.innerHTML = html`
+  const listCard = () => `
   <section class="card">
     <div class="card-head">
       <h2>Par pièce <small class="muted">kWh</small></h2>
@@ -63,7 +68,7 @@ export function renderRooms(view: HTMLElement, records: DayRecord[]) {
     </div>
     <p class="hint muted">${isCurrent ? `Du 1er janvier au ${longDate(last)}, comparé à la même période de ${year - 1}.` : `Année ${year} complète, comparée à ${year - 1}.`}${win?.cut ? ` La collecte a commencé le ${longDate(first)} : l'évolution porte sur la même période des deux années (${win.label}).` : ''}${
       caveat.includes('jour') ? ` <strong>Attention</strong> : ${esc(caveat.split(' · ').filter((c) => c.includes('jour')).join(', '))}, l'évolution en est faussée.` : ''
-    } Touchez une pièce pour voir son détail.</p>
+    } Touchez une pièce pour ouvrir sa page.</p>
     <div class="chart" id="rooms-chart" style="height:${Math.max(220, sorted.length * 52 + 40)}px" role="img" aria-label="Consommation par pièce"></div>
     ${table(
       [
@@ -72,7 +77,7 @@ export function renderRooms(view: HTMLElement, records: DayRecord[]) {
         'Part',
         `${year - 1}${win?.cut ? ' (même période)' : ''}`,
         'Évolution',
-        ...(hasTemps ? [`Temp. moy. (${winterLabel})`, 'Consigne moy.', `Jours à moyenne sous ${thrLabel}`] : []),
+        ...(hasTemps ? [`Température moyenne mesurée (${winterLabel})`, 'Température demandée aux radiateurs (consigne), moyenne', `Jours à moyenne sous ${thrLabel}`] : []),
       ],
       sorted.map((r) => {
         const v = now.get(r.id) ?? 0;
@@ -81,37 +86,43 @@ export function renderRooms(view: HTMLElement, records: DayRecord[]) {
         const tm = winterTemps(r.id, winter);
         const cold = r.category === 'heating' ? coldDays(r.id, winter, thr) : null;
         return [
-          `<button type="button" class="link" data-focus="${esc(r.id)}"><span class="swatch" style="background:${roomColor(r.id)}"></span>${esc(r.name)}</button> <small class="muted">${CATEGORY_LABEL[r.category]}</small>`,
+          `<a class="link" href="#piece-${esc(encodeURIComponent(r.id))}" data-room-link="${esc(r.id)}"><span class="swatch" style="background:${roomColor(r.id)}"></span>${esc(r.name)}</a> <small class="muted">${CATEGORY_LABEL[r.category]}</small>`,
           v,
           sum ? `${nf0.format((v / sum) * 100)} %` : '—',
           b,
           d === null ? '—' : pct(d),
           ...(hasTemps
             ? [
-                tm ? `${tm[0].toFixed(1).replace('.', ',')} °C` : '—',
-                tm?.[1] != null ? `${tm[1].toFixed(1).replace('.', ',')} °C` : '—',
+                tm ? `${fmt1(tm[0])} °C` : '—',
+                tm?.[1] != null ? `${fmt1(tm[1])} °C` : '—',
                 cold ? `${cold.under} j sur ${cold.n} <small class="muted">${cold.source === 'station' ? 'station' : 'radiateur'}</small>` : '—',
               ]
             : []),
         ];
       }),
     )}
-    ${hasTemps ? `<p class="hint muted">Températures et jours froids : ${winterLabel} (1er novembre ${winter} → 31 mars ${year}), comme dans Confort. Jours à moyenne sous ${thrLabel} : jours dont la température moyenne est sous le seuil, sur les jours relevés de l'hiver ; mesurée par la station Netatmo quand la pièce y est liée (« station »), sinon par la sonde du radiateur. Seuil et heures détaillées dans Confort.</p>` : ''}
-  </section>
+    ${hasTemps ? `<p class="hint muted">Températures et jours froids : ${winterLabel} (1er novembre ${winter} → 31 mars ${year}), comme dans Air et confort. Jours à moyenne sous ${thrLabel} : jours dont la température moyenne est sous le seuil, sur les jours relevés de l'hiver ; mesurée par la station Netatmo quand la pièce y est liée (« station »), sinon par la sonde du radiateur. Seuil dans ⚙ Paramètres → Objectifs et alertes, heures détaillées dans Air et confort.</p>` : ''}
+  </section>`;
+  const changesCard = () => `
   <section class="card">
     <h2>Qu'est-ce qui a changé ? <small class="muted">${year - 1} → ${year}${suffix}</small></h2>
     <p class="hint muted">Chaque barre montre de combien une pièce a fait monter (rouge) ou baisser (vert) le total.</p>
     <div class="chart" id="rooms-waterfall" role="img" aria-label="Évolution par pièce"></div>
-  </section>
-  ${
+  </section>`;
+  const roomCard = () =>
     focus
       ? `<section class="card">
-    <div class="card-head"><h2>${esc(roomName(focus))} — mois par mois</h2><button type="button" class="link" data-focus="">Fermer</button></div>
-    <div class="chart" id="room-detail" role="img" aria-label="Détail mensuel de la pièce"></div>
+    <div class="card-head"><h2>Mois par mois <small class="muted">kWh, ${year - 2} à ${year}</small></h2></div>
+    <div class="chart" id="room-detail" role="img" aria-label="Détail mensuel de la pièce, ${esc(roomName(focus))}"></div>
   </section>`
-      : ''
-  }`;
+      : `<section class="card"><p class="hint">Pas de consommation de cette pièce en ${year}${room ? '' : ''}.</p></section>`;
+  view.innerHTML = html(part === 'list' ? listCard() : part === 'changes' ? changesCard() : roomCard());
+  if (part === 'room') return drawRoom();
 
+  if (part === 'changes') {
+    drawWaterfall(document.getElementById('rooms-waterfall')!, roomDeltas(records, win?.from ?? `${year}-01-01`, win?.to ?? end), year, suffix);
+    return;
+  }
   hbarChart(document.getElementById('rooms-chart')!, {
     labels: sorted.map((r) => r.name),
     series: [
@@ -124,10 +135,10 @@ export function renderRooms(view: HTMLElement, records: DayRecord[]) {
       { name: `${year - 1} (même période)`, color: cssVar('--usage-other'), data: sorted.map((r) => Math.round(before.get(r.id) ?? 0)) },
     ],
     price: avgPrice(),
-    onClick: (i) => setState({ focusRoom: sorted[i].id }),
+    onClick: (i) => (location.hash = `#piece-${encodeURIComponent(sorted[i].id)}`),
   });
-  drawWaterfall(document.getElementById('rooms-waterfall')!, roomDeltas(records, win?.from ?? `${year}-01-01`, win?.to ?? end), year, suffix);
-  if (focus) {
+  function drawRoom() {
+    if (!focus) return;
     const mine = records.filter((r) => r.room === focus);
     const m = monthlyByYear(mine);
     const shown = years.filter((y) => y >= year - 2 && y <= year);
@@ -178,16 +189,9 @@ function coldDays(room: string, season: number, thr: number): { under: number; n
 }
 
 // ------------------------------------------------------------------ events
-/** Room focus buttons. Returns true when the click belonged to this view. */
-export function handleClick(btn: HTMLElement): boolean {
-  if (btn.dataset.focus === undefined) return false;
-  setState({ focusRoom: btn.dataset.focus || null });
-  return true;
-}
-
 /** Year selector. Returns true when the change belonged to this view. */
 export function handleChange(t: HTMLInputElement | HTMLSelectElement): boolean {
   if (t.dataset.set !== 'roomsYear') return false;
-  setState({ roomsYear: Number(t.value), focusRoom: null });
+  setState({ roomsYear: Number(t.value) });
   return true;
 }
