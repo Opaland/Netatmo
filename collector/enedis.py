@@ -22,8 +22,10 @@ log = logging.getLogger(__name__)
 API = "https://conso.boris.sh/api/consommation_quotidienne"
 API_PMAX = "https://conso.boris.sh/api/puissance_conso_max_quotidienne"
 USER_AGENT = "intuis-history/1.0 (+https://github.com/Opaland/Netatmo)"
-DATE_KEYS = ("date", "dateDebut", "date_debut", "debut", "horodatage", "start")
-VALUE_KEYS = ("value", "valeur", "val", "consommation")
+# 2026 Enedis format: {"grandeur": [{"points": [{"d": "2024-01-01", "v": "12345"}]}]};
+# older formats used date/value or date/valeur.
+DATE_KEYS = ("d", "date", "dateDebut", "date_debut", "debut", "horodatage", "start")
+VALUE_KEYS = ("v", "value", "valeur", "val", "consommation")
 
 
 class LinkyError(RuntimeError):

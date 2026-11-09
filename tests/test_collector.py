@@ -407,3 +407,21 @@ def test_rekey_reencrypts_everything_and_rates_strength(tmp_path):
     with pytest.raises(DecryptError):
         Store(tmp_path, "ancienne phrase")
     assert strength_bits("motdepasse") < 50 <= strength_bits("pivoine tracteur lagune moustache onze")
+
+
+def test_linky_reads_the_2026_enedis_format(tmp_path):
+    from collector.enedis import collect
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        meta = {"idPrm": "12345678901234", "etapeMetier": "BRUT", "periode": {}, "typeValeur": "x", "pas": "P1D"}
+        if request.url.path.endswith("puissance_conso_max_quotidienne"):
+            points = [{"d": "2024-01-01T19:20:00+01:00", "v": "8120", "p": "P1D"}]
+        else:
+            points = [{"d": "2024-01-01", "v": "23500"}, {"d": "2024-01-02", "v": None}]
+        return httpx.Response(200, json={**meta, "grandeur": [{"unite": "Wh", "points": points}], "contexte": {}})
+
+    store = Store(tmp_path, "pw")
+    http = httpx.Client(transport=httpx.MockTransport(handler))
+    collect(store, "tok", "12345678901234", "2024-01-01", "Europe/Paris", http=http)
+    assert store.doc("linky")["daily"] == {"2024-01-01": 23500.0}
+    assert store.doc("linky")["pmax"]["2024-01-01"] == 8.12
