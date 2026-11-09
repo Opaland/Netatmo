@@ -42,6 +42,12 @@ def cmd_discover(s: Settings, args: argparse.Namespace) -> None:
     print('  INTUIS_ROOM_CATEGORIES={"<id>": "water_heater"}   (valeurs : heating, water_heater, ignore)')
 
 
+def cmd_diagnose(s: Settings, args: argparse.Namespace) -> None:
+    from .diagnose import run
+
+    run(_client(s))
+
+
 def cmd_sync(s: Settings, args: argparse.Namespace, backfill: bool = False) -> None:
     s.require("passphrase")
     store = Store(s.data_dir, s.passphrase)
@@ -97,6 +103,7 @@ def main(argv: list[str] | None = None) -> None:
     sub = p.add_subparsers(dest="cmd", required=True)
     d = sub.add_parser("discover")
     d.add_argument("--save-raw", metavar="FICHIER")
+    sub.add_parser("diagnose", help="diagnostic anonyme (sans noms ni valeurs)")
     for name in ("sync", "backfill"):
         sp = sub.add_parser(name)
         sp.add_argument("--days", type=int, default=35, help="jours re-téléchargés à chaque sync (défaut 35)")
@@ -111,6 +118,7 @@ def main(argv: list[str] | None = None) -> None:
     s = Settings.from_env()
     {
         "discover": cmd_discover,
+        "diagnose": cmd_diagnose,
         "sync": cmd_sync,
         "backfill": lambda s, a: cmd_sync(s, a, backfill=True),
         "verify": cmd_verify,
