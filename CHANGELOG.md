@@ -1,5 +1,95 @@
 # Historique des versions
 
+## v1.5 — novembre 2026 : revue de code complète et corrections
+
+Version de qualité : **tout le code** relu par quatre agents de revue (collecteur et workflows ; PWA
+sécurité et données ; PWA calculs ; PWA vues et performance), 46 constats ouverts en issues
+`revue-code` (1 critique, 17 majeurs, 25 mineurs, 3 suggestions), **43 corrigés**, 3 reportés en v1.6
+avec leur raison (#229, #257, #258). Aucune nouvelle vue ; seules exceptions, les suites de l'audit des
+données côté collecte. Détail dans [`docs/bmad/revues/v1.5.md`](docs/bmad/revues/v1.5.md).
+
+- **Sécurité et vie privée**
+  - **Fuite des coordonnées corrigée (critique, #261)** : une erreur HTTP d'Open-Meteo écrivait
+    l'URL, donc la latitude et la longitude du logement, dans le journal public de la collecte. Les
+    erreurs de toutes les sources passent par une couche d'erreurs sûres (source, chemin, statut,
+    catégorie, code validé ; jamais la requête, le corps, un id ni une valeur), et chaque ligne de
+    journal, stdout et stderr compris, est expurgée (`collector/redact.py`) ; corps d'erreur des API
+    et nom de la maison retirés aussi (#263, #264). Un test de fuite fait échouer toutes les sources
+    avec des réponses piégées (#321).
+  - Dépendances Python verrouillées avec empreintes (`requirements-lock.txt`, `--require-hashes`),
+    secrets donnés à la seule étape qui lance le collecteur, `timeout-minutes` sur la collecte (#265) ;
+    artefacts du relevé horaire acceptés seulement de ce dépôt et de ses runs planifiés, enveloppes
+    chiffrées refusées si version, KDF ou itérations sortent de l'attendu (#236, #271) ; clés Tempo
+    validées avant publication (#274).
+  - PWA : garde Trusted Types réécrite en petit analyseur (une quarantaine de contournements refusés,
+    texte échappé jamais bloqué, #230, #231) ; exports CSV neutralisés contre les formules (#235) ;
+    champs de jeton et de mots de passe non mémorisables par le navigateur (#233) ; appli refusée dans
+    un cadre (#237) ; données déchiffrées oubliées au verrouillage (#232) ; stockage local, base et
+    caches nommés d'après le dépôt sur l'origine `github.io` partagée, avec le risque restant expliqué
+    dans Paramètres et une étude des options (`docs/etudes/origine-dediee.md`, #229 en partie).
+  - Cadre juridique complété : Shelly Cloud, import Home Assistant et nouvelles collectes (#228).
+- **Exactitude des chiffres**
+  - **Vue foyer** (chambres regroupées) devenue un simple regroupement d'affichage, désactivée par
+    défaut : tous les calculs tournent sur les pièces brutes, donc kWh, euros, HP/HC, jours perdus,
+    jours froids, consigne et alerte froid sont identiques avec ou sans regroupement (#234, #238,
+    #239, #241, #242, #243, #248).
+  - **Périodes partielles** signalées partout : barres hachurées avec le nombre de jours, jours
+    estimés ou perdus pâlis, évolutions N-1 sur la même période, projection et verdict sans première
+    année partielle, moyenne mensuelle sur les mois couverts, saison de chauffe en cours affichable
+    (#240, #244, #246, #297, #298) ; cumul annuel aligné sur un axe bissextile commun (#245).
+  - **Euros qualifiés** : une seule règle de prix pour toute l'appli (#252) ; « hors abonnement » ou
+    « abonnement inclus, tout le logement » écrit à côté de chaque coût ; les mêmes 12 mois partout
+    sur la Synthèse ; projection au prix moyen de la sélection (#290, #291, #292). Une seule définition
+    des jours sous 19 °C (#294) ; résumés pour lecteur d'écran sans totaux absurdes (#295).
+- **Robustesse du collecteur** : jeton Netatmo renouvelé enregistré dès la connexion et versionné
+  même si la collecte échoue, commit avec reprise sans force (#262) ; unité Linky lue dans la réponse,
+  plus d'heuristique Wh / kWh (#266) ; heure répétée du passage à l'heure d'hiver additionnée (#267) ;
+  vraie valeur qui remplace une estimation (#269) ; `Retry-After` plafonné et erreurs réseau Intuis
+  réessayées sous le plafond d'appels (#270) ; import Home Assistant sans écrasement par un jour
+  partiel (#272) ; un seul assistant de cadence pour toutes les sources (#275).
+- **Performance et cycle de vie de la PWA** : premier écran mesuré honnêtement (entrée et chunks
+  préchargés) et passé de **269 kB à environ 70 kB** gzip (26 % du budget), ECharts chargé à part
+  (#227) ; seules les années horaires utiles téléchargées, séries et coûts mémorisés (#251, #256) ;
+  chargeur à la demande lié au jeu de données affiché (#247, #255) ; cartes différées jamais
+  supprimées en silence, messages clairs au démarrage, un seul déverrouillage à la fois, saisie des
+  identifiants conservée en cas d'erreur (#249, #250, #254, #259).
+- **Nouvelles données** (collecte seulement, chiffrées, en agrégats ; au plus une ligne dans une carte
+  existante) :
+  - **pièces au pas de 30 minutes** (énergie HP/HC, température, consigne) avec **4 ans
+    d'historique** rattrapés en quelques nuits sous un budget d'appels propre ; profil horaire au pas
+    de 30 min et heure de la chute de température dans « Pourquoi cette pièce était froide ? »
+    (S-1.26, #224 ; recouvre #217) ;
+  - **état des appareils** : radiateur, relais ou chauffe-eau injoignable (`offline_h`, compte dans le
+    résumé du job, issue facultative), heures d'anticipation et d'abaissement par pièce, coupures de
+    courant et Wi-Fi de la passerelle (#214, #218, #276) ;
+  - **piles et signal radio** des modules de la station, journal des **mises à jour de firmware**
+    (#215, #216) ;
+  - Linky : **heure du pic** de puissance et **index par cadran** recoupés avec la consommation
+    (#219, #277) ; contrat et couleur Tempo connus d'Intuis recoupés (#278) ;
+  - **pinces Shelly** (EM Gen3, Pro EM) lues canal par canal, avec les rôles « arrivée générale » et
+    « chauffe-eau » exclus de la décomposition des autres usages (#279).
+- **Tests** : 107 → 228 tests Python, 252 → 389 tests TypeScript ; tests du client Intuis (429, 5xx,
+  401, refresh refusé, plafond, #273) ; tests de `app.ts` et `ui.ts` (#253) ; e2e sans aucune attente
+  fixe, sur un signal « vue prête », absences vérifiées après le rendu des cartes différées (#260).
+- **Préparation de la v1.6** (documents seulement) : audit UX, architecture cible, banc d'essai et
+  choix du design system, maquettes revues deux fois, audit des graphiques (`docs/design/`) ; étude
+  de tous les appareils de la maison (`docs/etudes/audit-appareils.md`).
+
+**À faire par le propriétaire** :
+
+- **supprimer les journaux des anciennes collectes** où les coordonnées ont pu apparaître (Actions →
+  « Collecte quotidienne » → chaque exécution antérieure au correctif → « Delete all logs ») : le
+  correctif protège les journaux futurs, pas ceux déjà publiés ;
+- variable de dépôt `DEVICE_ALERT` = `true` si une issue doit s'ouvrir quand un module ne répond plus
+  (types et dates seulement) ;
+- **ressaisir la phrase de passe une fois** sur chaque appareil après la mise à jour : la clé
+  « Rester connecté » est rangée sous un nouveau nom propre au dépôt et l'ancienne est oubliée ;
+- **décider de l'origine** de l'application (#229) : sous-domaine dédié recommandé ; d'ici là, aucun
+  autre site GitHub Pages sur ce compte ;
+- lancer le diagnostic « Inventaire » pour vérifier sur le vrai compte les champs nouvellement lus
+  (état de connexion, Wi-Fi, contrat Intuis, heure du pic, index Linky), et laisser trois nuits au
+  rattrapage des demi-heures (ou une collecte manuelle en `backfill`).
+
 ## v1.4 — novembre 2026 : expliquer par pièce, nouvelles sources, simulateurs
 
 - **Fenêtres ouvertes, boost et état des radiateurs (E13)** : l'API Intuis ne garde aucun historique

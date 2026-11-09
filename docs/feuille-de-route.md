@@ -130,8 +130,8 @@ Les versions 1.1 à 1.3 ont livré l'essentiel des tableaux ci-dessus (voir `CHA
 | Version | Thème | Contenu | Jalon |
 |---|---|---|---|
 | **1.4** ✅ livrée | Expliquer par pièce | Nouveau cadrage par **62 personas** (les 52 existants + 10 nouveaux, une issue chacun) ; historique des **fenêtres ouvertes**, du boost et des états des radiateurs (`homestatus`, #162), avec minimisation des données de présence ; **prises Shelly** (#158) ; étude Home Assistant + Zigbee ; processus de **revue par agents** (#157) ; récits v1.3 restants (facture, surfaces et travaux, Safari, branche `data`, mesure des volets, QR code) ; récits des nouveaux personas (alerte froid, langage clair, VE, PAC, locataire) | [v1.4](https://github.com/Opaland/Netatmo/milestone/4) |
-| **1.5** 🔄 en cours | Revue de code | **Tout le code** relu par des agents de revue en quatre lots (collecteur et workflows ; PWA sécurité et données ; PWA calculs ; PWA vues et performance), constats en issues `revue-code` puis corrigés ; budget de taille honnête (#227) ; suites de l'audit des données côté collecte (#214 à #219, #224) ; pas de nouvelle vue | [v1.5](https://github.com/Opaland/Netatmo/milestone/5) |
-| **1.6** | Design et UI/UX | Revue **design et UI/UX complète** par des agents, corrections, puis **nouveau design system** (jetons, typographie, espacements, composants) appliqué partout ; feuille « Réglages du graphique » | [v1.6](https://github.com/Opaland/Netatmo/milestone/6) |
+| **1.5** ✅ livrée | Revue de code | **Tout le code** relu par des agents de revue en quatre lots, 46 constats en issues `revue-code` (1 critique, 17 majeurs), 43 corrigés et 3 reportés en v1.6 ; budget de taille honnête (premier écran de 269 à ~70 kB) ; suites de l'audit des données côté collecte (pièces au pas 30 min sur 4 ans, état des appareils, piles, firmware, pic et index Linky, pinces Shelly) ; pas de nouvelle vue | [v1.5](https://github.com/Opaland/Netatmo/milestone/5) |
+| **1.6** 🔄 en cours | Design et UI/UX | Audit UX, architecture cible, maquettes et audit des graphiques faits pendant la v1.5 ; **reconstruction sur un nouveau design system** (Open Props + Radix Colors : jetons, typographie, espacements, composants) approuvée par le propriétaire le 9 novembre 2026, **étape 1 (fondations, S-7.18) en cours** ; puis navigation à 5 onglets, centre de paramètres, Accueil, page Pièce, Outils ; constats reportés (#229, #257, #258) | [v1.6](https://github.com/Opaland/Netatmo/milestone/6) |
 | **2** | Diffuser | Dépôt modèle, assistant, chat IA conditionnel, Argon2id, copie NAS | [v2](https://github.com/Opaland/Netatmo/milestone/3) |
 
 ## 4. Ordre recommandé
@@ -147,9 +147,15 @@ Les versions 1.1 à 1.3 ont livré l'essentiel des tableaux ci-dessus (voir `CHA
 données ; jalon fermé ; 46 personas sur 62 en 👍 ([revue de fin](bmad/revues/v1.4.md)). Le relevé
 horaire reste à activer par le propriétaire (`ROOM_STATE_HOURLY`).
 
-**v1.5** : d'abord la revue de code complète et la correction des constats critiques et majeurs, puis
-#227, #213, #228 et les suites de l'audit, dans l'ordre de
-[`bmad/revues/v1.5-cadrage.md`](bmad/revues/v1.5-cadrage.md).
+**Bilan de la v1.5** (novembre 2026) : revue de code complète, 43 constats sur 46 corrigés (dont le
+seul critique, une fuite des coordonnées dans les journaux publics), suites de l'audit des données
+livrées, jalon fermé ; 40 personas en 👍, 21 en ➖ (version sans nouvelle vue), 1 en 👎
+([revue de fin](bmad/revues/v1.5.md)). Restent au propriétaire : supprimer les anciens journaux de
+collecte, décider de l'origine (#229), régler `DEVICE_ALERT`.
+
+**v1.6** (en cours) : reconstruction de l'interface sur le nouveau design system, approuvée le
+9 novembre 2026 ; d'abord les fondations (jetons et composants, S-7.18, #310), puis le plan de
+migration (S-7.25, #317) et les écrans dans l'ordre de `docs/design/architecture-cible.md`.
 
 **Rappel du départ de la v1.4** : d'abord S-1.16 (méthode de revue, prérequis de la v1.5 et de la v1.6) et
 S-13.1 (l'API sert-elle déjà un historique de fenêtre ouverte ?), puis S-13.5 avant toute collecte de
