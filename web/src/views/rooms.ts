@@ -3,6 +3,7 @@ import { CATEGORY_LABEL, type DayRecord, MONTHS_SHORT, minusYears, monthlyByYear
 import { roomDeltas } from '../analysis';
 import { ds, setState, state } from '../app';
 import { barChart, cssVar, hbarChart } from '../charts';
+import { effectiveMapping } from '../comfort';
 import {
   activeRooms,
   avgPrice,
@@ -31,6 +32,8 @@ export function renderRooms(view: HTMLElement, records: DayRecord[]) {
   const sorted = rooms.slice().sort((a, b) => (now.get(b.id) ?? 0) - (now.get(a.id) ?? 0));
   const focus = state.focusRoom && rooms.some((r) => r.id === state.focusRoom) ? state.focusRoom : null;
   const hasTemps = activeRooms().some((r) => ds!.temps.has(r.id));
+  const thr = state.comfortThreshold;
+  const thrLabel = `${thr.toString().replace('.', ',')} °C`;
 
   view.innerHTML = `
   <section class="card">
@@ -47,23 +50,24 @@ export function renderRooms(view: HTMLElement, records: DayRecord[]) {
     <p class="hint muted">${isCurrent ? `Du 1er janvier au ${longDate(last)}, comparé à la même période de ${year - 1}.` : `Année ${year} complète, comparée à ${year - 1}.`} Touchez une pièce pour voir son détail.</p>
     <div class="chart" id="rooms-chart" style="height:${Math.max(220, sorted.length * 52 + 40)}px" role="img" aria-label="Consommation par pièce"></div>
     ${table(
-      ['Pièce', 'kWh', 'Part', `${year - 1}`, 'Évolution', ...(hasTemps ? ['Temp. moy.', 'Consigne moy.'] : [])],
+      ['Pièce', 'kWh', 'Part', `${year - 1}`, 'Évolution', ...(hasTemps ? ['Temp. moy.', 'Consigne moy.', `Jours sous ${thrLabel}`] : [])],
       sorted.map((r) => {
         const v = now.get(r.id) ?? 0;
         const b = before.get(r.id) ?? 0;
         const d = pctChange(v, b);
         const tm = winterTemps(r.id, year);
+        const cold = r.category === 'heating' ? coldDays(r.id, year, thr) : null;
         return [
           `<button type="button" class="link" data-focus="${esc(r.id)}"><span class="swatch" style="background:${roomColor(r.id)}"></span>${esc(r.name)}</button> <small class="muted">${CATEGORY_LABEL[r.category]}</small>`,
           v,
           sum ? `${nf0.format((v / sum) * 100)} %` : '—',
           b,
           d === null ? '—' : pct(d),
-          ...(hasTemps ? [tm ? `${tm[0].toFixed(1).replace('.', ',')} °C` : '—', tm?.[1] != null ? `${tm[1].toFixed(1).replace('.', ',')} °C` : '—'] : []),
+          ...(hasTemps ? [tm ? `${tm[0].toFixed(1).replace('.', ',')} °C` : '—', tm?.[1] != null ? `${tm[1].toFixed(1).replace('.', ',')} °C` : '—', cold ? `${cold[0]} j${cold[1] === 'station' ? ' <small class="muted">station</small>' : ''}` : '—'] : []),
         ];
       }),
     )}
-    ${hasTemps ? '<p class="hint muted">Températures : moyennes des jours chauffés de l\'année (novembre à mars).</p>' : ''}
+    ${hasTemps ? `<p class="hint muted">Températures : moyennes des jours chauffés de l'année (novembre à mars). Jours sous ${thrLabel} : jours de novembre à mars dont la moyenne est sous le seuil, mesurée par la station Netatmo quand la pièce y est liée (« station »), sinon par le radiateur. Seuil et heures détaillées dans Confort.</p>` : ''}
   </section>
   <section class="card">
     <h2>Qu'est-ce qui a changé ? <small class="muted">${year - 1} → ${year}${isCurrent ? ', à date' : ''}</small></h2>
@@ -118,6 +122,26 @@ function winterTemps(room: string, year: number): [number, number | null] | null
     if (c !== null) (sp += c), nsp++;
   }
   return n ? [s / n, nsp ? sp / nsp : null] : null;
+}
+
+/** S-11.3: heating-season days of that year whose mean temperature is below `thr` (station if linked). */
+function coldDays(room: string, year: number, thr: number): [number, 'station' | 'radiator'] | null {
+  const st = ds!.station;
+  const heating = activeRooms().filter((r) => r.category === 'heating');
+  const k = st ? effectiveMapping(heating, st.modules, state.roomModuleMap).get(room) : undefined;
+  const means: [string, number][] =
+    k && st
+      ? Object.entries(st.daily[k] ?? {}).map(([d, v]) => [d, v[2]])
+      : [...(ds!.temps.get(room) ?? [])].map(([d, v]) => [d, v[0]]);
+  let n = 0;
+  let under = 0;
+  for (const [d, m] of means) {
+    const mo = Number(d.slice(5, 7));
+    if (!d.startsWith(String(year)) || (mo > 3 && mo < 11)) continue;
+    n++;
+    if (m < thr) under++;
+  }
+  return n ? [under, k ? 'station' : 'radiator'] : null;
 }
 
 // ------------------------------------------------------------------ events
