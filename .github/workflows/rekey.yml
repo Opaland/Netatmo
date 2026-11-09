@@ -1,0 +1,40 @@
+name: Changer la phrase de passe
+
+# 1. Ajoutez le secret NEW_DATA_PASSPHRASE (la nouvelle phrase).
+# 2. Lancez ce workflow : toutes les données sont rechiffrées et la robustesse est vérifiée.
+# 3. Remplacez la valeur du secret DATA_PASSPHRASE par la nouvelle phrase, puis supprimez
+#    NEW_DATA_PASSPHRASE. Entre les étapes 2 et 3, la collecte de la nuit échouerait.
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: collect
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  rekey:
+    runs-on: ubuntu-latest
+    env:
+      DATA_PASSPHRASE: ${{ secrets.DATA_PASSPHRASE }}
+      NEW_DATA_PASSPHRASE: ${{ secrets.NEW_DATA_PASSPHRASE }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - run: pip install .
+      - run: python -m collector rekey
+      - name: Commit
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/
+          git commit -m "data: changement de phrase de passe"
+          git push
+      - name: Étape suivante
+        run: |
+          echo "## Données rechiffrées" >> "$GITHUB_STEP_SUMMARY"
+          echo "Remplacez maintenant le secret **DATA_PASSPHRASE** par la nouvelle phrase, puis supprimez **NEW_DATA_PASSPHRASE**." >> "$GITHUB_STEP_SUMMARY"

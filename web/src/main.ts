@@ -62,10 +62,21 @@ import { WrongPassphrase } from './crypto';
 import { type Dataset, NoData, type Source, forgetKeys, load, loadHourly, recallKey, rememberKey, unlock } from './data';
 import { renderMarkdown } from './markdown';
 import { type ContractPeriod, OFFERS, periodAt } from './offers';
+import {
+  GROUPS,
+  TOKEN_HELP_URL,
+  hasToken,
+  listSecrets,
+  putSecret,
+  repoFromLocation,
+  runCollect,
+  setToken,
+  validate,
+} from './settings';
 import './style.css';
 
 // ------------------------------------------------------------------ state
-type View = 'overview' | 'compare' | 'rooms' | 'analyse' | 'report';
+type View = 'overview' | 'compare' | 'rooms' | 'analyse' | 'report' | 'settings';
 type CatFilter = 'all' | Category;
 
 interface State {
@@ -337,6 +348,8 @@ const ICONS = {
   rooms: '<path d="M3 10l9-7 9 7v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1z"/><path d="M9 21v-7h6v7"/>',
   analyse: '<circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3M8 13l2-3 2 2 2-4"/>',
   report: '<path d="M6 2h9l5 5v15H6z"/><path d="M14 2v6h6M9 13h8M9 17h8"/>',
+  settings:
+    '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>',
   menu: '<circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="19" r="1.5"/>',
 };
 const icon = (name: keyof typeof ICONS) =>
@@ -367,11 +380,13 @@ function render() {
       <div class="menu-panel">
         ${pricesForm()}
         <button type="button" data-view="report">${icon('report')} Rapport annuel imprimable</button>
+        <button type="button" data-view="settings">${icon('settings')} Paramètres et connexions</button>
         <button type="button" id="export">Exporter en CSV (filtres appliqués)</button>
         <button type="button" id="lock">${ds.source === 'demo' ? 'Quitter la démo' : 'Verrouiller'}</button>
       </div>
     </details>
   </header>
+  ${staleBanner()}
   <section class="filters" aria-label="Filtres">
     ${seg('cat', state.cat, [['all', 'Tout'], ['heating', 'Chauffage'], ['water_heater', 'Chauffe-eau']], 'Catégorie')}
     <details class="rooms-picker">
@@ -390,14 +405,24 @@ function render() {
   <main id="view"></main>`;
   const view = document.getElementById('view')!;
   const records = filtered();
-  if (!records.length) {
+  if (!records.length && state.view !== 'settings') {
     view.innerHTML = `<p class="empty">Aucune donnée pour cette sélection.</p>`;
   } else if (state.view === 'overview') renderOverview(view, records);
   else if (state.view === 'compare') renderCompare(view, records);
   else if (state.view === 'analyse') renderAnalyse(view, records);
   else if (state.view === 'report') renderReport(view);
+  else if (state.view === 'settings') renderSettings(view);
   else renderRooms(view, records);
-  document.body.classList.toggle('is-report', state.view === 'report');
+  document.body.classList.toggle('is-report', state.view === 'report' || state.view === 'settings');
+}
+
+/** S-1.5: warn when the archive stopped moving (collection broken or Intuis late). */
+function staleBanner() {
+  const last = ds!.meta.last_day;
+  if (!last || ds!.source === 'demo') return '';
+  const days = Math.floor((Date.now() - Date.parse(`${last}T12:00:00Z`)) / 86400000);
+  if (days <= 3) return '';
+  return `<p class="stale" role="alert"><span aria-hidden="true">⚠️</span> Données arrêtées au ${longDate(last)} (il y a ${days} jours) : la collecte est peut-être en panne. Une alerte est ouverte dans les issues GitHub du dépôt ; vous pouvez aussi la relancer depuis Paramètres.</p>`;
 }
 
 // ------------------------------------------------------------------ overview
@@ -1052,6 +1077,122 @@ function renderAnalyse(view: HTMLElement, records: DayRecord[]) {
   drawHourly(records);
 }
 
+// ------------------------------------------------------------------ settings (GitHub secrets)
+let settingsRepo = repoFromLocation() ?? 'Opaland/Netatmo';
+let configured: Set<string> | null = null;
+let settingsMsg: { ok: boolean; text: string } | null = null;
+
+function renderSettings(view: HTMLElement) {
+  const m = ds!.meta;
+  const status = (on: boolean, label: string) =>
+    `<li><span class="${on ? 'ok' : 'ko'}" aria-hidden="true">${on ? '✓' : '○'}</span> ${label} <span class="muted">${on ? 'actif' : 'non configuré'}</span></li>`;
+  const groups = GROUPS.map(
+    (g) => `<fieldset class="secrets" data-group="${g.id}"><legend>${esc(g.title)}</legend>
+      <p class="hint muted">${esc(g.help)}</p>
+      ${g.fields
+        .map(
+          (f) => `<label>${esc(f.label)} ${
+            configured ? (configured.has(f.name) ? '<span class="ok">✓ enregistré</span>' : '<span class="muted">non enregistré</span>') : ''
+          }
+          <input name="${f.name}" type="${f.secret ? 'password' : 'text'}" autocomplete="off" spellcheck="false" placeholder="${esc(
+            f.placeholder ?? (configured?.has(f.name) ? 'laisser vide pour garder la valeur actuelle' : ''),
+          )}" ${hasToken() ? '' : 'disabled'}></label>`,
+        )
+        .join('')}
+    </fieldset>`,
+  ).join('');
+  view.innerHTML = `
+  <section class="card">
+    <div class="card-head"><h2>Paramètres et connexions</h2><button type="button" class="link" data-view="overview">Fermer</button></div>
+    <ul class="status-list">
+      ${status(true, 'Radiateurs et chauffe-eau Intuis')}
+      ${status(!!m.weather_source, `Météo (${m.weather_source === 'netatmo' ? 'station Netatmo' : 'Open-Meteo'})`)}
+      ${status(!!(m as { has_station?: boolean }).has_station, 'Station Netatmo, tous les modules')}
+      ${status(!!m.has_linky, 'Compteur Linky')}
+      ${status(!!ds!.insights, 'Analyse IA mensuelle')}
+    </ul>
+    <p class="hint muted">Dernière collecte : ${m.updated ? esc(m.updated.replace('T', ' à ').slice(0, 21)) + ' (UTC)' : '—'}.</p>
+  </section>
+  ${
+    ds!.source === 'demo'
+      ? '<section class="card"><p class="notice">Mode démonstration : les paramètres sont désactivés.</p></section>'
+      : `<section class="card">
+    <h2>1. Autoriser l'application à écrire vos secrets</h2>
+    <p class="hint muted">Créez un <a href="${TOKEN_HELP_URL}" target="_blank" rel="noopener">jeton GitHub « fine-grained »</a> :
+      accès au seul dépôt <strong>${esc(settingsRepo)}</strong>, permissions <strong>Secrets : lecture et écriture</strong> et
+      <strong>Actions : lecture et écriture</strong>, <strong>rien d'autre</strong> (surtout pas « Contents »), expiration courte (7 jours). Le jeton reste en mémoire le temps de la visite :
+      il n'est jamais enregistré, ni sur l'appareil, ni ailleurs.</p>
+    <form id="gh-login" class="inline-form">
+      <label>Dépôt<input name="repo" value="${esc(settingsRepo)}" autocomplete="off" spellcheck="false"></label>
+      <label>Jeton GitHub<input name="token" type="password" autocomplete="off" placeholder="github_pat_…" ${hasToken() ? 'value="••••••••" disabled' : ''}></label>
+      ${hasToken() ? '<button type="button" id="gh-logout" class="link">Oublier le jeton</button>' : '<button class="primary small" type="submit">Se connecter</button>'}
+    </form>
+  </section>
+  <form class="card" id="secrets-form">
+    <h2>2. Vos identifiants</h2>
+    <p class="hint muted">Chaque valeur est <strong>chiffrée dans votre navigateur</strong> avec la clé publique du dépôt avant l'envoi :
+      seul GitHub peut la déchiffrer, pour la collecte. Seuls les champs remplis sont envoyés ; GitHub ne permet pas de relire une valeur.
+      La phrase de passe des données ne se change pas ici (voir « rekey » dans le README).</p>
+    ${groups}
+    <button class="primary" type="submit" ${hasToken() ? '' : 'disabled'}>Chiffrer et enregistrer dans GitHub</button>
+  </form>
+  <section class="card">
+    <h2>3. Lancer la collecte</h2>
+    <p class="hint muted">Utile après avoir ajouté une connexion. La collecte prend quelques minutes, puis le site se met à jour.</p>
+    <div class="controls">
+      <button type="button" class="primary small" id="run-collect" ${hasToken() ? '' : 'disabled'}>Collecter maintenant</button>
+      <label class="toggle"><input type="checkbox" id="run-backfill"> Tout l'historique</label>
+    </div>
+  </section>`
+  }
+  ${settingsMsg ? `<p class="settings-msg ${settingsMsg.ok ? 'ok' : 'ko'}" role="status">${esc(settingsMsg.text)}</p>` : ''}`;
+}
+
+async function settingsAction(fn: () => Promise<string>) {
+  settingsMsg = { ok: true, text: 'En cours…' };
+  render();
+  try {
+    settingsMsg = { ok: true, text: await fn() };
+  } catch (err) {
+    settingsMsg = { ok: false, text: (err as Error).message };
+  }
+  render();
+}
+
+app.addEventListener('submit', (e) => {
+  const form = e.target as HTMLFormElement;
+  if (form.id === 'gh-login') {
+    e.preventDefault();
+    const data = new FormData(form);
+    settingsRepo = String(data.get('repo') ?? '').trim();
+    setToken(String(data.get('token') ?? ''));
+    void settingsAction(async () => {
+      configured = await listSecrets(settingsRepo);
+      return `Connecté à ${settingsRepo} : ${configured.size} secret(s) déjà enregistré(s).`;
+    });
+  }
+  if (form.id === 'secrets-form') {
+    e.preventDefault();
+    const entries = [...new FormData(form).entries()]
+      .map(([k, v]) => [k, String(v).trim()] as const)
+      .filter(([, v]) => v);
+    const errors = entries.map(([k, v]) => validate(k, v)).filter(Boolean);
+    if (errors.length) {
+      settingsMsg = { ok: false, text: errors.join(' ') };
+      return render();
+    }
+    if (!entries.length) {
+      settingsMsg = { ok: false, text: 'Aucun champ rempli.' };
+      return render();
+    }
+    void settingsAction(async () => {
+      for (const [k, v] of entries) await putSecret(settingsRepo, k, v);
+      configured = await listSecrets(settingsRepo);
+      return `${entries.length} secret(s) chiffré(s) et enregistré(s) : ${entries.map(([k]) => k).join(', ')}.`;
+    });
+  }
+});
+
 // ------------------------------------------------------------------ EDF offer comparator
 function comparison() {
   const off = offCol();
@@ -1344,6 +1485,19 @@ app.addEventListener('click', async (e) => {
   }
   if (btn.dataset.focus !== undefined) return setState({ focusRoom: btn.dataset.focus || null });
   if (btn.id === 'print') return window.print();
+  if (btn.id === 'gh-logout') {
+    setToken(null);
+    configured = null;
+    settingsMsg = { ok: true, text: 'Jeton oublié.' };
+    return render();
+  }
+  if (btn.id === 'run-collect') {
+    const backfill = (document.getElementById('run-backfill') as HTMLInputElement | null)?.checked ?? false;
+    return void settingsAction(async () => {
+      await runCollect(settingsRepo, backfill);
+      return `Collecte lancée${backfill ? ' (tout l\'historique)' : ''}. Revenez dans quelques minutes.`;
+    });
+  }
   if (btn.id === 'contract-add' || btn.dataset.contractDel !== undefined) {
     const list = contracts().map((c) => ({ ...c }));
     if (btn.id === 'contract-add') list.push({ ...list[list.length - 1], from: lastDay() });
@@ -1361,6 +1515,8 @@ app.addEventListener('click', async (e) => {
     setTimeout(() => URL.revokeObjectURL(a.href), 1000);
   }
   if (btn.id === 'lock') {
+    setToken(null);
+    configured = null;
     if (ds.source === 'data') await forgetKeys();
     ds = null;
     start();
