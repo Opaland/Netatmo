@@ -527,6 +527,10 @@ scripts/            outils ponctuels (jours Tempo, constats de revue → issues)
   déverrouillage ni aucune donnée, seulement un lien pour l'ouvrir directement. Ce contrôle en JavaScript
   ne remplace pas un vrai en-tête HTTP (impossible sur GitHub Pages).
 - Le site ne contacte aucun service tiers et n'envoie rien : il lit les fichiers chiffrés du dépôt.
+- Verrouiller (ou quitter la démo) oublie les données déchiffrées : jeu de données, fichiers chargés à
+  la demande (horaire, courbe Linky, état des pièces…), notes déchiffrées (travaux, factures) et calculs
+  mis en cache dans les vues. Un résultat qui arrive après le verrouillage ou l'ouverture d'un autre jeu
+  est ignoré.
 - Politique de sécurité du contenu (CSP) stricte, dans `web/index.html`, avec **Trusted Types** :
   le navigateur refuse toute chaîne brute affectée à `innerHTML`. Tout le HTML de l'application passe
   par une seule politique nommée (`web/src/trusted.ts`), qui refuse en plus le balisage exécutable

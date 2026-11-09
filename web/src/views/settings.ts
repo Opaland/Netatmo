@@ -16,10 +16,11 @@ import {
   repoFromLocation,
   runCollect,
   setToken,
-  validate,
+  invalidFields,
 } from '../settings';
 import { contractInfo, esc, longDate, table } from '../ui';
 import { html } from '../trusted';
+import { lazyAction, lazyCard } from '../lazy';
 import { showBuild } from '../build';
 import { loadVotes, usefulRate } from '../insight';
 import { tenant, tenantNote } from '../tenant';
@@ -107,6 +108,7 @@ export function renderSettings(view: HTMLElement) {
       La phrase de passe des données ne se change pas ici (voir « rekey » dans le README).</p>
     ${groups}
     <button class="primary" type="button" id="secrets-save" ${hasToken() ? '' : 'disabled'}>Chiffrer et enregistrer dans GitHub</button>
+    <p class="settings-msg ko" id="secrets-msg" role="alert"></p>
   </section>
   ${tenant().on ? tenantNote('Le contrat partagé est masqué') : contractSection()}
   <section class="card">
@@ -168,8 +170,8 @@ export function renderSettings(view: HTMLElement) {
   ${settingsMsg ? `<p class="settings-msg ${settingsMsg.ok ? 'ok' : 'ko'}" role="status">${esc(settingsMsg.text)}</p>` : ''}`;
   void showBuild(document.getElementById('build-info'));
   // S-12.6 tenant mode, S-12.5 prolonged cold alert: lazy modules
-  void import('./tenant-card').then((x) => x.mountTenant(document.getElementById('tenant-card'))).catch(() => {});
-  void import('./coldalert').then((x) => x.mountColdSettings(document.getElementById('cold-card'), () => settingsRepo)).catch(() => {});
+  void lazyCard(() => import('./tenant-card'), (x) => x.mountTenant(document.getElementById('tenant-card')), { zone: 'tenant-card', what: 'Mode locataire' });
+  void lazyCard(() => import('./coldalert'), (x) => x.mountColdSettings(document.getElementById('cold-card'), () => settingsRepo), { zone: 'cold-card', what: 'Alerte froid prolongé' });
 }
 
 /** Informative note of a source (counts only, written by the collector), e.g. plugs without a counter. */
@@ -260,16 +262,28 @@ function login(group: Element) {
 
 /** Seal and store the filled secrets. */
 function saveSecrets(group: Element) {
+  // #259: checked field by field BEFORE anything is emptied or redrawn: on an error the
+  // message sits next to the button, the faulty fields are marked and every value stays.
+  const inputs = [...group.querySelectorAll<HTMLInputElement>('input[name]')].filter((i) => !i.disabled);
+  const msg = group.querySelector<HTMLElement>('#secrets-msg');
+  const bad = invalidFields(inputs.map((i) => [i.name, i.value.trim()]));
+  for (const i of inputs) {
+    const wrong = bad.some((b) => b.name === i.name);
+    if (wrong) {
+      i.setAttribute('aria-invalid', 'true');
+      i.setAttribute('aria-describedby', 'secrets-msg');
+    } else {
+      i.removeAttribute('aria-invalid');
+      i.removeAttribute('aria-describedby');
+    }
+  }
+  if (bad.length || !inputs.some((i) => i.value.trim())) {
+    if (msg) msg.textContent = bad.length ? bad.map((b) => `${b.label} : ${b.error}`).join(' ') : 'Aucun champ rempli.';
+    inputs.find((i) => bad.some((b) => b.name === i.name))?.focus();
+    return;
+  }
+  if (msg) msg.textContent = '';
   const entries = takeValues(group).filter(([, v]) => v);
-  const errors = entries.map(([k, v]) => validate(k, v)).filter(Boolean);
-  if (errors.length) {
-    settingsMsg = { ok: false, text: errors.join(' ') };
-    return rerender();
-  }
-  if (!entries.length) {
-    settingsMsg = { ok: false, text: 'Aucun champ rempli.' };
-    return rerender();
-  }
   void settingsAction(async () => {
     for (const [k, v] of entries) await putSecret(settingsRepo, k, v);
     configured = await listSecrets(settingsRepo);
@@ -315,22 +329,22 @@ export function handleClick(btn: HTMLElement): boolean {
   }
   if (btn.id === 'legal-open') {
     // S-8.14: lazy module, only for whoever opens it
-    void import('../legal').then((m) => {
+    void lazyAction(btn, () => import('../legal'), (m) => {
       const card = document.getElementById('legal-card');
       if (card) card.innerHTML = html(`<div class="card-head"><h2>Cadre juridique</h2></div>${m.legalHtml()}`);
-    });
+    }, 'Cadre juridique');
     return true;
   }
   if (btn.id === 'invite-open') {
     // S-12.3: lazy module (QR encoder), only for whoever opens it
-    void import('./invite').then((m) => {
+    void lazyAction(btn, () => import('./invite'), (m) => {
       const card = document.getElementById('invite-card');
       if (!card) return;
       card.innerHTML = html(m.inviteHtml());
       m.bindInvite(card);
       card.querySelector<HTMLElement>('h2')?.setAttribute('tabindex', '-1');
       card.querySelector<HTMLElement>('h2')?.focus();
-    });
+    }, 'Invitation');
     return true;
   }
   if (btn.id === 'run-collect') {

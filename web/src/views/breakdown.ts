@@ -3,38 +3,46 @@
 // and what stays unexplained. Loaded on demand by the overview (no weight on first paint).
 // Declared appliances stay on this device, encrypted with the data key (like absences).
 import type { Hourly } from '../analysis';
-import { ds, onDatasetLoaded } from '../app';
+import { datasetDoc, ds, onDatasetLoaded } from '../app';
 import { type Breakdown, type Declared, breakdown, kwhPerYear, parseDeclared, plugsFrom, windowDays } from '../breakdown';
 import { cssVar, hbarChart } from '../charts';
 import { openLocal, sealLocal } from '../crypto';
 import { type Curve, lastCurveDay, measuredWattsCached, talon } from '../curve';
-import { loadCurve, loadHourly } from '../data';
+import { type Dataset, loadCurve, loadHourly } from '../data';
 import { memo } from '../memo';
 import { readPref, writePref } from '../money';
 import { html } from '../trusted';
 import { activeRooms, avgPrice, esc, fmtEur, lastDay, longDate, nf0, series, table } from '../ui';
 import { NS } from '../scope';
 
+// #247: what the card needs, loaded for the dataset shown (a late result of another one is dropped).
+const doc = datasetDoc((d) =>
+  Promise.all([
+    loadDeclared(d),
+    curveYears() ? loadCurve(d) : Promise.resolve(new Map<string, number>()),
+    // #251: only the hourly years of the 30-day window, not the whole history.
+    cardDays().length ? loadHourly(d, cardDays()[0]).catch(() => null) : Promise.resolve(null),
+  ]),
+);
+// Set from `doc` at each render; `declared` also by the form (until the dataset changes).
 let curve: Curve | null = null;
 let hourly: Hourly | null = null;
 let declared: Declared[] | null = null;
-let loading: Promise<void> | null = null;
 let formMsg = '';
 onDatasetLoaded(() => {
   curve = hourly = declared = null;
-  loading = null;
   formMsg = '';
 });
 
-const lsKey = () => `${NS}:postes:${ds!.source}`;
+const lsKey = (d: Pick<Dataset, 'source'> = ds!) => `${NS}:postes:${d.source}`;
 const nf1 = new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 1 });
 const kwh = (v: number) => `${v < 10 ? nf1.format(v) : nf0.format(v)} kWh`;
 
-async function loadDeclared(): Promise<Declared[]> {
-  const raw = readPref(lsKey());
+async function loadDeclared(d: Dataset): Promise<Declared[]> {
+  const raw = readPref(lsKey(d));
   if (!raw) return [];
   try {
-    const list = await openLocal<Declared[]>(JSON.parse(raw), ds!.key);
+    const list = await openLocal<Declared[]>(JSON.parse(raw), d.key);
     return Array.isArray(list) ? list.filter((d) => typeof parseDeclared(d.name, String(d.watts), String(d.hours)) !== 'string') : [];
   } catch {
     return []; // written with another passphrase
@@ -82,20 +90,17 @@ const curveYears = () => !!(ds!.meta as { linky_curve_years?: number[] }).linky_
 
 export function renderBreakdownCard(card: HTMLElement) {
   if (!ds) return;
-  if (declared === null || (curve === null && curveYears())) {
-    loading ??= Promise.all([
-      loadDeclared(),
-      curveYears() ? loadCurve(ds) : Promise.resolve(new Map<string, number>()),
-      // #251: only the hourly years of the 30-day window, not the whole history.
-      cardDays().length ? loadHourly(ds, cardDays()[0]).catch(() => null) : Promise.resolve(null),
-    ]).then(([d, c, h]) => {
-      declared = d;
-      curve = c;
-      hourly = h;
-    });
-    loading.then(() => card.isConnected && renderBreakdownCard(card)).catch(() => card.isConnected && card.remove());
+  const v = doc.get(ds, () => card.isConnected && renderBreakdownCard(card));
+  if (!v) {
+    if (doc.status(ds) === 'failed') {
+      card.hidden = false;
+      card.innerHTML = html`<div class="card-head"><h2>Autres usages en détail</h2></div><p class="hint muted">${
+        navigator.onLine ? 'Courbe de charge indisponible.' : 'Courbe de charge : disponible au prochain accès réseau.'
+      }</p>`;
+    }
     return;
   }
+  [declared, curve, hourly] = [declared ?? v[0], v[1], v[2]];
   const days = cardDays();
   if (days.length < 7) {
     card.hidden = true;

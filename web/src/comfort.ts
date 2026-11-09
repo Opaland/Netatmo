@@ -174,6 +174,22 @@ export function seasonOf(day: string): number | null {
   return m >= 11 ? y : m <= 3 ? y - 1 : null;
 }
 
+/**
+ * #294: « jours à moyenne sous le seuil » of a winter (Nov → Mar, `season` = the year it
+ * starts): the one definition of a cold day, used by Pièces and Confort for every source
+ * (station module or radiator probe). `means`: day → mean temperature of the day.
+ */
+export function coldWinterDays(means: Iterable<[string, number | null | undefined]>, season: number, threshold: number): { under: number; n: number } | null {
+  let n = 0;
+  let under = 0;
+  for (const [d, m] of means) {
+    if (typeof m !== 'number' || !Number.isFinite(m) || seasonOf(d) !== season) continue;
+    n++;
+    if (m < threshold) under++;
+  }
+  return n ? { under, n } : null;
+}
+
 export function sumSeason(perDay: Map<string, { n: number; cold: number }>, season: number) {
   let hours = 0;
   let days = 0;

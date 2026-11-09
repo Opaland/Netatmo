@@ -210,3 +210,62 @@ details.how p { font-size: var(--font-sm); color: var(--text-muted); }
 @media (min-width: 760px) {
   .screen { border-left: 1px solid var(--border); border-right: 1px solid var(--border); }
 }
+
+/* ---------- Revue design (v1.6, itération 2) ---------- */
+/* Bascule de thème : hors du flux, en bas à droite au-dessus des onglets (outil de maquette). */
+.theme-toggle { position: fixed; right: max(12px, env(safe-area-inset-right)); bottom: calc(84px + env(safe-area-inset-bottom)); margin: 0;
+  z-index: 7; min-height: 36px; font-size: var(--font-xs); box-shadow: var(--shadow-3); }
+.top h1 { min-width: 0; font-size: var(--font-lg); }
+
+/* Jauge : réel à date contre attendu (repère) et fin de période projetée */
+.gauge { display: grid; gap: var(--space-1); }
+.gauge .track { position: relative; height: 10px; border-radius: var(--radius-full); background: var(--surface-sunken); overflow: visible; }
+.gauge .fill { position: absolute; inset: 0 auto 0 0; border-radius: var(--radius-full); background: var(--usage-heating); }
+.gauge .proj { position: absolute; inset: 0 auto 0 0; border-radius: var(--radius-full);
+  background: repeating-linear-gradient(135deg, var(--border) 0 4px, transparent 4px 8px); }
+.gauge .mark { position: absolute; top: -4px; bottom: -4px; width: 2px; background: var(--text); border-radius: 1px; }
+.gauge .scale { display: flex; justify-content: space-between; font-size: var(--font-xs); color: var(--text-muted); font-variant-numeric: tabular-nums; }
+
+/* Comparaison toujours explicite : « −16 % vs 2025 à date » */
+.delta b { font-weight: 600; }
+.vs { color: var(--text-muted); }
+
+/* Part de chaque ligne dans le total */
+.share { display: block; height: 6px; border-radius: var(--radius-full); background: var(--surface-sunken); margin-top: 6px; overflow: hidden; }
+.share > i { display: block; height: 100%; border-radius: inherit; }
+
+/* Panneau « maintenant » d'une pièce */
+.now { display: grid; gap: var(--space-3); }
+.now .temp { font-size: 3rem; font-weight: 600; line-height: 1; font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
+.now .temp small { font-size: 1.25rem; font-weight: 500; color: var(--text-muted); }
+.now dl { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 2px var(--space-3); font-size: var(--font-sm); }
+.now dt { color: var(--text-muted); }
+.now dd { margin: 0; font-weight: 600; }
+
+/* Planning du jour sur fond heures creuses / pleines */
+.sched { display: grid; gap: var(--space-1); }
+.sched .lane { position: relative; height: 28px; border-radius: var(--radius-sm); overflow: hidden; background: var(--surface-sunken); }
+.sched .lane i { position: absolute; top: 0; bottom: 0; }
+.sched .hc { background: repeating-linear-gradient(135deg, var(--accent-soft) 0 6px, transparent 6px 12px); }
+.sched .comfort { background: var(--usage-heating); opacity: .9; top: 6px !important; bottom: 6px !important; border-radius: 4px; }
+.sched .eco { background: var(--usage-other); top: 10px !important; bottom: 10px !important; border-radius: 4px; }
+.sched .now-line { width: 2px; background: var(--text); }
+.sched .hours { display: flex; justify-content: space-between; font-size: var(--font-xs); color: var(--text-muted); font-variant-numeric: tabular-nums; }
+
+/* Interrupteur accessible (remplace la case à cocher) */
+.toggle { appearance: none; -webkit-appearance: none; flex: none; width: 48px; height: 28px; border-radius: var(--radius-full);
+  background: var(--border); position: relative; cursor: pointer; transition: background .15s var(--ease-out); }
+.toggle::after { content: ""; position: absolute; top: 3px; left: 3px; width: 22px; height: 22px; border-radius: 50%;
+  background: var(--surface-card); box-shadow: var(--shadow-1); transition: transform .15s var(--ease-out); }
+.toggle:checked { background: var(--accent); }
+.toggle:checked::after { transform: translateX(20px); }
+
+/* Période partielle : hachures, dans les graphiques comme dans la légende */
+.legend .hatch { width: 12px; height: 12px; border-radius: 3px; display: inline-block;
+  background: repeating-linear-gradient(135deg, var(--usage-heating) 0 2px, transparent 2px 4px); border: 1px solid var(--usage-heating); }
+.chart .temp-line { fill: none; stroke: var(--text); stroke-width: 1.5; stroke-dasharray: 2 3; }
+
+/* Sélecteur de période commun (contrôle segmenté) en tête d'écran */
+.periodbar { display: grid; gap: var(--space-2); }
+.periodbar .seg button { min-height: 36px; }
+.periodbar .scope { font-size: var(--font-sm); color: var(--text-muted); }

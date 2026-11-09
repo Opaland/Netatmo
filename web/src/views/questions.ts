@@ -1,7 +1,7 @@
 // "Questions types" card (S-5.9), loaded on demand by the report view: answers computed
 // by the code, no AI, no network.
-import { ds, rawDataset } from '../app';
-import { type Dataset, loadRoomState } from '../data';
+import { datasetDoc, ds, rawDataset } from '../app';
+import { loadRoomState } from '../data';
 import { BEDROOMS_ID } from '../household';
 import { QUESTIONS, type QuestionId, answer, answerableMonths, defaultMonth, monthLabel } from '../questions';
 import { activeRooms, costAvailable, costOf, esc, lastDay } from '../ui';
@@ -11,8 +11,8 @@ import { type RoomState, bedroomGrouping } from '../windows';
 let month: string | null = null;
 let question: QuestionId | null = null;
 // S-13.3: room states for « pourquoi cette pièce était froide ? », loaded when that question is asked
-let states: { ds: Dataset; doc: RoomState | null } | null = null;
-let statesFailed = false;
+// (#247: for the dataset shown only, forgotten on lock)
+const states = datasetDoc((d) => loadRoomState(d));
 
 export function mountQuestions(el: HTMLElement | null) {
   if (!el || !ds) return;
@@ -26,14 +26,9 @@ export function mountQuestions(el: HTMLElement | null) {
   }
   const names = new Map(activeRooms().map((r) => [r.id, r.name]));
   const records = ds.records.filter((r) => r.cat !== 'ignore');
-  if (question === 'cold' && ds.meta.has_roomstate && states?.ds !== ds && !statesFailed) {
-    const forDs = ds;
-    loadRoomState(forDs)
-      .then((doc) => (states = { ds: forDs, doc }))
-      .catch(() => (statesFailed = true))
-      .finally(() => el.isConnected && ds === forDs && mountQuestions(el));
-  }
-  const waiting = question === 'cold' && ds.meta.has_roomstate && states?.ds !== ds && !statesFailed;
+  let roomState: RoomState | null = null;
+  if (question === 'cold' && ds.meta.has_roomstate) roomState = states.get(ds, () => el.isConnected && mountQuestions(el)) ?? null;
+  const waiting = question === 'cold' && ds.meta.has_roomstate && states.status(ds) === 'loading';
   const roomName = (id: string) => (id === BEDROOMS_ID ? 'Chambres (regroupées)' : (names.get(id) ?? 'pièce inconnue'));
   const res = waiting
     ? { ok: true, lines: ['Chargement des relevés de l’état des pièces…'] }
@@ -45,7 +40,7 @@ export function mountQuestions(el: HTMLElement | null) {
         cost: costAvailable() ? (from, to) => costOf(records, from, to) : null,
         roomName,
         temps: (rawDataset() ?? ds).temps, // #241: raw rooms, never a household-view mean
-        roomState: states?.ds === ds ? states.doc : null,
+        roomState,
         groupOf: bedroomGrouping((rawDataset() ?? ds).meta.rooms, false),
       })
     : null;

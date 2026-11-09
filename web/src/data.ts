@@ -185,13 +185,40 @@ export async function load(source: Source, key: CryptoKey): Promise<Dataset> {
   };
 }
 
+// ------------------------------------------------------------ documents loaded on demand
+// #255: the caches are keyed by the data key (shared by the raw dataset and its household
+// view), so toggling the household view neither downloads nor decrypts anything again: the
+// room merge of the hourly documents is applied afterwards. #232: emptied on lock.
+type Cache<V> = WeakMap<CryptoKey, Map<string, Promise<V>>>;
+let caches: { hourly: Cache<Hourly>; station: Cache<StationHourly>; roomState: Cache<import('./windows').RoomState | null>; curve: Cache<Map<string, number>>; ha: Cache<import('./ha').HaDoc | null> };
+/** Forget every decrypted document (on lock). */
+export function clearDataCaches() {
+  caches = { hourly: new WeakMap(), station: new WeakMap(), roomState: new WeakMap(), curve: new WeakMap(), ha: new WeakMap() };
+  merged = new WeakMap();
+}
+let merged = new WeakMap<Hourly, WeakMap<Map<string, string>, Hourly>>();
+clearDataCaches();
+
+/** One load per (data key, name); a failed load is forgotten so that it can be tried again. */
+function once<V>(cache: Cache<V>, ds: Dataset, name: string, fetch: () => Promise<V>): Promise<V> {
+  let m = cache.get(ds.key);
+  if (!m) cache.set(ds.key, (m = new Map()));
+  let p = m.get(name);
+  if (!p) {
+    const own = m;
+    p = fetch();
+    own.set(name, p);
+    p.catch(() => own.get(name) === p && own.delete(name));
+  }
+  return p;
+}
+
 /**
  * Hourly documents are big (≈ 9 000 points per room and per year): loaded only when a view
  * needs them, once per dataset. `since` (YYYY-MM-DD) limits the load to the years from that
  * day on (#251): the Synthèse cards need 30 days, the Analyse 12 months; the research export
  * takes everything. A load already covering the asked years is reused.
  */
-const hourlyCache = new WeakMap<Dataset, Map<string, Promise<Hourly>>>();
 export function hourlyYears(ds: Dataset, since?: string): number[] {
   const all = (ds.meta as Meta & { hourly_years?: number[] }).hourly_years ?? [];
   const from = since ? Number(since.slice(0, 4)) : -Infinity;
@@ -199,17 +226,15 @@ export function hourlyYears(ds: Dataset, since?: string): number[] {
 }
 export function loadHourly(ds: Dataset, since?: string): Promise<Hourly> {
   const years = hourlyYears(ds, since);
-  let loads = hourlyCache.get(ds);
-  if (!loads) hourlyCache.set(ds, (loads = new Map()));
-  for (const [k, p] of loads) {
+  let loads = caches.hourly.get(ds.key);
+  if (!loads) caches.hourly.set(ds.key, (loads = new Map()));
+  let p: Promise<Hourly> | undefined;
+  for (const [k, q] of loads) {
     const have = new Set(k.split(','));
-    if (years.every((y) => have.has(String(y)))) return p;
+    if (years.every((y) => have.has(String(y)))) p = q;
   }
-  const key = years.join(',');
-  const p = fetchHourly(ds, years);
-  loads.set(key, p);
-  p.catch(() => loads.delete(key));
-  return p;
+  p ??= once(caches.hourly, ds, years.join(','), () => fetchHourly(ds, years));
+  return ds.roomMap?.size ? p.then((h) => mergeRooms(h, ds.roomMap!)) : p;
 }
 
 async function fetchHourly(ds: Dataset, years: number[]): Promise<Hourly> {
@@ -218,19 +243,42 @@ async function fetchHourly(ds: Dataset, years: number[]): Promise<Hourly> {
     years.map((y) => optional<{ hourly?: Record<string, Record<string, number>> }>(ds.source, `${y}.hourly`, ds.key)),
   );
   for (const doc of docs) {
-    for (const [raw, hours] of Object.entries(doc?.hourly ?? {})) {
-      const room = ds.roomMap?.get(raw) ?? raw;
-      const merged = room !== raw;
+    for (const [room, hours] of Object.entries(doc?.hourly ?? {})) {
       const m = out.get(room) ?? new Map<string, number>();
-      for (const [h, wh] of Object.entries(hours)) m.set(h, (merged ? (m.get(h) ?? 0) : 0) + wh / 1000);
+      for (const [h, wh] of Object.entries(hours)) m.set(h, wh / 1000);
       out.set(room, m);
     }
   }
   return out;
 }
 
+/** The household view of raw hourly data: merged rooms summed (once per raw data and room map). */
+export function mergeRooms(h: Hourly, roomMap: Map<string, string>): Hourly {
+  let per = merged.get(h);
+  if (!per) merged.set(h, (per = new WeakMap()));
+  let out = per.get(roomMap);
+  if (out) return out;
+  out = new Map();
+  for (const [raw, hours] of h) {
+    const room = roomMap.get(raw) ?? raw;
+    if (room === raw) {
+      out.set(room, hours);
+      continue;
+    }
+    const m = new Map(out.get(room) ?? []);
+    for (const [k, kwh] of hours) m.set(k, (m.get(k) ?? 0) + kwh);
+    out.set(room, m);
+  }
+  per.set(roomMap, out);
+  return out;
+}
+
 /** Station hourly readings (S-11): loaded only when the comfort view needs them. */
-export async function loadStationHourly(ds: Dataset): Promise<StationHourly> {
+export function loadStationHourly(ds: Dataset): Promise<StationHourly> {
+  return once(caches.station, ds, 'station', () => fetchStationHourly(ds));
+}
+
+async function fetchStationHourly(ds: Dataset): Promise<StationHourly> {
   const out: StationHourly = new Map();
   const docs = await Promise.all(
     (ds.meta.station_hourly_years ?? []).map((y) =>
@@ -249,33 +297,19 @@ export async function loadStationHourly(ds: Dataset): Promise<StationHourly> {
 
 /** Daily room states from the hourly snapshots (E13, roomstate.enc.json), loaded on demand, once
  * per dataset (Confort, Analyse, Synthèse and the absences share it). */
-const roomStateCache = new WeakMap<Dataset, Promise<import('./windows').RoomState | null>>();
 export function loadRoomState(ds: Dataset): Promise<import('./windows').RoomState | null> {
-  let p = roomStateCache.get(ds);
-  if (!p) {
-    p = optional<import('./windows').RoomState>(ds.source, 'roomstate', ds.key);
-    roomStateCache.set(ds, p);
-    p.catch(() => roomStateCache.delete(ds));
-  }
-  return p;
+  return once(caches.roomState, ds, 'roomstate', () => optional<import('./windows').RoomState>(ds.source, 'roomstate', ds.key));
 }
 
 /** Home Assistant daily aggregates (S-1.18, ha.enc.json), loaded on demand. */
 export function loadHa(ds: Dataset): Promise<import('./ha').HaDoc | null> {
-  return optional(ds.source, 'ha', ds.key);
+  return once(caches.ha, ds, 'ha', () => optional<import('./ha').HaDoc>(ds.source, 'ha', ds.key));
 }
 
 /** Linky 30-min load curve (S-1.11), one document per year, loaded on demand, once per dataset
  * (the curve card and the breakdown card both need it). */
-const curveCache = new WeakMap<Dataset, Promise<Map<string, number>>>();
 export function loadCurve(ds: Dataset): Promise<Map<string, number>> {
-  let p = curveCache.get(ds);
-  if (!p) {
-    p = fetchCurve(ds);
-    curveCache.set(ds, p);
-    p.catch(() => curveCache.delete(ds));
-  }
-  return p;
+  return once(caches.curve, ds, 'curve', () => fetchCurve(ds));
 }
 
 async function fetchCurve(ds: Dataset): Promise<Map<string, number>> {

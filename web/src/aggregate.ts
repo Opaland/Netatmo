@@ -211,22 +211,50 @@ export function monthlyBySeason(records: DayRecord[]): Map<string, (number | nul
   return out;
 }
 
-/** Running total per day of year (index 0 = 1 Jan); null after the last day with data. */
-export function cumulativeByYear(records: DayRecord[], lastDay: string): Map<number, (number | null)[]> {
+/**
+ * Index of a day on a leap-year axis (#245): 1 Jan = 0, 29 Feb = 59, 1 Mar = 60 in every
+ * year, so that the same date lines up across leap and non-leap years.
+ */
+export function leapDayIndex(day: string): number {
+  const y = Number(day.slice(0, 4));
+  const leap = (y % 4 === 0 && y % 100 !== 0) || y % 400 === 0;
+  return dayOfYear(day) + (!leap && day.slice(5) >= '03-01' ? 1 : 0);
+}
+
+/**
+ * Running total per day on a leap-year axis (index 0 = 1 Jan, 59 = 29 Feb, 365 = 31 Dec);
+ * null before the first and after the last day with data. In a non-leap year, 29 Feb repeats 28 Feb (#245).
+ * `breaks`: days drawn as a gap (estimated or lost days, #297) while the total goes on.
+ */
+export function cumulativeByYear(records: DayRecord[], lastDay: string, breaks?: Set<string>): Map<number, (number | null)[]> {
   const daily = new Map<number, number[]>();
+  let first = '';
   for (const r of records) {
     const y = Number(r.day.slice(0, 4));
     let arr = daily.get(y);
     if (!arr) daily.set(y, (arr = new Array(366).fill(0)));
-    arr[dayOfYear(r.day)] += r.kwh;
+    arr[leapDayIndex(r.day)] += r.kwh;
+    if (!first || r.day < first) first = r.day;
+  }
+  const gaps = new Map<number, Set<number>>();
+  for (const d of breaks ?? []) {
+    const y = Number(d.slice(0, 4));
+    if (!gaps.has(y)) gaps.set(y, new Set());
+    gaps.get(y)!.add(leapDayIndex(d));
   }
   const out = new Map<number, (number | null)[]>();
   for (const [y, arr] of daily) {
-    const stop = y === Number(lastDay.slice(0, 4)) ? dayOfYear(lastDay) : 365;
+    const stop = y === Number(lastDay.slice(0, 4)) ? leapDayIndex(lastDay) : 365;
+    // first data year: nothing is drawn before the collection started
+    const start = y === Number(first.slice(0, 4)) ? leapDayIndex(first) : 0;
+    const g = gaps.get(y);
     let acc = 0;
     out.set(
       y,
-      arr.map((v, i) => (i > stop ? null : (acc += v))),
+      arr.map((v, i) => {
+        acc += v;
+        return i > stop || i < start || g?.has(i) ? null : acc;
+      }),
     );
   }
   return out;

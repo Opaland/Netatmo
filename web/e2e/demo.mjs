@@ -611,6 +611,113 @@ try {
     await page.screenshot({ path: `${OUT}/hors-ligne-analyse.png`, fullPage: true });
     await ctx.close();
   }
+  // v1.5 life cycle (#247, #255, #232): household view toggled while the Synthèse cards load,
+  // no hourly file downloaded again by the toggle, then lock and reopen: everything is drawn again.
+  {
+    progress('cycle de vie : vue foyer pendant le chargement, verrouillage, réouverture');
+    const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 }, serviceWorkers: 'block' });
+    await ctx.addInitScript(recordViolations);
+    const page = await ctx.newPage();
+    page.on('pageerror', (e) => errors.push(`cycle de vie: ${e.message}`));
+    page.on('console', (m) => m.type() === 'error' && errors.push(`cycle de vie: ${m.text()}`));
+    let hourlyRequests = 0;
+    page.on('request', (r) => /\.hourly\.enc\.json$/.test(r.url()) && hourlyRequests++);
+    try {
+      await openDemo(page);
+      await page.click('[data-view=overview]');
+      await page.waitForSelector('#curve-card');
+      // at once, before the load curve and the hourly data arrive (#247)
+      await page.click('.menu summary');
+      await page.check('[data-toggle=household]');
+      await page.waitForSelector('#curve-day-chart canvas', { timeout: 20000 });
+      await page.waitForSelector('#bd-chart canvas', { timeout: 20000 });
+      const talon = await page.locator('#curve-talon').innerText();
+      check(/\d\s?W/.test(talon), `cycle de vie : talon de veille absent après la bascule (${talon})`);
+      await page.click('[data-view=analyse]');
+      await page.waitForSelector('#hour-grid canvas', { timeout: 20000 });
+      await page.waitForTimeout(1500); // offline prefetch (idle callback) included
+      const before = hourlyRequests;
+      for (let i = 0; i < 2; i++) {
+        if ((await page.locator('.menu').getAttribute('open')) === null) await page.click('.menu summary');
+        await page.click('[data-toggle=household]');
+        await page.waitForSelector('#hour-grid canvas', { timeout: 20000 });
+      }
+      await page.waitForTimeout(1500);
+      check(hourlyRequests === before, `cycle de vie : la bascule de la vue foyer a retéléchargé ${hourlyRequests - before} fichier(s) horaire(s) (#255)`);
+      // lock (« Quitter la démo »), then reopen: the views draw again from a clean slate
+      if ((await page.locator('.menu').getAttribute('open')) === null) await page.click('.menu summary');
+      await page.click('#lock');
+      await page.waitForSelector('#demo', { timeout: 10000 });
+      check(!(await page.locator('header.top').count()), 'cycle de vie : l’appli reste affichée après le verrouillage');
+      await page.click('#demo');
+      await page.waitForSelector('header.top', { timeout: 30000 });
+      await page.click('[data-view=overview]');
+      await page.waitForSelector('#curve-day-chart canvas', { timeout: 20000 }).catch(() => errors.push('cycle de vie : courbe de charge absente après réouverture'));
+      await page.click('[data-view=analyse]');
+      await page.waitForSelector('#hour-grid canvas', { timeout: 20000 }).catch(() => errors.push('cycle de vie : profil horaire absent après réouverture'));
+      await page.click('[data-view=comfort]');
+      await page.waitForSelector('#cold-chart canvas', { timeout: 20000 }).catch(() => errors.push('cycle de vie : vue Confort absente après réouverture'));
+      await checkViolations(page, 'cycle de vie');
+    } catch (err) {
+      errors.push(`cycle de vie : ${err}`);
+    }
+    await ctx.close();
+  }
+  // #249: a lazy card that cannot load offline says so and offers to try again (never vanishes).
+  {
+    progress('carte différée hors ligne');
+    const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 }, serviceWorkers: 'block' });
+    await ctx.addInitScript(recordViolations);
+    const page = await ctx.newPage();
+    page.on('pageerror', (e) => errors.push(`carte hors ligne: ${e.message}`));
+    try {
+      await openDemo(page);
+      await page.click('[data-view=overview]');
+      await page.waitForSelector('.kpi');
+      await ctx.setOffline(true);
+      await page.click('[data-view=analyse]');
+      const failed = page.locator('#shutters-zone .lazy-failed');
+      await failed.waitFor({ timeout: 15000 });
+      const text = await failed.innerText();
+      check(/indisponible hors connexion/.test(text) && /Réessayer/.test(text), `carte hors ligne : message inattendu « ${text} »`);
+      await audit(page, 'carte-hors-ligne');
+      await checkViolations(page, 'carte hors ligne');
+      // back online: the browser keeps the failed module until a reload, the card says so
+      await ctx.setOffline(false);
+      await page.waitForSelector('#shutters-zone [data-lazy-retry=reload]', { timeout: 15000 });
+      await Promise.all([page.waitForEvent('load'), page.click('#shutters-zone [data-lazy-retry]')]);
+      await openDemo(page);
+      await page.click('[data-view=analyse]');
+      await page.waitForSelector('#shutters-card', { timeout: 15000 }).catch(() => errors.push('carte hors ligne : la carte ne revient pas après rechargement'));
+    } catch (err) {
+      errors.push(`carte hors ligne : ${err}`);
+    }
+    await ctx.close();
+  }
+  // #254: while a passphrase is being checked, the demo button cannot start a second unlock.
+  {
+    progress('déverrouillage unique');
+    const ctx = await browser.newContext({ serviceWorkers: 'block' });
+    await ctx.route('**/data/keyinfo.json', (r) => r.fulfill({ contentType: 'application/json', body: JSON.stringify({ salt: 'AAAAAAAAAAAAAAAAAAAAAA==', iter: 600000 }) }));
+    await ctx.route('**/data/meta.enc.json', async (r) => {
+      await new Promise((res) => setTimeout(res, 1500));
+      await r.fulfill({ status: 404, body: '' });
+    });
+    const page = await ctx.newPage();
+    page.on('pageerror', (e) => errors.push(`déverrouillage: ${e.message}`));
+    try {
+      await page.goto(base);
+      await page.fill('#pass', 'une phrase quelconque');
+      await page.click('#unlock button.primary');
+      await page.waitForFunction(() => document.querySelector('.lock .error')?.textContent === 'Déchiffrement…');
+      check(await page.isDisabled('#demo'), 'déverrouillage : le bouton de démo reste cliquable pendant le déchiffrement');
+      await page.waitForSelector('#pass:not([disabled])', { timeout: 15000 });
+      check(!(await page.locator('header.top').count()), 'déverrouillage : un jeu de données s’est ouvert');
+    } catch (err) {
+      errors.push(`déverrouillage : ${err}`);
+    }
+    await ctx.close();
+  }
   // S-8.9: Trusted Types enforced (a raw string is refused) and libsodium still works under it.
   {
     const ctx = await browser.newContext();

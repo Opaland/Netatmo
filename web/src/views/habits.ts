@@ -56,8 +56,10 @@ export interface CalendarOpts {
 export async function fillAnalyse(cal: CalendarOpts) {
   put('telework-zone', teleworkCard());
   bindTelework();
+  const d = ds;
   const edits = await loadEdits();
   await loadModeAbsences();
+  if (ds !== d) return; // #247: another dataset (or the lock) since: its own render fills the card
   const list = absences(edits);
   const el = document.getElementById('cal-chart');
   const marks = list.flatMap((p) => daysOf(p)).filter((d) => d.startsWith(String(cal.year)));
@@ -175,28 +177,32 @@ onDatasetLoaded(() => {
 });
 
 async function loadModeAbsences() {
-  if (byMode || !ds!.meta.has_roomstate) return;
+  const d = ds!;
+  if (byMode || !d.meta.has_roomstate) return;
+  let found: Period[];
   try {
-    const rs = await loadRoomState(ds!);
-    byMode = rs ? confirmedAbsences(rs).map(([from, to]) => ({ from, to })) : [];
+    const rs = await loadRoomState(d);
+    found = rs ? confirmedAbsences(rs).map(([from, to]) => ({ from, to })) : [];
   } catch {
-    byMode = []; // the detection by consumption stays
+    found = []; // the detection by consumption stays
   }
+  if (ds === d) byMode = found; // #247: never another dataset's absences
 }
 const lsAbsences = () => `${NS}:absences:${ds!.source}`;
 
 async function loadEdits(): Promise<AbsenceEdits> {
   if (cachedEdits) return cachedEdits;
+  const d = ds!;
   const raw = readPref(lsAbsences());
   let edits = NO_EDITS;
   if (raw) {
     try {
-      edits = { ...NO_EDITS, ...(await openLocal<AbsenceEdits>(JSON.parse(raw), ds!.key)) };
+      edits = { ...NO_EDITS, ...(await openLocal<AbsenceEdits>(JSON.parse(raw), d.key)) };
     } catch {
       /* written with another passphrase: start again */
     }
   }
-  cachedEdits = edits;
+  if (ds === d) cachedEdits = edits;
   return edits;
 }
 

@@ -20,28 +20,28 @@
   <button class="chip" aria-pressed="false">Toutes les années</button>
 </div>
 <section class="card">
-  <div class="card-head"><h2>Hiver contre hiver</h2><span class="sub">saison de chauffe, à date</span></div>
-  <label class="switch"><span><b>À climat égal</b><br><span class="sub">corrige l'écart de froid entre les deux hivers</span></span><input type="checkbox" checked></label>
+  <div class="card-head"><h2>Hiver contre hiver</h2><span class="sub">hivers complets, septembre → août</span></div>
+  <label class="switch"><span><b>À climat égal</b><br><span class="sub">corrige l'écart de froid entre les deux hivers</span></span><input class="toggle" type="checkbox" role="switch" checked aria-label="À climat égal"></label>
   <div class="tiles">
     <div class="tile"><div class="label">2025-2026</div><div class="value">5 640 kWh</div><div class="delta">1 046 €</div></div>
     <div class="tile"><div class="label">2024-2025</div><div class="value">6 210 kWh</div><div class="delta">1 152 €</div></div>
   </div>
   <p><b>−7 % à climat égal</b> (−9 % brut) : l'hiver dernier était un peu plus froid, mais la baisse vient surtout des réglages.</p>
   <svg class="chart" viewBox="0 0 360 190" role="img" aria-labelledby="c2t">
-<title id="c2t">Consommation mois par mois : 2026 sous 2025 presque chaque mois, surtout en octobre (400 contre 630 kWh).</title>
+<title id="c2t">Consommation par mois de septembre à août : l'hiver 2025-2026 est sous l'hiver 2024-2025 presque chaque mois ; l'hiver 2026-2027 a commencé en septembre.</title>
 <line class="grid" x1="34" x2="360" y1="160.0" y2="160.0"/><text x="28" y="164.0" text-anchor="end">0</text>
 <line class="grid" x1="34" x2="360" y1="106.4" y2="106.4"/><text x="28" y="110.4" text-anchor="end">500</text>
 <line class="grid" x1="34" x2="360" y1="52.9" y2="52.9"/><text x="28" y="56.9" text-anchor="end">1 000</text>
-<polyline points="34.0,15.4 62.7,108.6 91.5,79.6 120.2,86.1 148.9,125.7 177.6,141.2 206.4,145.0 235.1,147.7 263.8,127.9 292.5,86.1 321.3,68.9 350.0,23.9" fill="none" stroke="var(--year-2)" stroke-width="2" stroke-dasharray="4 3" stroke-linejoin="round"/>
-<polyline points="34.0,18.6 62.7,35.7 91.5,42.1 120.2,79.6 148.9,116.1 177.6,141.2 206.4,146.1 235.1,147.7 263.8,134.3 292.5,92.5 321.3,67.9 350.0,31.4" fill="none" stroke="var(--year-1)" stroke-width="2.5" stroke-dasharray="" stroke-linejoin="round"/>
-<polyline points="34.0,25.0 62.7,48.6 91.5,58.2 120.2,91.4 148.9,127.9 177.6,146.1 206.4,148.2 235.1,148.2 263.8,147.7 292.5,117.1 321.3,142.3" fill="none" stroke="var(--year-0)" stroke-width="3" stroke-dasharray="" stroke-linejoin="round"/>
-<text x="34.0" y="178" text-anchor="middle">janv.</text>
-<text x="120.2" y="178" text-anchor="middle">avr.</text>
-<text x="206.4" y="178" text-anchor="middle">juil.</text>
-<text x="292.5" y="178" text-anchor="middle">oct.</text>
-<text x="325.3" y="146.3" style="fill:var(--year-0);font-weight:600">2026</text>
+<polyline points="34.0,127.9 62.7,86.1 91.5,68.9 120.2,23.9 148.9,18.6 177.6,35.7 206.4,42.1 235.1,79.6 263.8,116.1 292.5,141.2 321.3,146.1 350.0,147.7" fill="none" stroke="var(--year-1)" stroke-width="2.5" stroke-linejoin="round"/>
+<polyline points="34.0,134.3 62.7,92.5 91.5,67.9 120.2,31.4 148.9,25.0 177.6,48.6 206.4,58.2 235.1,91.4 263.8,127.9 292.5,146.1 321.3,148.2 350.0,148.2" fill="none" stroke="var(--year-0)" stroke-width="3" stroke-linejoin="round"/>
+<polyline points="34.0,147.7 62.7,117.1 91.5,142.3" fill="none" stroke="var(--year-2)" stroke-width="2" stroke-dasharray="4 3" stroke-linejoin="round"/>
+<text x="34.0" y="178" text-anchor="middle">sept.</text>
+<text x="120.2" y="178" text-anchor="middle">déc.</text>
+<text x="206.4" y="178" text-anchor="middle">mars</text>
+<text x="292.5" y="178" text-anchor="middle">juin</text>
+
 </svg>
-  <div class="legend"><span><i class="sw" style="background:var(--year-0)"></i>2026</span><span><i class="sw" style="background:var(--year-1)"></i>2025</span><span><i class="sw" style="background:var(--year-2)"></i>2024 (pointillé)</span></div>
+  <div class="legend"><span><i class="sw" style="background:var(--year-0)"></i>Hiver 2025-2026</span><span><i class="sw" style="background:var(--year-1)"></i>Hiver 2024-2025</span><span>– – 2026-2027 en cours (au 8 nov.)</span></div>
   <details class="how"><summary>Comment c'est calculé</summary><p>Saison de chauffe : 1ᵉʳ septembre → 31 août. À climat égal : consommation ramenée aux <span class="term">degrés-jours</span> de la saison la plus récente.</p></details>
 </section>
 <section class="card">

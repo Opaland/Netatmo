@@ -2,7 +2,7 @@
 // Confort: what was imported, and the agreement between an opening sensor and the open-window
 // detection of the Intuis radiator of the same room.
 import { addDays } from '../aggregate';
-import { ds, onDatasetLoaded, rerender, state } from '../app';
+import { datasetDoc, ds, onDatasetLoaded, rerender, state } from '../app';
 import { isBedroom } from '../comfort';
 import { loadHa, loadRoomState } from '../data';
 import { type HaDoc, KIND_LABEL, agreement, guessRoom, lastHaDay, summarize } from '../ha';
@@ -12,9 +12,12 @@ import { esc, longDate, nf0, table } from '../ui';
 import { type RoomState, bedroomGrouping } from '../windows';
 import { NS } from '../scope';
 
+// #247: loaded for the dataset shown; `doc` / `rs` / `failed` are refreshed from it at each render.
+const haDoc = datasetDoc((d) =>
+  Promise.all([loadHa(d), d.meta.has_roomstate ? loadRoomState(d) : Promise.resolve(null)]).then(([h, r]) => ({ doc: h ?? ({} as HaDoc), rs: r })),
+);
 let doc: HaDoc | null = null;
 let rs: RoomState | null = null;
-let loading = false;
 let failed = false;
 onDatasetLoaded(() => {
   doc = null;
@@ -27,20 +30,10 @@ const head = `<div class="card-head"><h2>Capteurs Home Assistant <small class="m
 const lsLinks = () => `${NS}:ha-rooms:${ds!.source}`;
 
 function ensure() {
-  if (doc || loading || failed) return;
-  loading = true;
-  Promise.all([loadHa(ds!), ds!.meta.has_roomstate ? loadRoomState(ds!) : Promise.resolve(null)])
-    .then(([h, r]) => {
-      doc = h ?? {};
-      rs = r;
-    })
-    .catch(() => {
-      failed = true;
-    })
-    .finally(() => {
-      loading = false;
-      if (state.view === 'comfort') rerender();
-    });
+  const v = haDoc.get(ds, () => state.view === 'comfort' && rerender());
+  doc = v?.doc ?? null;
+  rs = v?.rs ?? null;
+  failed = haDoc.status(ds) === 'failed';
 }
 
 /** Room chosen on this device for each opening sensor ('' = none), else guessed from the names. */

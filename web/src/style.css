@@ -594,6 +594,12 @@ th {
 .tt-name {
   color: var(--text-secondary);
 }
+.tt-note {
+  color: var(--text-secondary);
+  font-size: 11px;
+  max-width: 240px;
+  white-space: normal;
+}
 .tt-total {
   border-top: 1px solid var(--border);
   margin-top: 4px;
@@ -940,6 +946,16 @@ fieldset.secrets input,
   border: 1px solid var(--border);
 }
 .settings-msg.ko {
+  color: var(--bad);
+}
+.settings-msg:empty {
+  display: none;
+}
+/* #249: a lazy card that could not be shown says so (offline) or shows its error */
+.lazy-failed .link {
+  margin-left: 4px;
+}
+.lazy-error {
   color: var(--bad);
 }
 .card a {

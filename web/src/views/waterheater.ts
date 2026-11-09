@@ -9,6 +9,7 @@ import { belowThreshold, hcVerdict, hourByMonth, peakExtraCost, waterHeaterHc } 
 import { activeRooms, esc, fmtEur, fmtKwh, hcHpAt, lastDay, nf0, offCol, series, table, tableToggle } from '../ui';
 import { html } from '../trusted';
 import { lsKey } from '../scope';
+import { lazyCard } from '../lazy';
 
 const LS_THRESHOLD = lsKey('hc-threshold');
 function threshold(): number {
@@ -101,7 +102,7 @@ export function drawWaterHeater(hourly: Hourly | null) {
   if (!el) return;
   // S-13.6: contactor mode from the hourly snapshots (lazy module)
   const line = document.getElementById('contactor-line');
-  if (line) import('./offload').then((m) => m.fillContactor(line)).catch(() => line.remove());
+  if (line) void lazyCard(() => import('./offload'), (m) => m.fillContactor(line), { zone: line, what: 'Contacteur du chauffe-eau' });
   const [from, to] = twelveMonths();
   const rooms = waterRooms();
   const hc = waterHeaterHc(ds!.tariffs, rooms, offCol(), from, to);

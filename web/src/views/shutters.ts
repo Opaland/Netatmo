@@ -5,6 +5,7 @@ import { addDays, minusYears } from '../aggregate';
 import { ds } from '../app';
 import { cssVar, scatterChart } from '../charts';
 import { loadHourly } from '../data';
+import { unavailable } from '../offline';
 import {
   MIN_CLOSED,
   type ShutterComparison,
@@ -82,16 +83,19 @@ async function drawComparison() {
     return;
   }
   out.innerHTML = html('<p class="hint muted">Chargement des données horaires…</p>');
+  const d = ds;
+  const weather = ds.weather;
   let hourly;
   try {
-    hourly = await loadHourly(ds, addDays(minusYears(lastDay()), 1)); // #251: the 12 months compared below
+    hourly = await loadHourly(d, addDays(minusYears(lastDay()), 1)); // #251: the 12 months compared below
   } catch {
-    out.innerHTML = html('<p class="hint muted">Données horaires indisponibles.</p>');
+    if (ds === d) out.innerHTML = html(`<p class="hint muted">${esc(unavailable('Données horaires'))}</p>`);
     return;
   }
+  if (ds !== d) return; // #247: locked or another dataset since: the hourly data belong to the old one
   const last = lastDay();
   const heat = activeRooms().filter((r) => r.category === 'heating').map((r) => r.id);
-  const all = nights(hourly, heat, ds.weather, new Set(notes), addDays(minusYears(last), 1), last);
+  const all = nights(hourly, heat, weather, new Set(notes), addDays(minusYears(last), 1), last);
   const cmp = compareShutters(all);
   if (!document.body.contains(out)) return;
   if (!cmp) {
