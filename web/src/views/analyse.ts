@@ -46,6 +46,7 @@ export function renderAnalyse(view: HTMLElement, records: DayRecord[]) {
   <section class="card" id="indoor-sig" hidden></section>`
       : `<section class="card"><h2>Signature énergétique</h2><p class="hint muted">Disponible dès que la collecte a récupéré la météo (prochaine collecte).</p></section>`
   }
+  <div id="works-zone"></div>
   ${setpointCard(records)}
   ${anomaliesCard(records)}
   <section class="card" id="calendar-card">
@@ -129,6 +130,8 @@ export function renderAnalyse(view: HTMLElement, records: DayRecord[]) {
   calendarChart(document.getElementById('cal-chart')!, cal);
   // S-4.9 telework cost, S-4.10 absences (marks on the calendar), loaded on demand (S-7.10)
   import('./habits').then((m) => m.fillAnalyse(cal)).catch(() => {});
+  // S-6.2: surfaces and works markers, signature before / after (lazy module)
+  import('./works').then((m) => m.fillWorks(records)).catch(() => {});
   // temperatures
   if (tempRoom) {
     const from = addDays(minusYears(last), 1);

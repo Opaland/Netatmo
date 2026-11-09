@@ -94,6 +94,7 @@ export function renderOverview(view: HTMLElement, records: DayRecord[]) {
   </section>
   <div id="money-zone"></div>
   ${linkyCard()}
+  <div id="invoice-zone"></div>
   ${curveCard()}
   <section class="card">
     <div class="card-head">
@@ -124,6 +125,8 @@ export function renderOverview(view: HTMLElement, records: DayRecord[]) {
   drawCurve();
   // S-2.11 / S-2.12 / S-2.13: budget, CO₂ and new tariff, loaded on demand (S-7.10)
   import('./budget').then((m) => m.fillOverview()).catch(() => {});
+  // S-2.3: reconcile with an invoice (lazy module)
+  import('./invoice').then((m) => m.fillInvoice()).catch(() => {});
 
   const set = aggregate(records, from, to, state.gran, split === 'category' ? (r) => r.cat : (r) => roomGroup(r.room));
   const order =

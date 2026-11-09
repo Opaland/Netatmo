@@ -1235,3 +1235,78 @@ code.hash {
   word-break: break-all;
   font-size: 0.85em;
 }
+
+/* v1.4: invoice (S-2.3), works and surfaces (S-6.2), research export (S-6.6) */
+.badge-ok,
+.badge-warn {
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 1px 8px;
+  border-radius: 6px;
+  border: 1px solid currentColor;
+  white-space: nowrap;
+}
+.badge-ok {
+  color: var(--good);
+}
+.badge-warn {
+  color: var(--bad);
+}
+.invoice-result th {
+  position: static;
+  text-align: left;
+  font-weight: normal;
+  white-space: normal;
+}
+.invoice-result th small {
+  display: block;
+}
+#works-card td small {
+  display: block;
+}
+.works-surfaces {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(10em, 1fr));
+  gap: 0 12px;
+}
+.research-dialog {
+  width: min(560px, calc(100vw - 32px));
+  max-height: calc(100dvh - 32px);
+  box-sizing: border-box;
+  padding: 20px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--surface-1);
+  color: var(--text-primary);
+  box-shadow: var(--shadow);
+}
+.research-dialog::backdrop {
+  background: rgb(0 0 0 / 0.45);
+}
+.research-form {
+  display: grid;
+  gap: 8px;
+}
+.research-form .money-field select {
+  max-width: 100%;
+}
+.research-form h2 {
+  margin: 0;
+}
+.research-format {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 6px 12px;
+}
+.research-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.research-actions .small:not(.primary) {
+  padding: 8px 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-0);
+  color: var(--text-primary);
+}

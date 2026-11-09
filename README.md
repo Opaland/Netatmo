@@ -26,6 +26,15 @@ Ce que l'application mobile ne fait pas, et que celle-ci fait :
 - l'**export CSV** pour Excel et un **export long** JSON / CSV au format documenté
   ([docs/export-long.md](docs/export-long.md), schéma JSON publié) pour Home Assistant ou Node-RED,
   préparés dans le navigateur, sans rien envoyer ;
+- un **export recherche** horaire anonymisé (pièces en pseudonymes, dates décalées, licence au choix,
+  zone climatique facultative), vérifié par le détecteur du rapport anonymisé
+  ([docs/export-recherche.md](docs/export-recherche.md)) ;
+- le **recoupement avec une facture** : la période et le montant TTC d'une facture, comparés au coût
+  calculé (compteur Linky × tarif du contrat + abonnement au prorata), écart expliqué (relevé estimé,
+  jours manquants, abonnement, taxes) et part du chauffage et de l'eau chaude ;
+- les **surfaces** des pièces et des **marqueurs « travaux »** datés (isolation, fenêtres,
+  radiateur…) : signature avant / après (deux droites), kWh/m² et kWh par degré-jour ; ces saisies et
+  les factures restent **chiffrées sur l'appareil** ;
 - une **analyse du mois rédigée par l'IA** (Claude), facultative.
 
 Tout tourne sur GitHub, gratuitement, sans serveur à maintenir :
@@ -106,6 +115,13 @@ Sans activité (toucher, clavier) pendant **15 minutes**, l'application se verro
 les données déchiffrées, la clé mémorisée et le jeton GitHub sont oubliés, la phrase est redemandée.
 Le délai se règle dans le menu ⋮ (5 min, 15 min, 1 h, ou jamais sur cet appareil) ; il compte aussi
 quand l'onglet est fermé, si bien qu'un téléphone volé ne livre pas l'historique.
+
+Sur iPhone, iOS peut **effacer la clé mémorisée** (quelques jours sans ouvrir l'appli dans Safari, ou
+manque de place) : l'appli le détecte et l'écrit (« iOS a effacé la clé, vos données sont intactes »),
+puis redemande la phrase. Les données ne sont pas touchées : elles restent chiffrées dans le dépôt.
+L'appli demande au navigateur de conserver son stockage (`navigator.storage.persist()`) ; l'installer
+sur l'écran d'accueil le protège mieux. Les notes privées de l'appareil (absences, factures, travaux)
+sont, elles, perdues avec le stockage. Chaque version est testée sur WebKit (moteur de Safari) en CI.
 
 ### Le plus simple : l'écran Paramètres
 

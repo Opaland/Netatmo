@@ -7,6 +7,7 @@ import type { Coverage } from './checks';
 import type { DayHours, Night, StationHourly } from './comfort';
 import { type Envelope, type KeyInfo, decryptEnvelope, deriveKey } from './crypto';
 import { type RememberedKey, freshKey } from './session';
+import { askPersistence, writeMark } from './storage';
 
 export type Source = 'data' | 'demo';
 
@@ -260,6 +261,9 @@ export async function rememberKey(source: Source, key: CryptoKey, now = Date.now
   try {
     const entry: RememberedKey = { key, at: now };
     await tx('readwrite', (s) => s.put(entry, source));
+    // S-7.9: remember that a key was kept (date only) and ask the browser not to evict it.
+    writeMark({ source, at: now });
+    void askPersistence();
   } catch {
     /* private browsing: just don't remember */
   }
@@ -278,6 +282,7 @@ export async function recallKey(source: Source, now = Date.now()): Promise<Crypt
 }
 
 export async function forgetKeys(): Promise<void> {
+  writeMark(null); // forgotten on purpose: no "erased by the browser" message next time
   try {
     await tx('readwrite', (s) => s.clear());
   } catch {

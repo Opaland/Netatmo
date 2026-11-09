@@ -5,7 +5,8 @@ import { WrongPassphrase } from '../crypto';
 import { type Source, load, rememberKey, unlock } from '../data';
 import { html } from '../trusted';
 
-export function renderLock(message = '', hasRealData = true) {
+/** `notice`: an information, not an error (S-7.9: key erased by the browser, data intact). */
+export function renderLock(message = '', hasRealData = true, notice = '') {
   disposeAll(app);
   app.innerHTML = html`
   <main class="lock">
@@ -13,6 +14,7 @@ export function renderLock(message = '', hasRealData = true) {
       <img src="icons/icon.svg" alt="" width="64" height="64">
       <h1>Historique énergie</h1>
       <p class="muted">Radiateurs et chauffe-eau Intuitiv / Intuis — vos données restent chiffrées, elles ne sont déchiffrées que sur cet appareil.</p>
+      ${notice ? `<p class="notice" id="lock-notice" role="status">${esc(notice)}</p>` : ''}
       ${
         hasRealData
           ? `<form id="unlock">
