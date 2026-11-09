@@ -295,6 +295,16 @@ function computeComparison() {
   return { perYear, all, scope: linky ? 'logement' : 'chauffage' };
 }
 
+/** #314: one-line summary of the comparator for its row in Outils (last full year, else the latest). */
+export function offersLine(): string {
+  if (tenant().on || !ds!.offers.size || !ds!.tempo.rows.length) return '';
+  const rows = comparison().perYear.filter((p) => p.r.hphc.days > 0);
+  const p = [...rows].reverse().find((x) => x.r.hphc.days >= 360) ?? rows[rows.length - 1];
+  if (!p) return '';
+  const eur = (k: 'base' | 'hphc' | 'tempo') => fmtEur(p.r[k].energy + p.r[k].subscription);
+  return `${p.y}${p.r.hphc.days < 360 ? ` (${p.r.hphc.days} j)` : ''} : Base ${eur('base')} · Heures creuses ${eur('hphc')} · Tempo ${eur('tempo')}`;
+}
+
 function simWarning() {
   if (state.simKva === null || !ds!.pmax.size) return '';
   const last = lastDay();

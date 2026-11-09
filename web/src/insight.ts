@@ -79,3 +79,15 @@ export function pseudonymLegend(map: Record<string, string> | undefined): [strin
     return ra[0] - rb[0] || ra[1] - rb[1] || a.localeCompare(b);
   });
 }
+
+/** First sentence of the monthly analysis, without the markdown marks (« Un mois plus sobre… »). */
+export function firstSentence(md: string, max = 90): string {
+  const line =
+    md
+      .split('\n')
+      .map((l) => l.trim())
+      .find((l) => l && !l.startsWith('#') && !l.startsWith('|') && !l.startsWith('---')) ?? '';
+  const plain = line.replace(/^[-*>]\s+/, '').replace(/[*_`]/g, '').replace(/\[([^\]]*)\]\([^)]*\)/g, '$1');
+  const s = /^(.*?[.!?])(\s|$)/.exec(plain)?.[1] ?? plain;
+  return s.length > max ? `${s.slice(0, max - 1).trimEnd()}…` : s;
+}

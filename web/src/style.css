@@ -545,8 +545,57 @@ code {
   margin-bottom: var(--space-4);
   border-radius: var(--radius-lg);
 }
-.card.sim {
+.card.sim,
+.sim-page .card {
   border-style: dashed;
+}
+.sim-note {
+  margin: 0 0 var(--space-3);
+  font-size: var(--font-sm);
+  color: var(--text-muted);
+}
+/* #318 / #336: État des données, year by year and source by source */
+.year-verdict {
+  padding: var(--space-3) 0;
+  border-top: 1px solid var(--border);
+}
+.year-verdict h3 {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-2);
+  margin: 0 0 var(--space-1);
+}
+.year-verdict ul,
+.source-quality .gaps {
+  margin: var(--space-2) 0 0;
+  padding-left: var(--space-4);
+}
+.year-verdict li,
+.source-quality .gaps li {
+  margin-bottom: var(--space-2);
+  overflow-wrap: anywhere;
+}
+.year-verdict.good .tag.level {
+  background: var(--state-good-soft);
+  color: var(--state-good);
+}
+.year-verdict.fair .tag.level {
+  background: var(--state-warn-soft);
+  color: var(--state-warn);
+}
+.year-verdict.poor .tag.level {
+  background: var(--state-bad-soft);
+  color: var(--state-bad);
+}
+.source-quality {
+  margin-top: var(--space-4);
+}
+.source-quality h3 {
+  margin: 0 0 var(--space-2);
+}
+.source-quality .gaps p {
+  margin: 0;
 }
 .card.off {
   background: var(--surface-sunken);
