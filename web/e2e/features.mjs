@@ -105,6 +105,22 @@ async function audit(page, where) {
   }
 }
 
+/** #311: the amounts of the tiles (every page, components.ts tile()) stay on one line and inside their tile. */
+const tileAmounts = (page) =>
+  page.evaluate(() =>
+    [...document.querySelectorAll('body:not(.is-simple) #view .kpis .kpi-value')].flatMap((el) => {
+      const range = document.createRange();
+      range.selectNodeContents(el);
+      const lines = new Set([...range.getClientRects()].filter((r) => r.width > 0).map((r) => Math.round(r.top)));
+      const tile = el.closest('.kpi').getBoundingClientRect();
+      const box = range.getBoundingClientRect();
+      const out = [];
+      if (lines.size > 1) out.push(`« ${el.textContent} » sur ${lines.size} lignes`);
+      if (box.right > tile.right + 1 || box.left < tile.left - 1) out.push(`« ${el.textContent} » sort de sa tuile`);
+      return out;
+    }),
+  );
+
 const recordViolations = () => {
   window.__csp = [];
   document.addEventListener('securitypolicyviolation', (e) => window.__csp.push(`${e.violatedDirective} ${(e.sample || '').slice(0, 60)}`.trim()));
@@ -198,6 +214,8 @@ try {
       check(want.test(scope) && /hors abonnement/.test(scope), `#311 : ligne « ce qui est compté » inattendue pour ${p} (« ${scope} »)`);
       check((await page.locator('#home-chart canvas').count()) === 1, `#311 : graphique absent pour ${p}`);
     }
+    const cut = await tileAmounts(page);
+    check(!cut.length, `#311 : montant de tuile coupé (iPhone 13) → ${cut.join(', ')}`);
     await audit(page, 'accueil');
   }
 
