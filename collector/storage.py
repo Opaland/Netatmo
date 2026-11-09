@@ -9,6 +9,9 @@ data/
   2024.hourly.enc.json    {"hourly":  {room: {"YYYY-MM-DDTHH": Wh}}}   (loaded on demand by the app)
   weather.enc.json        {"source": "...", "outdoor": {"YYYY-MM-DD": [min, max, mean]},
                            "indoor": {"YYYY-MM-DD": mean}}
+  station.enc.json        Netatmo weather station: modules, daily [min, max, mean, hum, co2] and
+                          small daily aggregates "nightly" / "hours" (see docs/api-notes.md)
+  2025.station_h.enc.json {"hourly": {"m0": {"YYYY-MM-DDTHH": [°C, %, ppm]}}} (loaded on demand)
   netatmo-token.enc.json  rotating refresh token of the Netatmo weather station (optional)
 """
 
@@ -95,14 +98,22 @@ class Store:
         return self.doc(str(year)).setdefault("daily", {})
 
     def years(self) -> list[int]:
-        found = {int(p.name.split(".")[0]) for p in self.dir.glob("*.enc.json") if p.name.split(".")[0].isdigit()}
+        """Years with a yearly energy document "YYYY.enc.json" (not "YYYY.hourly" and the like)."""
+        found = {int(p.name[:4]) for p in self.dir.glob("*.enc.json") if p.name[: -len(".enc.json")].isdigit()}
         found |= {int(n) for n in self._docs if n.isdigit()}
         return sorted(found)
 
-    def hourly_years(self) -> list[int]:
-        found = {int(p.name.split(".")[0]) for p in self.dir.glob("*.hourly.enc.json")}
-        found |= {int(n.split(".")[0]) for n in self._docs if n.endswith(".hourly")}
+    def _suffix_years(self, suffix: str) -> list[int]:
+        found = {int(p.name.split(".")[0]) for p in self.dir.glob(f"*.{suffix}.enc.json")}
+        found |= {int(n.split(".")[0]) for n in self._docs if n.endswith(f".{suffix}") and self._docs[n]}
         return sorted(found)
+
+    def hourly_years(self) -> list[int]:
+        return self._suffix_years("hourly")
+
+    def station_hourly_years(self) -> list[int]:
+        """Years with hourly weather-station readings "YYYY.station_h.enc.json"."""
+        return self._suffix_years("station_h")
 
     def delete_room(self, room_id: str) -> None:
         """Remove a room from every yearly document (daily, tariffs, temps, hourly)."""
@@ -140,6 +151,7 @@ class Store:
             "rooms": rooms,
             "years": self.years(),
             "hourly_years": self.hourly_years(),
+            "station_hourly_years": self.station_hourly_years(),
             "first_day": self.first_day(),
             "last_day": self.last_day(),
             **(extra or {}),
