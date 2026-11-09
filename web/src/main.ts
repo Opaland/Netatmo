@@ -62,6 +62,8 @@ function render() {
           <select data-lock-after>${LOCK_CHOICES.map((m) => `<option value="${m}" ${m === state.lockAfter ? 'selected' : ''}>${m ? (m < 60 ? `après ${m} min` : `après ${m / 60} h`) : 'jamais sur cet appareil'}</option>`).join('')}</select>
         </label>
         <button type="button" id="export">Exporter en CSV (filtres appliqués)</button>
+        <button type="button" data-export-long="csv" title="Format long documenté (docs/export-long.md), tout l'historique, préparé sur cet appareil">Export long (CSV)</button>
+        <button type="button" data-export-long="json" title="Même contenu en JSON, conforme au schéma docs/export-long.schema.json">Export long (JSON)</button>
         <button type="button" id="backup" title="Tous les fichiers chiffrés en un seul, toujours chiffrés : à garder hors de GitHub">Télécharger une sauvegarde chiffrée</button>
         <button type="button" id="lock">${ds.source === 'demo' ? 'Quitter la démo' : 'Verrouiller'}</button>
       </div>
@@ -125,6 +127,8 @@ app.addEventListener('click', async (e) => {
     return setState({ rooms: btn.dataset.rooms === 'all' ? null : [] });
   }
   if (clickHandlers.some((h) => h(btn))) return;
+  // S-9.7: long export, built locally from the decrypted data (lazy module)
+  if (btn.dataset.exportLong) return void import('./export').then((m) => ds && m.downloadLong(ds, btn.dataset.exportLong as 'csv' | 'json'));
   if (btn.id === 'export') {
     const blob = new Blob(['﻿' + toCsv(filtered(), ds.meta.rooms)], { type: 'text/csv;charset=utf-8' });
     const a = document.createElement('a');

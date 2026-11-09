@@ -19,7 +19,12 @@ Ce que l'application mobile ne fait pas, et que celle-ci fait :
 - un **calendrier** de consommation, des **profils horaires**, les **températures** des pièces ;
 - la **part du chauffage et du chauffe-eau** dans la consommation totale (compteur **Linky**) ;
 - **par pièce** : classement, évolution N-1 → N en cascade, détail mensuel ;
-- un **rapport annuel** imprimable (PDF) et l'**export CSV** ;
+- un **rapport annuel** imprimable (PDF), avec le comparateur d'offres et la puissance maximale, et sa
+  version **anonymisée** à remettre à un tiers (pièces en pseudonymes, ni nom, ni identifiant, ni
+  donnée horaire, ni station) ;
+- l'**export CSV** pour Excel et un **export long** JSON / CSV au format documenté
+  ([docs/export-long.md](docs/export-long.md), schéma JSON publié) pour Home Assistant ou Node-RED,
+  préparés dans le navigateur, sans rien envoyer ;
 - une **analyse du mois rédigée par l'IA** (Claude), facultative.
 
 Tout tourne sur GitHub, gratuitement, sans serveur à maintenir :

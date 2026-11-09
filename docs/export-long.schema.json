@@ -1,0 +1,76 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Opaland/Netatmo/blob/main/docs/export-long.schema.json",
+  "title": "Historique énergie — export long (version 1)",
+  "description": "Document JSON produit par « Export long (JSON) » dans l'application. Le CSV « Export long (CSV) » a les mêmes colonnes, dans le même ordre ; chaque ligne respecte $defs/row. Voir docs/export-long.md.",
+  "type": "object",
+  "required": ["format", "version", "generated", "timezone", "first_day", "last_day", "columns", "rows"],
+  "additionalProperties": false,
+  "properties": {
+    "format": { "const": "intuis-history-long" },
+    "version": { "const": 1 },
+    "generated": { "type": "string", "format": "date-time", "description": "Date de création du fichier (ISO 8601, UTC)." },
+    "timezone": { "type": "string", "minLength": 1, "description": "Fuseau IANA de la maison : les dates sont des jours locaux." },
+    "first_day": { "oneOf": [{ "$ref": "#/$defs/date" }, { "type": "null" }] },
+    "last_day": { "oneOf": [{ "$ref": "#/$defs/date" }, { "type": "null" }] },
+    "columns": { "const": ["date", "source", "entity", "metric", "value", "unit"] },
+    "rows": { "type": "array", "items": { "$ref": "#/$defs/row" } }
+  },
+  "$defs": {
+    "date": { "type": "string", "pattern": "^\\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\\d|3[01])$" },
+    "row": {
+      "type": "object",
+      "required": ["date", "source", "entity", "metric", "value", "unit"],
+      "additionalProperties": false,
+      "properties": {
+        "date": { "$ref": "#/$defs/date" },
+        "source": { "enum": ["intuis", "linky", "weather", "station"] },
+        "entity": { "type": "string", "minLength": 1, "description": "Pièce (intuis), « logement » (linky), « exterieur » (weather) ou nom du module (station)." },
+        "metric": { "type": "string" },
+        "value": { "type": "number" },
+        "unit": { "enum": ["kWh", "°C", "kVA", "%", "ppm"] }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "source": { "const": "intuis" } } },
+          "then": {
+            "oneOf": [
+              { "properties": { "metric": { "const": "energy" }, "unit": { "const": "kWh" }, "value": { "minimum": 0 } } },
+              { "properties": { "metric": { "enum": ["temperature", "setpoint"] }, "unit": { "const": "°C" } } }
+            ]
+          }
+        },
+        {
+          "if": { "properties": { "source": { "const": "linky" } } },
+          "then": {
+            "properties": { "entity": { "const": "logement" } },
+            "oneOf": [
+              { "properties": { "metric": { "const": "energy" }, "unit": { "const": "kWh" }, "value": { "minimum": 0 } } },
+              { "properties": { "metric": { "const": "power_max" }, "unit": { "const": "kVA" }, "value": { "minimum": 0 } } }
+            ]
+          }
+        },
+        {
+          "if": { "properties": { "source": { "const": "weather" } } },
+          "then": {
+            "properties": {
+              "entity": { "const": "exterieur" },
+              "metric": { "enum": ["temperature_min", "temperature_max", "temperature_mean"] },
+              "unit": { "const": "°C" }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "source": { "const": "station" } } },
+          "then": {
+            "oneOf": [
+              { "properties": { "metric": { "enum": ["temperature_min", "temperature_max", "temperature_mean"] }, "unit": { "const": "°C" } } },
+              { "properties": { "metric": { "const": "humidity" }, "unit": { "const": "%" }, "value": { "minimum": 0, "maximum": 100 } } },
+              { "properties": { "metric": { "const": "co2" }, "unit": { "const": "ppm" }, "value": { "minimum": 0 } } }
+            ]
+          }
+        }
+      ]
+    }
+  }
+}

@@ -1,7 +1,7 @@
 // S-1.9: visual smoke test of the demo, every view, light and dark, mobile and desktop.
 // Run after `npm run build`: node e2e/demo.mjs  (starts `vite preview` itself).
 import { spawn } from 'node:child_process';
-import { mkdirSync } from 'node:fs';
+import { mkdirSync, readFileSync } from 'node:fs';
 import { chromium, devices } from 'playwright';
 
 const PORT = Number(process.env.E2E_PORT ?? 4179);
@@ -30,7 +30,7 @@ try {
     ['mobile-sombre', { ...devices['Pixel 7'], colorScheme: 'dark' }],
     ['bureau', { viewport: { width: 1280, height: 900 } }],
   ]) {
-    const ctx = await browser.newContext({ ...opts, deviceScaleFactor: 1 });
+    const ctx = await browser.newContext({ ...opts, deviceScaleFactor: 1, acceptDownloads: true });
     const page = await ctx.newPage();
     page.on('pageerror', (e) => errors.push(`${name}: ${e.message}`));
     page.on('console', (m) => m.type() === 'error' && errors.push(`${name}: ${m.text()}`));
@@ -58,7 +58,31 @@ try {
     await page.click('.menu summary');
     await page.click('.menu-panel [data-view=report]');
     await page.waitForSelector('.report');
+    // S-6.3: offer comparator and maximum power in the annual report (lazy module)
+    try {
+      await page.waitForSelector('#report-offers table', { timeout: 15000 });
+      await page.waitForSelector('#report-pmax table', { timeout: 15000 });
+    } catch (err) {
+      errors.push(`${name}/report: comparateur ou pic de puissance absent (${err})`);
+    }
     await page.screenshot({ path: `${OUT}/${name}-report.png`, fullPage: true });
+    // S-6.4: anonymised report, without any room or home name of the demo
+    await page.click('#report-anon');
+    await page.waitForSelector('.anon-report #anon-chart canvas', { timeout: 15000 });
+    const anon = await page.locator('.anon-report').innerText();
+    for (const secret of ['Maison démo', 'Salon', 'Cuisine', 'Chambre parentale', 'Chambre enfant', 'Salle de bain', 'Bureau', 'r-salon']) {
+      if (anon.includes(secret)) errors.push(`${name}/anonymisé: « ${secret} » apparaît`);
+    }
+    if (!/Pièce A/.test(anon) || !/Période/.test(anon)) errors.push(`${name}/anonymisé: pseudonymes ou période absents`);
+    await page.screenshot({ path: `${OUT}/${name}-report-anonymise.png`, fullPage: true });
+    // S-9.7: long export, generated in the page
+    if (name === 'bureau') {
+      await page.click('.menu summary');
+      const [dl] = await Promise.all([page.waitForEvent('download'), page.click('[data-export-long=csv]')]);
+      const head = readFileSync(await dl.path(), 'utf8').split('\n')[0];
+      if (head !== 'date,source,entity,metric,value,unit') errors.push(`export long : en-tête inattendu (${head})`);
+      if (!/^energie-long-v1-\d{4}-\d{2}-\d{2}\.csv$/.test(dl.suggestedFilename())) errors.push(`export long : nom ${dl.suggestedFilename()}`);
+    }
     await ctx.close();
   }
   await browser.close();
