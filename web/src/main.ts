@@ -25,6 +25,8 @@ import {
   dayProfile,
   djuBetween,
   energyCost,
+  compareOffers,
+  daySplits,
   energyCostTrve,
   fitSeason,
   offPeakShares,
@@ -59,6 +61,7 @@ import {
 import { WrongPassphrase } from './crypto';
 import { type Dataset, NoData, type Source, forgetKeys, load, loadHourly, recallKey, rememberKey, unlock } from './data';
 import { renderMarkdown } from './markdown';
+import { type ContractPeriod, OFFERS, periodAt } from './offers';
 import './style.css';
 
 // ------------------------------------------------------------------ state
@@ -78,11 +81,13 @@ interface State {
   focusRoom: string | null;
   prices: Prices;
   priceMode: 'trve' | 'manual';
-  kva: number;
+  kva: number; // legacy (v1.1), migrated to contracts
+  contracts: ContractPeriod[];
   climate: boolean;
   analyseYear: number | null;
   tempRoom: string | null;
   reportYear: number | null;
+  stationMetric: 'temp' | 'hum' | 'co2';
   showTables: boolean;
 }
 
@@ -100,10 +105,12 @@ const DEFAULT: State = {
   prices: NO_PRICES,
   priceMode: 'trve',
   kva: 9,
+  contracts: [],
   climate: false,
   analyseYear: null,
   tempRoom: null,
   reportYear: null,
+  stationMetric: 'temp',
   showTables: false,
 };
 
@@ -141,7 +148,15 @@ const pct = (p: number) => {
   return `${r > 0 ? '+' : r < 0 ? '−' : ''}${nf0.format(Math.abs(r))} %`;
 };
 const fmtEur = (v: number) => `${nf0.format(v)} €`;
-const useTrve = () => state.priceMode === 'trve' && ds!.trve.some((r) => r.kva === state.kva);
+function contracts(): ContractPeriod[] {
+  return state.contracts.length ? state.contracts : [{ from: firstDay(), offer: 'edf-trv-hphc', kva: state.kva || 9 }];
+}
+/** Regulated price row in force on that day, under the contract of that day. */
+function priceAt(day: string) {
+  const c = periodAt(contracts(), day);
+  return c ? trveAt(ds!.offers.get(c.offer) ?? [], c.kva, day) : null;
+}
+const useTrve = () => state.priceMode === 'trve' && ds!.offers.size > 0;
 const costAvailable = () => useTrve() || hasPrices(state.prices);
 function offCol(): 1 | 2 {
   const water = ds!.meta.rooms.filter((r) => r.category === 'water_heater').map((r) => r.id);
@@ -153,8 +168,8 @@ function costOf(records: DayRecord[], from: string, to: string, withSub = false)
   const recs = records.filter((r) => r.day >= from && r.day <= to);
   if (useTrve()) {
     const off = offCol();
-    const c = energyCostTrve(recs, ds!.tariffs, ds!.trve, state.kva, off, offPeakShares(ds!.tariffs, off));
-    return c.energy + (withSub ? subscriptionTrve(ds!.trve, state.kva, from, to) : 0);
+    const c = energyCostTrve(recs, ds!.tariffs, priceAt, 0, off, offPeakShares(ds!.tariffs, off));
+    return c.energy + (withSub ? subscriptionTrve(priceAt, 0, from, to) : 0);
   }
   const sub = withSub ? subscriptionCost(from, to, state.prices) : 0;
   return energyCost(recs, ds!.tariffs, state.prices) + sub;
@@ -572,6 +587,8 @@ function renderCompare(view: HTMLElement, records: DayRecord[]) {
     <p class="hint muted">L'évolution de l'année en cours est calculée à date : du 1er janvier au ${Number(last.slice(8, 10))} ${MONTHS_LONG[Number(last.slice(5, 7)) - 1]} des deux années.</p>
   </section>`;
 
+  view.insertAdjacentHTML('beforeend', comparatorCard());
+  drawComparator();
   const el = document.getElementById('cmp-chart')!;
   let ser: Series[] = [];
   let labels: string[] = [];
@@ -749,14 +766,25 @@ function pricesForm() {
   const input = (key: keyof Prices, label: string, ph: string) =>
     `<label>${esc(label)}<input data-price="${key}" type="number" inputmode="decimal" step="0.0001" min="0" placeholder="${ph}" value="${p[key] ?? ''}"></label>`;
   const kvas = [...new Set(ds!.trve.map((r) => r.kva))].sort((a, b) => a - b);
-  const now = trveAt(ds!.trve, state.kva, lastDay());
+  const now = priceAt(lastDay());
   const fmt4 = (v: number) => v.toFixed(4).replace('.', ',');
-  const trve = ds!.trve.length
-    ? `<label class="check"><input type="radio" name="pmode" data-pmode="trve" ${state.priceMode === 'trve' ? 'checked' : ''}> Tarif réglementé EDF heures pleines / creuses (historique officiel)</label>
+  const rows = contracts()
+    .map(
+      (c, i) => `<div class="contract-row">
+        <input type="date" aria-label="À partir du" data-contract="${i}" data-field="from" value="${c.from}">
+        <select aria-label="Offre" data-contract="${i}" data-field="offer">${OFFERS.map((o) => `<option value="${o.id}" ${o.id === c.offer ? 'selected' : ''}>${esc(o.supplier)} ${esc(o.label)}</option>`).join('')}</select>
+        <select aria-label="Puissance" data-contract="${i}" data-field="kva">${kvas.map((k) => `<option value="${k}" ${k === c.kva ? 'selected' : ''}>${k} kVA</option>`).join('')}</select>
+        ${i > 0 ? `<button type="button" class="link" data-contract-del="${i}" aria-label="Supprimer cette période">✕</button>` : ''}
+      </div>`,
+    )
+    .join('');
+  const trve = ds!.offers.size
+    ? `<label class="check"><input type="radio" name="pmode" data-pmode="trve" ${state.priceMode === 'trve' ? 'checked' : ''}> Tarifs officiels selon mon contrat</label>
       ${
         state.priceMode === 'trve'
-          ? `<label>Puissance souscrite<select data-set="kva">${kvas.map((k) => `<option value="${k}" ${k === state.kva ? 'selected' : ''}>${k} kVA</option>`).join('')}</select></label>
-        ${now ? `<p class="hint muted">Depuis le ${longDate(now.from)} : HP ${fmt4(now.hp)} €, HC ${fmt4(now.hc)} €/kWh, abonnement ${nf0.format(now.fixedYear / 12)} €/mois TTC. Chaque jour est compté au tarif en vigueur ce jour-là (source : CRE, open data).</p>` : ''}`
+          ? `<p class="hint muted">Mon contrat, période par période (date de début, offre, puissance souscrite) :</p>${rows}
+        <button type="button" class="link" id="contract-add">+ Ajouter un changement (puissance, offre)</button>
+        ${now ? `<p class="hint muted">Aujourd'hui : HP ${fmt4(now.hp)} €, HC ${fmt4(now.hc)} €/kWh, abonnement ${nf0.format(now.fixedYear / 12)} €/mois TTC. Chaque jour est compté au tarif en vigueur ce jour-là (CRE, open data).</p>` : ''}`
           : ''
       }
       <label class="check"><input type="radio" name="pmode" data-pmode="manual" ${state.priceMode === 'manual' ? 'checked' : ''}> Mes propres prix</label>`
@@ -814,6 +842,7 @@ function linkyCard() {
     <div class="card-head"><h2>Part dans la consommation du logement <small class="muted">compteur Linky</small></h2></div>
     <p class="hint muted" id="linky-summary"></p>
     <div class="chart" id="linky-chart" role="img" aria-label="Chauffage, chauffe-eau et autres usages par mois"></div>
+    ${ds!.pmax.size ? '<h3>Puissance maximale appelée <small class="muted">kVA, par mois</small></h3><p class="hint muted" id="pmax-summary"></p><div class="chart" id="pmax-chart" role="img" aria-label="Puissance maximale par mois et puissance souscrite"></div>' : ''}
   </section>`;
 }
 
@@ -841,6 +870,7 @@ function drawLinky() {
     document.getElementById('linky-summary')!.innerHTML =
       `Sur 12 mois : chauffage <strong>${nf0.format((sum(heat) / tot) * 100)} %</strong>, chauffe-eau <strong>${nf0.format((sum(water) / tot) * 100)} %</strong>, autres usages <strong>${nf0.format(Math.max(0, 1 - (sum(heat) + sum(water)) / tot) * 100)} %</strong> de ${fmtKwh(tot)} relevés par le compteur.`;
   }
+  drawPmax();
   barChart(el, {
     labels: keys.map((k) => bucketLabel(k, 'month')),
     series: [
@@ -851,6 +881,40 @@ function drawLinky() {
     stacked: true,
     price: avgPrice(),
   });
+}
+
+function drawPmax() {
+  const el = document.getElementById('pmax-chart');
+  if (!el) return;
+  const months = new Map<string, { max: number; day: string }>();
+  for (const [d, v] of ds!.pmax) {
+    const m = d.slice(0, 7);
+    if (!months.has(m) || v > months.get(m)!.max) months.set(m, { max: v, day: d });
+  }
+  const keys = [...months.keys()].sort().slice(-24);
+  const subscribed = keys.map((k) => periodAt(contracts(), `${k}-15`)?.kva ?? null);
+  lineChart(el, {
+    labels: keys.map((k) => bucketLabel(k, 'month')),
+    series: [
+      { name: 'Puissance max atteinte', color: series(1), data: keys.map((k) => Math.round(months.get(k)!.max * 100) / 100) },
+      { name: 'Puissance souscrite', color: cssVar('--text-muted'), data: subscribed },
+    ],
+    price: null,
+    unit: 'kVA',
+  });
+  const last12 = keys.slice(-12).map((k) => months.get(k)!);
+  const peak = last12.reduce((a, b) => (b.max > a.max ? b : a), last12[0]);
+  const kva = periodAt(contracts(), lastDay())?.kva;
+  if (peak && kva) {
+    const margin = kva - peak.max;
+    document.getElementById('pmax-summary')!.innerHTML = `Sur 12 mois, pic de <strong>${peak.max.toFixed(1).replace('.', ',')} kVA</strong> le ${longDate(peak.day)}, pour ${kva} kVA souscrits. ${
+      margin > 3.5
+        ? 'Marge confortable : une puissance inférieure pourrait suffire (abonnement moins cher), à confirmer sur un hiver très froid.'
+        : margin < 0.5
+          ? 'Vous êtes au plus près de votre puissance : risque de disjonction lors des pics.'
+          : 'Puissance adaptée à vos pics.'
+    }`;
+  }
 }
 
 // ------------------------------------------------------------------ analyse
@@ -914,6 +978,7 @@ function renderAnalyse(view: HTMLElement, records: DayRecord[]) {
       <p class="hint muted">Détection automatique : la colonne où le chauffe-eau consomme le plus est considérée comme les heures creuses.</p></section>`
       : ''
   }
+  ${stationCard()}
   ${
     tempRoom
       ? `<section class="card"><div class="card-head"><h2>Températures <small class="muted">°C, moyenne par jour</small></h2>
@@ -983,7 +1048,127 @@ function renderAnalyse(view: HTMLElement, records: DayRecord[]) {
       unit: '°C',
     });
   }
+  drawStation();
   drawHourly(records);
+}
+
+// ------------------------------------------------------------------ EDF offer comparator
+function comparison() {
+  const off = offCol();
+  const linky = ds!.linky.size ? ds!.linky : null;
+  const splits = daySplits(ds!.records, ds!.tariffs, off, offPeakShares(ds!.tariffs, off), linky);
+  const kvaAt = (d: string) => periodAt(contracts(), d)?.kva ?? 9;
+  const base = ds!.offers.get('edf-trv-base') ?? [];
+  const hphc = ds!.offers.get('edf-trv-hphc') ?? [];
+  const years = [...new Set(splits.map((s) => Number(s.day.slice(0, 4))))].sort();
+  const perYear = years.map((y) => ({
+    y,
+    r: compareOffers(splits.filter((s) => s.day.startsWith(String(y))), kvaAt, base, hphc, ds!.tempo.rows, ds!.tempo.days),
+  }));
+  const all = compareOffers(splits, kvaAt, base, hphc, ds!.tempo.rows, ds!.tempo.days);
+  return { perYear, all, scope: linky ? 'logement' : 'chauffage' };
+}
+
+function comparatorCard() {
+  if (!ds!.offers.size || !ds!.tempo.rows.length) return '';
+  const { all, scope } = comparison();
+  if (!all.hphc.days) return '';
+  const tot = (k: 'base' | 'hphc' | 'tempo') => all[k].energy + all[k].subscription;
+  const best = (['base', 'hphc', 'tempo'] as const).reduce((a, b) => (tot(b) < tot(a) ? b : a));
+  const names = { base: 'Base', hphc: 'Heures pleines / creuses', tempo: 'Tempo' };
+  const diff = tot('hphc') - tot(best);
+  return `<section class="card">
+    <h2>Quelle offre EDF aurait coûté le moins ? <small class="muted">tarifs réglementés, ${all.hphc.days} jours</small></h2>
+    <p class="period-total">${
+      best === 'hphc'
+        ? 'Votre option <strong>heures pleines / creuses</strong> a été la moins chère.'
+        : `En <strong>${names[best]}</strong>, vous auriez payé <strong>${fmtEur(diff)}</strong> de moins qu'en heures pleines / creuses sur la période.`
+    }</p>
+    <div class="chart" id="offers-chart" role="img" aria-label="Coût par offre et par année"></div>
+    <div id="offers-table"></div>
+    <p class="hint muted">Recalcul jour par jour aux tarifs réglementés en vigueur (CRE, open data), abonnement compris, avec la puissance de votre contrat. Périmètre : ${
+      scope === 'logement'
+        ? 'tout le logement (compteur Linky) ; les heures creuses des autres usages sont supposées réparties sur la journée (8 h sur 24)'
+        : 'radiateurs et chauffe-eau seulement (ajoutez le Linky pour tout le logement)'
+    }. Tempo : couleur réelle de chaque jour, <strong>sans changer vos habitudes</strong> (en pratique on décale ou réduit sa consommation les jours rouges). L'EJP, fermé aux nouveaux clients depuis 1998, n'est pas publié en open data.</p>
+  </section>`;
+}
+
+function drawComparator() {
+  const el = document.getElementById('offers-chart');
+  if (!el) return;
+  const { perYear } = comparison();
+  const rows = perYear.filter((p) => p.r.hphc.days > 0);
+  const cost = (r: (typeof rows)[number]['r'], k: 'base' | 'hphc' | 'tempo') => Math.round(r[k].energy + r[k].subscription);
+  const ser: Series[] = [
+    { name: 'Base', color: series(4), data: rows.map((p) => cost(p.r, 'base')) },
+    { name: 'Heures pleines / creuses', color: series(0), data: rows.map((p) => cost(p.r, 'hphc')) },
+    { name: 'Tempo', color: series(2), data: rows.map((p) => cost(p.r, 'tempo')) },
+  ];
+  barChart(el, { labels: rows.map((p) => `${p.y}${p.r.hphc.days < 360 ? ` (${p.r.hphc.days} j)` : ''}`), series: ser, stacked: false, price: null, unit: '€' });
+  document.getElementById('offers-table')!.innerHTML = tableToggle(
+    table(
+      ['Année', 'Base', 'HP / HC', 'Tempo'],
+      rows.map((p) => [String(p.y), fmtEur(cost(p.r, 'base')), fmtEur(cost(p.r, 'hphc')), fmtEur(cost(p.r, 'tempo'))]),
+    ),
+  );
+}
+
+// ------------------------------------------------------------------ Netatmo weather station
+const STATION_METRICS = { temp: ['Température', '°C', 2], hum: ['Humidité', '%', 3], co2: ['CO₂', 'ppm', 4] } as const;
+
+function stationCard() {
+  const st = ds!.station;
+  if (!st) return '';
+  return `<section class="card">
+    <div class="card-head"><h2>Station météo Netatmo <small class="muted">moyenne par jour, 12 derniers mois</small></h2>
+      <div class="controls">${seg('stationMetric', state.stationMetric, [['temp', 'Température'], ['hum', 'Humidité'], ['co2', 'CO₂']], 'Mesure')}</div>
+    </div>
+    ${state.stationMetric === 'co2' ? '<p class="hint muted">CO₂ : au-delà de 1 000 ppm, l\'air est confiné (aérer) ; 1 500 ppm et plus, aération insuffisante. Mesuré par les modules intérieurs seulement.</p>' : ''}
+    <div class="chart" id="station-chart" role="img" aria-label="Mesures de la station Netatmo"></div>
+    <div id="station-table"></div>
+  </section>`;
+}
+
+function drawStation() {
+  const st = ds!.station;
+  const el = document.getElementById('station-chart');
+  if (!st || !el) return;
+  const [, unit, col] = STATION_METRICS[state.stationMetric];
+  const last = lastDay();
+  const from = addDays(minusYears(last), 1);
+  const days: string[] = [];
+  for (let d = from; d <= last; d = addDays(d, 1)) days.push(d);
+  const keys = Object.keys(st.modules).filter((k) => state.stationMetric !== 'co2' || st.modules[k].indoor);
+  // identity follows the module (its order in the station), never its rank
+  const color = (k: string) => (st.modules[k].type === 'NAModule1' ? cssVar('--text-muted') : series(2 + Object.keys(st.modules).indexOf(k)));
+  lineChart(el, {
+    labels: days.map((d) => bucketLabel(d, 'day')),
+    series: keys.map((k) => ({ name: st.modules[k].name, color: color(k), data: days.map((d) => st.daily[k]?.[d]?.[col] ?? null) })),
+    price: null,
+    unit,
+  });
+  // winter averages (Nov–Mar) per module, last two seasons
+  const seasonAvg = (k: string, season: number) => {
+    const vals: number[] = [];
+    for (const [d, v] of Object.entries(st.daily[k] ?? {})) {
+      const y = Number(d.slice(0, 4));
+      const m = Number(d.slice(5, 7));
+      const s = m >= 11 ? y : m <= 3 ? y - 1 : null;
+      if (s === season && v[col] !== null) vals.push(v[col] as number);
+    }
+    return vals.length > 20 ? vals.reduce((a, b) => a + b, 0) / vals.length : null;
+  };
+  const lastSeason = Number(last.slice(5, 7)) >= 11 ? Number(last.slice(0, 4)) : Number(last.slice(0, 4)) - 1;
+  const fmt = (v: number | null) => (v === null ? '—' : `${(state.stationMetric === 'co2' ? Math.round(v) : Math.round(v * 10) / 10).toString().replace('.', ',')} ${unit}`);
+  document.getElementById('station-table')!.innerHTML = table(
+    ['Module', `Hiver ${lastSeason - 1}–${lastSeason}`, `Hiver ${lastSeason}–${lastSeason + 1}`],
+    keys.map((k) => [
+      `<span class="swatch" style="background:${color(k)}"></span>${esc(st.modules[k].name)}`,
+      fmt(seasonAvg(k, lastSeason - 1)),
+      fmt(seasonAvg(k, lastSeason)),
+    ]),
+  );
 }
 
 function drawHourly(records: DayRecord[]) {
@@ -1159,6 +1344,14 @@ app.addEventListener('click', async (e) => {
   }
   if (btn.dataset.focus !== undefined) return setState({ focusRoom: btn.dataset.focus || null });
   if (btn.id === 'print') return window.print();
+  if (btn.id === 'contract-add' || btn.dataset.contractDel !== undefined) {
+    const list = contracts().map((c) => ({ ...c }));
+    if (btn.id === 'contract-add') list.push({ ...list[list.length - 1], from: lastDay() });
+    else list.splice(Number(btn.dataset.contractDel), 1);
+    setState({ contracts: list });
+    document.querySelector<HTMLDetailsElement>('.menu')?.setAttribute('open', '');
+    return;
+  }
   if (btn.id === 'export') {
     const blob = new Blob(['﻿' + toCsv(filtered(), ds.meta.rooms)], { type: 'text/csv;charset=utf-8' });
     const a = document.createElement('a');
@@ -1190,8 +1383,13 @@ app.addEventListener('change', (e) => {
     document.querySelector<HTMLDetailsElement>('.menu')?.setAttribute('open', '');
     return;
   }
-  if (t.dataset.set === 'kva') {
-    setState({ kva: Number(t.value) });
+  if (t.dataset.contract !== undefined) {
+    const list = contracts().map((c) => ({ ...c }));
+    const c = list[Number(t.dataset.contract)];
+    if (t.dataset.field === 'kva') c.kva = Number(t.value);
+    else if (t.dataset.field === 'offer') c.offer = t.value;
+    else if (t.value) c.from = t.value;
+    setState({ contracts: list.sort((a, b) => (a.from < b.from ? -1 : 1)) });
     document.querySelector<HTMLDetailsElement>('.menu')?.setAttribute('open', '');
     return;
   }

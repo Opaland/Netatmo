@@ -1,7 +1,8 @@
 // Fetching the encrypted files and remembering the derived key on this device.
 
 import { type DayRecord, type Meta, toRecords } from './aggregate';
-import { type Hourly, type TariffMap, type TrveRow, type Weather, parseTrveCsv } from './analysis';
+import { loadOffers, loadTempo } from './offers';
+import { type Hourly, type TariffMap, type TempoRow, type TrveRow, type Weather, parseTrveCsv } from './analysis';
 import { type Envelope, type KeyInfo, decryptEnvelope, deriveKey } from './crypto';
 
 export type Source = 'data' | 'demo';
@@ -19,6 +20,15 @@ export interface Dataset {
   insights: Insights | null;
   estimated: Set<string>; // "room|day" rebuilt from a monthly total
   trve: TrveRow[]; // EDF regulated HP/HC tariff history (CRE open data)
+  offers: Map<string, TrveRow[]>; // price history per supplier offer
+  pmax: Map<string, number>; // day -> max power drawn (kVA), Linky
+  tempo: { rows: TempoRow[]; days: Map<string, number> };
+  station: Station | null;
+}
+
+export interface Station {
+  modules: Record<string, { name: string; type: string; indoor: boolean }>;
+  daily: Record<string, Record<string, [number, number, number, number | null, number | null]>>; // [min, max, mean, hum, co2]
 }
 
 /** Public CRE file, refreshed at each deploy; bundled copy as fallback. */
@@ -88,7 +98,7 @@ const toMap2 = <V>(o: Record<string, Record<string, V>> | undefined, into: Map<s
 
 export async function load(source: Source, key: CryptoKey): Promise<Dataset> {
   const meta = await decryptEnvelope<Meta>(await getJson<Envelope>(`${source}/meta.enc.json`), key);
-  const [years, weatherDoc, linkyDoc, insights, trve] = await Promise.all([
+  const [years, weatherDoc, linkyDoc, insights, trve, station, offers, tempo] = await Promise.all([
     Promise.all(
       meta.years.map(async (y) => {
         const doc = await decryptEnvelope<YearDoc>(await getJson<Envelope>(`${source}/${y}.enc.json`), key);
@@ -100,9 +110,12 @@ export async function load(source: Source, key: CryptoKey): Promise<Dataset> {
       'weather',
       key,
     ),
-    optional<{ daily?: Record<string, number> }>(source, 'linky', key),
+    optional<{ daily?: Record<string, number>; pmax?: Record<string, number> }>(source, 'linky', key),
     optional<Insights>(source, 'insights', key),
     loadTrve(),
+    optional<Station>(source, 'station', key),
+    loadOffers(),
+    loadTempo(),
   ]);
   const tariffs: TariffMap = new Map();
   const temps: Dataset['temps'] = new Map();
@@ -128,6 +141,10 @@ export async function load(source: Source, key: CryptoKey): Promise<Dataset> {
     insights,
     estimated,
     trve,
+    offers,
+    tempo,
+    pmax: new Map(Object.entries(linkyDoc?.pmax ?? {})),
+    station: station?.daily && Object.keys(station.daily).length ? station : null,
   };
 }
 

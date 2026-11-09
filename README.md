@@ -11,7 +11,10 @@ Ce que l'application mobile ne fait pas, et que celle-ci fait :
   (degrés-jours) ;
 - un **verdict** du mois en euros (« conforme / plus élevé / plus économe que d'habitude ») et une
   **projection** de fin d'année ;
-- le **coût réel** heures pleines / heures creuses avec abonnement ;
+- le **coût réel** au tarif EDF en vigueur chaque jour, selon **votre contrat période par période**
+  (offre, puissance souscrite), et un **comparateur Base / heures creuses / Tempo** ;
+- la **puissance maximale appelée** (Linky) face à la puissance souscrite ;
+- l'historique complet de la **station météo Netatmo** (tous les modules : température, humidité, CO₂) ;
 - la **signature énergétique** du logement (kWh par jour selon la température extérieure) ;
 - un **calendrier** de consommation, des **profils horaires**, les **températures** des pièces ;
 - la **part du chauffage et du chauffe-eau** dans la consommation totale (compteur **Linky**) ;
@@ -104,6 +107,10 @@ Chaque option s'active en ajoutant des secrets. Sans eux, l'application fonction
    cliquez *Generate token*, puis copiez le **refresh token**.
 3. Ajoutez les secrets `NETATMO_CLIENT_ID`, `NETATMO_CLIENT_SECRET` et `NETATMO_REFRESH_TOKEN`.
 
+Tous les modules sont archivés (module principal, modules intérieurs additionnels, module extérieur) :
+température min / max / moyenne, humidité et CO₂ par jour. Le module extérieur remplace Open-Meteo
+pour les degrés-jours.
+
 Netatmo renouvelle le jeton à chaque utilisation : le collecteur garde le nouveau, chiffré, dans
 `data/netatmo-token.enc.json`. Vous n'avez rien à refaire, sauf si vous révoquez l'accès.
 
@@ -125,10 +132,14 @@ le texte est réécrit. **Ce qui est envoyé à Anthropic** : des totaux mensuel
 pourcentages) et les noms des pièces. Ni adresse, ni coordonnées, ni identifiants, ni données
 journalières. La clé reste un secret GitHub : elle n'est jamais dans le site.
 
-**Prix.** Par défaut, le coût est calculé au **tarif réglementé EDF heures pleines / heures creuses**,
-jour par jour, avec le prix et l'abonnement en vigueur ce jour-là (historique officiel publié par la
+**Prix et contrat.** Dans le menu ⋮, décrivez votre contrat période par période (date de début, offre,
+puissance souscrite, par exemple 9 kVA puis 12 kVA). Chaque jour est compté avec le prix et
+l'abonnement en vigueur ce jour-là (historique officiel publié par la
 CRE en [open data](https://www.data.gouv.fr/datasets/historique-des-tarifs-reglementes-de-vente-delectricite-pour-les-consommateurs-residentiels),
-mis à jour à chaque déploiement). Choisissez votre **puissance souscrite** dans le menu ⋮. Avant
+mis à jour à chaque déploiement). Pour ajouter un autre fournisseur, il suffit d'un fichier de tarifs
+au même format dans `web/public/tarifs/` et d'une ligne dans `web/src/offers.ts`. Le comparateur
+(onglet Comparer) recalcule Base, heures creuses et Tempo sur les mêmes jours, avec la couleur Tempo
+réelle de chaque jour ([api-couleur-tempo.fr](https://www.api-couleur-tempo.fr)). Avant
 l'activation des tarifs dans l'application Intuis (2025), la répartition heures pleines / creuses
 n'existe pas : elle est estimée pour chaque pièce à partir de sa répartition mesurée depuis. Vous
 pouvez aussi saisir vos propres prix. Ces réglages restent sur votre appareil.
@@ -198,6 +209,7 @@ data/               données chiffrées, écrites par la collecte (créé au pre
 web/                application PWA (Vite + TypeScript + ECharts)
   public/demo/      données de démonstration chiffrées (phrase « demo »)
 docs/               notes sur l'API, étude de l'existant, feuille de route, règles du projet (PROJET.md)
+  etudes/           études « faut-il le faire ? » (volets Wiser, plateforme domotique)
   bmad/             cadrage BMAD : brief, revue 50 personas, PRD, architecture, epics, QA
 .github/workflows/  CI, collecte quotidienne, déploiement GitHub Pages
 ```

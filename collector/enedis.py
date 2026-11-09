@@ -20,6 +20,7 @@ from .storage import Store
 log = logging.getLogger(__name__)
 
 API = "https://conso.boris.sh/api/consommation_quotidienne"
+API_PMAX = "https://conso.boris.sh/api/puissance_conso_max_quotidienne"
 USER_AGENT = "intuis-history/1.0 (+https://github.com/Opaland/Netatmo)"
 DATE_KEYS = ("date", "dateDebut", "date_debut", "debut", "horodatage", "start")
 VALUE_KEYS = ("value", "valeur", "val", "consommation")
@@ -70,6 +71,7 @@ def collect(store: Store, token: str, prm: str, first_day: str, tz: str, http: h
             log.warning("Linky : réponse sans mesure reconnue (clés : %s)", list(resp.json())[:8])
         rows += found
         chunk_start = chunk_end
+    _collect_pmax(store, token, prm, start, today, http)
     if not rows:
         return 0
     # Values are Wh; tolerate a kWh payload (a house uses well over 500 Wh a day).
@@ -78,3 +80,28 @@ def collect(store: Store, token: str, prm: str, first_day: str, tz: str, http: h
         store.put("linky", "daily", day, None, round(v * factor, 1))
     log.info("Linky : %d jours", len(rows))
     return len(rows)
+
+
+def _collect_pmax(store: Store, token: str, prm: str, start: date, today: date, http: httpx.Client) -> None:
+    """Daily maximum power drawn (kVA): tells whether the subscribed power fits. Best effort."""
+    rows: list[tuple[str, float]] = []
+    chunk_start = start
+    while chunk_start < today:
+        chunk_end = min(chunk_start + timedelta(days=365), today)
+        resp = http.get(
+            API_PMAX,
+            params={"pointId": prm, "dateDebut": chunk_start.isoformat(), "dateFin": chunk_end.isoformat()},
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        if resp.status_code != 200:
+            log.warning("Linky : puissance max indisponible (HTTP %s)", resp.status_code)
+            return
+        rows += _readings(resp.json())
+        chunk_start = chunk_end
+    if not rows:
+        return
+    # Enedis gives VA; tolerate kVA.
+    factor = 0.001 if statistics.median(v for _d, v in rows) > 100 else 1.0
+    for day, v in rows:
+        store.put("linky", "pmax", day, None, round(v * factor, 2))
+    log.info("Linky : puissance max sur %d jours", len(rows))

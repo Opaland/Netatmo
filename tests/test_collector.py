@@ -249,7 +249,7 @@ def test_open_meteo_fills_outdoor_temperatures(tmp_path):
     assert weather["outdoor"] == {"2024-01-01": [1.0, 7.0, 4.0]}  # mean computed, incomplete day dropped
 
 
-def test_station_rotates_refresh_token_and_reads_outdoor(tmp_path):
+def test_station_rotates_refresh_token_and_reads_every_module(tmp_path):
     from collector.station import Station
 
     tokens = []
@@ -261,13 +261,26 @@ def test_station_rotates_refresh_token_and_reads_outdoor(tmp_path):
             tokens.append(form["refresh_token"])
             return httpx.Response(200, json={"access_token": "a", "refresh_token": f"r{len(tokens)}"})
         if path == "/api/getstationsdata":
+            modules = [
+                {"_id": "out", "type": "NAModule1", "module_name": "Extérieur"},
+                {"_id": "kids", "type": "NAModule4", "module_name": "Chambre enfants"},
+                {"_id": "cave", "type": "NAModule4", "module_name": "Cave"},
+            ]
             return httpx.Response(
-                200, json={"body": {"devices": [{"_id": "main", "modules": [{"_id": "out", "type": "NAModule1"}]}]}}
+                200,
+                json={
+                    "body": {"devices": [{"_id": "main", "type": "NAMain", "module_name": "Salon", "modules": modules}]}
+                },
             )
         if path == "/api/getmeasure":
-            if request.url.params.get("module_id") == "out":
-                return httpx.Response(200, json={"body": {"1704063600": [-2.0, 6.0, None]}})
-            return httpx.Response(200, json={"body": {"1704063600": [19.0, 21.0, 20.2]}})
+            module = request.url.params.get("module_id")
+            assert ("co2" in request.url.params["type"]) == (module != "out")
+            values = {
+                "out": [-2.0, 6.0, None, 85],
+                "kids": [18.0, 20.0, 19.1, 55, 900],
+                "cave": [12.0, 13.0, 12.5, 70, 500],
+            }
+            return httpx.Response(200, json={"body": {"1704063600": values.get(module, [19.0, 21.0, 20.2, 50, 700])}})
         return httpx.Response(404)
 
     store = Store(tmp_path, "pw")
@@ -279,6 +292,10 @@ def test_station_rotates_refresh_token_and_reads_outdoor(tmp_path):
     assert weather["source"] == "netatmo"
     assert weather["outdoor"]["2024-01-01"] == [-2.0, 6.0, 2.0]
     assert weather["indoor"]["2024-01-01"] == 20.2
+    station = store.doc("station")
+    assert [m["name"] for m in station["modules"].values()] == ["Salon", "Extérieur", "Chambre enfants", "Cave"]
+    assert station["daily"]["m2"]["2024-01-01"] == [18.0, 20.0, 19.1, 55, 900]
+    assert station["daily"]["m1"]["2024-01-01"] == [-2.0, 6.0, 2.0, 85, None]
 
 
 def test_linky_parser_accepts_unknown_shapes_and_kwh(tmp_path):
@@ -287,6 +304,8 @@ def test_linky_parser_accepts_unknown_shapes_and_kwh(tmp_path):
     def handler(request: httpx.Request) -> httpx.Response:
         assert request.headers["Authorization"] == "Bearer tok"
         assert request.url.params["pointId"] == "12345678901234"
+        if request.url.path.endswith("puissance_conso_max_quotidienne"):
+            return httpx.Response(200, json={"mesures": [{"date": "2024-01-01", "valeur": 7350}]})
         return httpx.Response(
             200,
             json={
@@ -308,6 +327,7 @@ def test_linky_parser_accepts_unknown_shapes_and_kwh(tmp_path):
     )
     assert n > 0
     assert store.doc("linky")["daily"]["2024-01-01"] == 21500.0  # kWh payload converted to Wh
+    assert store.doc("linky")["pmax"]["2024-01-01"] == 7.35  # VA converted to kVA
 
 
 def test_monthly_totals_fill_days_lost_by_the_backend(tmp_path):

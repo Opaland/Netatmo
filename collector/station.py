@@ -74,17 +74,33 @@ class Station:
         return resp.json()
 
     # ------------------------------------------------------------ data
-    def devices(self) -> tuple[str, str | None]:
-        """(main device id = indoor, outdoor module id or None)."""
+    def modules(self) -> list[dict]:
+        """Main (indoor) module first, then its radio modules (outdoor, extra indoor)."""
         body = self._get("/api/getstationsdata", {})["body"]
         devices = body.get("devices", [])
         if not devices:
             raise StationError("Station Netatmo : aucune station sur ce compte")
         main = devices[0]
-        outdoor = next((m["_id"] for m in main.get("modules", []) if m.get("type") == "NAModule1"), None)
-        return main["_id"], outdoor
+        out = [
+            {
+                "id": main["_id"],
+                "module": None,
+                "name": main.get("module_name") or "Station",
+                "type": main.get("type", "NAMain"),
+            }
+        ]
+        for m in main.get("modules", []):
+            out.append(
+                {
+                    "id": main["_id"],
+                    "module": m["_id"],
+                    "name": m.get("module_name") or m.get("type"),
+                    "type": m.get("type"),
+                }
+            )
+        return out
 
-    def _daily(self, device: str, module: str | None, begin: int, end: int) -> list[tuple[int, list]]:
+    def _daily(self, device: str, module: str | None, types: str, begin: int, end: int) -> list[tuple[int, list]]:
         out = []
         start = begin
         while start < end:
@@ -92,7 +108,7 @@ class Station:
             params = {
                 "device_id": device,
                 "scale": "1day",
-                "type": "min_temp,max_temp,temperature",
+                "type": types,
                 "date_begin": start,
                 "date_end": stop,
                 "optimize": "true",
@@ -105,31 +121,45 @@ class Station:
         return out
 
     def collect(self, tz: str, first_day: str) -> int:
+        """Every module: daily min / max / mean temperature, humidity, CO₂ (indoor modules).
+        Stored in station.enc.json; the outdoor module also feeds weather.outdoor (DJU)."""
         self.login()
-        main, outdoor = self.devices()
         zone = ZoneInfo(tz)
-        have = (
-            self.store.doc("weather").get("outdoor", {}) if self.store.doc("weather").get("source") == "netatmo" else {}
-        )
-        begin_day = max(have) if have else first_day
-        begin_dt = datetime.fromisoformat(begin_day).replace(tzinfo=zone) - timedelta(days=10)
-        begin = int(begin_dt.timestamp())
+        station = self.store.doc("station")
+        known = station.get("daily", {})
+        last_days = [max(d) for d in known.values() if d]
+        begin_day = min(last_days) if last_days else first_day
+        begin = int((datetime.fromisoformat(begin_day).replace(tzinfo=zone) - timedelta(days=10)).timestamp())
         end = int(datetime.now(zone).timestamp())
-        n = 0
-        if outdoor:
-            for ts, (tmin, tmax, tmean) in self._daily(main, outdoor, begin, end):
+        outdoor_days = 0
+        names = {}
+        for i, m in enumerate(self.modules()):
+            key = f"m{i}"
+            indoor = m["type"] in ("NAMain", "NAModule4")
+            names[key] = {"name": m["name"], "type": m["type"], "indoor": indoor}
+            types = "min_temp,max_temp,temperature,humidity" + (",co2" if indoor else "")
+            for ts, cols in self._daily(m["id"], m["module"], types, begin, end):
+                tmin, tmax, tmean, hum = (list(cols) + [None] * 5)[:4]
+                co2 = cols[4] if indoor and len(cols) > 4 else None
                 if tmin is None or tmax is None:
                     continue
                 day = datetime.fromtimestamp(ts, zone).strftime("%Y-%m-%d")
                 mean = tmean if tmean is not None else (tmin + tmax) / 2
-                self.store.put("weather", "outdoor", day, None, [round(tmin, 1), round(tmax, 1), round(mean, 1)])
-                n += 1
+                r = lambda v: None if v is None else round(v, 1)  # noqa: E731
+                self.store.put(
+                    "station",
+                    "daily",
+                    key,
+                    day,
+                    [r(tmin), r(tmax), r(mean), r(hum), None if co2 is None else round(co2)],
+                )
+                if m["type"] == "NAModule1":
+                    self.store.put("weather", "outdoor", day, None, [r(tmin), r(tmax), r(mean)])
+                    outdoor_days += 1
+                elif m["type"] == "NAMain":
+                    self.store.put("weather", "indoor", day, None, r(mean))
+        self.store.set_top("station", "modules", names)
+        if outdoor_days:
             self.store.set_top("weather", "source", "netatmo")
-        for ts, (tmin, tmax, tmean) in self._daily(main, None, begin, end):
-            if tmin is None or tmax is None:
-                continue
-            day = datetime.fromtimestamp(ts, zone).strftime("%Y-%m-%d")
-            mean = tmean if tmean is not None else (tmin + tmax) / 2
-            self.store.put("weather", "indoor", day, None, round(mean, 1))
-        log.info("Station Netatmo : %d jours de température extérieure", n)
-        return n
+        log.info("Station Netatmo : %d modules, %d jours de température extérieure", len(names), outdoor_days)
+        return outdoor_days

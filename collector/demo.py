@@ -44,6 +44,25 @@ def generate(out_dir: Path, passphrase: str = "demo", start_year: int = 2022) ->
         tmin, tmax = tmean - rnd.uniform(2.5, 5), tmean + rnd.uniform(2.5, 6)
         store.put("weather", "outdoor", d.isoformat(), None, [round(tmin, 1), round(tmax, 1), round(tmean, 1)])
         store.put("weather", "indoor", d.isoformat(), None, round(19.6 + rnd.gauss(0, 0.4), 1))
+        # Netatmo station: living room (main), kids' bedroom, cellar, outdoor
+        cold = max(0.0, 15 - tmean) / 15
+        for key, base, hum, co2 in (("m0", 19.8, 50, 750), ("m2", 19.0, 55, 950), ("m3", 11 + 0.35 * tmean, 72, 480)):
+            tm = base + rnd.gauss(0, 0.4)
+            c = co2 + 350 * cold + rnd.gauss(0, 120)
+            store.put(
+                "station",
+                "daily",
+                key,
+                d.isoformat(),
+                [round(tm - 1.2, 1), round(tm + 1.4, 1), round(tm, 1), round(hum + rnd.gauss(0, 4)), round(c)],
+            )
+        store.put(
+            "station",
+            "daily",
+            "m1",
+            d.isoformat(),
+            [round(tmin, 1), round(tmax, 1), round(tmean, 1), round(78 - tmean + rnd.gauss(0, 6)), None],
+        )
         dju = max(0.0, 18 - tmean)
         weekend = d.weekday() >= 5
         day_total = 0.0
@@ -80,13 +99,30 @@ def generate(out_dir: Path, passphrase: str = "demo", start_year: int = 2022) ->
         if d >= date(start_year + 1, 1, 1):  # Linky history shorter than the radiators'
             other = 6500 + (1800 if weekend else 0) + 900 * math.cos((doy - 15) / 365 * 2 * math.pi) + rnd.gauss(0, 900)
             store.put("linky", "daily", d.isoformat(), None, round(day_total + max(other, 2500), 1))
+            store.put("linky", "pmax", d.isoformat(), None, round(min(11.8, 3.2 + 0.28 * dju + rnd.uniform(0, 2.5)), 2))
         d += timedelta(days=1)
     store.set_top("weather", "source", "open-meteo")
+    store.set_top(
+        "station",
+        "modules",
+        {
+            "m0": {"name": "Salon", "type": "NAMain", "indoor": True},
+            "m1": {"name": "Extérieur", "type": "NAModule1", "indoor": False},
+            "m2": {"name": "Chambre enfants", "type": "NAModule4", "indoor": True},
+            "m3": {"name": "Cave", "type": "NAModule4", "indoor": True},
+        },
+    )
     rooms = [
         {"id": r, "name": n, "category": c, "module_types": ["NMH"] if c == HEATING else ["NMW"], "virtual": False}
         for r, n, c, _w, _sp in ROOMS
     ]
-    extra = {"has_tariffs": True, "has_temps": True, "has_linky": True, "weather_source": "open-meteo"}
+    extra = {
+        "has_tariffs": True,
+        "has_temps": True,
+        "has_linky": True,
+        "has_station": True,
+        "weather_source": "open-meteo",
+    }
     store.replace(
         "insights",
         {
