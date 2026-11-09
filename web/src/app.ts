@@ -193,6 +193,8 @@ function applyDisplay(fresh: boolean) {
 // ------------------------------------------------------------------ household view (S-12.2)
 /** Dataset as decrypted, before the household view merges the bedrooms. */
 let raw: Dataset | null = null;
+/** #300: rooms of the dataset before the household view, the order that fixes room colours. */
+export const rawRooms = () => (raw ?? ds)!.meta.rooms;
 
 /**
  * The decrypted dataset with every room, whatever is displayed: for what must work on raw

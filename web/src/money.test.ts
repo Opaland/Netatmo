@@ -30,9 +30,9 @@ describe('S-2.12 budget', () => {
 describe('S-2.13 CO₂', () => {
   it('multiplies the kWh by the factor and formats', () => {
     expect(co2Of(1000, 0.052)).toBeCloseTo(52);
-    expect(fmtCo2(52)).toBe('52 kgCO₂e');
-    expect(fmtCo2(2.345)).toBe('2,3 kgCO₂e');
-    expect(fmtCo2(1520)).toBe('1,5 tCO₂e');
+    expect(fmtCo2(52)).toBe('52 kg CO₂e');
+    expect(fmtCo2(2.345)).toBe('2,3 kg CO₂e');
+    expect(fmtCo2(1520)).toBe('1,5 t CO₂e');
   });
 });
 

@@ -28,7 +28,7 @@ import {
 } from '../comfort';
 import { barChart, comboChart, cssVar, lineChart, seqRamp } from '../charts';
 import { type Station, loadStationHourly } from '../data';
-import { activeRooms, esc, lastDay, longDate, nf0, series, table, tableToggle } from '../ui';
+import { activeRooms, esc, lastDay, longDate, nf0, series, table, tableToggle, measureColor } from '../ui';
 import { html } from '../trusted';
 import * as windows from './windows';
 import { lazyCard } from '../lazy';
@@ -164,7 +164,7 @@ function drawCo2(st: Station) {
         { name: 'Heures > 1 000 ppm', color: ramp[1], data: rows.map((r) => r?.h_co2_1000 ?? null) },
         { name: 'Heures > 1 400 ppm', color: ramp[3], data: rows.map((r) => r?.h_co2_1400 ?? null) },
       ],
-      lines: [{ name: 'Maximum de la nuit', color: cssVar('--text-secondary'), data: rows.map((r) => r?.co2_max ?? null) }],
+      lines: [{ name: 'Maximum de la nuit', color: cssVar('--text-muted'), data: rows.map((r) => r?.co2_max ?? null) }],
       barUnit: 'h',
       lineUnit: 'ppm',
       barMax: 9,
@@ -444,8 +444,8 @@ function drawProbes(st: Station, map: Map<string, string>) {
       lineChart(el, {
         labels: heat.map(dayLabel),
         series: [
-          { name: 'Sonde du radiateur', color: series(0), data: heat.map((d) => t.get(d)?.[0] ?? null) },
-          { name: `Station (${st.modules[k].name})`, color: series(2), data: heat.map((d) => st.daily[k]?.[d]?.[2] ?? null) },
+          { name: 'Sonde du radiateur', color: measureColor(), data: heat.map((d) => t.get(d)?.[0] ?? null) },
+          { name: `Station (${st.modules[k].name})`, color: cssVar('--accent'), data: heat.map((d) => st.daily[k]?.[d]?.[2] ?? null) },
         ],
         price: null,
         unit: '°C',

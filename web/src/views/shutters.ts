@@ -17,7 +17,7 @@ import {
   saveNotes,
 } from '../shutters';
 import { html } from '../trusted';
-import { activeRooms, esc, fmtKwh, lastDay, longDate, series, table } from '../ui';
+import { activeRooms, esc, fmtKwh, lastDay, longDate, table } from '../ui';
 
 const num1 = (v: number) => v.toFixed(1).replace('.', ',');
 const signed = (v: number) => `${v > 0 ? '+' : v < 0 ? '−' : ''}${num1(Math.abs(v))}`;
@@ -50,7 +50,7 @@ function draw(zone: HTMLElement) {
     <div class="card-head"><h2>Volets fermés le soir <small class="muted">journal de cet appareil</small></h2></div>
     <label class="check"><input type="checkbox" data-shutters="tonight" ${notes.includes(t) ? 'checked' : ''}> Volets fermés ce soir (${esc(longDate(t))})</label>
     <div class="controls" style="align-items:center;margin:6px 0">
-      <label>Autre soir <input type="date" data-shutters="day" max="${t}" value="${addDays(t, -1)}" style="padding:6px;border:1px solid var(--border);border-radius:8px;background:var(--surface-1)"></label>
+      <label>Autre soir <input type="date" data-shutters="day" max="${t}" value="${addDays(t, -1)}" style="padding:6px;border:1px solid var(--border);border-radius:8px;background:var(--surface-card)"></label>
       <button type="button" class="primary small" data-shutters="add">Noter</button>
     </div>
     <p class="hint muted">${notes.length ? `${notes.length} soir${notes.length > 1 ? 's' : ''} noté${notes.length > 1 ? 's' : ''}` : 'Aucun soir noté.'}
@@ -117,7 +117,7 @@ async function drawComparison() {
         points: cmp.open.map((n) => [n.t, Math.round(n.kwh * 100) / 100, n.day]),
         fit: { slope: cmp.fit.slope, intercept: cmp.fit.intercept, from: Math.min(...xs), to: Math.min(15, Math.max(...xs), cmp.fit.balance ?? 15) },
       },
-      { name: 'Volets fermés', color: series(0), points: cmp.closed.map((n) => [n.t, Math.round(n.kwh * 100) / 100, n.day]) },
+      { name: 'Volets fermés', color: cssVar('--accent'), points: cmp.closed.map((n) => [n.t, Math.round(n.kwh * 100) / 100, n.day]) },
     ],
   });
 }

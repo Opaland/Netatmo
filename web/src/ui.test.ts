@@ -21,6 +21,7 @@ vi.mock('./app', () => ({
     return h.state;
   },
   activeRooms: () => h.rooms,
+  rawRooms: () => h.rooms,
   onLock: () => {},
 }));
 // a CSS token is returned by name: the colour assertions read which token was chosen
@@ -151,13 +152,14 @@ describe('tariff names', () => {
 });
 
 describe('room colours: they follow the room, never its rank', () => {
-  it('water heater in its colour, six heating rooms on slots 3 to 8, the others in « Autres pièces »', () => {
+  it('water heater in its usage colour, rooms on the room palette, past six shown in « Autres pièces »', () => {
     h.rooms = [room('w', 'water_heater'), ...Array.from({ length: 8 }, (_, i) => room(`h${i}`))];
     setup();
-    expect(ui.roomColor('w')).toBe('--cat-water');
-    expect(ui.roomColor('h0')).toBe('--series-3');
-    expect(ui.roomColor('h5')).toBe('--series-8');
-    expect(ui.roomColor('h6')).toBe('--text-muted');
+    expect(ui.roomColor('w')).toBe('--usage-water');
+    expect(ui.roomColor('h0')).toBe('--room-1');
+    expect(ui.roomColor('h5')).toBe('--room-6');
+    expect(ui.roomColor('h6')).toBe('--room-7');
+    expect(ui.roomColor(ui.OTHER)).toBe('--usage-standby');
     expect(ui.roomGroup('w')).toBe('w');
     expect(ui.roomGroup('h5')).toBe('h5');
     expect(ui.roomGroup('h6')).toBe(ui.OTHER);
@@ -168,13 +170,14 @@ describe('room colours: they follow the room, never its rank', () => {
   it('a room keeps its colour when the other rooms are filtered out', () => {
     h.rooms = [room('a'), room('b'), room('c')];
     setup({ state: { rooms: ['c'] } });
-    expect(ui.roomColor('c')).toBe('--series-5');
+    expect(ui.roomColor('c')).toBe('--room-3');
   });
 
-  it('the latest year takes the first series colour', () => {
-    setup({ years: [2023, 2024, 2025] });
-    expect(ui.yearColor(2025)).toBe('--series-1');
-    expect(ui.yearColor(2023)).toBe('--series-3');
+  it('#300: the latest year takes year-0, older ones the lighter steps of the ramp', () => {
+    setup({ years: [2020, 2021, 2022, 2023, 2024, 2025] });
+    expect(ui.yearColor(2025)).toBe('--year-0');
+    expect(ui.yearColor(2023)).toBe('--year-2');
+    expect(ui.yearColor(2020)).toBe('--year-3');
   });
 });
 
@@ -191,6 +194,9 @@ describe('formatting', () => {
     expect(ui.delta(110, 100)).toContain('class="delta up"');
     expect(ui.delta(90, 100)).toContain('class="delta down"');
     expect(ui.delta(100, 100)).toContain('class="delta neutral"');
-    expect(ui.delta(100, 0)).toContain('pas de référence N-1');
+    expect(ui.delta(100, 0)).toContain("pas de comparaison avec l'an dernier");
+    // #310: the reference is always written out
+    expect(ui.delta(90, 100, 'vs nov. 2025 au 8')).toContain('<b>−10 %</b> <span class="vs">vs nov. 2025 au 8</span>');
+    expect(ui.delta(90, 100)).not.toContain('N-1');
   });
 });

@@ -6,10 +6,10 @@ import { type DayRecord, MONTHS_SHORT, minusYears, monthlyByYear } from '../aggr
 import { type AnonReport, anonReportHtml, leaks } from '../anon';
 import { daySplits, djuBetween, offPeakShares, roomDeltas } from '../analysis';
 import { activeRooms, ds } from '../app';
-import { barChart, disposeAll } from '../charts';
+import { barChart, cssVar, disposeAll } from '../charts';
 import { periodAt } from '../offers';
 import { offersForYear, offersSectionHtml, pmaxForYear, pmaxSectionHtml } from '../report-sections';
-import { contracts, costOf, esc, firstDay, lastDay, offCol, series, yearColor } from '../ui';
+import { contracts, costOf, esc, firstDay, lastDay, offCol, yearColor } from '../ui';
 import { html } from '../trusted';
 import { leaseWindow, tenant } from '../tenant';
 
@@ -132,7 +132,7 @@ export function renderAnonymised(view: HTMLElement, year: number | 'lease') {
     const keys = [...months.keys()].sort();
     barChart(chart, {
       labels: keys.map((k) => `${MONTHS_SHORT[Number(k.slice(5, 7)) - 1]} ${k.slice(0, 4)}`),
-      series: [{ name: 'Bail', color: series(0), data: keys.map((k) => Math.round(months.get(k)!)) }],
+      series: [{ name: 'Bail', color: cssVar('--accent'), data: keys.map((k) => Math.round(months.get(k)!)) }],
       stacked: false,
       price: null,
     });

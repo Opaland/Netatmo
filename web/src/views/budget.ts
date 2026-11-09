@@ -94,7 +94,7 @@ function moneyCard(b: ReturnType<typeof yearBudget>): string {
     }. Projeté au 31 décembre : <strong>${fmtEur(b.projected)}</strong> pour un budget de ${fmtEur(b.budget)}, soit <strong class="${b.over ? 'ko-red' : ''}">${
       b.over ? `${fmtEur(b.gap)} au-dessus du budget` : `dans le budget (${fmtEur(-b.gap)} de marge)`
     }</strong>.</p>
-    <div class="share" aria-label="Part du budget déjà dépensée"><span style="flex:${share};background:var(--${b.over ? 'bad' : 'accent'})"></span><span style="flex:${100 - share};background:var(--ghost)"></span></div>
+    <div class="share" aria-label="Part du budget déjà dépensée"><span style="flex:${share};background:var(--${b.over ? 'bad' : 'accent'})"></span><span style="flex:${100 - share};background:var(--usage-other)"></span></div>
     <p class="share-legend"><span>${nf0.format(share)} % du budget dépensé</span></p>`;
   } else {
     budgetHtml = '<p class="hint">Fixez un budget annuel pour le chauffage et l\'eau chaude : l\'écart projeté s\'affichera ici et dans le mode simple.</p>';
@@ -111,7 +111,7 @@ function moneyCard(b: ReturnType<typeof yearBudget>): string {
     <h3 class="money-h">Empreinte carbone</h3>
     <p>≈ <strong>${fmtCo2(co2Of(kwhYtd, f))}</strong> depuis le 1<sup>er</sup> janvier, ${fmtCo2(co2Of(kwh12, f))} sur 12 mois.</p>
     <p class="hint muted">${fmtKwh(kwhYtd)} × ${fmtFactor(f)}${f === CO2_DEFAULT ? ` (facteur par défaut : ${esc(CO2_SOURCE)})` : ' (facteur saisi sur cet appareil)'}.</p>
-    <label class="money-field">Facteur d'émission (kgCO₂e par kWh)
+    <label class="money-field">Facteur d'émission (kg CO₂e par kWh)
       <input type="number" id="co2-input" inputmode="decimal" min="0" max="2" step="0.001" value="${f}"></label>
     ${f !== CO2_DEFAULT ? '<button type="button" class="link" id="co2-reset">Revenir au facteur par défaut</button>' : ''}
     <details class="table-details"><summary>Comment c'est calculé</summary>

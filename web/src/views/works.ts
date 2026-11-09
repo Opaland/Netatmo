@@ -8,7 +8,7 @@ import { barChart, chartOf, cssVar, scatterChart } from '../charts';
 import { loadNote, saveNote } from '../local-store';
 import { BEDROOMS_ID, displaySurfaces } from '../household';
 import { html } from '../trusted';
-import { activeRooms, catColor, esc, firstDay, fmtKwh, lastDay, longDate, nf0, pct, series, table } from '../ui';
+import { activeRooms, catColor, esc, firstDay, fmtKwh, lastDay, longDate, nf0, pct, table, referenceColor } from '../ui';
 import {
   type HomeWorks,
   MAX_SURFACE,
@@ -187,8 +187,8 @@ function drawCharts() {
   const sig = document.getElementById('works-sig-chart');
   if (sig && c) {
     const sides: [string, Side | null, string][] = [
-      ['Avant', c.r.before, cssVar('--text-muted')],
-      ['Après', c.r.after, series(0)],
+      ['Avant', c.r.before, referenceColor()],
+      ['Après', c.r.after, cssVar('--accent')],
     ];
     scatterChart(sig, {
       xName: 'Température extérieure moyenne (°C)',
@@ -226,7 +226,7 @@ function drawCharts() {
   }
   const chart = chartOf(el);
   if (byMonth.size) {
-    const ink = cssVar('--text-primary');
+    const ink = cssVar('--text');
     chart.setOption({
       series: [
         {

@@ -15,31 +15,8 @@ import { projectYear, verdict } from '../analysis';
 import { ds, setState, state } from '../app';
 import { type Series, barChart, cssVar, lineChart } from '../charts';
 import { periodAt } from '../offers';
-import {
-  OTHER,
-  activeRooms,
-  avgPrice,
-  catColor,
-  contracts,
-  delta,
-  esc,
-  costOf,
-  eurOf,
-  firstDay,
-  fmtEur,
-  fmtKwh,
-  lastDay,
-  longDate,
-  nf0,
-  pct,
-  roomColor,
-  roomGroup,
-  roomName,
-  seg,
-  series,
-  table,
-  tableToggle,
-} from '../ui';
+import { OTHER, activeRooms, avgPrice, catColor, contracts, delta, esc, costOf, eurOf, firstDay, fmtEur, fmtKwh, lastDay, longDate, nf0, pct, roomColor, roomGroup, roomName, seg, table, tableToggle, measureColor, referenceColor } from '../ui';
+import { NO_REFERENCE, PERIOD, vsLabel } from '../glossary';
 import { chartMarks, qualityCard, uncertainDays, yoyGapNote } from './quality';
 import { html } from '../trusted';
 import { lazyCard } from '../lazy';
@@ -64,7 +41,7 @@ function kpi(label: string, from: string, to: string, records: DayRecord[], cls 
   return `<article class="kpi${cls}">
     <h3>${esc(label)}</h3>
     <p class="kpi-value">${fmtKwh(now)}</p>
-    <p class="kpi-sub">${eur ? `${eur} · ` : ''}${hasBefore ? delta(now, before) + yoyGapNote(records, from, to) : '<span class="delta neutral">pas de référence N-1</span>'}</p>
+    <p class="kpi-sub">${eur ? `${eur} · ` : ''}${hasBefore ? delta(now, before, vsLabel(from, to)) + yoyGapNote(records, from, to) : `<span class="delta neutral">${NO_REFERENCE}</span>`}</p>
   </article>`;
 }
 
@@ -105,8 +82,8 @@ export function renderOverview(view: HTMLElement, records: DayRecord[]) {
   <div id="grid-zone"></div>
   <section class="kpis">
     ${kpi(`${MONTHS_LONG[Number(last.slice(5, 7)) - 1]} ${last.slice(0, 4)} (au ${Number(last.slice(8, 10))})`, monthStart, last, records, '', plain('month'))}
-    ${kpi(`Depuis le 1er janvier ${last.slice(0, 4)}`, yearStart, last, records, '', plain('year'))}
-    ${kpi('12 derniers mois', addDays(minusYears(last), 1), last, records, ' kpi-detail', plain('12m'))}
+    ${kpi(PERIOD.ytd, yearStart, last, records, '', plain('year'))}
+    ${kpi(PERIOD['12m'], addDays(minusYears(last), 1), last, records, ' kpi-detail', plain('12m'))}
     ${projectionTile(records, last, simple)}
     <article class="kpi kpi-budget" id="budget-kpi" hidden></article>
   </section>
@@ -230,9 +207,9 @@ function projectionTile(records: DayRecord[], last: string, simple = false) {
   </article>`;
   }
   return `<article class="kpi kpi-detail">
-    <h3>Fin ${year} estimée</h3>
+    <h3>${PERIOD.projection}</h3>
     <p class="kpi-value">≈ ${fmtKwh(p.projected)}</p>
-    <p class="kpi-sub">${eur !== null ? `≈ ${fmtEur(eur)} · ` : ''}${prev && firstDay() <= `${Number(year) - 1}-01-01` ? delta(p.projected, prev) : ''}</p>
+    <p class="kpi-sub">${eur !== null ? `≈ ${fmtEur(eur)} · ` : ''}${prev && firstDay() <= `${Number(year) - 1}-01-01` ? delta(p.projected, prev, `vs ${Number(year) - 1}`) : ''}</p>
   </article>`;
 }
 
@@ -297,7 +274,7 @@ function drawLinky() {
     series: [
       { name: 'Chauffage', color: catColor('heating'), data: keys.map((k) => Math.round(heat.get(k) ?? 0)) },
       { name: 'Chauffe-eau', color: catColor('water_heater'), data: keys.map((k) => Math.round(water.get(k) ?? 0)) },
-      { name: 'Autres usages', color: cssVar('--ghost'), data: other.map(Math.round) },
+      { name: 'Autres usages', color: cssVar('--usage-other'), data: other.map(Math.round) },
     ],
     stacked: true,
     price: avgPrice(),
@@ -314,8 +291,8 @@ function drawPmax() {
   lineChart(el, {
     labels: keys.map((k) => bucketLabel(k, 'month')),
     series: [
-      { name: 'Puissance max atteinte', color: series(1), data: keys.map((k) => Math.round(months.get(k)!.max * 100) / 100) },
-      { name: 'Puissance souscrite', color: cssVar('--text-muted'), data: subscribed },
+      { name: 'Puissance max atteinte', color: measureColor(), data: keys.map((k) => Math.round(months.get(k)!.max * 100) / 100) },
+      { name: 'Puissance souscrite', color: referenceColor(), data: subscribed },
     ],
     price: null,
     unit: 'kVA',

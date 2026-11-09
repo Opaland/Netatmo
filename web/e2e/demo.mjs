@@ -563,6 +563,38 @@ try {
     await ctx.close();
   }
 
+  // #319: 360 px phone, system text at 200 %, normal mode: no horizontal page scroll, segments
+  // wrap, nothing sticks out of the screen, and axe still passes (WCAG 1.4.4, 1.4.10).
+  {
+    const ctx = await browser.newContext({ viewport: { width: 360, height: 780 }, deviceScaleFactor: 1, hasTouch: true });
+    const page = await ctx.newPage();
+    page.on('pageerror', (e) => errors.push(`360-200: ${e.message}`));
+    await openDemo(page);
+    await page.addStyleTag({ content: 'html { font-size: 200% !important; }' });
+    for (const view of ['overview', 'rooms', 'analyse', 'compare', 'comfort']) {
+      progress(`360 px, texte 200 % : ${view}`);
+      await page.click(`[data-view=${view}]`);
+      await ready(page);
+      await nextFrame(page);
+      const out = await page.evaluate(() => {
+        const found = [];
+        if (document.documentElement.scrollWidth > window.innerWidth + 1) found.push(`page ${document.documentElement.scrollWidth}px > ${window.innerWidth}px`);
+        for (const el of document.querySelectorAll('#view .seg, #view .seg button, #view .controls, #view .card-head, #view .kpi, #view .chip, #view .verdict, #view .share-legend')) {
+          const cs = getComputedStyle(el);
+          if (cs.display === 'none' || el.closest('details:not([open])') || el.closest('[hidden]')) continue;
+          const r = el.getBoundingClientRect();
+          if (r.width && r.right > window.innerWidth + 1) found.push(`${el.className || el.tagName} déborde (${Math.round(r.right)} px)`);
+          if (el.matches('.seg button') && el.scrollWidth > el.clientWidth + 1) found.push(`« ${el.textContent} » coupé`);
+        }
+        return found;
+      });
+      check(!out.length, `360 px, texte 200 %/${view} : ${out.slice(0, 5).join(', ')}`);
+      await page.screenshot({ path: `${OUT}/mobile360-texte200-${view}.png`, fullPage: true });
+      if (view === 'overview' || view === 'compare') await audit(page, `360 px, texte 200 %/${view}`);
+    }
+    await ctx.close();
+  }
+
   // S-7.7: high contrast (axe checks the enhanced 7:1 ratio) and forced colours, light and dark.
   for (const [name, opts] of [
     ['contraste-clair', { viewport: { width: 1280, height: 900 }, contrast: 'more' }],

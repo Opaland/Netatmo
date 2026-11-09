@@ -1,11 +1,13 @@
 // Helpers shared by several views: formatting, HTML fragments, colours, rooms, costs.
-import { type Category, type DayRecord, MONTHS_LONG, addDays, applyFilter, minusYears, pctChange } from './aggregate';
+import { type Category, type DayRecord, addDays, applyFilter, minusYears, pctChange } from './aggregate';
 import { type PriceAt, energyCost, energyCostTrve, hasPrices, offPeakColumn, offPeakShares, subscriptionCost, subscriptionTrve, trveAt } from './analysis';
-import { type State, activeRooms, ds, onLock, state } from './app';
+import { type State, activeRooms, ds, onLock, rawRooms, state } from './app';
 import { cssVar, escapeHtml as esc, waterfallChart } from './charts';
 import { type ResolvedContract, resolveContract } from './contract';
 import { type ContractPeriod, periodAt } from './offers';
 import { type HcHp, flatPrice, hcHp, manualHcHp, manualPriceAt } from './pricing';
+import { comparison, seg } from './components';
+import { NO_REFERENCE, dayLong, signedPct } from './glossary';
 import { tenant } from './tenant';
 
 export { esc };
@@ -13,35 +15,21 @@ export { fmtKwh } from './charts';
 
 // ------------------------------------------------------------------ formatting
 export const nf0 = new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 0 });
-/** Signed, rounded percentage without "-0". */
-export const pct = (p: number) => {
-  const r = Math.round(p);
-  return `${r > 0 ? '+' : r < 0 ? '−' : ''}${nf0.format(Math.abs(r))} %`;
-};
+/** Signed, rounded percentage without "-0" (glossary.ts, #315). */
+export const pct = signedPct;
 export const fmtEur = (v: number) => `${nf0.format(v)} €`;
 
-export function longDate(day: string) {
-  return `${Number(day.slice(8, 10))} ${MONTHS_LONG[Number(day.slice(5, 7)) - 1]} ${day.slice(0, 4)}`;
-}
+/** « 1er août 2026 » (#299: one date format, glossary.ts). */
+export const longDate = (day: string) => dayLong(day);
 
-export function delta(now: number, before: number) {
-  const p = pctChange(now, before);
-  if (p === null) return `<span class="delta neutral">pas de référence N-1</span>`;
-  const r = Math.round(p);
-  const cls = r === 0 ? 'neutral' : r > 0 ? 'up' : 'down';
-  const arrow = r === 0 ? '=' : r > 0 ? '▲' : '▼';
-  return `<span class="delta ${cls}"><span aria-hidden="true">${arrow}</span> ${pct(p)} vs N-1</span>`;
-}
+/**
+ * Year-over-year change with its reference always written out (#310 review rule): « ▼ −16 %
+ * vs nov. 2025 au 8 ». `vs` comes from glossary.vsLabel(); arrow + word, never colour alone.
+ */
+export const delta = (now: number, before: number, vs = "vs l'an dernier") => comparison(pctChange(now, before), vs, { none: NO_REFERENCE });
 
 // ------------------------------------------------------------------ HTML fragments
-export function seg<T extends string>(name: string, value: T, options: [T, string][], label: string) {
-  return `<div class="seg" role="radiogroup" aria-label="${esc(label)}">${options
-    .map(
-      ([v, l]) =>
-        `<button type="button" role="radio" aria-checked="${v === value}" data-set="${name}" data-value="${v}">${esc(l)}</button>`,
-    )
-    .join('')}</div>`;
-}
+export { seg };
 
 export function table(head: string[], rows: (string | number)[][], numericFrom = 1) {
   return `<div class="table-wrap" tabindex="0"><table><thead><tr>${head.map((h, i) => `<th${i >= numericFrom ? ' class="num"' : ''}>${esc(h)}</th>`).join('')}</tr></thead><tbody>${rows
@@ -188,34 +176,52 @@ export function tariffNames(): [string, string] {
 }
 
 // ------------------------------------------------------------------ colours and rooms
-const SERIES_SLOTS = 8;
-export const series = (i: number) => cssVar(`--series-${(i % SERIES_SLOTS) + 1}`);
-export const catColor = (c: Category) => cssVar(c === 'water_heater' ? '--cat-water' : '--cat-heating');
+// #300 / #310: colours come from the design tokens. Orange and blue belong to the usages,
+// iris to the years; rooms and other categorical series take the room palette.
+const PALETTE = 8;
+/** i-th colour of the categorical palette (never orange, blue or iris). */
+export const series = (i: number) => cssVar(`--room-${(i % PALETTE) + 1}`);
+export const catColor = (c: Category) => cssVar(c === 'water_heater' ? '--usage-water' : '--usage-heating');
+/** Measured value (a single line), reference value (subscribed power, expected…). */
+export const measureColor = () => cssVar('--series-measure');
+export const referenceColor = () => cssVar('--series-reference');
 
 export { activeRooms };
 /**
- * Colour follows the room (its position in the house), never its rank.
- * Water-heater rooms wear the water colour; heating rooms take slots 3–8 (blue and
- * orange stay reserved for the two usages). Past six heating rooms → "Autres pièces".
+ * #300: the colour follows the room — its place among the heating rooms of the house, in the
+ * order of the data (never its rank among the rooms shown) — so a room keeps its colour with
+ * or without the household view; « Chambres » takes the colour of its first bedroom.
+ * Water-heater rooms wear the water colour. Past six heating rooms shown → « Autres pièces ».
  */
-const ROOM_SLOTS = [2, 3, 4, 5, 6, 7];
-function roomSlot(id: string): number | null {
-  const heating = activeRooms().filter((r) => r.category === 'heating');
+const SHOWN_ROOMS = 6;
+function roomIndex(id: string): number {
+  const heating = rawRooms().filter((r) => r.category === 'heating');
   const i = heating.findIndex((r) => r.id === id);
-  return i >= 0 && i < ROOM_SLOTS.length ? ROOM_SLOTS[i] : null;
+  if (i >= 0) return i;
+  // a group of the household view: the first of its members (absent from the view)
+  const shown = new Set(ds!.meta.rooms.map((r) => r.id));
+  return Math.max(0, heating.findIndex((r) => !shown.has(r.id)));
+}
+function shownRank(id: string): number | null {
+  const i = activeRooms()
+    .filter((r) => r.category === 'heating')
+    .findIndex((r) => r.id === id);
+  return i >= 0 && i < SHOWN_ROOMS ? i : null;
 }
 export function roomColor(id: string) {
   const room = activeRooms().find((r) => r.id === id);
   if (room?.category === 'water_heater') return catColor('water_heater');
-  const slot = roomSlot(id);
-  return slot === null ? cssVar('--text-muted') : series(slot);
+  if (id === OTHER) return cssVar('--usage-standby');
+  return series(roomIndex(id));
 }
 export const OTHER = '__other__';
 export const roomGroup = (id: string) =>
-  activeRooms().find((r) => r.id === id)?.category === 'water_heater' || roomSlot(id) !== null ? id : OTHER;
+  activeRooms().find((r) => r.id === id)?.category === 'water_heater' || shownRank(id) !== null ? id : OTHER;
+/** #300: years and seasons on the iris → grey ramp, the latest (year-0) in full colour. */
 export function yearColor(y: number) {
   const years = ds!.meta.years;
-  return series(years.indexOf(y) >= 0 ? years.length - 1 - years.indexOf(y) : 0);
+  const age = years.indexOf(y) >= 0 ? years.length - 1 - years.indexOf(y) : 0;
+  return cssVar(`--year-${Math.min(3, age)}`);
 }
 export const roomName = (id: string) => (id === OTHER ? 'Autres pièces' : (ds!.meta.rooms.find((r) => r.id === id)?.name ?? id));
 

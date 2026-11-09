@@ -107,7 +107,7 @@ function gapsHtml(gaps: ReturnType<typeof gapMonths>, lost: boolean): string {
     }`;
 }
 
-/** #297: the estimated or lost days behind a « vs N-1 » of [from, to] (HTML, empty when there are none). */
+/** #297: the estimated or lost days behind a « vs l'an dernier » of [from, to] (HTML, empty when there are none). */
 export function yoyGapNote(records: DayRecord[], from: string, to: string): string {
   const pf = minusYears(from);
   const pt = minusYears(to);
@@ -116,9 +116,9 @@ export function yoyGapNote(records: DayRecord[], from: string, to: string): stri
   const before = countIn(days, pf, pt);
   const first = records.reduce((a, r) => (r.day < a ? r.day : a), records[0]?.day ?? pf);
   const parts = [
-    ...(first > pf && first <= pt ? [`N-1 incomplète : collecte depuis le ${shortDate(first, true)}`] : []),
+    ...(first > pf && first <= pt ? [`an dernier incomplet : collecte depuis le ${shortDate(first, true)}`] : []),
     ...(now ? [`${from.slice(0, 4)} : ${uncertainText(now)}`] : []),
-    ...(before ? [`N-1 : ${uncertainText(before)}`] : []),
+    ...(before ? [`${pf.slice(0, 4)} : ${uncertainText(before)}`] : []),
   ];
   return parts.length ? `<br><small class="muted">${esc(parts.join(' · '))}</small>` : '';
 }

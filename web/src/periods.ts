@@ -2,7 +2,8 @@
 // comparisons and the report. A chart bucket (week, month, year…) is « partial » when the
 // period shown or the data only covers part of it; it is « uncertain » when it contains
 // estimated or lost days. Both are said in the tooltip and on the bar, at every granularity.
-import { type Granularity, MONTHS_SHORT, addDays, bucketKey, minusYears } from './aggregate';
+import { type Granularity, addDays, bucketKey, minusYears } from './aggregate';
+import { dayShort } from './glossary';
 
 const DAY_MS = 86400000;
 /** Days from `from` to `to`, both included (calendar days: no DST effect, dates are UTC). */
@@ -13,11 +14,8 @@ export const MONTH_DAYS = 30.4375;
 const isLeap = (y: number) => (y % 4 === 0 && y % 100 !== 0) || y % 400 === 0;
 const lastOfMonth = (ym: string) => new Date(Date.UTC(Number(ym.slice(0, 4)), Number(ym.slice(5, 7)), 0)).toISOString().slice(0, 10);
 
-/** « 1er nov. », « 8 nov. » (with the year when asked). */
-export function shortDate(day: string, withYear = false): string {
-  const d = Number(day.slice(8, 10));
-  return `${d === 1 ? '1er' : d} ${MONTHS_SHORT[Number(day.slice(5, 7)) - 1]}${withYear ? ` ${day.slice(0, 4)}` : ''}`;
-}
+/** « 1er nov. », « 8 nov. » (with the year when asked): glossary.ts (#299). */
+export const shortDate = (day: string, withYear = false) => dayShort(day, withYear);
 
 /** First and last calendar day of a bucket. */
 export function bucketRange(key: string, g: Granularity): [string, string] {

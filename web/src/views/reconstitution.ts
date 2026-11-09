@@ -6,7 +6,7 @@ import { ds } from '../app';
 import { barChart } from '../charts';
 import { displayId } from '../household';
 import { rebuildLost, rebuildTotals, suspectDays } from '../reconstitute';
-import { activeRooms, esc, fmtKwh, longDate, roomName, series, table } from '../ui';
+import { activeRooms, esc, fmtKwh, longDate, roomName, series, table, measureColor } from '../ui';
 import { html } from '../trusted';
 
 const monthLabel = (m: string) => `${MONTHS_SHORT[Number(m.slice(5, 7)) - 1]} ${m.slice(2, 4)}`;
@@ -65,8 +65,8 @@ export function renderReconstitution(zone: HTMLElement) {
   barChart(document.getElementById('recon-chart')!, {
     labels: months.map(monthLabel),
     series: [
-      { name: 'Mesuré', color: series(0), data: months.map((m) => round(measured.get(m))) },
-      { name: 'Reconstitué', color: series(3), data: months.map((m) => round(rebuiltM.get(m))) },
+      { name: 'Mesuré', color: measureColor(), data: months.map((m) => round(measured.get(m))) },
+      { name: 'Reconstitué', color: series(0), data: months.map((m) => round(rebuiltM.get(m))) },
     ],
     stacked: true,
     price: null,

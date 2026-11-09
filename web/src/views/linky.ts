@@ -19,7 +19,7 @@ import {
 import { loadCurve, loadHourly } from '../data';
 import { memo } from '../memo';
 import { periodAt } from '../offers';
-import { activeRooms, catColor, contracts, flatPriceAt, fmtEur, longDate, nf0, series } from '../ui';
+import { activeRooms, catColor, contracts, flatPriceAt, fmtEur, longDate, nf0, measureColor } from '../ui';
 import { html } from '../trusted';
 
 // #247: the curve first, then only the hourly years of its 30-day window (#251), for the
@@ -143,7 +143,7 @@ function parts(heat: number[] | null, water: number[] | null, total: (number | n
   return [
     ...(heat ? [{ name: 'Chauffage', color: catColor('heating'), data: heat.map((v, i) => (total[i] === null ? null : Math.round(Math.min(v, total[i]!)))) }] : []),
     ...(water ? [{ name: 'Chauffe-eau', color: catColor('water_heater'), data: water.map((v, i) => (total[i] === null ? null : Math.round(v))) }] : []),
-    { name: 'Autres usages', color: cssVar('--ghost'), data: other.map(round) },
+    { name: 'Autres usages', color: cssVar('--usage-other'), data: other.map(round) },
   ];
 }
 
@@ -158,7 +158,7 @@ function drawTypical(from: string, last: string, days: Set<string>) {
   areaChart(document.getElementById('curve-typical')!, {
     labels: SLOTS,
     areas: heat || water ? parts(heat, water, total) : [],
-    lines: [{ name: 'Logement (Linky)', color: series(0), data: total.map(round) }],
+    lines: [{ name: 'Logement (Linky)', color: measureColor(), data: total.map(round) }],
     unit: 'W',
   });
   const n = typ.days[group];
@@ -227,7 +227,7 @@ function drawDay(card: HTMLElement) {
   areaChart(el, {
     labels,
     areas: any && (heat || water) ? parts(heat, water, values) : [],
-    lines: [{ name: 'Logement (Linky)', color: series(0), data: values.map(round) }],
+    lines: [{ name: 'Logement (Linky)', color: measureColor(), data: values.map(round) }],
     unit: 'W',
     zoom: true,
   });

@@ -1,6 +1,7 @@
 // ECharts wrapper: modular import (smaller bundle) + theme read from CSS tokens.
 
 import type { ECharts, EChartsCoreOption, SetOptionOpts } from 'echarts/core';
+import { buildTheme, remPx, splitCount, themeKey } from './chart-theme';
 import { type Measure, summarize } from './summary';
 import { node } from './trusted';
 import { track } from './ready';
@@ -87,7 +88,7 @@ function decal(i: number) {
 
 /** #297: stripes over a bar whose period is partial or has estimated or lost days. */
 function hatch() {
-  return { color: cssVar('--surface-1') || 'rgba(255,255,255,0.7)', symbol: 'rect', dashArrayX: [1, 0], dashArrayY: [2, 3], rotation: -Math.PI / 4 };
+  return { color: cssVar('--surface-card') || 'rgba(255,255,255,0.7)', symbol: 'rect', dashArrayX: [1, 0], dashArrayY: [2, 3], rotation: -Math.PI / 4 };
 }
 
 /** What the chart builders need from an ECharts instance; calls wait for the chunk if needed. */
@@ -97,8 +98,34 @@ export interface ChartHandle {
   off(event: 'click'): void;
 }
 
+// #310: one theme built from the tokens (chart-theme.ts), registered once per colour scheme,
+// contrast and text size; a chart created under another theme is recreated with the current one.
+const rootPx = () => parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
+const registered = new Set<string>();
+const themeOf = new WeakMap<ECharts, string>();
+function currentTheme(l: Lib): string {
+  const px = rootPx();
+  const key = themeKey(cssVar, px);
+  if (!registered.has(key)) {
+    l.registerTheme(key, buildTheme(cssVar, px, getComputedStyle(document.body).fontFamily || 'system-ui, sans-serif'));
+    registered.add(key);
+  }
+  return key;
+}
+/** Size of the axis texts in px (--font-xs, follows the system text size). */
+export const axisPx = () => Math.max(11, Math.round(remPx(cssVar('--font-xs'), rootPx())));
+
 function real(el: HTMLElement, l: Lib): ECharts {
-  const chart = l.getInstanceByDom(el) ?? l.init(el);
+  const key = currentTheme(l);
+  let chart = l.getInstanceByDom(el);
+  if (chart && themeOf.get(chart) !== key) {
+    chart.dispose();
+    chart = undefined;
+  }
+  if (!chart) {
+    chart = l.init(el, key);
+    themeOf.set(chart, key);
+  }
   if (!observed.has(el)) {
     new ResizeObserver(() => chart.resize()).observe(el);
     observed.add(el);
@@ -148,10 +175,7 @@ function tooltip(price: number | null, showTotal: boolean, unit = 'kWh', series:
   return {
     trigger: 'axis' as const,
     confine: true,
-    backgroundColor: cssVar('--surface-raised'),
-    borderColor: cssVar('--border'),
-    textStyle: { color: cssVar('--text-primary'), fontFamily: 'inherit', fontSize: 12 },
-    axisPointer: { type: 'line' as const, lineStyle: { color: cssVar('--text-muted'), width: 1 } },
+    axisPointer: { type: 'line' as const },
     formatter: tip((params: unknown) => {
       const list = (
         params as { seriesName: string; seriesIndex: number; dataIndex: number; value: number | null; color: string; axisValueLabel: string }[]
@@ -175,21 +199,19 @@ function tooltip(price: number | null, showTotal: boolean, unit = 'kWh', series:
   };
 }
 
-function axes(labels: string[]) {
-  const muted = cssVar('--text-muted');
+/** Axes styled by the theme; #319: fewer value ticks on a short chart, labels never overlap. */
+function axes(labels: string[], el?: HTMLElement) {
   return {
     grid: { left: 8, right: 12, top: 36, bottom: 8, containLabel: true },
     xAxis: {
       type: 'category' as const,
       data: labels,
-      axisLine: { lineStyle: { color: cssVar('--border') } },
-      axisTick: { show: false },
-      axisLabel: { color: muted, hideOverlap: true },
+      axisLabel: { hideOverlap: true },
     },
     yAxis: {
       type: 'value' as const,
-      splitLine: { lineStyle: { color: cssVar('--grid') } },
-      axisLabel: { color: muted, formatter: (v: number) => (v !== 0 && Math.abs(v) < 10 ? nf1 : nf0).format(v) },
+      splitNumber: splitCount(el?.clientHeight || 300, 60),
+      axisLabel: { formatter: (v: number) => (v !== 0 && Math.abs(v) < 10 ? nf1 : nf0).format(v) },
     },
   };
 }
@@ -203,8 +225,6 @@ function legend(series: Series[]) {
     icon: 'roundRect',
     itemWidth: 12,
     itemHeight: 12,
-    textStyle: { color: cssVar('--text-secondary') },
-    pageTextStyle: { color: cssVar('--text-secondary') },
   };
 }
 
@@ -225,7 +245,7 @@ export function barChart(
     notes?: (string | null)[];
   },
 ) {
-  const surface = cssVar('--surface-1');
+  const surface = cssVar('--surface-card');
   // Per-bar style only when needed: plain arrays keep the default fast path.
   const item = (s: Series) =>
     s.colors || opts.muted?.some(Boolean) || opts.partial?.some(Boolean) || s.marks?.some(Boolean)
@@ -244,7 +264,7 @@ export function barChart(
   chart.setOption(
     {
       animationDuration: 300,
-      ...axes(opts.labels),
+      ...axes(opts.labels, el),
       legend: legend(opts.series),
       tooltip: tooltip(opts.price, opts.stacked && !opts.unit, opts.unit, opts.series, opts.notes),
       dataZoom: opts.zoom ? [{ type: 'inside', minValueSpan: 6 }] : [],
@@ -276,15 +296,20 @@ export function lineChart(
 ) {
   const chart = instance(el);
   describe(el, opts.labels, opts.series, opts.unit);
-  const ax = axes(opts.labels);
-  const ends = opts.endLabels !== false && opts.series.length <= 4;
+  const ax = axes(opts.labels, el);
+  // #319: end labels drawn inside the chart: right margin from the longest name, or a legend
+  // when the names would take more than a third of a narrow chart.
+  const px = axisPx();
+  const longest = Math.max(0, ...opts.series.map((s) => s.name.length));
+  const room = Math.ceil(longest * px * 0.6) + 12;
+  const ends = opts.endLabels !== false && opts.series.length <= 4 && room <= (el.clientWidth || 360) / 3;
   chart.setOption(
     {
       animationDuration: 300,
       ...ax,
       // zoomed axis (°C around 20): keep one decimal so ticks never repeat
       yAxis: opts.scale ? { ...ax.yAxis, scale: true, axisLabel: { ...ax.yAxis.axisLabel, formatter: (v: number) => nf1.format(v) } } : ax.yAxis,
-      legend: { ...legend(opts.series), icon: 'rect', itemWidth: 14, itemHeight: 3 },
+      legend: { ...legend(opts.series), show: opts.series.length > 1 && !ends, icon: 'rect', itemWidth: 14, itemHeight: 3 },
       tooltip: tooltip(opts.price, false, opts.unit, opts.series),
       series: opts.series.map((s) => ({
         type: 'line',
@@ -294,16 +319,11 @@ export function lineChart(
         symbolSize: 8,
         connectNulls: false,
         lineStyle: { width: s.name === opts.emphasize ? 3 : 2, color: s.color },
-        itemStyle: { color: s.color, borderColor: cssVar('--surface-1'), borderWidth: 2 },
+        itemStyle: { color: s.color, borderColor: cssVar('--surface-card'), borderWidth: 2 },
         // direct label at the line end (few series only)
-        endLabel: {
-          show: ends,
-          formatter: '{a}',
-          color: cssVar('--text-secondary'),
-          fontSize: 11,
-        },
+        endLabel: { show: ends, formatter: '{a}', color: cssVar('--text-muted'), fontSize: px },
       })),
-      grid: { left: 8, right: ends ? 48 : 12, top: 36, bottom: 8, containLabel: true },
+      grid: { left: 8, right: ends ? room : 12, top: ends ? 16 : 36, bottom: 8, containLabel: true },
     },
     { notMerge: true },
   );
@@ -314,7 +334,7 @@ export function hbarChart(
   opts: { labels: string[]; series: Series[]; price: number | null; onClick?: (index: number) => void },
 ) {
   const chart = instance(el);
-  const muted = cssVar('--text-muted');
+  const width = el.clientWidth || 360;
   chart.setOption(
     {
       animationDuration: 300,
@@ -327,9 +347,10 @@ export function hbarChart(
         inverse: true,
         axisLine: { show: false },
         axisTick: { show: false },
-        axisLabel: { color: cssVar('--text-secondary'), width: 110, overflow: 'truncate' },
+        axisLabel: { color: cssVar('--text'), width: Math.round(Math.min(140, width * 0.32)), overflow: 'break' },
       },
-      xAxis: { type: 'value', splitLine: { lineStyle: { color: cssVar('--grid') } }, axisLabel: { color: muted, formatter: (v: number) => nf0.format(v) } },
+      // #319: as many ticks as the width allows (« 9001 2001 500 » overlapped at 360 px)
+      xAxis: { type: 'value', splitNumber: splitCount(width - 180), axisLabel: { hideOverlap: true, formatter: (v: number) => nf0.format(v) } },
       series: opts.series.map((s, i) => ({
         type: 'bar',
         name: s.name,
@@ -339,7 +360,7 @@ export function hbarChart(
         itemStyle: { color: s.color, borderRadius: [0, 4, 4, 0] },
         label:
           i === 0
-            ? { show: true, position: 'right', color: cssVar('--text-secondary'), formatter: (p: { value: number }) => nf0.format(p.value) }
+            ? { show: true, position: 'right', color: cssVar('--text-muted'), formatter: (p: { value: number }) => nf0.format(p.value) }
             : { show: false },
         cursor: opts.onClick ? 'pointer' : 'default',
       })),
@@ -438,9 +459,6 @@ export function comboChart(
 // ------------------------------------------------------------------ extra chart forms
 const ttBase = () => ({
   confine: true,
-  backgroundColor: cssVar('--surface-raised'),
-  borderColor: cssVar('--border'),
-  textStyle: { color: cssVar('--text-primary'), fontFamily: 'inherit', fontSize: 12 },
 });
 /** Sequential blue ramp (light → dark), light/dark mode aware. */
 export const seqRamp = () => [cssVar('--seq-1'), cssVar('--seq-2'), cssVar('--seq-3'), cssVar('--seq-4'), cssVar('--seq-5')];
@@ -495,7 +513,7 @@ export function scatterChart(el: HTMLElement, opts: { series: ScatterSeries[]; x
           name: s.name,
           data: s.points,
           symbolSize: 6,
-          itemStyle: { color: s.color, opacity: 0.55, borderColor: cssVar('--surface-1'), borderWidth: 0.5 },
+          itemStyle: { color: s.color, opacity: 0.55, borderColor: cssVar('--surface-card'), borderWidth: 0.5 },
         },
         ...(s.fit
           ? [
@@ -553,16 +571,16 @@ export function calendarChart(el: HTMLElement, opts: { year: number; data: [stri
         right: 8,
         cellSize: ['auto', 13],
         splitLine: { show: false },
-        itemStyle: { color: cssVar('--surface-0'), borderColor: cssVar('--surface-1'), borderWidth: 2 },
+        itemStyle: { color: cssVar('--surface-page'), borderColor: cssVar('--surface-card'), borderWidth: 2 },
         yearLabel: { show: false },
-        dayLabel: { firstDay: 1, nameMap: ['D', 'L', 'M', 'M', 'J', 'V', 'S'], color: muted, fontSize: 10 },
-        monthLabel: { nameMap: 'FR', color: muted, fontSize: 10 },
+        dayLabel: { firstDay: 1, nameMap: ['D', 'L', 'M', 'M', 'J', 'V', 'S'], color: muted, fontSize: axisPx() },
+        monthLabel: { nameMap: 'FR', color: muted, fontSize: axisPx() },
       },
       series: [
         { type: 'heatmap', coordinateSystem: 'calendar', data: opts.data },
         // S-4.10: marked days (probable absences), a dot over the cell
         ...(opts.marks?.length
-          ? [{ type: 'scatter', coordinateSystem: 'calendar', data: opts.marks.map((d) => [d, 0]), symbolSize: 5, itemStyle: { color: cssVar('--text-primary') } }]
+          ? [{ type: 'scatter', coordinateSystem: 'calendar', data: opts.marks.map((d) => [d, 0]), symbolSize: 5, itemStyle: { color: cssVar('--text') } }]
           : []),
       ],
     },
@@ -605,7 +623,7 @@ export function gridHeatmap(
         {
           type: 'heatmap',
           data: opts.data,
-          itemStyle: { borderColor: cssVar('--surface-1'), borderWidth: 2, borderRadius: 3 },
+          itemStyle: { borderColor: cssVar('--surface-card'), borderWidth: 2, borderRadius: 3 },
         },
       ],
     },
@@ -683,7 +701,7 @@ export function waterfallChart(
   chart.setOption(
     {
       grid: { left: 8, right: 8, top: 28, bottom: 8, containLabel: true },
-      legend: { top: 0, left: 0, textStyle: { color: cssVar('--text-secondary') }, icon: 'roundRect', itemWidth: 12, itemHeight: 12, data: ['Hausse', 'Baisse'] },
+      legend: { top: 0, left: 0, textStyle: { color: cssVar('--text-muted') }, icon: 'roundRect', itemWidth: 12, itemHeight: 12, data: ['Hausse', 'Baisse'] },
       tooltip: {
         ...ttBase(),
         trigger: 'axis',
@@ -705,9 +723,9 @@ export function waterfallChart(
       },
       series: [
         { type: 'bar', stack: 'w', data: base, itemStyle: { color: 'transparent' }, emphasis: { disabled: true }, tooltip: { show: false } },
-        { type: 'bar', stack: 'w', name: 'Total', data: totals, itemStyle: { color: cssVar('--text-secondary'), borderRadius: [4, 4, 0, 0] }, barMaxWidth: 36 },
-        { type: 'bar', stack: 'w', name: 'Hausse', data: up, itemStyle: { color: cssVar('--bad'), borderRadius: [4, 4, 0, 0] }, barMaxWidth: 36 },
-        { type: 'bar', stack: 'w', name: 'Baisse', data: down, itemStyle: { color: cssVar('--good'), borderRadius: [4, 4, 0, 0] }, barMaxWidth: 36 },
+        { type: 'bar', stack: 'w', name: 'Total', data: totals, itemStyle: { color: cssVar('--text-muted'), borderRadius: [4, 4, 0, 0] }, barMaxWidth: 36 },
+        { type: 'bar', stack: 'w', name: 'Hausse', data: up, itemStyle: { color: cssVar('--state-bad'), borderRadius: [4, 4, 0, 0] }, barMaxWidth: 36 },
+        { type: 'bar', stack: 'w', name: 'Baisse', data: down, itemStyle: { color: cssVar('--state-good'), borderRadius: [4, 4, 0, 0] }, barMaxWidth: 36 },
       ],
     },
     { notMerge: true },
