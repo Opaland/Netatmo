@@ -14,8 +14,11 @@ import argparse
 import csv
 import json
 import logging
+import os
 import sys
 from pathlib import Path
+
+import httpx
 
 from .api import IntuisClient
 from .config import Settings
@@ -53,10 +56,57 @@ def cmd_diagnose(s: Settings, args: argparse.Namespace) -> None:
         run(client)
 
 
+def _warn(msg: str) -> None:
+    # "::warning::" shows up as an annotation on the GitHub Actions run.
+    print(f"::warning::{msg}" if os.environ.get("GITHUB_ACTIONS") else f"Attention : {msg}")
+
+
+def _weather(s: Settings, store: Store, home) -> str | None:
+    """Outdoor temperatures: the Netatmo station if configured, else Open-Meteo. Never fatal."""
+    first = store.first_day()
+    if not first:
+        return None
+    if s.netatmo_client_id and s.netatmo_refresh_token:
+        from .station import Station, StationError
+
+        try:
+            Station(store, s.netatmo_client_id, s.netatmo_client_secret, s.netatmo_refresh_token).collect(
+                home.timezone, first
+            )
+            return "netatmo"
+        except (StationError, httpx.HTTPError) as err:
+            _warn(f"{err} — repli sur Open-Meteo")
+    if home.latitude is None or home.longitude is None:
+        _warn("Coordonnées de la maison inconnues : pas de météo")
+        return None
+    from .weather import open_meteo
+
+    try:
+        open_meteo(store, home.latitude, home.longitude, home.timezone, first)
+        return store.doc("weather").get("source")
+    except httpx.HTTPError as err:
+        _warn(f"Météo Open-Meteo indisponible : {err}")
+        return store.meta.get("weather_source")
+
+
 def cmd_sync(s: Settings, args: argparse.Namespace, backfill: bool = False) -> None:
     s.require("passphrase")
     store = Store(s.data_dir, s.passphrase)
-    changed = Syncer(_client(s), store, s.room_categories).run(days=args.days, backfill=backfill)
+    syncer = Syncer(_client(s), store, s.room_categories)
+    syncer.run(days=args.days, backfill=backfill, save=False)
+    home = syncer.last_home
+    source = _weather(s, store, home)
+    extra = {"weather_source": source} if source else {}
+    if s.enedis_token and s.enedis_prm and store.first_day():
+        from .enedis import LinkyError, collect
+
+        try:
+            collect(store, s.enedis_token, s.enedis_prm, store.first_day(), home.timezone)
+        except (LinkyError, httpx.HTTPError) as err:
+            _warn(str(err))
+    if store.doc("linky").get("daily"):
+        extra["has_linky"] = True
+    changed = syncer.save(home, extra)
     print("Fichiers modifiés : " + (", ".join(changed) if changed else "aucun"))
     print(f"Couverture : {store.first_day()} → {store.last_day()}")
 

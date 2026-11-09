@@ -20,6 +20,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      issues: write
     outputs:
       configured: ${{ steps.check.outputs.configured }}
     env:
@@ -29,6 +30,13 @@ jobs:
       INTUIS_CLIENT_SECRET: ${{ secrets.INTUIS_CLIENT_SECRET }}
       DATA_PASSPHRASE: ${{ secrets.DATA_PASSPHRASE }}
       INTUIS_ROOM_CATEGORIES: ${{ vars.INTUIS_ROOM_CATEGORIES }}
+      # Optional: Netatmo weather station (see README)
+      NETATMO_CLIENT_ID: ${{ secrets.NETATMO_CLIENT_ID }}
+      NETATMO_CLIENT_SECRET: ${{ secrets.NETATMO_CLIENT_SECRET }}
+      NETATMO_REFRESH_TOKEN: ${{ secrets.NETATMO_REFRESH_TOKEN }}
+      # Optional: Linky meter through Conso API (see README)
+      ENEDIS_TOKEN: ${{ secrets.ENEDIS_TOKEN }}
+      ENEDIS_PRM: ${{ secrets.ENEDIS_PRM }}
     steps:
       - id: check
         run: |
@@ -62,6 +70,33 @@ jobs:
             git commit -m "data: collecte du $(date -u +%Y-%m-%d)"
             git push
           fi
+
+      # One open issue while the collection fails (GitHub e-mails the owner), closed on success.
+      - name: Alerte en cas d'échec
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          title="⚠️ La collecte quotidienne échoue"
+          run_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          num=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search "\"$title\" in:title" --json number --jq '.[0].number // empty')
+          if [ -n "$num" ]; then
+            gh issue comment "$num" --repo "$GITHUB_REPOSITORY" --body "Nouvel échec le $(date -u +%F) : $run_url"
+          else
+            gh issue create --repo "$GITHUB_REPOSITORY" --title "$title" --body "@${{ github.repository_owner }} la collecte du $(date -u +%F) a échoué : $run_url
+
+          Causes fréquentes : mot de passe Intuis changé (mettre à jour le secret INTUIS_PASSWORD), serveur Intuis indisponible (réessayer plus tard), changement de l'API (lancer Actions → Diagnostic).
+          Cette issue se fermera toute seule à la prochaine collecte réussie."
+          fi
+      - name: Fermeture de l'alerte
+        if: success() && steps.check.outputs.configured == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          title="⚠️ La collecte quotidienne échoue"
+          for num in $(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search "\"$title\" in:title" --json number --jq '.[].number'); do
+            gh issue close "$num" --repo "$GITHUB_REPOSITORY" --comment "Collecte rétablie le $(date -u +%F)."
+          done
 
   # A push made with GITHUB_TOKEN does not trigger other workflows: deploy explicitly.
   deploy:

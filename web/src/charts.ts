@@ -1,11 +1,32 @@
 // ECharts wrapper: modular import (smaller bundle) + theme read from CSS tokens.
 
-import { BarChart, LineChart } from 'echarts/charts';
-import { DataZoomComponent, GridComponent, LegendComponent, TooltipComponent } from 'echarts/components';
+import { BarChart, HeatmapChart, LineChart, ScatterChart } from 'echarts/charts';
+import {
+  CalendarComponent,
+  DataZoomComponent,
+  GridComponent,
+  LegendComponent,
+  MarkLineComponent,
+  TooltipComponent,
+  VisualMapComponent,
+} from 'echarts/components';
 import * as echarts from 'echarts/core';
 import { CanvasRenderer } from 'echarts/renderers';
 
-echarts.use([BarChart, LineChart, GridComponent, TooltipComponent, LegendComponent, DataZoomComponent, CanvasRenderer]);
+echarts.use([
+  BarChart,
+  LineChart,
+  ScatterChart,
+  HeatmapChart,
+  GridComponent,
+  TooltipComponent,
+  LegendComponent,
+  DataZoomComponent,
+  CalendarComponent,
+  VisualMapComponent,
+  MarkLineComponent,
+  CanvasRenderer,
+]);
 
 export interface Series {
   name: string;
@@ -209,4 +230,217 @@ export function hbarChart(
   );
   chart.off('click');
   if (opts.onClick) chart.on('click', (p) => opts.onClick!(p.dataIndex));
+}
+
+// ------------------------------------------------------------------ extra chart forms
+const ttBase = () => ({
+  confine: true,
+  backgroundColor: cssVar('--surface-raised'),
+  borderColor: cssVar('--border'),
+  textStyle: { color: cssVar('--text-primary'), fontFamily: 'inherit', fontSize: 12 },
+});
+/** Sequential blue ramp (light → dark), light/dark mode aware. */
+export const seqRamp = () => [cssVar('--seq-1'), cssVar('--seq-2'), cssVar('--seq-3'), cssVar('--seq-4'), cssVar('--seq-5')];
+
+export interface ScatterSeries {
+  name: string;
+  color: string;
+  points: [number, number, string][]; // x °C, y kWh, label (day)
+  fit?: { slope: number; intercept: number; from: number; to: number } | null;
+}
+
+export function scatterChart(el: HTMLElement, opts: { series: ScatterSeries[]; xName: string; yName: string }) {
+  const chart = instance(el);
+  const muted = cssVar('--text-muted');
+  chart.setOption(
+    {
+      animationDuration: 300,
+      grid: { left: 8, right: 16, top: 36, bottom: 24, containLabel: true },
+      legend: legend(opts.series.map((s) => ({ name: s.name, color: s.color, data: [] }))),
+      tooltip: {
+        ...ttBase(),
+        trigger: 'item',
+        formatter: (p: { seriesName: string; value: [number, number, string] }) =>
+          Array.isArray(p.value) && p.value.length === 3
+            ? `<div class="tt"><div class="tt-title">${escapeHtml(p.value[2])}</div><div class="tt-row"><strong>${fmtKwh(p.value[1])}</strong><span class="tt-name">${nf1.format(p.value[0])} °C</span></div></div>`
+            : escapeHtml(p.seriesName),
+      },
+      xAxis: {
+        type: 'value',
+        name: opts.xName,
+        nameLocation: 'middle',
+        nameGap: 26,
+        nameTextStyle: { color: muted },
+        splitLine: { lineStyle: { color: cssVar('--grid') } },
+        axisLabel: { color: muted },
+      },
+      yAxis: {
+        type: 'value',
+        name: opts.yName,
+        nameTextStyle: { color: muted, align: 'left' },
+        splitLine: { lineStyle: { color: cssVar('--grid') } },
+        axisLabel: { color: muted },
+      },
+      series: opts.series.flatMap((s) => [
+        {
+          type: 'scatter',
+          name: s.name,
+          data: s.points,
+          symbolSize: 6,
+          itemStyle: { color: s.color, opacity: 0.55, borderColor: cssVar('--surface-1'), borderWidth: 0.5 },
+        },
+        ...(s.fit
+          ? [
+              {
+                type: 'line',
+                name: s.name,
+                data: [
+                  [s.fit.from, s.fit.slope * s.fit.from + s.fit.intercept],
+                  [s.fit.to, Math.max(0, s.fit.slope * s.fit.to + s.fit.intercept)],
+                ],
+                showSymbol: false,
+                lineStyle: { width: 2, color: s.color },
+                tooltip: { show: false },
+              },
+            ]
+          : []),
+      ]),
+    },
+    { notMerge: true },
+  );
+}
+
+export function calendarChart(el: HTMLElement, opts: { year: number; data: [string, number][]; max: number }) {
+  const chart = instance(el);
+  const muted = cssVar('--text-muted');
+  chart.setOption(
+    {
+      tooltip: {
+        ...ttBase(),
+        formatter: (p: { value: [string, number] }) =>
+          `<div class="tt"><div class="tt-title">${escapeHtml(p.value[0])}</div><strong>${fmtKwh(p.value[1])}</strong></div>`,
+      },
+      visualMap: {
+        min: 0,
+        max: Math.max(1, opts.max),
+        calculable: false,
+        orient: 'horizontal',
+        left: 'center',
+        bottom: 0,
+        itemWidth: 10,
+        itemHeight: 120,
+        text: ['élevée', 'faible'],
+        textStyle: { color: muted },
+        inRange: { color: seqRamp() },
+      },
+      calendar: {
+        range: String(opts.year),
+        top: 28,
+        left: 30,
+        right: 8,
+        cellSize: ['auto', 13],
+        splitLine: { show: false },
+        itemStyle: { color: cssVar('--surface-0'), borderColor: cssVar('--surface-1'), borderWidth: 2 },
+        yearLabel: { show: false },
+        dayLabel: { firstDay: 1, nameMap: ['D', 'L', 'M', 'M', 'J', 'V', 'S'], color: muted, fontSize: 10 },
+        monthLabel: { nameMap: 'FR', color: muted, fontSize: 10 },
+      },
+      series: [{ type: 'heatmap', coordinateSystem: 'calendar', data: opts.data }],
+    },
+    { notMerge: true },
+  );
+}
+
+export function gridHeatmap(
+  el: HTMLElement,
+  opts: { xLabels: string[]; yLabels: string[]; data: [number, number, number][]; unit: string },
+) {
+  const chart = instance(el);
+  const muted = cssVar('--text-muted');
+  const max = Math.max(0.001, ...opts.data.map((d) => d[2]));
+  chart.setOption(
+    {
+      tooltip: {
+        ...ttBase(),
+        formatter: (p: { value: [number, number, number] }) =>
+          `<div class="tt"><div class="tt-title">${escapeHtml(opts.yLabels[p.value[1]])} ${escapeHtml(opts.xLabels[p.value[0]])}</div><strong>${nf1.format(p.value[2])} ${escapeHtml(opts.unit)}</strong></div>`,
+      },
+      grid: { left: 8, right: 8, top: 8, bottom: 44, containLabel: true },
+      xAxis: { type: 'category', data: opts.xLabels, axisLabel: { color: muted, interval: 2 }, axisTick: { show: false }, axisLine: { show: false } },
+      yAxis: { type: 'category', data: opts.yLabels, inverse: true, axisLabel: { color: muted }, axisTick: { show: false }, axisLine: { show: false } },
+      visualMap: {
+        min: 0,
+        max,
+        orient: 'horizontal',
+        left: 'center',
+        bottom: 0,
+        itemWidth: 10,
+        itemHeight: 120,
+        text: ['élevée', 'faible'],
+        textStyle: { color: muted },
+        inRange: { color: seqRamp() },
+      },
+      series: [
+        {
+          type: 'heatmap',
+          data: opts.data,
+          itemStyle: { borderColor: cssVar('--surface-1'), borderWidth: 2, borderRadius: 3 },
+        },
+      ],
+    },
+    { notMerge: true },
+  );
+}
+
+/** Waterfall: start total → one bar per room delta → end total. */
+export function waterfallChart(
+  el: HTMLElement,
+  opts: { startLabel: string; endLabel: string; start: number; steps: { name: string; delta: number }[] },
+) {
+  const chart = instance(el);
+  const muted = cssVar('--text-muted');
+  const labels = [opts.startLabel, ...opts.steps.map((s) => s.name), opts.endLabel];
+  const base: (number | string)[] = [0];
+  const up: (number | string)[] = ['-'];
+  const down: (number | string)[] = ['-'];
+  const totals: (number | string)[] = [Math.round(opts.start)];
+  let acc = opts.start;
+  for (const s of opts.steps) {
+    const next = acc + s.delta;
+    base.push(Math.round(Math.min(acc, next)));
+    up.push(s.delta >= 0 ? Math.round(s.delta) : '-');
+    down.push(s.delta < 0 ? Math.round(-s.delta) : '-');
+    totals.push('-');
+    acc = next;
+  }
+  base.push(0);
+  up.push('-');
+  down.push('-');
+  totals.push(Math.round(acc));
+  chart.setOption(
+    {
+      grid: { left: 8, right: 8, top: 28, bottom: 8, containLabel: true },
+      legend: { top: 0, left: 0, textStyle: { color: cssVar('--text-secondary') }, icon: 'roundRect', itemWidth: 12, itemHeight: 12, data: ['Hausse', 'Baisse'] },
+      tooltip: {
+        ...ttBase(),
+        trigger: 'axis',
+        axisPointer: { type: 'shadow' },
+        formatter: (ps: { dataIndex: number }[]) => {
+          const i = ps[0].dataIndex;
+          const v = i === 0 ? opts.start : i === labels.length - 1 ? acc : opts.steps[i - 1].delta;
+          const txt = i === 0 || i === labels.length - 1 ? fmtKwh(v) : `${v > 0 ? '+' : '−'}${fmtKwh(Math.abs(v))}`;
+          return `<div class="tt"><div class="tt-title">${escapeHtml(labels[i])}</div><strong>${txt}</strong></div>`;
+        },
+      },
+      xAxis: { type: 'category', data: labels, axisLabel: { color: muted, interval: 0, rotate: labels.length > 6 ? 35 : 0 }, axisTick: { show: false } },
+      yAxis: { type: 'value', splitLine: { lineStyle: { color: cssVar('--grid') } }, axisLabel: { color: muted, formatter: (v: number) => nf0.format(v) } },
+      series: [
+        { type: 'bar', stack: 'w', data: base, itemStyle: { color: 'transparent' }, emphasis: { disabled: true }, tooltip: { show: false } },
+        { type: 'bar', stack: 'w', name: 'Total', data: totals, itemStyle: { color: cssVar('--text-secondary'), borderRadius: [4, 4, 0, 0] }, barMaxWidth: 36 },
+        { type: 'bar', stack: 'w', name: 'Hausse', data: up, itemStyle: { color: cssVar('--bad'), borderRadius: [4, 4, 0, 0] }, barMaxWidth: 36 },
+        { type: 'bar', stack: 'w', name: 'Baisse', data: down, itemStyle: { color: cssVar('--good'), borderRadius: [4, 4, 0, 0] }, barMaxWidth: 36 },
+      ],
+    },
+    { notMerge: true },
+  );
 }

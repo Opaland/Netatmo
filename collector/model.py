@@ -39,6 +39,8 @@ class Home:
     timezone: str
     bridge_id: str
     rooms: list[Room]
+    latitude: float | None = None
+    longitude: float | None = None
     # Water-heater module id -> id under which its consumption is stored (its room).
     water_heaters: dict[str, str] = field(default_factory=dict)
 
@@ -60,6 +62,15 @@ def classify_room(name: str, module_types: list[str], override: str | None = Non
     if module_types and all(t in WATER_HEATER_MODULE_TYPES for t in module_types):
         return WATER_HEATER
     return HEATING
+
+
+def _coord(home: dict, index: int) -> float | None:
+    """homesdata gives "coordinates": [longitude, latitude]."""
+    c = home.get("coordinates")
+    try:
+        return float(c[index]) if c else None
+    except (TypeError, ValueError, IndexError):
+        return None
 
 
 def parse_homes(payload: dict, overrides: dict[str, str] | None = None) -> list[Home]:
@@ -109,18 +120,21 @@ def parse_homes(payload: dict, overrides: dict[str, str] | None = None) -> list[
                 bridge_id=bridge or "",
                 rooms=rooms,
                 water_heaters=water_heaters,
+                latitude=_coord(h, 1),
+                longitude=_coord(h, 0),
             )
         )
     return homes
 
 
-def parse_measure_blocks(blocks: object, scale_seconds: int) -> list[tuple[int, float]]:
-    """Parse Netatmo measures into [(timestamp, value)].
+Columns = list[float | None]
+
+
+def parse_measure_columns(blocks: object, scale_seconds: int) -> list[tuple[int, Columns]]:
+    """Parse Netatmo measures into [(timestamp, [value per requested type])].
 
     Two shapes exist: "optimized" blocks `[{beg_time, step_time, value: [[v], ...]}]`
-    and plain `{"<timestamp>": [v, ...]}`. When several measure types are requested
-    at once (e.g. base / peak / off-peak tariffs) each point holds one column per
-    type: they are summed into a single total.
+    and plain `{"<timestamp>": [v, ...]}`. Points whose columns are all null are dropped.
     """
     raw: list[tuple[int, object]] = []
     if isinstance(blocks, dict):
@@ -133,10 +147,19 @@ def parse_measure_blocks(blocks: object, scale_seconds: int) -> list[tuple[int, 
     points = []
     for ts, val in raw:
         cols = val if isinstance(val, list) else [val]
-        nums = [float(c) for c in cols if c is not None]
-        if nums:
-            points.append((ts, sum(nums)))
-    return sorted(points)
+        parsed = [None if c is None else float(c) for c in cols]
+        if any(c is not None for c in parsed):
+            points.append((ts, parsed))
+    return sorted(points, key=lambda p: p[0])
+
+
+def total(cols: Columns) -> float:
+    return sum(c for c in cols if c is not None)
+
+
+def parse_measure_blocks(blocks: object, scale_seconds: int) -> list[tuple[int, float]]:
+    """Like parse_measure_columns, with the columns summed (e.g. base + peak + off-peak)."""
+    return [(ts, total(cols)) for ts, cols in parse_measure_columns(blocks, scale_seconds)]
 
 
 def parse_room_measures(payload: dict, scale_seconds: int) -> dict[str, list[tuple[int, float]]]:
@@ -149,6 +172,12 @@ def parse_module_measures(payload: dict, scale_seconds: int) -> dict[str, list[t
     """Same as parse_room_measures, for the `modules` part of a gethomemeasure response."""
     modules = payload.get("body", {}).get("home", {}).get("modules", []) or []
     return {str(m.get("id")): parse_measure_blocks(m.get("measures") or [], scale_seconds) for m in modules}
+
+
+def parse_home_columns(payload: dict, scale_seconds: int, part: str) -> dict[str, list[tuple[int, Columns]]]:
+    """Per-column points for `part` = "rooms" or "modules" of a gethomemeasure response."""
+    items = payload.get("body", {}).get("home", {}).get(part, []) or []
+    return {str(x.get("id")): parse_measure_columns(x.get("measures") or [], scale_seconds) for x in items}
 
 
 def to_local_day(ts: int, tz: str) -> str:

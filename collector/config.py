@@ -32,6 +32,11 @@ class Settings:
     user_prefix: str = "muller"
     app_identifier: str = "app_muller"
     passphrase: str = ""
+    netatmo_client_id: str = ""
+    netatmo_client_secret: str = ""
+    netatmo_refresh_token: str = ""
+    enedis_token: str = ""
+    enedis_prm: str = ""
     data_dir: Path = Path("data")
     # Optional overrides: {"<room_id>": "water_heater" | "heating" | "ignore"}
     room_categories: dict[str, str] = field(default_factory=dict)
@@ -50,6 +55,11 @@ class Settings:
             user_prefix=os.environ.get("INTUIS_USER_PREFIX", "muller"),
             app_identifier=os.environ.get("INTUIS_APP_IDENTIFIER", "app_muller"),
             passphrase=os.environ.get("DATA_PASSPHRASE", ""),
+            netatmo_client_id=os.environ.get("NETATMO_CLIENT_ID", ""),
+            netatmo_client_secret=os.environ.get("NETATMO_CLIENT_SECRET", ""),
+            netatmo_refresh_token=os.environ.get("NETATMO_REFRESH_TOKEN", ""),
+            enedis_token=os.environ.get("ENEDIS_TOKEN", ""),
+            enedis_prm=os.environ.get("ENEDIS_PRM", ""),
             data_dir=Path(os.environ.get("DATA_DIR", "data")),
             room_categories=overrides,
         )

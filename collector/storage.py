@@ -1,9 +1,15 @@
-"""Encrypted, per-year JSON storage committed to the repository.
+"""Encrypted JSON documents committed to the repository.
 
 data/
-  keyinfo.json        public: salt + PBKDF2 iterations (no secret)
-  meta.enc.json       encrypted: home, rooms (with category), coverage, last update
-  2024.enc.json ...   encrypted: {"daily": {room_id: {"YYYY-MM-DD": Wh}}}
+  keyinfo.json            public: salt + PBKDF2 iterations (no secret)
+  meta.enc.json           home, rooms (with category), coverage, available extras, last update
+  2024.enc.json ...       {"daily":   {room: {"YYYY-MM-DD": Wh}},
+                           "tariffs": {room: {"YYYY-MM-DD": [Wh $0, Wh $1, Wh $2]}},
+                           "temps":   {room: {"YYYY-MM-DD": [measured °C, setpoint °C]}}}
+  2024.hourly.enc.json    {"hourly":  {room: {"YYYY-MM-DDTHH": Wh}}}   (loaded on demand by the app)
+  weather.enc.json        {"source": "...", "outdoor": {"YYYY-MM-DD": [min, max, mean]},
+                           "indoor": {"YYYY-MM-DD": mean}}
+  netatmo-token.enc.json  rotating refresh token of the Netatmo weather station (optional)
 """
 
 from __future__ import annotations
@@ -13,6 +19,7 @@ import json
 import os
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 
 from .crypto import ITERATIONS, decrypt_json, encrypt_json
 
@@ -26,8 +33,8 @@ class Store:
         self.dir.mkdir(parents=True, exist_ok=True)
         self.salt, self.iterations = self._keyinfo()
         self.meta: dict = self._read("meta") or {}
-        self._years: dict[int, Daily] = {}
-        self._dirty: set[int] = set()
+        self._docs: dict[str, dict] = {}
+        self._dirty: set[str] = set()
 
     # ----------------------------------------------------------- files
     def _keyinfo(self) -> tuple[bytes, int]:
@@ -56,50 +63,86 @@ class Store:
         self._path(name).write_text(json.dumps(env) + "\n")
         return True
 
-    # ----------------------------------------------------------- data
+    # ----------------------------------------------------------- generic documents
+    def doc(self, name: str) -> dict:
+        if name not in self._docs:
+            self._docs[name] = self._read(name) or {}
+        return self._docs[name]
+
+    def put(self, name: str, section: str, key: str, sub: str | None, value: Any) -> None:
+        """doc[section][key][sub] = value (or doc[section][key] = value when sub is None)."""
+        target = self.doc(name).setdefault(section, {})
+        if sub is not None:
+            target = target.setdefault(key, {})
+            key = sub
+        if target.get(key) != value:
+            target[key] = value
+            self._dirty.add(name)
+
+    def set_top(self, name: str, key: str, value: Any) -> None:
+        doc = self.doc(name)
+        if doc.get(key) != value:
+            doc[key] = value
+            self._dirty.add(name)
+
+    def replace(self, name: str, obj: dict) -> None:
+        if self.doc(name) != obj:
+            self._docs[name] = obj
+            self._dirty.add(name)
+
+    # ----------------------------------------------------------- energy
     def year(self, year: int) -> Daily:
-        if year not in self._years:
-            raw = self._read(str(year)) or {}
-            self._years[year] = raw.get("daily", {})
-        return self._years[year]
+        return self.doc(str(year)).setdefault("daily", {})
 
     def years(self) -> list[int]:
-        found = set()
-        for p in self.dir.glob("*.enc.json"):
-            stem = p.name.split(".")[0]
-            if stem.isdigit():
-                found.add(int(stem))
-        return sorted(found | set(self._years))
+        found = {int(p.name.split(".")[0]) for p in self.dir.glob("*.enc.json") if p.name.split(".")[0].isdigit()}
+        found |= {int(n) for n in self._docs if n.isdigit()}
+        return sorted(found)
+
+    def hourly_years(self) -> list[int]:
+        found = {int(p.name.split(".")[0]) for p in self.dir.glob("*.hourly.enc.json")}
+        found |= {int(n.split(".")[0]) for n in self._docs if n.endswith(".hourly")}
+        return sorted(found)
+
+    def delete_room(self, room_id: str) -> None:
+        """Remove a room from every yearly document (daily, tariffs, temps, hourly)."""
+        names = [str(y) for y in self.years()] + [f"{y}.hourly" for y in self.hourly_years()]
+        for name in names:
+            doc = self.doc(name)
+            for section in doc.values():
+                if isinstance(section, dict) and room_id in section:
+                    del section[room_id]
+                    self._dirty.add(name)
 
     def merge(self, room_id: str, day: str, wh: float) -> None:
-        y = int(day[:4])
-        rooms = self.year(y)
-        prev = rooms.setdefault(room_id, {}).get(day)
-        if prev != wh:
-            rooms[room_id][day] = wh
-            self._dirty.add(y)
+        self.put(day[:4], "daily", room_id, day, wh)
+
+    def _days(self) -> list[str]:
+        return [d for y in self.years() for r in self.year(y).values() for d in r]
 
     def last_day(self) -> str | None:
-        days = [d for y in self.years() for r in self.year(y).values() for d in r]
+        days = self._days()
         return max(days) if days else None
 
     def first_day(self) -> str | None:
-        days = [d for y in self.years() for r in self.year(y).values() for d in r]
+        days = self._days()
         return min(days) if days else None
 
-    def save(self, home: dict, rooms: list[dict]) -> list[str]:
+    def save(self, home: dict, rooms: list[dict], extra: dict | None = None) -> list[str]:
         changed = []
-        for y in sorted(self._dirty):
-            data = {r: dict(sorted(days.items())) for r, days in sorted(self._years[y].items())}
-            if self._write(str(y), {"daily": data}):
-                changed.append(f"{y}.enc.json")
+        for name in sorted(self._dirty):
+            obj = _sorted(self._docs[name])
+            if self._write(name, obj):
+                changed.append(f"{name}.enc.json")
         self._dirty.clear()
         meta = {
             "home": home,
             "rooms": rooms,
             "years": self.years(),
+            "hourly_years": self.hourly_years(),
             "first_day": self.first_day(),
             "last_day": self.last_day(),
+            **(extra or {}),
         }
         # Keep `updated` out of the comparison so a no-op run produces no commit.
         if changed or {k: v for k, v in self.meta.items() if k != "updated"} != meta:
@@ -108,3 +151,9 @@ class Store:
             self.meta = meta
             changed.append("meta.enc.json")
         return changed
+
+
+def _sorted(obj: Any) -> Any:
+    if isinstance(obj, dict):
+        return {k: _sorted(obj[k]) for k in sorted(obj)}
+    return obj
