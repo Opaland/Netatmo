@@ -247,3 +247,109 @@ export function roomDeltas(records: DayRecord[], from: string, to: string): Map<
 }
 
 export { dayOfYear };
+
+// ------------------------------------------------------------------ regulated tariff (EDF Tarif Bleu HP/HC)
+/** One period of the CRE open-data file Option_HPHC.csv (prices TTC). */
+export interface TrveRow {
+  from: string; // YYYY-MM-DD
+  to: string | null; // inclusive, null = still in force
+  kva: number;
+  fixedYear: number; // € per year (abonnement)
+  hc: number; // €/kWh heures creuses
+  hp: number; // €/kWh heures pleines
+}
+
+const frDate = (s: string) => (s ? `${s.slice(6, 10)}-${s.slice(3, 5)}-${s.slice(0, 2)}` : null);
+const frNum = (s: string) => Number(s.replace(',', '.'));
+
+export function parseTrveCsv(text: string): TrveRow[] {
+  const lines = text.trim().split(/\r?\n/);
+  const head = lines[0].split(';');
+  const col = (name: string) => head.indexOf(name);
+  const [iFrom, iTo, iKva, iFix, iHc, iHp] = [
+    col('DATE_DEBUT'),
+    col('DATE_FIN'),
+    col('P_SOUSCRITE'),
+    col('PART_FIXE_TTC'),
+    col('PART_VARIABLE_HC_TTC'),
+    col('PART_VARIABLE_HP_TTC'),
+  ];
+  return lines
+    .slice(1)
+    .map((l) => l.split(';'))
+    .filter((c) => c[iFrom] && c[iHc] && c[iHp])
+    .map((c) => ({
+      from: frDate(c[iFrom])!,
+      to: frDate(c[iTo]),
+      kva: Number(c[iKva]),
+      fixedYear: frNum(c[iFix]),
+      hc: frNum(c[iHc]),
+      hp: frNum(c[iHp]),
+    }))
+    .sort((a, b) => (a.from < b.from ? -1 : 1));
+}
+
+export function trveAt(rows: TrveRow[], kva: number, day: string): TrveRow | null {
+  let found: TrveRow | null = null;
+  for (const r of rows) if (r.kva === kva && r.from <= day && (!r.to || day <= r.to)) found = r;
+  return found;
+}
+
+/** Share of off-peak energy per room (from days with tariff detail), plus the overall share. */
+export function offPeakShares(tariffs: TariffMap, off: 1 | 2): { perRoom: Map<string, number>; overall: number } {
+  const perRoom = new Map<string, number>();
+  let allOff = 0;
+  let all = 0;
+  for (const [room, days] of tariffs) {
+    let o = 0;
+    let t = 0;
+    for (const v of days.values()) (o += v[off]), (t += v[0] + v[1] + v[2]);
+    if (t > 0) perRoom.set(room, o / t);
+    allOff += o;
+    all += t;
+  }
+  return { perRoom, overall: all > 0 ? allOff / all : 0.3 };
+}
+
+export interface TrveCost {
+  energy: number;
+  estimatedKwh: number; // kWh priced with an estimated HP/HC split
+}
+
+/** Energy cost day by day at the regulated price in force that day. */
+export function energyCostTrve(
+  records: DayRecord[],
+  tariffs: TariffMap,
+  rows: TrveRow[],
+  kva: number,
+  off: 1 | 2,
+  shares: { perRoom: Map<string, number>; overall: number },
+): TrveCost {
+  const on = off === 1 ? 2 : 1;
+  let energy = 0;
+  let estimatedKwh = 0;
+  const cache = new Map<string, TrveRow | null>();
+  for (const r of records) {
+    let p = cache.get(r.day);
+    if (p === undefined) cache.set(r.day, (p = trveAt(rows, kva, r.day)));
+    if (!p) continue;
+    const t = tariffs.get(r.room)?.get(r.day);
+    if (t && t[1] + t[2] > 0) {
+      energy += t[off] * p.hc + (t[on] + t[0]) * p.hp;
+    } else {
+      const s = shares.perRoom.get(r.room) ?? shares.overall;
+      energy += r.kwh * (s * p.hc + (1 - s) * p.hp);
+      estimatedKwh += r.kwh;
+    }
+  }
+  return { energy, estimatedKwh };
+}
+
+export function subscriptionTrve(rows: TrveRow[], kva: number, from: string, to: string): number {
+  let s = 0;
+  for (let d = from; d <= to; d = addDays(d, 1)) {
+    const p = trveAt(rows, kva, d);
+    if (p) s += p.fixedYear / (Number(d.slice(0, 4)) % 4 === 0 ? 366 : 365);
+  }
+  return s;
+}

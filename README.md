@@ -125,8 +125,13 @@ le texte est réécrit. **Ce qui est envoyé à Anthropic** : des totaux mensuel
 pourcentages) et les noms des pièces. Ni adresse, ni coordonnées, ni identifiants, ni données
 journalières. La clé reste un secret GitHub : elle n'est jamais dans le site.
 
-**Prix.** Dans l'application, menu ⋮ : prix du kWh (unique, ou heures pleines / heures creuses) et
-abonnement mensuel. Ces réglages restent sur votre appareil.
+**Prix.** Par défaut, le coût est calculé au **tarif réglementé EDF heures pleines / heures creuses**,
+jour par jour, avec le prix et l'abonnement en vigueur ce jour-là (historique officiel publié par la
+CRE en [open data](https://www.data.gouv.fr/datasets/historique-des-tarifs-reglementes-de-vente-delectricite-pour-les-consommateurs-residentiels),
+mis à jour à chaque déploiement). Choisissez votre **puissance souscrite** dans le menu ⋮. Avant
+l'activation des tarifs dans l'application Intuis (2025), la répartition heures pleines / creuses
+n'existe pas : elle est estimée pour chaque pièce à partir de sa répartition mesurée depuis. Vous
+pouvez aussi saisir vos propres prix. Ces réglages restent sur votre appareil.
 
 ### Alertes
 
