@@ -229,6 +229,30 @@ try {
       await page.screenshot({ path: `${OUT}/${name}-${view}.png`, fullPage: true });
       await audit(page, `${name}/${view}`);
     }
+    if (name === 'bureau') {
+      try {
+        // S-9.6: « volets fermés » card (lazy module) in Analyse
+        await page.waitForSelector('#shutters-card', { timeout: 10000 });
+        // S-12.2: bedrooms merged by default, detail on demand until the next lock
+        const picker = () => page.locator('.rooms-panel').textContent();
+        if (!(await picker()).includes('Chambres') || (await picker()).includes('Chambre parentale')) errors.push('vue foyer : chambres non regroupées');
+        const openMenu = async () => (await page.locator('.menu').getAttribute('open')) === null && (await page.click('.menu summary'));
+        await page.click('[data-view=overview]');
+        await openMenu();
+        await page.click('[data-household=reveal]');
+        if (!(await picker()).includes('Chambre parentale')) errors.push('vue foyer : détail non affiché');
+        await openMenu();
+        await page.click('[data-household=hide]');
+        await openMenu();
+        // S-8.14: « Cadre juridique » from Paramètres (lazy module)
+        await page.click('.menu-panel [data-view=settings]');
+        await page.click('#legal-open');
+        await page.waitForSelector('#legal-card .legal-list', { timeout: 10000 });
+        await page.screenshot({ path: `${OUT}/${name}-juridique.png`, fullPage: true });
+      } catch (err) {
+        errors.push(`${name}: vue foyer / volets / cadre juridique (${err})`);
+      }
+    }
     // S-11 / S-3.8: comfort view (lazy chunk), bedroom detail on a deliberate gesture, other threshold
     await page.click('[data-view=comfort]');
     await page.waitForSelector('#cold-chart canvas', { timeout: 15000 });
