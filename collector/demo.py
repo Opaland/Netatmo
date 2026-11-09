@@ -267,6 +267,24 @@ def generate(out_dir: Path, passphrase: str = "demo", start_year: int = 2022) ->
                 "- Baisser la consigne de la **salle de bain** hors des créneaux du matin.\n"
                 "- Vérifier la relance de 7 h dans le **bureau** le week-end."
             ),
+            # What would have been sent: pseudonyms only (S-5.7), and the usage of the call (S-5.8)
+            "facts": {
+                "mois": "exemple",
+                "pieces": [{"piece": "Pièce A", "usage": "chauffage", "kwh": 310.0, "kwh_annee_precedente": 340.0}],
+                "station_confort": {"Capteur A": {"co2_moyen_ppm": 870, "heures_nuit_co2_sup_1000_ppm": 42}},
+            },
+            "pseudonyms": {"Pièce A": "Salon", "Capteur A": "Chambre enfants"},
+            "usage": {
+                "requests": 1,
+                "input_tokens": 2100,
+                "output_tokens": 900,
+                "cache_read_input_tokens": 0,
+                "cache_creation_input_tokens": 0,
+                "cost_usd": 0.0264,
+                "cost_eur": 0.023,
+                "eur_per_usd": 0.87,
+                "served_by": ["claude-opus-5-5"],
+            },
         },
     )
     return store.save({"id": "demo", "name": "Maison démo", "timezone": "Europe/Paris"}, rooms, extra)

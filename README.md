@@ -207,9 +207,19 @@ chaque source la date d'expiration (« estimée » le cas échéant), ou « expi
 
 Une fois par mois, l'application calcule elle-même tous les chiffres du mois écoulé, et Claude
 rédige le commentaire. Chaque nombre du texte est comparé aux chiffres calculés : s'il en invente un,
-le texte est réécrit. **Ce qui est envoyé à Anthropic** : des totaux mensuels (kWh, °C, degrés-jours,
-pourcentages) et les noms des pièces. Ni adresse, ni coordonnées, ni identifiants, ni données
+le texte est réécrit. **Ce qui est envoyé à Anthropic** : des totaux mensuels (kWh, coût estimé en €
+si un contrat est partagé, °C, degrés-jours, pourcentages), au plus cinq jours inhabituels, le talon
+et la puissance maximale Linky, des compteurs de confort de la station (CO₂, humidité, heures sous
+19 °C) et la couverture des données. Les pièces et capteurs partent sous un **pseudonyme**
+(« Pièce A », « Capteur B ») : leurs vrais noms sont remis dans le texte localement, avant
+l'enregistrement chiffré. Ni nom du logement, ni adresse, ni coordonnées, ni identifiants, ni données
 journalières. La clé reste un secret GitHub : elle n'est jamais dans le site.
+
+Dans l'onglet Analyse, la carte affiche le modèle, les jetons consommés et le **coût estimé** de
+l'analyse ; un bouton « Utile / Pas utile » garde votre avis sur l'appareil, et Paramètres montre la
+part des analyses des 3 derniers mois jugées utiles (règle ADR-5). Le rapport annuel propose des
+**questions types** (« ce mois est-il normal ? », « quelle pièce a le plus augmenté ? »…) répondues
+par le code, sans IA ni réseau.
 
 **Prix et contrat.** Dans le menu ⋮, décrivez votre contrat période par période (date de début, offre,
 puissance souscrite, par exemple 9 kVA puis 12 kVA). Pour que **tous les appareils du foyer**

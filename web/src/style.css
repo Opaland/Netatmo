@@ -755,6 +755,22 @@ fieldset.prices legend {
   gap: 4px;
   font-size: 0.92rem;
 }
+/* S-5.8 / S-5.9: vote on the AI analysis, canned questions */
+.insight-vote,
+.question-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin: 8px 0;
+}
+.question-list button {
+  text-align: left;
+  white-space: normal;
+}
+.question-answer {
+  margin-top: 8px;
+}
 @media print {
   .top,
   .filters,
@@ -976,4 +992,68 @@ body.is-simple .kpis {
   border: 1px dashed var(--text-muted);
   color: var(--text-secondary);
   white-space: nowrap;
+}
+
+/* v1.3 money cards (S-2.11, S-2.12, S-2.13) and habits (S-4.9, S-4.10) */
+body.is-simple .kpis:has(.kpi-budget:not([hidden])) .kpi-detail {
+  display: none;
+}
+.money-field {
+  display: grid;
+  gap: 4px;
+  margin: 10px 0 4px;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+.money-field input,
+.money-field select {
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-0);
+  max-width: 14em;
+  box-sizing: border-box;
+}
+.money-h {
+  margin-top: 16px;
+  font-size: 1rem;
+}
+.days-pick {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  margin: 6px 0;
+}
+.absence-add {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: end;
+}
+.absence-list {
+  list-style: none;
+  margin: 8px 0 12px;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+}
+.absence-list li {
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+.absence-list .hint {
+  margin: 4px 0;
+}
+.absence-list .link {
+  color: var(--accent);
+  font-size: 0.85rem;
+}
+body.is-simple #grid-card {
+  display: none;
+}
+#grid-card .grid-seen {
+  margin-top: 6px;
+  font-size: 0.85rem;
+  text-decoration: underline;
 }

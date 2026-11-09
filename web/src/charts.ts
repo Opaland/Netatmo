@@ -445,17 +445,20 @@ export function scatterChart(el: HTMLElement, opts: { series: ScatterSeries[]; x
   );
 }
 
-export function calendarChart(el: HTMLElement, opts: { year: number; data: [string, number][]; max: number }) {
+export function calendarChart(el: HTMLElement, opts: { year: number; data: [string, number][]; max: number; marks?: string[]; markLabel?: string }) {
   const chart = instance(el);
   const muted = cssVar('--text-muted');
   chart.setOption(
     {
       tooltip: {
         ...ttBase(),
-        formatter: (p: { value: [string, number] }) =>
-          `<div class="tt"><div class="tt-title">${escapeHtml(p.value[0])}</div><strong>${fmtKwh(p.value[1])}</strong></div>`,
+        formatter: (p: { value: [string, number]; seriesIndex: number }) =>
+          p.seriesIndex === 1
+            ? `<div class="tt"><div class="tt-title">${escapeHtml(p.value[0])}</div>${escapeHtml(opts.markLabel ?? '')}</div>`
+            : `<div class="tt"><div class="tt-title">${escapeHtml(p.value[0])}</div><strong>${fmtKwh(p.value[1])}</strong></div>`,
       },
       visualMap: {
+        seriesIndex: 0,
         min: 0,
         max: Math.max(1, opts.max),
         calculable: false,
@@ -480,7 +483,13 @@ export function calendarChart(el: HTMLElement, opts: { year: number; data: [stri
         dayLabel: { firstDay: 1, nameMap: ['D', 'L', 'M', 'M', 'J', 'V', 'S'], color: muted, fontSize: 10 },
         monthLabel: { nameMap: 'FR', color: muted, fontSize: 10 },
       },
-      series: [{ type: 'heatmap', coordinateSystem: 'calendar', data: opts.data }],
+      series: [
+        { type: 'heatmap', coordinateSystem: 'calendar', data: opts.data },
+        // S-4.10: marked days (probable absences), a dot over the cell
+        ...(opts.marks?.length
+          ? [{ type: 'scatter', coordinateSystem: 'calendar', data: opts.marks.map((d) => [d, 0]), symbolSize: 5, itemStyle: { color: cssVar('--text-primary') } }]
+          : []),
+      ],
     },
     { notMerge: true },
   );
