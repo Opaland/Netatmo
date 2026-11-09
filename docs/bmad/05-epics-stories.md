@@ -48,11 +48,11 @@ dans les [issues GitHub](https://github.com/Opaland/Netatmo/issues) (une par ré
 | S-3.1 | En tant que propriétaire, je veux la température extérieure quotidienne d'Open-Meteo, afin de calculer des DJU sans clé | G les coordonnées de la maison · Q la collecte tourne · A `weather.outdoor[jour] = [min, max, moy]`, les derniers jours complétés par la prévision | M | M | Fait (v1.1) |
 | S-3.2 | En tant que météorologue amateur, je veux utiliser ma station Netatmo, afin d'avoir mes propres mesures | G les secrets Netatmo · Q la collecte tourne · A `source` = station, le jeton tourné est sauvegardé chiffré ; sans secret, repli Open-Meteo | M | S | Fait (v1.1) |
 | S-3.3 | En tant qu'analyste, je veux les DJU (base 18 °C modifiable) et les kWh/DJU par saison, afin de comparer à climat égal | G deux saisons · Q j'ouvre la comparaison · A kWh/DJU affichés par saison et par pièce | S | M | Fait (v1.1) |
-| S-2.7 | En tant que client EDF, je veux simuler une autre puissance souscrite et voir l'offre la moins chère sur 12 mois, afin d'ajuster mon contrat | G le pic Linky et le comparateur · Q je choisis 9 ou 12 kVA · A coût simulé par offre, avec avertissement si la puissance est sous le pic | M | S | À faire |
+| S-2.7 | En tant que client EDF, je veux simuler une autre puissance souscrite et voir l'offre la moins chère sur 12 mois, afin d'ajuster mon contrat | G le pic Linky et le comparateur · Q je choisis 9 ou 12 kVA · A coût simulé par offre, avec avertissement si la puissance est sous le pic | M | S | Fait (v1.2) |
 | S-2.4 | En tant que client EDF, je veux décrire mon contrat période par période (offre, puissance : 9 puis 12 kVA), afin que chaque jour soit compté au bon tarif | G deux périodes · Q j'affiche le coût · A chaque jour utilise l'offre et la puissance en vigueur ; d'autres fournisseurs s'ajoutent par un fichier de tarifs | M | M | Fait (v1.2) |
 | S-2.5 | En tant que client EDF, je veux savoir ce que m'auraient coûté Base, HP/HC et Tempo, afin de choisir la bonne offre | G l'historique et les couleurs Tempo · Q j'ouvre Comparer · A coût par offre et par année, mêmes jours, hypothèses affichées | M | S | Fait (v1.2) |
 | S-2.6 | En tant que client, je veux voir ma puissance maximale appelée (Linky), afin de vérifier ma puissance souscrite | G le jeton Linky · Q j'ouvre la synthèse · A pic mensuel vs puissance souscrite, avec un avis | S | S | Fait (v1.2) |
-| S-3.6 | En tant que parent, je veux une vue confort (seuils CO₂ et humidité, chambres masquées par défaut), afin de savoir quand aérer | G la station · Q j'ouvre la vue · A jours au-dessus de 1 000 ppm et d'humidité > 65 % signalés par module | M | S | À faire |
+| S-3.6 | En tant que parent, je veux une vue confort (seuils CO₂ et humidité, chambres masquées par défaut), afin de savoir quand aérer | G la station · Q j'ouvre la vue · A jours au-dessus de 1 000 ppm et d'humidité > 65 % signalés par module | M | S | Fait (v1.2) |
 | S-3.5 | En tant que propriétaire de la station Netatmo, je veux l'historique de tous ses modules (salon, chambre des enfants, cave, extérieur : température, humidité, CO₂), afin de relier confort intérieur, météo et consommation | G les secrets Netatmo · Q la collecte tourne · A `station.enc.json` contient min / max / moyenne par module et par jour ; l'application affiche les courbes par module | M | S | En cours |
 | S-3.4 | En tant que propriétaire, je veux la signature énergétique avec régression, afin de voir l'effet d'un réglage | G ≥ 30 jours de chauffe · Q j'ouvre la vue · A nuage coloré par saison, droite, pente et seuil de non-chauffage affichés | S | M | Fait (v1.1) |
 
@@ -67,7 +67,7 @@ dans les [issues GitHub](https://github.com/Opaland/Netatmo/issues) (une par ré
 | S-4.5 | En tant que télétravailleur, je veux un profil jour × heure, afin de voir le coût des journées à la maison | G des données `1hour` · Q j'ouvre les profils · A carte 7 × 24 chargée à la demande depuis `YYYY.hourly` | M | S | Fait (v1.1) |
 | S-4.6 | En tant que membre frileux, je veux température mesurée et consigne par pièce, afin de juger le confort | G des `temps` · Q je choisis une pièce · A les deux courbes sur la conso ; consigne absente = trou, pas zéro | M | S | Fait (v1.1) |
 | S-4.7 | En tant que propriétaire, je veux voir la part chauffage + eau chaude dans le Linky, afin de situer le reste du foyer | G `linky.enc.json` · Q j'ouvre la vue · A part en % par mois ; sans document, la vue est masquée | M | C | Fait (v1.1) |
-| S-4.8 | En tant que propriétaire, je veux des alertes d'anomalie déterministes, afin de repérer une dérive | G un jour hors signature > 2σ · Q la collecte tourne · A le jour est marqué dans le calendrier, avec son écart | M | S | À faire |
+| S-4.8 | En tant que propriétaire, je veux des alertes d'anomalie déterministes, afin de repérer une dérive | G un jour hors signature > 2σ · Q la collecte tourne · A le jour est marqué dans le calendrier, avec son écart | M | S | Fait (v1.2) |
 
 ## E5 · Synthèse IA
 
@@ -91,7 +91,7 @@ dans les [issues GitHub](https://github.com/Opaland/Netatmo/issues) (une par ré
 
 | ID | Récit | Critères d'acceptation | T | P | Statut |
 |---|---|---|---|---|---|
-| S-7.1 | En tant que senior, je veux un mode simple, afin de lire sans effort | G le mode simple · Q j'ouvre l'appli · A verdict + 3 chiffres, police ≥ 16 px, lisible à 200 % de zoom | M | M | À faire |
+| S-7.1 | En tant que senior, je veux un mode simple, afin de lire sans effort | G le mode simple · Q j'ouvre l'appli · A verdict + 3 chiffres, police ≥ 16 px, lisible à 200 % de zoom | M | M | Fait (v1.2) |
 | S-7.2 | En tant que personne malvoyante, je veux un résumé et un tableau par graphique, afin d'utiliser un lecteur d'écran | G VoiceOver ou TalkBack · Q je parcours un graphique · A un résumé textuel est lu ; un tableau équivalent est accessible | M | M | À faire |
 | S-7.3 | En tant que personne daltonienne, je veux une palette sûre et des libellés, afin de distinguer HP/HC et les années | G simulation deutéranopie · Q j'affiche HP/HC · A les séries restent distinguables (motif ou libellé direct) | S | M | À faire |
 | S-7.4 | En tant que possesseur d'un téléphone modeste, je veux un chargement < 3 s, afin de ne pas abandonner | G CPU bridé ×4, clé mémorisée · Q j'ouvre l'appli · A premier graphique < 3 s, squelette visible avant | M | S | À faire |
@@ -107,7 +107,7 @@ dans les [issues GitHub](https://github.com/Opaland/Netatmo/issues) (une par ré
 | S-8.5 | En tant que RSSI, je veux une CSP stricte et libsodium figé, chargé à la demande et testé, afin de limiter le risque d'un jeton dans la page | G la page publiée · Q un script tiers ou inline tente de s'exécuter · A il est bloqué ; seuls le site et api.github.com sont joignables | M | M | Fait (v1.2) |
 | S-8.6 | En tant que propriétaire, je veux que les Paramètres refusent `DATA_PASSPHRASE`, afin de ne pas rendre l'archive illisible | G une tentative d'écriture · Q j'enregistre · A refus explicite, renvoi vers `rekey` | S | M | Fait (v1.2) |
 | S-8.7 | (réservé) | — | — | — | — |
-| S-8.8 | En tant que personne soucieuse de sa vie privée, je veux une page « ce qui est public / ce qui part chez des tiers », afin de décider en connaissance de cause | G la page Paramètres · Q je l'ouvre · A liste des données publiques (chiffrées), des tiers (Intuis, Netatmo, Enedis via Conso API, Open-Meteo, Anthropic, api-couleur-tempo) et de ce qui leur est envoyé | S | S | À faire |
+| S-8.8 | En tant que personne soucieuse de sa vie privée, je veux une page « ce qui est public / ce qui part chez des tiers », afin de décider en connaissance de cause | G la page Paramètres · Q je l'ouvre · A liste des données publiques (chiffrées), des tiers (Intuis, Netatmo, Enedis via Conso API, Open-Meteo, Anthropic, api-couleur-tempo) et de ce qui leur est envoyé | S | S | Fait (v1.2) |
 | S-8.3 | En tant que mainteneur, je veux les données dans une branche `data`, afin de garder `main` lisible | G la collecte · Q elle commit · A `main` ne reçoit plus de commits de données ; le déploiement lit la branche `data` | M | C | À faire |
 
 ## E9 · Pont local en lecture seule (conditionnel)

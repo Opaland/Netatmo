@@ -25,7 +25,9 @@ import {
   dayProfile,
   djuBetween,
   energyCost,
+  anomalies,
   compareOffers,
+  daysAbove,
   daySplits,
   energyCostTrve,
   fitSeason,
@@ -99,6 +101,8 @@ interface State {
   tempRoom: string | null;
   reportYear: number | null;
   stationMetric: 'temp' | 'hum' | 'co2';
+  simKva: number | null; // comparator: simulate another subscribed power
+  simple: boolean; // simple mode (S-7.1)
   showTables: boolean;
 }
 
@@ -122,6 +126,8 @@ const DEFAULT: State = {
   tempRoom: null,
   reportYear: null,
   stationMetric: 'temp',
+  simKva: null,
+  simple: false,
   showTables: false,
 };
 
@@ -381,6 +387,7 @@ function render() {
         ${pricesForm()}
         <button type="button" data-view="report">${icon('report')} Rapport annuel imprimable</button>
         <button type="button" data-view="settings">${icon('settings')} Paramètres et connexions</button>
+        <label class="check"><input type="checkbox" data-toggle="simple" ${state.simple ? 'checked' : ''}> Mode simple (grands caractères, l'essentiel)</label>
         <button type="button" id="export">Exporter en CSV (filtres appliqués)</button>
         <button type="button" id="lock">${ds.source === 'demo' ? 'Quitter la démo' : 'Verrouiller'}</button>
       </div>
@@ -414,6 +421,7 @@ function render() {
   else if (state.view === 'settings') renderSettings(view);
   else renderRooms(view, records);
   document.body.classList.toggle('is-report', state.view === 'report' || state.view === 'settings');
+  document.body.classList.toggle('is-simple', state.simple && state.view === 'overview');
 }
 
 /** S-1.5: warn when the archive stopped moving (collection broken or Intuis late). */
@@ -981,6 +989,7 @@ function renderAnalyse(view: HTMLElement, records: DayRecord[]) {
   </section>`
       : `<section class="card"><h2>Signature énergétique</h2><p class="hint muted">Disponible dès que la collecte a récupéré la météo (prochaine collecte).</p></section>`
   }
+  ${anomaliesCard(records)}
   <section class="card">
     <div class="card-head"><h2>Calendrier <small class="muted">kWh par jour</small></h2>
       <div class="controls"><label class="select"><span class="sr-only">Année</span><select data-set="analyseYear">${years
@@ -1145,6 +1154,33 @@ function renderSettings(view: HTMLElement) {
     </div>
   </section>`
   }
+  <section class="card">
+    <h2>Ce qui est public, ce qui part chez des tiers</h2>
+    ${table(
+      ['Donnée', 'Où', 'Qui peut la lire'],
+      [
+        ['Consommation, météo, station, Linky, analyse IA', 'Dépôt GitHub public (dossier data/)', 'Personne sans votre phrase de passe : fichiers chiffrés AES-256'],
+        ['Identifiants et jetons', 'Secrets GitHub', 'Uniquement la collecte automatique ; illisibles même pour vous'],
+        ['Code de l\'application', 'Dépôt public', 'Tout le monde (aucune donnée personnelle)'],
+        ['Journaux de collecte', 'GitHub Actions (public)', 'Tout le monde : uniquement des comptes et des codes, jamais de valeur'],
+        ['Prix et contrat saisis ici', 'Votre appareil (stockage du navigateur)', 'Vous seul'],
+      ],
+      99,
+    )}
+    <h3>Services tiers contactés par la collecte</h3>
+    ${table(
+      ['Service', 'Pour quoi', 'Ce qui lui est envoyé'],
+      [
+        ['Intuis (Muller)', 'Consommation des radiateurs et du chauffe-eau', 'Vos identifiants Intuis'],
+        ['Netatmo', 'Station météo (si activée)', 'Votre jeton Netatmo'],
+        ['Conso API (conso.boris.sh) → Enedis', 'Linky (si activé)', 'Votre jeton et votre PDL'],
+        ['Open-Meteo', 'Météo de la commune', 'Coordonnées arrondies à ~1 km'],
+        ['Anthropic (Claude)', 'Analyse du mois (si activée)', 'Totaux mensuels et noms des pièces'],
+        ['CRE, api-couleur-tempo.fr', 'Tarifs et couleurs Tempo publics', 'Rien de personnel'],
+      ],
+      99,
+    )}
+  </section>
   ${settingsMsg ? `<p class="settings-msg ${settingsMsg.ok ? 'ok' : 'ko'}" role="status">${esc(settingsMsg.text)}</p>` : ''}`;
 }
 
@@ -1198,7 +1234,7 @@ function comparison() {
   const off = offCol();
   const linky = ds!.linky.size ? ds!.linky : null;
   const splits = daySplits(ds!.records, ds!.tariffs, off, offPeakShares(ds!.tariffs, off), linky);
-  const kvaAt = (d: string) => periodAt(contracts(), d)?.kva ?? 9;
+  const kvaAt = (d: string) => state.simKva ?? periodAt(contracts(), d)?.kva ?? 9;
   const base = ds!.offers.get('edf-trv-base') ?? [];
   const hphc = ds!.offers.get('edf-trv-hphc') ?? [];
   const years = [...new Set(splits.map((s) => Number(s.day.slice(0, 4))))].sort();
@@ -1208,6 +1244,16 @@ function comparison() {
   }));
   const all = compareOffers(splits, kvaAt, base, hphc, ds!.tempo.rows, ds!.tempo.days);
   return { perYear, all, scope: linky ? 'logement' : 'chauffage' };
+}
+
+function simWarning() {
+  if (state.simKva === null || !ds!.pmax.size) return '';
+  const last = lastDay();
+  const from = addDays(minusYears(last), 1);
+  const over = [...ds!.pmax].filter(([d, v]) => d >= from && v > state.simKva!).length;
+  return over
+    ? `<p class="stale" role="alert"><span aria-hidden="true">⚠️</span> Sur 12 mois, votre puissance a dépassé ${state.simKva} kVA pendant ${over} jour(s) : avec cet abonnement, le disjoncteur aurait coupé.</p>`
+    : `<p class="hint muted">Sur 12 mois, votre pic n'a jamais dépassé ${state.simKva} kVA.</p>`;
 }
 
 function comparatorCard() {
@@ -1225,6 +1271,13 @@ function comparatorCard() {
         ? 'Votre option <strong>heures pleines / creuses</strong> a été la moins chère.'
         : `En <strong>${names[best]}</strong>, vous auriez payé <strong>${fmtEur(diff)}</strong> de moins qu'en heures pleines / creuses sur la période.`
     }</p>
+    <div class="controls">
+      <label class="select">Puissance<select data-set="simKva">
+        <option value="" ${state.simKva === null ? 'selected' : ''}>celle de mon contrat</option>
+        ${[6, 9, 12, 15, 18].map((k) => `<option value="${k}" ${state.simKva === k ? 'selected' : ''}>simuler ${k} kVA</option>`).join('')}
+      </select></label>
+    </div>
+    ${simWarning()}
     <div class="chart" id="offers-chart" role="img" aria-label="Coût par offre et par année"></div>
     <div id="offers-table"></div>
     <p class="hint muted">Recalcul jour par jour aux tarifs réglementés en vigueur (CRE, open data), abonnement compris, avec la puissance de votre contrat. Périmètre : ${
@@ -1253,6 +1306,23 @@ function drawComparator() {
       rows.map((p) => [String(p.y), fmtEur(cost(p.r, 'base')), fmtEur(cost(p.r, 'hphc')), fmtEur(cost(p.r, 'tempo'))]),
     ),
   );
+}
+
+function anomaliesCard(records: DayRecord[]) {
+  if (!ds!.weather) return '';
+  const list = anomalies(records, ds!.weather).slice(0, 12);
+  if (!list.length) return '';
+  return `<section class="card"><h2>Jours inhabituels <small class="muted">chauffage, écart à la signature</small></h2>
+    <p class="hint muted">Jours où le chauffage s'écarte nettement de ce qu'annonce la température extérieure (plus de 2 fois l'écart habituel et plus de 3 kWh) : fenêtre ouverte, absence, invités, réglage oublié…</p>
+    ${table(
+      ['Jour', 'Consommé', 'Attendu', 'Écart'],
+      list.map((a) => [
+        longDate(a.day),
+        fmtKwh(a.kwh),
+        fmtKwh(Math.max(0, a.expected)),
+        `<span class="delta ${a.z > 0 ? 'up' : 'down'}"><span aria-hidden="true">${a.z > 0 ? '▲' : '▼'}</span> ${a.z > 0 ? '+' : '−'}${fmtKwh(Math.abs(a.kwh - a.expected))}</span>`,
+      ]),
+    )}</section>`;
 }
 
 // ------------------------------------------------------------------ Netatmo weather station
@@ -1302,12 +1372,15 @@ function drawStation() {
   };
   const lastSeason = Number(last.slice(5, 7)) >= 11 ? Number(last.slice(0, 4)) : Number(last.slice(0, 4)) - 1;
   const fmt = (v: number | null) => (v === null ? '—' : `${(state.stationMetric === 'co2' ? Math.round(v) : Math.round(v * 10) / 10).toString().replace('.', ',')} ${unit}`);
+  const comfort = state.stationMetric !== 'temp';
+  const [thr, thrLabel] = state.stationMetric === 'co2' ? [1000, '> 1 000 ppm'] : [65, '> 65 % (risque de moisissure)'];
   document.getElementById('station-table')!.innerHTML = table(
-    ['Module', `Hiver ${lastSeason - 1}–${lastSeason}`, `Hiver ${lastSeason}–${lastSeason + 1}`],
+    ['Module', `Hiver ${lastSeason - 1}–${lastSeason}`, `Hiver ${lastSeason}–${lastSeason + 1}`, ...(comfort ? [`Jours ${thrLabel}, 12 mois`] : [])],
     keys.map((k) => [
       `<span class="swatch" style="background:${color(k)}"></span>${esc(st.modules[k].name)}`,
       fmt(seasonAvg(k, lastSeason - 1)),
       fmt(seasonAvg(k, lastSeason)),
+      ...(comfort ? [st.modules[k].indoor || state.stationMetric === 'hum' ? daysAbove(st.daily[k] ?? {}, col, thr, from, last) : '—'] : []),
     ]),
   );
 }
@@ -1549,6 +1622,8 @@ app.addEventListener('change', (e) => {
     document.querySelector<HTMLDetailsElement>('.menu')?.setAttribute('open', '');
     return;
   }
+  if (t.dataset.toggle === 'simple') return setState({ simple: (t as HTMLInputElement).checked, view: 'overview' });
+  if (t.dataset.set === 'simKva') return setState({ simKva: t.value ? Number(t.value) : null });
   if (t.dataset.toggle === 'climate') return setState({ climate: (t as HTMLInputElement).checked });
   if (t.dataset.set === 'analyseYear') return setState({ analyseYear: Number(t.value) });
   if (t.dataset.set === 'reportYear') return setState({ reportYear: Number(t.value) });

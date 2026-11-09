@@ -15,6 +15,11 @@
 - `rekey` (changer la phrase de passe, workflow dédié) et estimation de robustesse (`strength`).
 - Dépendances : ECharts 6.1 (correctif XSS), Vitest 5, actions GitHub à jour.
 - Revue 50 personas de la v1.2 (`docs/bmad/revues/v1.2.md`).
+- Comparateur : simulation d'une autre puissance souscrite, avec alerte si le pic Linky la dépasse.
+- Station : jours au-dessus de 1 000 ppm de CO₂ et de 65 % d'humidité par module.
+- « Jours inhabituels » : écarts nets à la signature énergétique (règle déterministe, sans IA).
+- Mode simple : verdict et chiffres clés en grands caractères.
+- Paramètres : ce qui est public, ce qui part chez des tiers.
 
 ## v1.1 — novembre 2026 : comprendre sa consommation
 

@@ -125,3 +125,32 @@ describe('offer comparator', () => {
     expect(r.tempo.subscription).toBeCloseTo(1, 6);
   });
 });
+
+import { anomalies, daysAbove } from './analysis';
+
+describe('anomalies', () => {
+  it('flags a heating day far above the signature', () => {
+    const weather = new Map<string, [number, number, number]>();
+    const recs: DayRecord[] = [];
+    for (let i = 0; i < 60; i++) {
+      const day = addDaysTest('2025-11-01', i);
+      const t = (i % 15) - 2;
+      weather.set(day, [t - 2, t + 2, t]);
+      recs.push(rec(day, 40 - 2 * t + (i % 3) * 0.3));
+    }
+    recs.push(rec('2026-01-05', 0)); // placeholder day without weather: ignored
+    recs[30].kwh += 25; // one abnormal day
+    const a = anomalies(recs, weather);
+    expect(a.map((x) => x.day)).toEqual([recs[30].day]);
+    expect(a[0].z).toBeGreaterThan(2);
+  });
+  it('counts days above a threshold', () => {
+    expect(daysAbove({ '2025-01-01': [0, 0, 0, 60, 1200], '2025-01-02': [0, 0, 0, 50, 800] }, 4, 1000, '2025-01-01', '2025-12-31')).toBe(1);
+  });
+});
+
+function addDaysTest(day: string, n: number) {
+  const d = new Date(`${day}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + n);
+  return d.toISOString().slice(0, 10);
+}

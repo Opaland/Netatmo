@@ -899,3 +899,22 @@ fieldset.secrets input,
   background: var(--surface-1);
   font-size: 0.9rem;
 }
+
+/* simple mode (S-7.1): verdict + key figures only, large type */
+body.is-simple .filters,
+body.is-simple #view > .card,
+body.is-simple .tabs {
+  display: none;
+}
+body.is-simple {
+  font-size: 18px;
+}
+body.is-simple .verdict-title {
+  font-size: 1.4rem;
+}
+body.is-simple .kpi-value {
+  font-size: 2.2rem;
+}
+body.is-simple .kpis {
+  grid-template-columns: 1fr;
+}
