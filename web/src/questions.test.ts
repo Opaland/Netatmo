@@ -118,9 +118,9 @@ describe('S-5.9 questions answered by code', () => {
     it('counts the cold days and explains them, window first', () => {
       const a = answer('cold', '2025-01', input);
       expect(a.ok).toBe(true);
-      expect(a.lines[0]).toBe('En janvier 2025, 7 journées sous 19 °C en moyenne, toutes pièces confondues (sonde des radiateurs).');
-      expect(a.lines[1]).toBe('Salon : 5 journées, dont 3 avec une fenêtre ouverte (6,5 h au total), 1 en mode absence ou hors-gel, 1 sans explication relevée.');
-      expect(a.lines[2]).toBe('Chambres (regroupées) : 2 journées, dont 2 avec une consigne sous 19 °C.');
+      expect(a.lines[0]).toBe('En janvier 2025, 5 jours avec au moins une pièce sous 19 °C en moyenne (sonde des radiateurs).');
+      expect(a.lines[1]).toBe('Salon : 5 jours, dont 3 avec une fenêtre ouverte (6,5 h au total), 1 en mode absence ou hors-gel, 1 sans explication relevée.');
+      expect(a.lines[2]).toBe('Chambres (regroupées) : 2 jours, dont 2 avec une consigne sous 19 °C.');
       expect(a.lines[3]).toContain('une fenêtre était ouverte');
       expect(a.lines[4]).toContain('100 % des heures du mois');
     });

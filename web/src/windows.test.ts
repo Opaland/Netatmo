@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { DayRecord } from './aggregate';
+import { type DayRecord, addDays } from './aggregate';
 import type { Weather } from './analysis';
 import {
   type RoomState,
@@ -174,10 +174,34 @@ describe('room states, v1.4 remainders (S-13.3, S-13.4, S-13.6)', () => {
     expect(r.get('salon')).toEqual({ cold: 3, window: 1, openHours: 3.3, away: 0, lowSetpoint: 0, unexplained: 1, noData: 1 });
     // ch1 on the 15th: window 1.1 h comes first; on the 16th: setpoint 18 °C
     expect(r.get('ch1')).toMatchObject({ cold: 2, window: 1, lowSetpoint: 1 });
-    // household view: the temperatures are merged under BEDROOMS_ID, the states stay raw
-    const merged = new Map([['salon', temps.get('salon')!], [BEDROOMS_ID, temps.get('ch1')!]]);
-    const g = coldReasons(merged, rs, '2025-01-01', '2025-01-31', bedroomGrouping([{ id: 'salon', name: 'Salon' }, { id: BEDROOMS_ID, name: 'Chambres' }], true));
+    // bedrooms grouped (S-13.5): raw temperatures, the group explained by its own raw states
+    const g = coldReasons(temps, rs, '2025-01-01', '2025-01-31', bedroomGrouping([{ id: 'salon', name: 'Salon' }, { id: 'ch1', name: 'Chambre 1' }], false));
     expect(g.get(BEDROOMS_ID)).toMatchObject({ cold: 2, window: 1, lowSetpoint: 1 });
+  });
+
+  describe('#241: a group counts calendar days, from the raw (coldest) bedroom', () => {
+    const month = (t: number) => {
+      const m = new Map<string, [number, number | null]>();
+      for (let d = '2025-01-01'; d <= '2025-01-31'; d = addDays(d, 1)) m.set(d, [t, 19]);
+      return m;
+    };
+    const rooms = [
+      { id: 'c1', name: 'Chambre 1' },
+      { id: 'c2', name: 'Chambre 2' },
+    ];
+    const group = bedroomGrouping(rooms, false);
+
+    it('two cold bedrooms all January: 31 days, not 62', () => {
+      const r = coldReasons(new Map([['c1', month(17)], ['c2', month(17)]]), { seen: {}, rooms: {} }, '2025-01-01', '2025-01-31', group);
+      expect(r.get(BEDROOMS_ID)!.cold).toBe(31);
+    });
+
+    it('one cold and one warm bedroom: 31 days, not 0 (no mean of the bedrooms)', () => {
+      const r = coldReasons(new Map([['c1', month(17)], ['c2', month(21.5)]]), { seen: {}, rooms: {} }, '2025-01-01', '2025-01-31', group);
+      expect(r.get(BEDROOMS_ID)!.cold).toBe(31);
+      // and the detail shown: the same days for the cold bedroom
+      expect(coldReasons(new Map([['c1', month(17)], ['c2', month(21.5)]]), { seen: {}, rooms: {} }, '2025-01-01', '2025-01-31').get('c1')!.cold).toBe(31);
+    });
   });
 });
 

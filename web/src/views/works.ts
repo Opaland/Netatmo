@@ -7,6 +7,7 @@ import { type DayRecord, addDays, bucketKey, bucketKeys, bucketLabel, minusYears
 import { ds, onDatasetLoaded } from '../app';
 import { barChart, cssVar, scatterChart } from '../charts';
 import { loadNote, saveNote } from '../local-store';
+import { BEDROOMS_ID, displaySurfaces } from '../household';
 import { html } from '../trusted';
 import { activeRooms, catColor, esc, firstDay, fmtKwh, lastDay, longDate, nf0, pct, series, table } from '../ui';
 import {
@@ -67,6 +68,9 @@ function heatingRooms() {
   return activeRooms().filter((r) => r.category === 'heating' && inRecords.has(r.id));
 }
 
+/** #243: surfaces are stored by raw room id; « Chambres » gets the sum of its bedrooms. */
+const shownSurfaces = () => displaySurfaces(ds!, works!.surfaces);
+
 function current(): Marker | null {
   const list = works!.markers;
   return list.find((m) => m.day === chosen) ?? list[list.length - 1] ?? null;
@@ -76,7 +80,7 @@ function compare() {
   const m = current();
   if (!m || !ds!.weather) return null;
   const rooms = heatingRooms().map((r) => r.id);
-  const surf = surfaceOf(works!.surfaces, rooms);
+  const surf = surfaceOf(shownSurfaces(), rooms);
   const m2 = surf.known === rooms.length && surf.m2 > 0 ? surf.m2 : null;
   return { m, m2, surf, rooms, r: beforeAfter(heatPerDay(lastRecords), ds!.weather, m.day, firstDay(), lastDay(), m2) };
 }
@@ -99,9 +103,10 @@ function card(): string {
   const c = compare();
   const last = lastDay();
   const from12 = addDays(minusYears(last), 1);
-  const perRoom = perRoomM2(lastRecords, w.surfaces, from12, last);
-  const surf = surfaceOf(w.surfaces, rooms.map((r) => r.id));
-  const heat12 = lastRecords.filter((r) => r.cat === 'heating' && r.day >= from12 && w.surfaces[r.room]).reduce((s, r) => s + r.kwh, 0);
+  const shown = shownSurfaces();
+  const perRoom = perRoomM2(lastRecords, shown, from12, last);
+  const surf = surfaceOf(shown, rooms.map((r) => r.id));
+  const heat12 = lastRecords.filter((r) => r.cat === 'heating' && r.day >= from12 && shown[r.room]).reduce((s, r) => s + r.kwh, 0);
   return `<section class="card" id="works-card">
     <div class="card-head"><h2>Travaux et surfaces <small class="muted">avant / après</small></h2>
       ${
@@ -150,7 +155,7 @@ function card(): string {
       <div class="works-surfaces">${rooms
         .map(
           (r) =>
-            `<label class="money-field">${esc(r.name)} (m²) <input type="number" min="1" max="${MAX_SURFACE}" step="0.5" inputmode="decimal" data-works-surface="${esc(r.id)}" value="${w.surfaces[r.id] ?? ''}"></label>`,
+            `<label class="money-field">${esc(r.name)} (m²) <input type="number" min="1" max="${MAX_SURFACE}" step="0.5" inputmode="decimal" data-works-surface="${esc(r.id)}" value="${shown[r.id] ?? ''}"${r.id === BEDROOMS_ID ? ' disabled title="Surface des chambres : affichez leur détail pour la saisir"' : ''}></label>`,
         )
         .join('')}</div>
       ${

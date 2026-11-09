@@ -4,6 +4,7 @@ import type { DayRecord } from '../aggregate';
 import { offPeakShares, signaturePoints } from '../analysis';
 import { ds } from '../app';
 import { referenceSeason, roomShares, simulateSetpoint } from '../checks';
+import { displayId } from '../household';
 import { activeRooms, esc, fmtEur, fmtKwh, lastDay, nf0, offCol, table } from '../ui';
 import { currentHcHp } from './waterheater';
 import { html } from '../trusted';
@@ -41,7 +42,7 @@ export function drawSetpoint(records: DayRecord[]) {
   // Heating price: current off-peak / peak prices mixed with the heating's own off-peak share.
   const prices = currentHcHp();
   const heating = new Set(activeRooms().filter((r) => r.category === 'heating').map((r) => r.id));
-  const shares = offPeakShares(new Map([...ds!.tariffs].filter(([room]) => heating.has(room))), offCol());
+  const shares = offPeakShares(new Map([...ds!.tariffs].filter(([room]) => heating.has(displayId(ds!, room)))), offCol());
   const price = prices ? shares.overall * prices.hc + (1 - shares.overall) * prices.hp : null;
   const perRoom = roomShares(records, ref.from, ref.to);
   const show = () => {

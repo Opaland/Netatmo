@@ -1,6 +1,7 @@
 // Comfort (S-11.1, S-11.2, S-11.3) and radiator ↔ station comparison (S-3.8).
 // Pure functions: no DOM, no state. The view lives in views/comfort.ts.
 import { addDays } from './aggregate';
+import { foldName, isBedroom } from './household';
 
 export interface StationModule {
   name: string;
@@ -26,13 +27,10 @@ export type StationHourly = Map<string, Map<string, [number | null, number | nul
 export const FULL_NIGHT = 9;
 
 // ------------------------------------------------------------------ modules
-const fold = (s: string) =>
-  s
-    .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
-    .toLowerCase();
+const fold = foldName;
 
-export const isBedroom = (name: string) => /\b(chambre|bedroom|dortoir)/.test(fold(name));
+/** #234: one bedroom rule for the whole app, defined in household.ts. */
+export { isBedroom };
 /** Unheated spaces: they count as "indoor" for Netatmo but not as heated rooms. */
 export const isUnheated = (name: string) => /\b(cave|cellier|sous[- ]?sol|garage|grenier|buanderie|veranda|abri|atelier)/.test(fold(name));
 export const isCellar = (name: string) => /\b(cave|cellier|sous[- ]?sol)/.test(fold(name));

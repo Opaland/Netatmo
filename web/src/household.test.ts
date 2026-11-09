@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import type { Dataset } from './data';
-import { BEDROOMS_ID, bedroomIds, householdStation, householdView, isBedroom } from './household';
+import { isBedroom as comfortIsBedroom } from './comfort';
+import { BEDROOMS_ID, BEDROOM_RE, BEDROOM_WORDS, bedroomIds, householdStation, householdView, isBedroom } from './household';
+import vector from './__fixtures__/bedroom-names.json';
 
 const room = (id: string, name: string, category: 'heating' | 'water_heater' = 'heating') => ({ id, name, category, module_types: ['NMH'] });
 
@@ -59,6 +61,13 @@ describe('household view (S-12.2)', () => {
     expect(bedroomIds(dataset().meta.rooms)).toEqual(['c1', 'c2']);
   });
 
+  it('#234: one bedroom rule, shared with collector/insights.py', () => {
+    expect(BEDROOM_WORDS).toEqual(vector.words);
+    expect(BEDROOM_RE.source).toBe(`\\b(${vector.words.join('|')})`);
+    for (const [name, expected] of vector.cases as [string, boolean][]) expect([name, isBedroom(name)]).toEqual([name, expected]);
+    expect(comfortIsBedroom).toBe(isBedroom);
+  });
+
   it('merges bedrooms into one room and keeps totals', () => {
     const ds = dataset();
     const v = householdView(ds);
@@ -70,11 +79,16 @@ describe('household view (S-12.2)', () => {
       ['2025-01-02', 3],
     ]);
     expect(v.records.some((r) => r.room === 'c1' || r.room === 'c2')).toBe(false);
-    expect(v.tariffs.get(BEDROOMS_ID)!.get('2025-01-01')).toEqual([0, 1.5, 1.5]);
-    expect(v.temps.get(BEDROOMS_ID)!.get('2025-01-01')).toEqual([19, null]);
+    // v1.5: a merged day keeps its raw records; tariff detail and estimated days stay raw (#238, #239)
+    expect(v.records.find((r) => r.room === BEDROOMS_ID)!.parts!.map((p) => p.room)).toEqual(['c1', 'c2']);
+    expect(v.tariffs).toBe(ds.tariffs);
+    expect(v.estimated).toBe(ds.estimated);
+    // mean of the bedrooms; setpoint of the bedroom that has one (#248)
+    expect(v.temps.get(BEDROOMS_ID)!.get('2025-01-01')).toEqual([19, 17]);
     expect(v.temps.get('s')).toBe(ds.temps.get('s'));
-    expect(v.estimated).toEqual(new Set([`${BEDROOMS_ID}|2025-01-02`, 's|2025-01-01']));
-    expect(v.coverage!.get(BEDROOMS_ID)!.get('2025-01')).toEqual([29, 2, 0]);
+    // 1 January: both measured; 2 January: Chambre parentale missing (days, not room-days)
+    expect(v.coverage!.get(BEDROOMS_ID)!.get('2025-01')).toEqual([1, 0, 1]);
+    expect(v.coverage!.get('c1')).toBeUndefined();
     expect(v.roomMap!.get('c1')).toBe(BEDROOMS_ID);
     // the original dataset is untouched (detail on demand)
     expect(ds.records[1].room).toBe('c1');

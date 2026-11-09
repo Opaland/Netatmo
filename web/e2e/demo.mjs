@@ -277,16 +277,26 @@ try {
       try {
         // S-9.6: « volets fermés » card (lazy module) in Analyse
         await page.waitForSelector('#shutters-card', { timeout: 10000 });
-        // S-12.2: bedrooms merged by default, detail on demand until the next lock
+        // S-12.2 (v1.5): the household view is opt-in; real per-room figures by default, the
+        // menu toggle merges the bedrooms (display only: same total), detail on demand until the lock
         const picker = () => page.locator('.rooms-panel').textContent();
-        if (!(await picker()).includes('Chambres') || (await picker()).includes('Chambre parentale')) errors.push('vue foyer : chambres non regroupées');
+        const total = () => page.locator('.period-total strong').first().textContent();
         const openMenu = async () => (await page.locator('.menu').getAttribute('open')) === null && (await page.click('.menu summary'));
         await page.click('[data-view=overview]');
+        if (!(await picker()).includes('Chambre parentale') || (await picker()).includes('Chambres')) errors.push('vue foyer : active par défaut (doit être désactivée)');
+        const before = await total();
+        await openMenu();
+        await page.check('[data-toggle=household]');
+        if (!(await picker()).includes('Chambres') || (await picker()).includes('Chambre parentale')) errors.push('vue foyer : chambres non regroupées');
+        if ((await total()) !== before) errors.push(`vue foyer : total changé par le regroupement (${before} → ${await total()})`);
         await openMenu();
         await page.click('[data-household=reveal]');
         if (!(await picker()).includes('Chambre parentale')) errors.push('vue foyer : détail non affiché');
         await openMenu();
         await page.click('[data-household=hide]');
+        await openMenu();
+        await page.uncheck('[data-toggle=household]');
+        if (!(await picker()).includes('Chambre parentale')) errors.push('vue foyer : désactivation sans effet');
         await openMenu();
         // S-8.14: « Cadre juridique » from Paramètres (lazy module)
         await page.click('.menu-panel [data-view=settings]');

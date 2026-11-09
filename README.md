@@ -323,13 +323,19 @@ gardées. Analyse d'impact courte dans [docs/api-notes.md](docs/api-notes.md#don
 ### Vue foyer : chambres regroupées
 
 Les consommations, profils horaires, températures et le CO₂ par chambre disent beaucoup des
-habitudes de chacun. Par défaut, l'application regroupe donc sur tous les écrans les pièces dont le
-nom contient « chambre » (ou « bedroom ») en une seule pièce **« Chambres »** : totaux additionnés,
-températures et CO₂ moyennés, modules de la station compris ; dans l'analyse IA, leurs noms sont
-remplacés par « Chambres ». Le détail s'affiche par un geste volontaire, menu ⋮ → **Afficher le
-détail des chambres**, et seulement jusqu'au verrouillage suivant. La case « Vue foyer » du menu
-désactive le regroupement sur cet appareil seulement. C'est une protection d'affichage : toute
-personne qui connaît la phrase de passe peut voir le détail.
+habitudes de chacun. La case **« Vue foyer »** du menu ⋮ (désactivée par défaut depuis la v1.5, sur
+cet appareil seulement) regroupe sur tous les écrans les pièces dont le nom contient « chambre »,
+« bedroom », « dortoir » ou « suite parentale » en une seule pièce **« Chambres »** : totaux
+additionnés, températures et CO₂ moyennés, modules de la station compris ; dans l'analyse IA, leurs
+noms sont remplacés par « Chambres ». Le détail s'affiche alors par un geste volontaire, menu ⋮ →
+**Afficher le détail des chambres**, et seulement jusqu'au verrouillage suivant. C'est une
+protection d'affichage : toute personne qui connaît la phrase de passe peut voir le détail.
+
+Le regroupement ne change **aucun calcul** : coûts, partage heures pleines / creuses, jours perdus
+ou estimés, signature, jours inhabituels, reconstitution, pièce froide, alerte froid prolongé et
+surfaces sont calculés pièce par pièce, puis seulement additionnés pour l'affichage (un jour de
+« Chambres » est perdu ou estimé si une chambre l'est ; une journée froide est comptée si une
+chambre l'est). Les totaux sont identiques avec ou sans la vue foyer.
 
 ### Soirs « volets fermés »
 

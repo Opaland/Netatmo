@@ -268,16 +268,20 @@ def _unusual_days(store: Store, rooms: dict, weather: dict, first: str, last: st
 
 
 # ------------------------------------------------------------------ windows and boost (S-5.10)
-_BEDROOM = re.compile(r"\b(chambre|bedroom|dortoir)")
+# #234: the bedroom rule of the app (web/src/household.ts BEDROOM_WORDS / isBedroom), word for word;
+# both sides are tested against web/src/__fixtures__/bedroom-names.json.
+BEDROOM_WORDS = ("chambre", "bedroom", "dortoir", "suite parentale")
+_BEDROOM = re.compile(r"\b(" + "|".join(BEDROOM_WORDS) + ")", re.ASCII)  # JS \b is ASCII-only
 BEDROOMS_ALIAS = "Chambres (regroupées)"
 
 
 def _fold(name: str) -> str:
-    return unicodedata.normalize("NFD", name).encode("ascii", "ignore").decode().lower()
+    """Lower case without accents, as foldName() in the app (NFD, combining marks U+0300–U+036F dropped)."""
+    return "".join(c for c in unicodedata.normalize("NFD", name) if not 0x300 <= ord(c) <= 0x36F).lower()
 
 
 def is_bedroom(name: str) -> bool:
-    """Same rule as the app (web/src/comfort.ts isBedroom)."""
+    """Same rule as the app (web/src/household.ts isBedroom)."""
     return bool(_BEDROOM.search(_fold(name or "")))
 
 
