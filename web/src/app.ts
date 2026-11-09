@@ -21,6 +21,8 @@ export interface State {
   split: 'category' | 'room';
   compareYears: number[];
   compareMode: 'monthly' | 'cumul' | 'season';
+  /** #298: heating seasons shown in Comparer, by start year (null: the last three, current one included). */
+  compareSeasons: number[] | null;
   roomsYear: number | null;
   focusRoom: string | null;
   prices: Prices;
@@ -57,6 +59,7 @@ export const DEFAULT: State = {
   split: 'category',
   compareYears: [],
   compareMode: 'monthly',
+  compareSeasons: null,
   roomsYear: null,
   focusRoom: null,
   prices: NO_PRICES,
