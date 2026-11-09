@@ -10,8 +10,9 @@ import { esc, fmtEur, fmtKwh, lastDay, nf0, offCol, table } from '../ui';
 import { currentHcHp } from './waterheater';
 import { html } from '../trusted';
 import '../simulators.css';
+import { lsKey } from '../scope';
 
-const LS = 'intuis-history:heatpump';
+const LS = lsKey('heatpump');
 const FRANCE_RENOV = 'https://france-renov.gouv.fr/';
 interface Inputs {
   mode: 'scop' | 'curve';

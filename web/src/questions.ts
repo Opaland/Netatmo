@@ -3,7 +3,7 @@
 // (analysis.roomDeltas) and the degree days (analysis.djuBetween).
 import { type DayRecord, MONTHS_LONG, minusYears, pctChange } from './aggregate';
 import { type Weather, djuBetween, roomDeltas, verdict } from './analysis';
-import { type RoomState, coldReasons, coverage } from './windows';
+import { type Drops, type RoomState, coldReasons, coverage } from './windows';
 
 export type QuestionId = 'why' | 'normal' | 'room' | 'priciest' | 'cold';
 
@@ -26,6 +26,7 @@ export interface QuestionInput {
   temps?: Map<string, Map<string, [number, number | null]>>;
   roomState?: RoomState | null;
   groupOf?: (room: string) => string;
+  drops?: Drops; // S-1.26: sharp falls of the half-hour temperature (raw rooms), when collected
 }
 
 /** ok = false: lines[0] says why the question cannot be answered. */
@@ -216,11 +217,11 @@ const days = (n: number) => `${n} jour${n > 1 ? 's' : ''}`;
  * S-13.3: cold days of the month and what explains them (open window first). `temps` are the raw
  * rooms (#241): calendar days are counted, a group of bedrooms is cold on a day when one of them is.
  */
-function cold(month: string, first: string, end: string, { temps, roomState, groupOf, roomName }: QuestionInput): Answer {
+function cold(month: string, first: string, end: string, { temps, roomState, groupOf, roomName, drops }: QuestionInput): Answer {
   if (!roomState) return cannot('il faut le relevé horaire de l’état des pièces (fenêtres ouvertes), qui n’est pas activé');
   const cov = coverage(roomState, first, end);
   if (!cov.days) return cannot(`aucun relevé de l’état des pièces en ${monthLabel(month)}`);
-  const reasons = [...coldReasons(temps ?? new Map(), roomState, first, end, groupOf)].sort((a, b) => b[1].cold - a[1].cold);
+  const reasons = [...coldReasons(temps ?? new Map(), roomState, first, end, groupOf, 19, 1, drops)].sort((a, b) => b[1].cold - a[1].cold);
   const coldDays = new Set<string>();
   for (const t of (temps ?? new Map<string, Map<string, [number, number | null]>>()).values()) {
     for (const [d, [mean]] of t) if (d >= first && d <= end && mean < 19) coldDays.add(d);
@@ -233,7 +234,9 @@ function cold(month: string, first: string, end: string, { temps, roomState, gro
     lines.push(`En ${monthLabel(month)}, ${days(total)} avec au moins une pièce sous 19 °C en moyenne (sonde des radiateurs).`);
     for (const [id, r] of reasons.slice(0, 4)) {
       const parts = [
-        r.window ? `${r.window} avec une fenêtre ouverte (${nf1.format(r.openHours)} h au total)` : '',
+        r.window
+          ? `${r.window} avec une fenêtre ouverte (${nf1.format(r.openHours)} h au total${r.drop ? `, dont ${days(r.drop)} vu${r.drop > 1 ? 's' : ''} seulement par une chute de température au pas de 30 min` : ''})`
+          : '',
         r.away ? `${r.away} en mode absence ou hors-gel` : '',
         r.lowSetpoint ? `${r.lowSetpoint} avec une consigne sous 19 °C` : '',
         r.unexplained ? `${r.unexplained} sans explication relevée` : '',

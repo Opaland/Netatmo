@@ -199,6 +199,13 @@ jours à chaque collecte. Le collecteur en tire, par module et par jour, le CO�
 maximum, heures au-dessus de 1 000 / 1 400 / 1 500 ppm), les heures d'humidité au-dessus de 65 % et
 les heures sous 19 °C. Formats détaillés dans [docs/api-notes.md](docs/api-notes.md#station-météo-netatmo-api-publique).
 
+**Pièces au pas de 30 minutes** : énergie heures pleines / creuses, température et consigne de chaque
+pièce, toutes les 30 minutes, dans `data/AAAA.room30.enc.json` (un fichier par année, chargé à la
+demande). Intuis garde environ quatre ans : le collecteur les rattrape en quelques nuits (3 pour une
+maison de 7 pièces), pièce par pièce, sans dépasser son plafond d'appels. L'Analyse s'en sert pour le
+profil horaire (journée type au pas de 30 minutes) et les explications des pièces froides (chute
+rapide de température). Détails dans [docs/api-notes.md](docs/api-notes.md#pièces-au-pas-de-30-minutes-s-126).
+
 Netatmo renouvelle le jeton à chaque utilisation : le collecteur garde le nouveau, chiffré, dans
 `data/netatmo-token.enc.json`. Vous n'avez rien à refaire, sauf si vous révoquez l'accès.
 
@@ -415,7 +422,8 @@ station Netatmo 400, Linky 200, Open-Meteo 20, Shelly 30. Plafond atteint : la c
 pour cette source, garde ce qui a été récupéré et reprend la nuit suivante (une récupération
 d'historique interrompue continue d'elle-même). Pour changer un plafond, ajoutez une **variable**
 (onglet *Variables*, pas *Secrets*) `MAX_CALLS_INTUIS`, `MAX_CALLS_NETATMO`, `MAX_CALLS_LINKY` ou
-`MAX_CALLS_OPEN_METEO` ou `MAX_CALLS_SHELLY` (un nombre entier).
+`MAX_CALLS_OPEN_METEO` ou `MAX_CALLS_SHELLY` (un nombre entier). Les pièces au pas de 30 minutes ont leur
+propre budget dans celui d'Intuis (`MAX_CALLS_INTUIS_30MIN`, 50 par défaut).
 
 ### Jours « estimés »
 
@@ -503,7 +511,7 @@ web/                application PWA (Vite + TypeScript + ECharts)
   public/demo/      données de démonstration chiffrées (phrase « demo »)
 docs/               notes sur l'API, étude de l'existant, feuille de route, règles du projet (PROJET.md)
   etudes/           études « faut-il le faire ? » (volets Wiser, plateforme domotique, Home Assistant
-                    et Zigbee, module intérieur de la station, audit de tous les appareils et achats)
+                    et Zigbee, module intérieur de la station, audit de tous les appareils et achats, origine dédiée)
   design/           inventaire de l'interface (couleurs, typographie, composants), base du design system
   revues-agents/    consignes des revues de code et design par agents (à chaque version)
   bmad/             cadrage BMAD : brief, revue 50 personas, PRD, architecture, epics, QA
@@ -543,8 +551,20 @@ scripts/            outils ponctuels (jours Tempo, constats de revue → issues)
   écrite avec des entités). Elle analyse les balises comme le navigateur (petit analyseur, pas une
   expression régulière) : un texte échappé contenant « javascript: » ne bloque jamais l'affichage, et
   ce que l'analyseur ne sait pas trancher (commentaires, `<title>` contenant `<`…) est refusé. La politique `default` n'accepte que la chaîne vide
-  (ECharts vide ses infobulles) et le service worker du site. Le test de bout en bout échoue à la
-  moindre violation de la CSP.
+  (ECharts vide ses infobulles) et le service worker de l'appli, à son chemin exact. Le test de bout
+  en bout échoue à la moindre violation de la CSP.
+- **Origine partagée de GitHub Pages (risque résiduel, #229).** Sous `https://<compte>.github.io/<dépôt>/`,
+  l'origine du navigateur est `https://<compte>.github.io`, commune à **tous** les sites Pages du
+  compte. La clé « Rester connecté » (IndexedDB), les notes et réglages (localStorage) et le cache hors
+  ligne sont donc à la portée de tout script d'un autre site Pages de ce compte ouvert dans le même
+  navigateur : la clé n'est pas copiable, mais un tel script peut s'en servir pour déchiffrer
+  l'historique (public) et les notes ; il pourrait aussi ouvrir l'appli et lire la phrase tapée. Ce
+  que fait l'appli : noms rangés sous le chemin du dépôt (`intuis-history@<dépôt>`, caches
+  `energy-data@<dépôt>`, pour qu'une autre copie de l'appli sur le compte ne réutilise pas la clé par
+  mégarde ; ce n'est pas une isolation), service worker accepté à son chemin exact seulement,
+  avertissement dans Paramètres. **Ce qu'il faut faire** : ne publier aucun autre site GitHub Pages
+  sur ce compte, ou ne pas cocher « Rester connecté » ; la vraie parade est un domaine personnel dédié
+  (origine propre, quelques euros par an) : voir [docs/etudes/origine-dediee.md](docs/etudes/origine-dediee.md).
 
 ### Inviter un membre du foyer (S-12.3)
 

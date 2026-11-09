@@ -2,10 +2,9 @@
 // Fills the placeholder #works-zone left by analyse.ts: signature before / after the
 // chosen marker (two lines), kWh/m², monthly heating with the markers drawn on it.
 // Surfaces and markers stay on this device, encrypted with the data key (local-store.ts).
-import { getInstanceByDom } from 'echarts/core';
 import { type DayRecord, addDays, bucketKey, bucketKeys, bucketLabel, minusYears } from '../aggregate';
 import { ds, onDatasetLoaded } from '../app';
-import { barChart, cssVar, scatterChart } from '../charts';
+import { barChart, chartOf, cssVar, scatterChart } from '../charts';
 import { loadNote, saveNote } from '../local-store';
 import { BEDROOMS_ID, displaySurfaces } from '../household';
 import { html } from '../trusted';
@@ -225,8 +224,8 @@ function drawCharts() {
     const k = bucketKey(m.day, 'month');
     if (keys.includes(k)) byMonth.set(k, [...(byMonth.get(k) ?? []), WORK_KINDS[m.kind].split(' (')[0]]);
   }
-  const chart = getInstanceByDom(el);
-  if (chart && byMonth.size) {
+  const chart = chartOf(el);
+  if (byMonth.size) {
     const ink = cssVar('--text-primary');
     chart.setOption({
       series: [

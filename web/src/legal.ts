@@ -68,6 +68,23 @@ export const SERVICES: LegalService[] = [
     risk: 'moyen',
   },
   {
+    name: 'Shelly Cloud (prises, facultatif)',
+    frame: 'API officielle « Cloud Control » avec la clé cloud du foyer, en lecture seule, une collecte par nuit (2 appels pour 10 prises).',
+    terms:
+      'Ouverte à tout utilisateur enregistré pour ses propres appareils, 1 appel par seconde, clé à ne pas partager. La liste des appareils passe par deux points d\'accès non documentés (le second en repli) : s\'ils disparaissent, la source Shelly est marquée en échec, sans autre essai, et l\'historique gardé reste lisible. Conditions du compte Shelly acceptées dans l\'application.',
+    url: 'https://shelly-api-docs.shelly.cloud/cloud-control-api/',
+    read: '2026-11-09',
+    risk: 'moyen',
+  },
+  {
+    name: 'Home Assistant (import manuel, facultatif)',
+    frame: 'Logiciel libre installé chez le foyer ; export local, puis import par le collecteur sur votre ordinateur. Aucun service tiers, aucun jeton HA chez GitHub.',
+    terms: 'Licence Apache 2.0 du logiciel ; pas de conditions de service. Seuls des agrégats quotidiens par capteur sont gardés, chiffrés ; le fichier d\'export, en clair, est à supprimer après l\'import.',
+    url: 'https://www.home-assistant.io/docs/authentication/',
+    read: '2026-11-09',
+    risk: 'faible',
+  },
+  {
     name: 'Anthropic (analyse IA, facultative)',
     frame: 'API payante, clé du foyer ; seuls des totaux mensuels et les noms des pièces sont envoyés.',
     terms: 'Conditions commerciales d\'Anthropic, acceptées à la création de la clé ; non relues en détail pour cette page.',

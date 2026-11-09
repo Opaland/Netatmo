@@ -4,10 +4,11 @@ import { addDays, bucketLabel } from '../aggregate';
 import { datasetDoc, ds, onDatasetLoaded, rerender, state } from '../app';
 import { barChart } from '../charts';
 import { isBedroom } from '../comfort';
-import { loadRoomState } from '../data';
+import { loadRoom30, loadRoomState } from '../data';
 import { BEDROOMS_ID } from '../household';
 import { esc, longDate, nf0, roomColor, table, tableToggle } from '../ui';
 import {
+  type Drops,
   type RoomState,
   anomaliesWithWindows,
   bedroomGrouping,
@@ -33,11 +34,33 @@ const stateDoc = datasetDoc(async (d) => (await loadRoomState(d)) ?? ({} as Room
 let doc: RoomState | null = null;
 let failed = false;
 let exclude = false;
+// S-1.26: sharp falls of the half-hour temperature, 90 days, a sharper explanation of the cold days
+let drops: Drops | null = null;
+let dropsState: 'idle' | 'loading' | 'done' = 'idle';
 onDatasetLoaded(() => {
   doc = null;
   failed = false;
   exclude = false;
+  drops = null;
+  dropsState = 'idle';
 });
+
+function ensureDrops(last: string) {
+  if (dropsState !== 'idle' || !(ds!.meta.room30_years ?? []).length) return;
+  dropsState = 'loading';
+  const from = addDays(last, -89);
+  Promise.all([loadRoom30(ds!, from), import('../room30')])
+    .then(([r30, m]) => {
+      drops = m.tempDrops(r30, from, last);
+      if (state.view === 'comfort') rerender();
+    })
+    .catch(() => {
+      drops = null; // the snapshots alone, as before
+    })
+    .finally(() => {
+      dropsState = 'done';
+    });
+}
 
 const f1 = (v: number) => v.toFixed(1).replace('.', ',').replace('-', '−');
 const h1 = (v: number) => `${f1(v)} h`;
@@ -121,18 +144,23 @@ export function windowsCard(showBedrooms: boolean): string {
 
 function explanations(rs: RoomState, last: string, group: (r: string) => string) {
   const from = addDays(last, -89);
-  const allCold = coldWithWindow(ds!.temps, rs, from, last);
+  ensureDrops(last);
+  const allCold = coldWithWindow(ds!.temps, rs, from, last, 19, 1, drops ?? undefined);
   const cold = allCold.filter((c) => group(c.room) === c.room).slice(0, 8);
   const hidden = allCold.some((c) => group(c.room) !== c.room);
   const unusual = ds!.weather ? anomaliesWithWindows(ds!.records, ds!.weather, rs).filter((a) => a.day >= from).slice(0, 5) : [];
   const items = [
-    ...cold.map((c) => `<li>${esc(longDate(c.day))} — <strong>${esc(roomLabel(c.room))}</strong> à ${f1(c.temp)} °C en moyenne : fenêtre ouverte ${h1(c.open)}.</li>`),
+    ...cold.map((c) => {
+      const fall = c.drop ? `chute de ${f1(c.drop.fall)} °C vers ${c.drop.at.replace(':', ' h ')}` : '';
+      const why = c.open >= 1 ? `fenêtre ouverte ${h1(c.open)}${fall ? `, ${fall}` : ''}` : `${fall} (fenêtre ou porte ouverte, probablement)`;
+      return `<li>${esc(longDate(c.day))} — <strong>${esc(roomLabel(c.room))}</strong> à ${f1(c.temp)} °C en moyenne : ${why}.</li>`;
+    }),
     ...unusual.map((a) => `<li>${esc(longDate(a.day))} — jour inhabituel (${a.z > 0 ? 'plus' : 'moins'} de chauffage que prévu par la météo) : fenêtres ouvertes ${h1(a.open)} au total.</li>`),
   ];
   return `<h3 class="sub-title">Pourquoi cette pièce était froide ? <small class="muted">90 derniers jours</small></h3>
     ${
       items.length
-        ? `<p class="hint muted">Jours sous 19 °C (sonde du radiateur) ou inhabituels avec une fenêtre ouverte : explication possible, pas certaine.${hidden ? ' Les chambres regroupées ne sont pas détaillées.' : ''}</p><ul class="plain">${items.join('')}</ul>`
+        ? `<p class="hint muted">Jours sous 19 °C (sonde du radiateur) ou inhabituels avec une fenêtre ouverte : explication possible, pas certaine.${drops ? ' Les chutes de température viennent des relevés au pas de 30 minutes.' : ''}${hidden ? ' Les chambres regroupées ne sont pas détaillées.' : ''}</p><ul class="plain">${items.join('')}</ul>`
         : '<p class="hint muted">Aucun jour froid ou inhabituel avec une fenêtre ouverte sur les 90 derniers jours.</p>'
     }`;
 }

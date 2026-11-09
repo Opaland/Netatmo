@@ -1,11 +1,12 @@
 // AI analysis helpers (pure, no DOM): usefulness votes kept on this device (S-5.8),
 // usage and cost line, pseudonym legend (S-5.7).
 import type { InsightUsage } from './data';
+import { lsKey } from './scope';
 
 export type Vote = 'up' | 'down';
 export type Votes = Record<string, Vote>; // analysed month "YYYY-MM" -> vote
 
-const KEY = 'intuis-history:insight-votes';
+const KEY = lsKey('insight-votes');
 
 export function loadVotes(storage: Pick<Storage, 'getItem'> | null = safeStorage()): Votes {
   try {

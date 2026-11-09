@@ -10,6 +10,7 @@ import { BEDROOMS_ID } from '../household';
 import { readPref, writePref } from '../money';
 import { esc, longDate, nf0, table } from '../ui';
 import { type RoomState, bedroomGrouping } from '../windows';
+import { NS } from '../scope';
 
 // #247: loaded for the dataset shown; `doc` / `rs` / `failed` are refreshed from it at each render.
 const haDoc = datasetDoc((d) =>
@@ -26,7 +27,7 @@ onDatasetLoaded(() => {
 
 const f1 = (v: number) => v.toFixed(1).replace('.', ',').replace('-', '−');
 const head = `<div class="card-head"><h2>Capteurs Home Assistant <small class="muted">import chiffré</small></h2></div>`;
-const lsLinks = () => `intuis-history:ha-rooms:${ds!.source}`;
+const lsLinks = () => `${NS}:ha-rooms:${ds!.source}`;
 
 function ensure() {
   const v = haDoc.get(ds, () => state.view === 'comfort' && rerender());

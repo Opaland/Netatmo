@@ -3,11 +3,12 @@
 // Preferences are per device (localStorage), like the other display settings.
 import { addDays } from './aggregate';
 import type { TrveRow } from './analysis';
+import { lsKey } from './scope';
 
 // ------------------------------------------------------------------ preferences (per device)
-export const LS_BUDGET = 'intuis-history:budget';
-export const LS_CO2 = 'intuis-history:co2-factor';
-export const LS_GRID_SEEN = 'intuis-history:grid-seen';
+export const LS_BUDGET = lsKey('budget');
+export const LS_CO2 = lsKey('co2-factor');
+export const LS_GRID_SEEN = lsKey('grid-seen');
 
 function readNumber(key: string, ok: (v: number) => boolean): number | null {
   try {

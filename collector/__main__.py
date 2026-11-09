@@ -546,6 +546,13 @@ def _cold_label(cfg: dict | None, counts: dict[str, int]) -> str:
     )
 
 
+def _room30_label(h: dict | None) -> str:
+    """S-1.26: counters only (rooms with their whole history, oldest month reached)."""
+    if not h:
+        return "—"
+    return f"historique complet {h.get('done', 0)}/{h.get('rooms', 0)} pièces, depuis {str(h.get('oldest', ''))[:7]}"
+
+
 def _expiry_label(st: dict) -> str:
     if st.get("auth_expired"):
         return "refusé, à renouveler"
@@ -632,6 +639,7 @@ def _job_summary(store: Store, syncer: Syncer, changed: list[str], extra_rows: l
         f"| Station Netatmo (tous modules) | {yes(m.get('has_station'))} |",
         f"| Linky | {yes(m.get('has_linky'))} |",
         f"| Linky, courbe de charge 30 min | {yes(m.get('linky_curve_years'))} |",
+        f"| Pièces au pas 30 min | {_room30_label(m.get('room30_history'))} |",
         f"| Prises Shelly | {yes(m.get('has_shelly'))} |",
         f"| Analyse IA | {yes(store.doc('insights').get('period'))} |",
         f"| Contrat partagé | {_contract_label(m.get('contract'))} |",

@@ -2,9 +2,10 @@
 // encrypted with the data key (AES-GCM, crypto.ts sealLocal) before they reach localStorage.
 // Nothing is sent anywhere; another device or another passphrase does not see them.
 import { openLocal, sealLocal } from './crypto';
+import { NS } from './scope';
 
 /** Key of a note for one dataset (real data and demo never mix). */
-export const noteKey = (name: string, source: string) => `intuis-history:${name}:${source}`;
+export const noteKey = (name: string, source: string) => `${NS}:${name}:${source}`;
 
 /** The decrypted note, validated, or `fallback` (absent, unreadable or written with another passphrase). */
 export async function loadNote<T>(name: string, source: string, key: CryptoKey, validate: (v: unknown) => T, fallback: T): Promise<T> {

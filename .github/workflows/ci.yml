@@ -38,7 +38,7 @@ jobs:
       - run: npm ci
       - run: npm test
       - run: npm run build
-      - run: npm run size # S-7.10 : budget de taille du chunk d'entrée (gzip)
+      - run: npm run size # S-7.10, #227 : budget de taille du premier écran, entrée + préchargés (gzip)
 
   e2e:
     runs-on: ubuntu-latest

@@ -6,7 +6,9 @@
 import type { Dataset } from './data';
 import { html } from './trusted';
 
-export const DATA_CACHE = 'energy-data';
+// #229: name scoped to the repository at build time (vite.config.ts).
+import { DATA_CACHE } from './scope';
+export { DATA_CACHE };
 
 const dayLabel = (day: string) =>
   new Date(`${day}T12:00:00Z`).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' });
@@ -26,7 +28,11 @@ export function canPrefetch(c: NetInfo | undefined, online = true): boolean {
   return !['slow-2g', '2g', '3g'].includes(c.effectiveType ?? '');
 }
 
-const hourlyFiles = (ds: Dataset) => (ds.meta.hourly_years ?? []).map((y) => `${ds.source}/${y}.hourly.enc.json`);
+// S-1.26: the latest year of per-room half hours too (the Analyse profile prefers them).
+const hourlyFiles = (ds: Dataset) => [
+  ...(ds.meta.hourly_years ?? []).map((y) => `${ds.source}/${y}.hourly.enc.json`),
+  ...(ds.meta.room30_years ?? []).slice(-1).map((y) => `${ds.source}/${y}.room30.enc.json`),
+];
 
 /** Warm the service-worker cache with the hourly files (no decryption, nothing kept in memory). */
 export function prefetchForOffline(ds: Dataset) {

@@ -135,9 +135,15 @@ export function renderSettings(view: HTMLElement) {
         ['Prix saisis ici, contrat non partagé', 'Votre appareil (stockage du navigateur)', 'Vous seul'],
         ['Contrat partagé (dates, offre, puissance)', 'Variable GitHub CONTRACT_JSON, puis données chiffrées', 'Les administrateurs du dépôt ; chiffré dans data/'],
         ['Alerte froid prolongé (pièces suivies, seuil)', 'Variable GitHub COLD_ALERT_JSON ; issue publique', 'Variable : les administrateurs du dépôt ; issue : tout le monde, avec des pseudonymes seulement (ni nom ni température)'],
+        [
+          'Clé « Rester connecté », notes chiffrées, réglages, cache hors ligne',
+          'Ce navigateur, sur l\'origine de l\'appli',
+          'Vous, et tout script de la même origine : sur &lt;compte&gt;.github.io, c\'est aussi chaque autre site GitHub Pages du compte',
+        ],
       ],
       99,
     )}
+    ${sharedOriginWarning(location.hostname)}
     <h3>Services tiers contactés par la collecte</h3>
     ${table(
       ['Service', 'Pour quoi', 'Ce qui lui est envoyé'],
@@ -216,6 +222,20 @@ async function settingsAction(fn: () => Promise<string>) {
 }
 
 /** Forget the GitHub token and what it revealed (on lock). */
+/**
+ * #229: on <compte>.github.io the origin (storage, IndexedDB, caches) is shared by every Pages
+ * site of the account. Exported for the unit tests.
+ */
+export function sharedOriginWarning(host: string): string {
+  if (!host.endsWith('.github.io')) return '';
+  return `<p class="notice" id="shared-origin">
+      <strong>« Rester connecté » sur ${esc(host)} :</strong> cette adresse est partagée par tous les sites GitHub Pages du compte
+      ${esc(host.replace(/\.github\.io$/, ''))}. La clé gardée sur cet appareil ne peut pas être copiée, mais un script d'un autre site
+      Pages de ce compte, ouvert dans ce navigateur, pourrait s'en servir pour déchiffrer vos données et vos notes.
+      Ne publiez aucun autre site Pages sur ce compte, ou ne cochez pas « Rester connecté » (la phrase de passe est alors demandée
+      à chaque ouverture). Un domaine personnel dédié supprime ce risque (README, section Sécurité).</p>`;
+}
+
 export function forgetToken() {
   setToken(null);
   configured = null;

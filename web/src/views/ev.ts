@@ -12,8 +12,9 @@ import { tenant } from '../tenant';
 import { contracts, fmtEur, lastDay, longDate, nf0, offCol, table } from '../ui';
 import { html } from '../trusted';
 import '../simulators.css';
+import { lsKey } from '../scope';
 
-const LS = 'intuis-history:ev';
+const LS = lsKey('ev');
 const POWERS: [number, string][] = [
   [2.3, '2,3 kW (prise domestique)'],
   [3.7, '3,7 kW (prise renforcée)'],

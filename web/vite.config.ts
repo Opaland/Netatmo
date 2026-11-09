@@ -1,9 +1,21 @@
 import { defineConfig } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
 
+// #229: <compte>.github.io is one origin for every Pages site of the account, and the Cache API
+// is per origin. The runtime caches carry the repository name (GitHub Actions sets
+// GITHUB_REPOSITORY) so that another site's worker never reads or fills them by mistake.
+// The precache is already per worker scope (/<dépôt>/). Not an isolation: see scope.ts.
+const env = (globalThis as { process?: { env: Record<string, string | undefined> } }).process?.env ?? {};
+const repo = env.GITHUB_REPOSITORY?.split('/')[1]?.replace(/[^\w.-]/g, '') ?? '';
+const cacheName = (name: string) => (repo ? `${name}@${repo}` : name);
+
 export default defineConfig({
   // Relative base: works on https://<user>.github.io/<repo>/ without knowing the repo name.
   base: './',
+  define: {
+    'import.meta.env.VITE_DATA_CACHE': JSON.stringify(cacheName('energy-data')),
+    'import.meta.env.VITE_TARIFF_CACHE': JSON.stringify(cacheName('energy-tariffs')),
+  },
   plugins: [
     VitePWA({
       registerType: 'autoUpdate',
@@ -35,12 +47,12 @@ export default defineConfig({
           {
             urlPattern: ({ url }) => /\/(data|demo)\/.+\.json$/.test(url.pathname),
             handler: 'NetworkFirst',
-            options: { cacheName: 'energy-data', networkTimeoutSeconds: 4, cacheableResponse: { statuses: [200] } },
+            options: { cacheName: cacheName('energy-data'), networkTimeoutSeconds: 4, cacheableResponse: { statuses: [200] } },
           },
           {
             urlPattern: ({ url }) => /\/tarifs\/[^/]+\.(csv|json)$/.test(url.pathname),
             handler: 'NetworkFirst',
-            options: { cacheName: 'energy-tariffs', networkTimeoutSeconds: 4, cacheableResponse: { statuses: [200] } },
+            options: { cacheName: cacheName('energy-tariffs'), networkTimeoutSeconds: 4, cacheableResponse: { statuses: [200] } },
           },
         ],
       },

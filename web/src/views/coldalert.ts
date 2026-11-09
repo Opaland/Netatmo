@@ -21,9 +21,10 @@ import { hasToken, putVariable } from '../settings';
 import { esc, lastDay, longDate, table } from '../ui';
 import { html } from '../trusted';
 import '../simulators.css';
+import { lsKey } from '../scope';
 
 export const COLD_VARIABLE = 'COLD_ALERT_JSON';
-const LS = 'intuis-history:cold-draft';
+const LS = lsKey('cold-draft');
 
 /** #242: always the raw rooms and modules, whatever the household view shows. */
 const sensors = (): Sensor[] => coldSensors(rawDataset() ?? ds!);

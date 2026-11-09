@@ -13,6 +13,7 @@ import { memo } from '../memo';
 import { readPref, writePref } from '../money';
 import { html } from '../trusted';
 import { activeRooms, avgPrice, esc, fmtEur, lastDay, longDate, nf0, series, table } from '../ui';
+import { NS } from '../scope';
 
 // #247: what the card needs, loaded for the dataset shown (a late result of another one is dropped).
 const doc = datasetDoc((d) =>
@@ -33,7 +34,7 @@ onDatasetLoaded(() => {
   formMsg = '';
 });
 
-const lsKey = (d: Pick<Dataset, 'source'> = ds!) => `intuis-history:postes:${d.source}`;
+const lsKey = (d: Pick<Dataset, 'source'> = ds!) => `${NS}:postes:${d.source}`;
 const nf1 = new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 1 });
 const kwh = (v: number) => `${v < 10 ? nf1.format(v) : nf0.format(v)} kWh`;
 
