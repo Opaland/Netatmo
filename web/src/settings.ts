@@ -142,7 +142,7 @@ export async function putSecret(repo: string, name: string, value: string): Prom
 }
 
 /** Repository variables the app may write (S-12.1). */
-export const VARIABLES = new Set(['CONTRACT_JSON']);
+export const VARIABLES = new Set(['CONTRACT_JSON', 'COLD_ALERT_JSON']);
 
 /** Create or update a repository variable (not secret, so not sealed). */
 export async function putVariable(repo: string, name: string, value: string): Promise<void> {

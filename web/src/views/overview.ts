@@ -41,6 +41,7 @@ import {
 } from '../ui';
 import { qualityCard, uncertainBuckets, uncertainDays } from './quality';
 import { html } from '../trusted';
+import { tenant, tenantNote } from '../tenant';
 
 function kpi(label: string, from: string, to: string, records: DayRecord[], cls = '') {
   const now = total(records, from, to);
@@ -186,6 +187,7 @@ function projectionTile(records: DayRecord[], last: string) {
 }
 
 function linkyCard() {
+  if (tenant().on) return tenantNote('Les cartes Linky (part du logement, puissance, courbe de charge) sont masquées'); // S-12.6
   if (!ds!.linky.size) return '';
   return `<section class="card">
     <div class="card-head"><h2>Part dans la consommation du logement <small class="muted">compteur Linky</small></h2></div>
@@ -198,7 +200,7 @@ function linkyCard() {
 /** Linky 30-min load curve: placeholder filled by the lazily imported ./linky module. */
 function curveCard() {
   const years = (ds!.meta as { linky_curve_years?: number[] }).linky_curve_years;
-  return years?.length ? '<section class="card" id="curve-card" hidden></section>' : '';
+  return years?.length && !tenant().on ? '<section class="card" id="curve-card" hidden></section>' : '';
 }
 
 function drawCurve() {

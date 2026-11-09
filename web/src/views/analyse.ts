@@ -47,6 +47,7 @@ export function renderAnalyse(view: HTMLElement, records: DayRecord[]) {
       : `<section class="card"><h2>Signature énergétique</h2><p class="hint muted">Disponible dès que la collecte a récupéré la météo (prochaine collecte).</p></section>`
   }
   ${setpointCard(records)}
+  ${ds!.weather ? '<section class="card" id="hp-card" hidden></section>' : ''}
   ${anomaliesCard(records)}
   <section class="card" id="calendar-card">
     <div class="card-head"><h2>Calendrier <small class="muted">kWh par jour</small></h2>
@@ -152,6 +153,8 @@ export function renderAnalyse(view: HTMLElement, records: DayRecord[]) {
   drawHourly(records);
   drawWaterHeater(hourly);
   drawSetpoint(records);
+  // S-2.15: heat pump estimate, lazy module
+  void import('./heatpump').then((m) => m.mountHeatPump(document.getElementById('hp-card'), records)).catch(() => {});
   drawIndoorSignature(records);
 }
 

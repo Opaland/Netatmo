@@ -3,9 +3,11 @@ import { type Prices, inferKvaChange } from '../analysis';
 import { type State, ds, setState, state } from '../app';
 import { OFFERS, periodAt } from '../offers';
 import { contractInfo, contracts, esc, keepMenuOpen, lastDay, longDate, nf0, priceAt, priceMode, tariffNames } from '../ui';
+import { tenant, tenantPricesForm } from '../tenant';
 
 export function pricesForm() {
   const p = state.prices;
+  if (tenant().on) return tenantPricesForm(p.base, p.sub); // S-12.6
   const [n1, n2] = tariffNames();
   const input = (key: keyof Prices, label: string, ph: string) =>
     `<label>${esc(label)}<input data-price="${key}" type="number" inputmode="decimal" step="0.0001" min="0" placeholder="${ph}" value="${p[key] ?? ''}"></label>`;

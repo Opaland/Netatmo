@@ -1,0 +1,48 @@
+/* S-2.14, S-2.15, S-12.5, S-12.6: inputs of the simulator and settings cards (lazy chunks). */
+.sim-form {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px;
+  margin: 8px 0 12px;
+}
+.sim-form label {
+  display: grid;
+  gap: 4px;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  min-width: 0;
+}
+.sim-form input,
+.sim-form select {
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-1);
+  color: var(--text-primary);
+  font: inherit;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+.sim-form .check {
+  align-self: end;
+}
+.sim-form .check input {
+  width: auto;
+}
+.sim-choices {
+  display: grid;
+  gap: 6px;
+  margin: 8px 0;
+}
+.sim-json {
+  display: block;
+  overflow-wrap: anywhere;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: var(--surface-0);
+  font-size: 0.8rem;
+}
+.sim-result {
+  margin: 8px 0;
+}

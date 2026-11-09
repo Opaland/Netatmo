@@ -25,6 +25,7 @@ import httpx
 
 from .api import IntuisClient
 from .budget import METER, CallCapReached, caps_from_env
+from .cold import cold_alerts, cold_config, write_cold_file
 from .config import Settings
 from .schema import FormatError
 from .storage import Store
@@ -328,12 +329,29 @@ def cmd_sync(s: Settings, args: argparse.Namespace, backfill: bool = False) -> N
     for alert in alerts:
         _warn(alert)
     write_renew_file(alerts)
+    # S-12.5: prolonged cold in the rooms chosen (repository variable), pseudonyms only.
+    cold = cold_config(_warn)
+    if cold:
+        extra["cold_alert"] = cold
+    cold_lines, cold_counts = cold_alerts(store, cold)
+    write_cold_file(cold_lines)
     changed = syncer.save(home, extra)
     print("Fichiers modifiés : " + (", ".join(changed) if changed else "aucun"))
     print(f"Couverture : {store.first_day()} → {store.last_day()}")
     for line in _call_lines():
         print(line)
+    print(_cold_label(cold, cold_counts))
     _job_summary(store, syncer, changed)
+
+
+def _cold_label(cfg: dict | None, counts: dict[str, int]) -> str:
+    # Counts only: neither the rooms, nor the threshold, nor a temperature (public log).
+    if not cfg:
+        return "Alerte froid : désactivée"
+    return (
+        f"Alerte froid : {counts['suivies']} pièce(s) suivie(s), {counts['froides']} sous le seuil, "
+        f"{counts['sans_mesure']} sans mesure récente"
+    )
 
 
 def _expiry_label(st: dict) -> str:
@@ -455,7 +473,8 @@ def cmd_insights(s: Settings, args: argparse.Namespace) -> None:
             {
                 k: v
                 for k, v in store.meta.items()
-                if k.startswith("has_") or k in ("weather_source", "sources", "contract", "backfill_pending")
+                if k.startswith("has_")
+                or k in ("weather_source", "sources", "contract", "cold_alert", "backfill_pending")
             },
         )
         print(store.doc("insights")["markdown"])

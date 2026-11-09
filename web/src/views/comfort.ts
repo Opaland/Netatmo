@@ -73,6 +73,7 @@ export function renderComfort(view: HTMLElement) {
         : 'Aucune station Netatmo n\'est reliée : seules les températures mesurées par les radiateurs sont utilisées (moyennes par jour). Ajoutez la station dans Paramètres pour le CO₂ de la nuit et l\'humidité de la cave.'
     }</p>
   </section>
+  <div id="cold-alert-zone"></div>
   ${st ? co2Cards(st) : ''}
   ${st ? cellarCards(st) : ''}
   ${coldCard(st, map)}
@@ -83,6 +84,8 @@ export function renderComfort(view: HTMLElement) {
     drawProbes(st, map);
   }
   drawCold(st, map);
+  // S-12.5: prolonged cold alert of the rooms followed (lazy module)
+  void import('./coldalert').then((m) => m.mountColdBanner(document.getElementById('cold-alert-zone'))).catch(() => {});
 }
 
 // ------------------------------------------------------------------ S-11.1 night CO₂
