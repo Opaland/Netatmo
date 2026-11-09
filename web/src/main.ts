@@ -1,12 +1,14 @@
 // Shell: header, tabs, menu and filters; view router; delegated events; boot.
 // Each view lives in src/views/, shared helpers in src/ui.ts, state in src/app.ts.
 import { CATEGORY_LABEL, toCsv } from './aggregate';
-import { type State, type View, activeRooms, app, ds, onDatasetLoaded, setDataset, setRenderer, setState, state } from './app';
+import { type State, type View, activeRooms, app, ds, onDatasetOpened, onLock, setDataset, setRenderer, setState, state } from './app';
 import { disposeAll } from './charts';
 import { BadEnvelope, WrongPassphrase } from './crypto';
-import { NoData, forgetKeys, load, recallKey } from './data';
+import { type Dataset, NoData, clearDataCaches, forgetKeys, load, recallKey } from './data';
+import { lazyAction, lazyCard } from './lazy';
+import { clearMemo } from './memo';
 import { framedHtml, isFramed } from './frame';
-import { prefetchForOffline, updateNetStatus } from './offline';
+import { prefetchForOffline, unavailable, updateNetStatus } from './offline';
 import { IdleLock, LOCK_CHOICES, REMEMBER_DAYS, idleSince } from './session';
 import { isIos, keyLoss, lossMessage, readMark, writeMark } from './storage';
 import { type SwipeDir, onSwipe, step } from './swipe';
@@ -14,7 +16,7 @@ import { esc, filtered, keepMenuOpen, lastDay, longDate, roomColor, seg } from '
 import * as analyse from './views/analyse';
 import * as compare from './views/compare';
 import * as household from './views/household';
-import { renderLoading, renderLock } from './views/lock';
+import { renderLoading, renderLock, showApp } from './views/lock';
 import * as overview from './views/overview';
 import { pinSelect, pinnedTiles } from './views/pinned';
 import { toggleTerm } from './plain';
@@ -162,14 +164,14 @@ let comfort: typeof import('./views/comfort') | null = null;
 function renderComfort(view: HTMLElement) {
   if (comfort) return comfort.renderComfort(view);
   view.innerHTML = html('<p class="empty">Chargement…</p>');
-  import('./views/comfort')
-    .then((m) => {
+  void lazyCard(
+    () => import('./views/comfort'),
+    (m) => {
       comfort = m;
       if (state.view === 'comfort') render();
-    })
-    .catch(() => {
-      view.innerHTML = html('<p class="empty">Vue indisponible hors ligne : elle se chargera au prochain accès réseau.</p>');
-    });
+    },
+    { zone: view, what: 'Vue Confort' },
+  );
 }
 
 /** S-1.5: warn when the archive stopped moving (collection broken or Intuis late). */
@@ -208,8 +210,11 @@ app.addEventListener('click', async (e) => {
   if (clickHandlers.some((h) => h(btn))) return;
   // S-9.7: long export, built locally from the decrypted data (lazy module)
   // S-6.6: anonymised research dataset (lazy dialog)
-  if (btn.dataset.research !== undefined) return void import('./views/research').then((m) => m.openResearch());
-  if (btn.dataset.exportLong) return void import('./export').then((m) => ds && m.downloadLong(ds, btn.dataset.exportLong as 'csv' | 'json'));
+  if (btn.dataset.research !== undefined) return void lazyAction(btn, () => import('./views/research'), (m) => m.openResearch(), 'Export recherche');
+  if (btn.dataset.exportLong) {
+    const d = ds;
+    return void lazyAction(btn, () => import('./export'), (m) => m.downloadLong(d, btn.dataset.exportLong as 'csv' | 'json'), 'Export long');
+  }
   if (btn.id === 'export') {
     const blob = new Blob(['﻿' + toCsv(filtered(), ds.meta.rooms)], { type: 'text/csv;charset=utf-8' });
     const a = document.createElement('a');
@@ -340,8 +345,12 @@ async function lockApp() {
   await start();
 }
 const idle = new IdleLock(() => void lockApp());
-onDatasetLoaded(() => idle.start(state.lockAfter));
-onDatasetLoaded(() => prefetchForOffline(ds!));
+// #255: once per decrypted dataset, not when the household view is toggled.
+onDatasetOpened(() => idle.start(state.lockAfter));
+onDatasetOpened(() => prefetchForOffline(ds!));
+// #232: the decrypted documents and what was computed from them are forgotten on lock.
+onLock(clearDataCaches);
+onLock(clearMemo);
 
 // ------------------------------------------------------------------ boot
 async function start() {
@@ -350,6 +359,9 @@ async function start() {
     app.innerHTML = html(framedHtml(location.href));
     return;
   }
+  // #250: loading (decryption) and rendering fail for different reasons: a decryption error
+  // is explained on the lock screen, a rendering error (a bug) gets its own error screen.
+  let opened: Dataset;
   try {
     let key = await recallKey('data');
     // Away longer than the inactivity delay (tab closed, phone asleep): the key is forgotten.
@@ -357,22 +369,42 @@ async function start() {
       await forgetKeys();
       key = null;
     }
-    if (key) {
-      renderLoading();
-      setDataset(await load('data', key));
-      return render();
-    }
-    // S-7.9: a key remembered here but gone (erased by iOS / the browser, or expired).
-    const mark = readMark();
-    const loss = mark?.source === 'data' ? keyLoss(mark, false, Date.now(), REMEMBER_DAYS) : null;
-    if (mark) writeMark(null);
-    // Check whether real data exists to adapt the lock screen.
-    const resp = await fetch('data/keyinfo.json', { cache: 'no-cache' });
-    renderLock('', resp.ok, resp.ok ? lossMessage(loss, isIos(navigator.userAgent, navigator.maxTouchPoints)) : '');
+    if (!key) return await showLockScreen();
+    renderLoading();
+    opened = await load('data', key);
   } catch (err) {
     if (err instanceof WrongPassphrase) await forgetKeys();
-    renderLock(err instanceof BadEnvelope ? err.message : '', !(err instanceof NoData));
+    renderLock(startError(err), !(err instanceof NoData));
+    return;
   }
+  setDataset(opened);
+  showApp();
+}
+
+/** Lock screen, adapted to whether real data exists and to a key lost since the last visit. */
+async function showLockScreen() {
+  // S-7.9: a key remembered here but gone (erased by iOS / the browser, or expired).
+  const mark = readMark();
+  const loss = mark?.source === 'data' ? keyLoss(mark, false, Date.now(), REMEMBER_DAYS) : null;
+  if (mark) writeMark(null);
+  // Check whether real data exists to adapt the lock screen.
+  let resp: Response;
+  try {
+    resp = await fetch('data/keyinfo.json', { cache: 'no-cache' });
+  } catch {
+    // Offline, never cached: the form stays (the passphrase may work once online), with a word.
+    return renderLock(navigator.onLine ? '' : unavailable('Données'), true);
+  }
+  renderLock('', resp.ok, resp.ok ? lossMessage(loss, isIos(navigator.userAgent, navigator.maxTouchPoints)) : '');
+}
+
+/** #250: why the remembered key did not open the data, in words. */
+function startError(err: unknown): string {
+  if (err instanceof WrongPassphrase) return 'La clé mémorisée ne déchiffre plus les données (phrase de passe changée ?) : saisissez la phrase de passe.';
+  if (err instanceof NoData) return ''; // the lock screen already says that nothing was collected
+  if (err instanceof BadEnvelope) return err.message;
+  if (!navigator.onLine) return unavailable('Données');
+  return `Ouverture impossible : ${err instanceof Error ? err.message : String(err)}`;
 }
 
 if ('serviceWorker' in navigator && import.meta.env.PROD) {

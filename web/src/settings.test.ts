@@ -1,6 +1,6 @@
 import sodium from 'libsodium-wrappers';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { expiryInfo, listSecrets, noSaveAttrs, putSecret, putVariable, repoFromLocation, runCollect, setToken, validate } from './settings';
+import { expiryInfo, listSecrets, noSaveAttrs, putSecret, putVariable, repoFromLocation, runCollect, setToken, validate, invalidFields } from './settings';
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -124,5 +124,18 @@ describe('settings', () => {
     expect(expiryInfo({ credential: 'abc' }, today)).toMatchObject({ date: null, renew: false }); // « expiration inconnue »
     expect(expiryInfo({ credential: 'abc', auth_expired: true }, today)?.renew).toBe(true);
     expect(expiryInfo({ ok: '2026-11-09T04:00:00+00:00' }, today)).toBeNull(); // no tracked token (Intuis)
+  });
+});
+
+describe('secrets form: field by field (#259)', () => {
+  it('names only the invalid fields, with their label', () => {
+    const bad = invalidFields([
+      ['INTUIS_USERNAME', 'moi@example.fr'],
+      ['ENEDIS_PRM', '123'],
+      ['INTUIS_PASSWORD', 'secret'],
+      ['ANTHROPIC_API_KEY', ''],
+    ]);
+    expect(bad).toEqual([{ name: 'ENEDIS_PRM', label: expect.any(String), error: expect.stringMatching(/14 chiffres/) }]);
+    expect(bad[0].label).not.toBe('ENEDIS_PRM');
   });
 });

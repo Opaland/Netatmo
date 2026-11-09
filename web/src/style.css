@@ -942,6 +942,16 @@ fieldset.secrets input,
 .settings-msg.ko {
   color: var(--bad);
 }
+.settings-msg:empty {
+  display: none;
+}
+/* #249: a lazy card that could not be shown says so (offline) or shows its error */
+.lazy-failed .link {
+  margin-left: 4px;
+}
+.lazy-error {
+  color: var(--bad);
+}
 .card a {
   color: var(--accent);
 }

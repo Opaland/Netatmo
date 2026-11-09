@@ -2,7 +2,7 @@
 // busiest half hour and one day's curve. Loaded on demand by the overview, only when
 // meta.linky_curve_years exists, so neither this module nor the curve weigh on first paint.
 import type { Hourly } from '../analysis';
-import { ds, onDatasetLoaded } from '../app';
+import { datasetDoc, ds, onDatasetLoaded } from '../app';
 import { areaChart, cssVar } from '../charts';
 import {
   type Curve,
@@ -22,17 +22,27 @@ import { periodAt } from '../offers';
 import { activeRooms, catColor, contracts, flatPriceAt, fmtEur, longDate, nf0, series } from '../ui';
 import { html } from '../trusted';
 
+// #247: the curve first, then only the hourly years of its 30-day window (#251), for the
+// dataset shown; a result arriving after the dataset changed is dropped.
+const doc = datasetDoc(async (d) => {
+  const c = await loadCurve(d);
+  const last = lastCurveDay(c);
+  const since = last ? windowDays(c, last).from : '';
+  const h = last ? await loadHourly(d, since).catch(() => null) : null;
+  return { curve: c, hourly: h, since: h ? `${since.slice(0, 4)}-01-01` : '' };
+});
+// Set from `doc` at each render; `wider`: older hourly years loaded for a day picked further back.
 let curve: Curve | null = null;
 let hourly: Hourly | null = null;
 let hourlySince = ''; // first day the loaded hourly years cover (#251: not the whole history)
-let loading: Promise<void> | null = null;
+let wider: { hourly: Hourly; since: string } | null = null;
 let group: 'weekday' | 'weekend' = 'weekday';
 let pickedDay: string | null = null;
 onDatasetLoaded(() => {
   curve = null;
   hourly = null;
   hourlySince = '';
-  loading = null;
+  wider = null;
   pickedDay = null;
 });
 
@@ -47,26 +57,18 @@ function rooms(cat: 'heating' | 'water_heater') {
 /** Entry point: `card` is the empty section placed by the overview. */
 export function renderCurveCard(card: HTMLElement) {
   if (!ds) return;
-  if (!curve) {
+  const v = doc.get(ds, () => card.isConnected && renderCurveCard(card));
+  if (!v) {
+    const failed = doc.status(ds) === 'failed';
     card.hidden = false;
-    card.innerHTML = html('<div class="card-head"><h2>Courbe de charge <small class="muted">Linky, pas de 30 min</small></h2></div><p class="hint muted">Chargement de la courbe de charge…</p>');
-    // #251: the curve first, then only the hourly years of its 30-day window.
-    loading ??= loadCurve(ds).then(async (c) => {
-      const last = lastCurveDay(c);
-      const since = last ? windowDays(c, last).from : '';
-      hourly = last ? await loadHourly(ds!, since).catch(() => null) : null;
-      hourlySince = hourly ? `${since.slice(0, 4)}-01-01` : '';
-      curve = c;
-    });
-    loading
-      .then(() => card.isConnected && renderCurveCard(card))
-      .catch(() => {
-        loading = null;
-        if (card.isConnected) card.hidden = true;
-      });
+    card.innerHTML = html`<div class="card-head"><h2>Courbe de charge <small class="muted">Linky, pas de 30 min</small></h2></div><p class="hint muted">${
+      !failed ? 'Chargement de la courbe de charge…' : navigator.onLine ? 'Courbe de charge indisponible.' : 'Courbe de charge : disponible au prochain accès réseau.'
+    }</p>`;
     return;
   }
-  const c = curve;
+  const c = (curve = v.curve);
+  hourly = wider?.hourly ?? v.hourly;
+  hourlySince = wider?.since ?? v.since;
   const last = memo(c, 'last', () => lastCurveDay(c));
   if (!last) {
     card.hidden = true; // collection enabled but nothing received yet: Settings explains it
@@ -115,13 +117,17 @@ export function renderCurveCard(card: HTMLElement) {
       pickedDay = v;
       if (hourly && v < hourlySince) {
         // An older day than the loaded hourly years: load from that year, then redraw.
-        void loadHourly(ds!, v)
-          .then((h) => {
+        const d = ds!;
+        void loadHourly(d, v).then(
+          (h) => {
+            if (ds !== d) return; // #247: another dataset since
+            wider = { hourly: h, since: `${v.slice(0, 4)}-01-01` };
             hourly = h;
-            hourlySince = `${v.slice(0, 4)}-01-01`;
-          })
-          .catch(() => {})
-          .finally(() => card.isConnected && drawDay(card));
+            hourlySince = wider.since;
+            if (card.isConnected) drawDay(card);
+          },
+          () => {}, // that day is drawn without the radiators, as before the load
+        );
       }
       drawDay(card);
     }

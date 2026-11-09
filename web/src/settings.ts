@@ -200,6 +200,18 @@ export function validate(name: string, value: string): string | null {
   return null;
 }
 
+/**
+ * #259: the invalid fields among the typed ones, each with its label and its message, so that
+ * the form can point at them and keep every value typed (nothing is re-rendered).
+ */
+export function invalidFields(entries: [string, string][]): { name: string; label: string; error: string }[] {
+  const labels = new Map(GROUPS.flatMap((g) => g.fields.map((f) => [f.name, f.label] as const)));
+  return entries.flatMap(([name, value]) => {
+    const error = validate(name, value);
+    return error ? [{ name, label: labels.get(name) ?? name, error }] : [];
+  });
+}
+
 // ------------------------------------------------------------------ S-1.12 expiry of tokens
 export interface SourceStatus {
   ok?: string;

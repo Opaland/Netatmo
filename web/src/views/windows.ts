@@ -1,7 +1,7 @@
 // E13 card in Confort (lazy chunk, document loaded on demand): open windows, boost, setpoint modes,
 // heating and load shedding per room, from the hourly room-state snapshots (S-13.3 to S-13.6).
 import { addDays, bucketLabel } from '../aggregate';
-import { ds, onDatasetLoaded, rerender, state } from '../app';
+import { datasetDoc, ds, onDatasetLoaded, rerender, state } from '../app';
 import { barChart } from '../charts';
 import { isBedroom } from '../comfort';
 import { loadRoomState } from '../data';
@@ -28,8 +28,9 @@ import {
 
 const BEDROOMS = BEDROOMS_ID;
 const EXCLUDE_HOURS = 2;
+// #247: loaded for the dataset shown; `doc` / `failed` are refreshed from it at each render.
+const stateDoc = datasetDoc(async (d) => (await loadRoomState(d)) ?? ({} as RoomState));
 let doc: RoomState | null = null;
-let loading = false;
 let failed = false;
 let exclude = false;
 onDatasetLoaded(() => {
@@ -42,19 +43,8 @@ const f1 = (v: number) => v.toFixed(1).replace('.', ',').replace('-', '−');
 const h1 = (v: number) => `${f1(v)} h`;
 
 function ensure() {
-  if (doc || loading || failed) return;
-  loading = true;
-  loadRoomState(ds!)
-    .then((d) => {
-      doc = d ?? {};
-    })
-    .catch(() => {
-      failed = true;
-    })
-    .finally(() => {
-      loading = false;
-      if (state.view === 'comfort') rerender();
-    });
+  doc = stateDoc.get(ds, () => state.view === 'comfort' && rerender()) ?? null;
+  failed = stateDoc.status(ds) === 'failed';
 }
 
 function roomLabel(id: string) {

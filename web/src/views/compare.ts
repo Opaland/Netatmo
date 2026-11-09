@@ -34,6 +34,7 @@ import {
   yearColor,
 } from '../ui';
 import { html } from '../trusted';
+import { lazyCard } from '../lazy';
 import { tenant, tenantNote } from '../tenant';
 
 export function renderCompare(view: HTMLElement, records: DayRecord[]) {
@@ -127,7 +128,7 @@ export function renderCompare(view: HTMLElement, records: DayRecord[]) {
   view.insertAdjacentHTML('beforeend', html(comparatorCard()));
   drawComparator();
   // S-2.14: electric-vehicle charging simulator, lazy module
-  void import('./ev').then((m) => m.mountEv(view)).catch(() => {});
+  void lazyCard(() => import('./ev'), (m) => m.mountEv(view), { zone: null, what: 'Voiture électrique' });
   const el = document.getElementById('cmp-chart')!;
   let ser: Series[] = [];
   let labels: string[] = [];

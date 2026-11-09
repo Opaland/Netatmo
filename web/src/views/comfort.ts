@@ -1,7 +1,7 @@
 // Comfort ("Confort"), loaded on demand: night CO₂ (S-11.1), cellar humidity (S-11.2),
 // hours under a threshold per room (S-11.3) and radiator probe vs station (S-3.8).
 import { addDays, bucketLabel, minusYears } from '../aggregate';
-import { ds, householdStatus, onDatasetLoaded, rerender, revealBedrooms, setState, state } from '../app';
+import { datasetDoc, ds, householdStatus, onDatasetLoaded, rerender, revealBedrooms, setState, state } from '../app';
 import {
   type NightRow,
   type StationHourly,
@@ -30,10 +30,12 @@ import { type Station, loadStationHourly } from '../data';
 import { activeRooms, esc, lastDay, longDate, nf0, series, table, tableToggle } from '../ui';
 import { html } from '../trusted';
 import * as windows from './windows';
+import { lazyCard } from '../lazy';
 import * as ha from './ha';
 
+// #247: station hourly readings of the dataset shown; `hourly` / `hourlyFailed` refreshed from it.
+const stationDoc = datasetDoc((d) => loadStationHourly(d));
 let hourly: StationHourly | null = null;
-let hourlyLoading = false;
 let hourlyFailed = false;
 /** S-11.1 / S-12.2: bedroom detail hidden until a deliberate gesture, forgotten at the next lock. */
 let showBedrooms = false;
@@ -90,7 +92,7 @@ export function renderComfort(view: HTMLElement) {
   drawCold(st, map);
   windows.drawWindows(showBedrooms);
   // S-12.5: prolonged cold alert of the rooms followed (lazy module)
-  void import('./coldalert').then((m) => m.mountColdBanner(document.getElementById('cold-alert-zone'))).catch(() => {});
+  void lazyCard(() => import('./coldalert'), (m) => m.mountColdBanner(document.getElementById('cold-alert-zone')), { zone: 'cold-alert-zone', what: 'Alerte froid prolongé' });
 }
 
 // ------------------------------------------------------------------ S-11.1 night CO₂
@@ -304,20 +306,9 @@ function coldPerDay(st: Station, k: string, thr: number): Map<string, { n: numbe
 }
 
 function ensureHourly() {
-  if (hourly || hourlyLoading || hourlyFailed || !(ds!.meta.station_hourly_years ?? []).length) return;
-  hourlyLoading = true;
-  loadStationHourly(ds!)
-    .then((h) => {
-      hourly = h;
-      if (state.view === 'comfort') rerender();
-    })
-    .catch(() => {
-      hourlyFailed = true;
-      if (state.view === 'comfort') rerender();
-    })
-    .finally(() => {
-      hourlyLoading = false;
-    });
+  if (!(ds!.meta.station_hourly_years ?? []).length) return;
+  hourly = stationDoc.get(ds, () => state.view === 'comfort' && rerender()) ?? null;
+  hourlyFailed = stationDoc.status(ds) === 'failed';
 }
 
 function currentSeason() {
@@ -467,8 +458,9 @@ function drawProbes(st: Station, map: Map<string, string>) {
 export function handleClick(btn: HTMLElement): boolean {
   if (btn.dataset.comfort === 'show-bedrooms') {
     // S-12.2: the same gesture also lifts the household view (bedrooms merged elsewhere);
-    // it reloads the dataset, which resets this view: set the flag afterwards.
-    if (householdStatus().active) revealBedrooms(true);
+    // it changes the dataset shown, which resets this view: set the flag afterwards, then one
+    // render only (#255).
+    if (householdStatus().active) revealBedrooms(true, false);
     showBedrooms = true;
     rerender();
     return true;

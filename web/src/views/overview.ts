@@ -42,6 +42,7 @@ import {
 } from '../ui';
 import { qualityCard, uncertainBuckets, uncertainDays } from './quality';
 import { html } from '../trusted';
+import { lazyCard } from '../lazy';
 import { tenant, tenantNote } from '../tenant';
 import { ENERGY_ONLY, costScope, linkyMonths, pmaxMonths, projectedCost, twelveMonths } from '../synthese';
 import { comparedToLastYear, costSentence, glossarySection, kpiTitle, plainNum, term, verdictSentences, verdictTitle } from '../plain';
@@ -145,9 +146,9 @@ export function renderOverview(view: HTMLElement, records: DayRecord[]) {
   drawCurve();
   drawBreakdown();
   // S-2.11 / S-2.12 / S-2.13: budget, CO₂ and new tariff, loaded on demand (S-7.10)
-  import('./budget').then((m) => m.fillOverview()).catch(() => {});
+  void lazyCard(() => import('./budget'), (m) => m.fillOverview(), { zone: 'grid-zone', what: 'Budget et CO₂' });
   // S-2.3: reconcile with an invoice (lazy module)
-  import('./invoice').then((m) => m.fillInvoice()).catch(() => {});
+  void lazyCard(() => import('./invoice'), (m) => m.fillInvoice(), { zone: 'invoice-zone', what: 'Facture' });
 
   const set = aggregate(records, from, to, state.gran, split === 'category' ? (r) => r.cat : (r) => roomGroup(r.room));
   const order =
@@ -250,7 +251,7 @@ function linkyCard() {
 function drawOffload() {
   const el = document.getElementById('offload-zone');
   if (!el) return;
-  import('./offload').then((m) => m.fillOffload(el)).catch(() => el.remove());
+  void lazyCard(() => import('./offload'), (m) => m.fillOffload(el), { zone: el, what: 'Délestage' });
 }
 
 /** Linky 30-min load curve: placeholder filled by the lazily imported ./linky module. */
@@ -262,7 +263,7 @@ function curveCard() {
 function drawCurve() {
   const card = document.getElementById('curve-card');
   if (!card) return;
-  import('./linky').then((m) => card.isConnected && m.renderCurveCard(card)).catch(() => card.remove());
+  void lazyCard(() => import('./linky'), (m) => card.isConnected && m.renderCurveCard(card), { zone: card, what: 'Courbe de charge' });
 }
 
 /** S-4.12 / S-1.17: breakdown of the Linky "other usages", lazily imported ./breakdown module. */
@@ -273,7 +274,7 @@ function breakdownCard() {
 function drawBreakdown() {
   const card = document.getElementById('breakdown-card');
   if (!card) return;
-  import('./breakdown').then((m) => card.isConnected && m.renderBreakdownCard(card)).catch(() => card.remove());
+  void lazyCard(() => import('./breakdown'), (m) => card.isConnected && m.renderBreakdownCard(card), { zone: card, what: 'Autres usages en détail' });
 }
 
 function drawLinky() {

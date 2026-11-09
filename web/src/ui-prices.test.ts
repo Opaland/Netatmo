@@ -19,6 +19,7 @@ vi.mock('./app', () => ({
     return h.state;
   },
   activeRooms: () => [],
+  onLock: () => {},
 }));
 vi.mock('./charts', () => ({ cssVar: () => '', escapeHtml: (s: string) => s, waterfallChart: () => {}, fmtKwh: String }));
 vi.mock('./tenant', () => ({ tenant: () => h.tenant }));
