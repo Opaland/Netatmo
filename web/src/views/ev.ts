@@ -3,8 +3,8 @@
 // with the Linky 30-min curve, the half hours where the subscribed power would be exceeded.
 import { addDays, minusYears } from '../aggregate';
 import { KVA_STEPS, compareOffers, daySplits, offPeakShares } from '../analysis';
-import { ds, onDatasetLoaded, state } from '../app';
-import { type Curve, lastCurveDay } from '../curve';
+import { datasetDoc, ds, state } from '../app';
+import { lastCurveDay } from '../curve';
 import { loadCurve } from '../data';
 import { type EvInput, HC_END, HC_START, addCharge, chargePeaks, evPlan, kmPerYear } from '../ev';
 import { periodAt } from '../offers';
@@ -43,12 +43,8 @@ function save(v: EvInput) {
   }
 }
 
-let curve: Curve | null = null;
-let curveLoading: Promise<Curve> | null = null;
-onDatasetLoaded(() => {
-  curve = null;
-  curveLoading = null;
-});
+// #247: the Linky curve of the dataset shown (forgotten when it changes and on lock).
+const curveDoc = datasetDoc((d) => loadCurve(d));
 
 const nf1 = new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 1 });
 const kw = (w: number) => `${nf1.format(w / 1000)} kW`;
@@ -163,20 +159,12 @@ function drawPeaks(zone: HTMLElement, plan: NonNullable<ReturnType<typeof evPlan
     zone.innerHTML = html('<p class="hint muted">Dépassements de la puissance souscrite : disponibles avec la courbe de charge Linky (30 min), à activer dans votre espace Enedis.</p>');
     return;
   }
+  const curve = curveDoc.get(ds, () => zone.isConnected && drawPeaks(zone, plan, hasCurve));
   if (!curve) {
-    zone.innerHTML = html('<p class="hint muted">Chargement de la courbe de charge…</p>');
-    const d = ds;
-    curveLoading ??= loadCurve(d);
-    curveLoading
-      .then((c) => {
-        if (ds !== d) return;
-        curve = c;
-        if (zone.isConnected) drawPeaks(zone, plan, hasCurve);
-      })
-      .catch(() => {
-        curveLoading = null;
-        if (zone.isConnected) zone.innerHTML = html('<p class="hint muted">Courbe de charge indisponible hors ligne.</p>');
-      });
+    const failed = curveDoc.status(ds) === 'failed';
+    zone.innerHTML = html`<p class="hint muted">${
+      !failed ? 'Chargement de la courbe de charge…' : navigator.onLine ? 'Courbe de charge indisponible.' : 'Courbe de charge indisponible hors ligne.'
+    }</p>`;
     return;
   }
   const end = lastCurveDay(curve);

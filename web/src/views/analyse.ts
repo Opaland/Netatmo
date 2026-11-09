@@ -1,10 +1,11 @@
 // Analyse: AI insight, energy signature, anomalies, calendar, hourly profile,
 // peak / off-peak split, Netatmo station and room temperatures.
 import { type DayRecord, addDays, bucketLabel, minusYears } from '../aggregate';
-import { type Hourly, anomalies, dayProfile, daysAbove, fitSeason, signaturePoints, tariffSplit, weekHourGrid } from '../analysis';
-import { ds, onDatasetLoaded, rerender, setState, state } from '../app';
+import { anomalies, dayProfile, daysAbove, fitSeason, signaturePoints, tariffSplit, weekHourGrid } from '../analysis';
+import { datasetDoc, ds, rerender, setState, state } from '../app';
 import { calendarChart, cssVar, gridHeatmap, lineChart, scatterChart } from '../charts';
 import { loadHourly, loadRoomState } from '../data';
+import { lazyCard } from '../lazy';
 import { unavailable } from '../offline';
 import { activeRooms, catColor, esc, fmtKwh, lastDay, longDate, seg, series, table, tariffNames } from '../ui';
 import { SUSPECT_RATIO } from '../reconstitute';
@@ -14,34 +15,24 @@ import { drawWaterHeater, hcAlerts, waterHeaterCard } from './waterheater';
 import { html } from '../trusted';
 import { tenant } from '../tenant'; // S-12.6: works are the owner's business
 
-let hourly: Hourly | null = null;
-let hourlyLoading = false;
+// #247: documents loaded on demand for the dataset shown; a late result of another dataset is dropped.
+// #251: 12 months (water heater), 90 days (profile)
+const hourlyDoc = datasetDoc((d) => loadHourly(d, addDays(minusYears(d.meta.last_day ?? lastDay()), 1)));
 // S-13.3 / S-13.4: open-window hours and absence-mode days, a possible explanation of an unusual day
-let explain: { open: Map<string, number>; away: Set<string> } | null = null;
-let explainLoading = false;
-onDatasetLoaded(() => {
-  hourly = null;
-  explain = null;
+const explainDoc = datasetDoc(async (d) => {
+  const [rs, w] = await Promise.all([loadRoomState(d), import('../windows')]);
+  return rs ? { open: w.openByDay(rs), away: w.absenceDays(rs) } : { open: new Map<string, number>(), away: new Set<string>() };
 });
+const redraw = () => state.view === 'analyse' && rerender();
 
 function loadExplanations() {
-  if (explain || explainLoading || !ds!.meta.has_roomstate) return;
-  explainLoading = true;
-  Promise.all([loadRoomState(ds!), import('../windows')])
-    .then(([rs, w]) => {
-      explain = rs ? { open: w.openByDay(rs), away: w.absenceDays(rs) } : { open: new Map(), away: new Set() };
-      if (state.view === 'analyse') rerender();
-    })
-    .catch(() => {
-      explain = { open: new Map(), away: new Set() };
-    })
-    .finally(() => {
-      explainLoading = false;
-    });
+  if (ds!.meta.has_roomstate) explainDoc.get(ds, (ok) => ok && redraw());
 }
 
 /** « fenêtre ouverte N h » / « mode absence », or '—' (S-13.3). */
 function explanation(day: string): string {
+  if (explainDoc.status(ds) === 'failed') return '—';
+  const explain = explainDoc.get(ds);
   if (!explain) return '…';
   const parts: string[] = [];
   const open = explain.open.get(day) ?? 0;
@@ -162,9 +153,9 @@ export function renderAnalyse(view: HTMLElement, records: DayRecord[]) {
   };
   calendarChart(document.getElementById('cal-chart')!, cal);
   // S-4.9 telework cost, S-4.10 absences (marks on the calendar), loaded on demand (S-7.10)
-  import('./habits').then((m) => m.fillAnalyse(cal)).catch(() => {});
+  void lazyCard(() => import('./habits'), (m) => m.fillAnalyse(cal), { zone: 'absence-zone', what: 'Absences et télétravail' });
   // S-6.2: surfaces and works markers, signature before / after (lazy module)
-  import('./works').then((m) => m.fillWorks(records)).catch(() => {});
+  if (document.getElementById('works-zone')) void lazyCard(() => import('./works'), (m) => m.fillWorks(records), { zone: 'works-zone', what: 'Travaux et surfaces' });
   // temperatures
   if (tempRoom) {
     const from = addDays(minusYears(last), 1);
@@ -183,16 +174,19 @@ export function renderAnalyse(view: HTMLElement, records: DayRecord[]) {
     });
   }
   // S-5.7/S-5.8: AI card loaded on demand (markdown renderer, votes, usage)
-  if (ds!.insights) void import('./insight').then((m) => m.mountInsight(document.getElementById('insight-card')));
+  if (ds!.insights) void lazyCard(() => import('./insight'), (m) => m.mountInsight(document.getElementById('insight-card')), { zone: 'insight-card', what: 'Analyse IA' });
   drawStation();
   drawHourly(records);
-  drawWaterHeater(hourly);
+  drawWaterHeater(hourlyDoc.status(ds) === 'ready' ? hourlyDoc.get(ds)! : null);
   drawSetpoint(records);
   // S-2.15: heat pump estimate, lazy module
-  void import('./heatpump').then((m) => m.mountHeatPump(document.getElementById('hp-card'), records)).catch(() => {});
+  if (document.getElementById('hp-card')) void lazyCard(() => import('./heatpump'), (m) => m.mountHeatPump(document.getElementById('hp-card'), records), { zone: 'hp-card', what: 'Pompe à chaleur' });
   drawIndoorSignature(records);
   // S-9.6: « volets fermés » journal, lazy module
-  void import('./shutters').then((m) => document.getElementById('shutters-zone') && m.renderShutters(document.getElementById('shutters-zone')!));
+  void lazyCard(() => import('./shutters'), (m) => {
+    const zone = document.getElementById('shutters-zone');
+    if (zone) m.renderShutters(zone);
+  }, { zone: 'shutters-zone', what: 'Volets fermés' });
 }
 
 function anomaliesCard(records: DayRecord[]) {
@@ -224,7 +218,7 @@ function anomaliesCard(records: DayRecord[]) {
 function drawIndoorSignature(records: DayRecord[]) {
   const card = document.getElementById('indoor-sig');
   if (!card || !ds!.station) return card?.remove();
-  import('./indoorsig').then((m) => card.isConnected && m.renderIndoorSignature(card, records)).catch(() => card.remove());
+  void lazyCard(() => import('./indoorsig'), (m) => card.isConnected && m.renderIndoorSignature(card, records), { zone: card, what: 'Signature intérieure' });
 }
 
 // ------------------------------------------------------------------ Netatmo weather station
@@ -291,20 +285,9 @@ function drawStation() {
 function drawHourly(records: DayRecord[]) {
   const zone = document.getElementById('hourly-zone');
   if (!zone || !(ds!.meta.hourly_years ?? []).length) return;
+  const hourly = hourlyDoc.get(ds, redraw);
   if (!hourly) {
-    if (!hourlyLoading) {
-      hourlyLoading = true;
-      loadHourly(ds!, addDays(minusYears(lastDay()), 1)) // #251: 12 months (water heater), 90 days (profile)
-        .then((h) => {
-          hourly = h;
-          hourlyLoading = false;
-          if (state.view === 'analyse') rerender();
-        })
-        .catch(() => {
-          hourlyLoading = false;
-          zone.innerHTML = html`<p class="hint muted">${unavailable('Données horaires')}</p>`;
-        });
-    }
+    if (hourlyDoc.status(ds) === 'failed') zone.innerHTML = html`<p class="hint muted">${unavailable('Données horaires')}</p>`;
     return;
   }
   const last = lastDay();

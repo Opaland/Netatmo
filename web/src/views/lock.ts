@@ -2,7 +2,7 @@
 import { app, rerender, setDataset } from '../app';
 import { disposeAll, escapeHtml as esc } from '../charts';
 import { WrongPassphrase } from '../crypto';
-import { type Source, load, rememberKey, unlock } from '../data';
+import { type Dataset, type Source, load, rememberKey, unlock } from '../data';
 import { html } from '../trusted';
 import { INSTALL_HASH, installSteps } from '../invite';
 
@@ -44,21 +44,59 @@ export function renderLock(message = '', hasRealData = true, notice = '') {
   document.getElementById('demo')!.addEventListener('click', () => open('demo', 'demo', false));
 }
 
+/** #254: one unlock at a time (passphrase or demo), the other buttons wait. */
+let opening = false;
+
 async function open(source: Source, pass: string, remember: boolean) {
-  const btn = app.querySelector<HTMLButtonElement>('button.primary, #demo');
-  if (btn) btn.disabled = true;
+  if (opening) return;
+  opening = true;
+  for (const el of app.querySelectorAll<HTMLButtonElement | HTMLInputElement>('.lock-card button, .lock-card input')) el.disabled = true;
+  app.querySelector('.lock-card')?.setAttribute('aria-busy', 'true');
   app.querySelector('.error')!.textContent = 'Déchiffrement…';
+  let opened: Dataset;
   try {
     const key = await unlock(source, pass);
     if (remember) await rememberKey(source, key);
     // S-12.3: the install fragment of an invitation has done its job
     if (location.hash === INSTALL_HASH) history.replaceState(null, '', location.pathname + location.search);
     renderLoading();
-    setDataset(await load(source, key));
-    rerender();
+    opened = await load(source, key);
   } catch (err) {
     renderLock(err instanceof WrongPassphrase ? 'Phrase de passe incorrecte.' : `Erreur : ${(err as Error).message}`);
+    return;
+  } finally {
+    opening = false;
   }
+  setDataset(opened);
+  showApp();
+}
+
+/**
+ * #250: draw the app once a dataset is installed. A rendering error is a bug, not a lock
+ * problem: it gets its own screen (and a console.error), the data stay decrypted until locked.
+ */
+export function showApp() {
+  try {
+    rerender();
+  } catch (err) {
+    console.error(err);
+    renderError(err);
+  }
+}
+
+/** The app could not be drawn: say so, offer to reload or to lock. */
+export function renderError(err: unknown) {
+  disposeAll(app);
+  app.innerHTML = html`
+  <main class="lock">
+    <div class="lock-card">
+      <h1>Affichage impossible</h1>
+      <p class="error" role="alert">Les données sont bien déchiffrées, mais l'affichage a échoué : ${esc(err instanceof Error ? err.message : String(err))}</p>
+      <p class="muted">Rechargez la page ; si l'erreur revient, signalez-la (le détail est dans la console du navigateur).</p>
+      <button class="primary" type="button" id="reload">Recharger</button>
+    </div>
+  </main>`;
+  document.getElementById('reload')!.addEventListener('click', () => location.reload());
 }
 
 export function renderLoading() {

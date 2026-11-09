@@ -39,8 +39,11 @@ onDatasetLoaded(() => {
 
 /** Surfaces and markers of this dataset (also used by the research export, S-6.6). */
 export async function loadWorks(): Promise<HomeWorks> {
-  works ??= await loadNote(NOTE, ds!.source, ds!.key, validWorks, NO_WORKS);
-  return works;
+  if (works) return works;
+  const d = ds!;
+  const w = await loadNote(NOTE, d.source, d.key, validWorks, NO_WORKS);
+  if (ds === d) works = w; // #247: never another dataset's notes
+  return w;
 }
 
 let lastRecords: DayRecord[] = [];
@@ -48,8 +51,9 @@ let lastRecords: DayRecord[] = [];
 /** Called by analyse.ts once this module is loaded. */
 export async function fillWorks(records: DayRecord[]) {
   lastRecords = records;
+  const d = ds;
   await loadWorks();
-  draw();
+  if (ds === d) draw(); // #247: else the new dataset's render fills its own card
 }
 
 function draw() {

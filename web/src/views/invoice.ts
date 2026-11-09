@@ -27,7 +27,12 @@ const signed = (v: number) => `${v > 0 ? '+' : v < 0 ? '−' : ''}${eur2(Math.ab
 export async function fillInvoice() {
   const zone = document.getElementById('invoice-zone');
   if (!zone) return;
-  invoices ??= await loadNote(NOTE, ds!.source, ds!.key, validList, []);
+  if (!invoices) {
+    const d = ds!;
+    const list = await loadNote(NOTE, d.source, d.key, validList, []);
+    if (ds !== d) return; // #247: locked or another dataset since
+    invoices = list;
+  }
   draw();
 }
 

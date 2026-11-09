@@ -1,10 +1,12 @@
 // S-1.10: data quality per month. Days estimated from a monthly total (Intuis kept the
 // month but lost the days) vs days lost at Intuis (neither the day nor the month).
-import { type DayRecord, MONTHS_LONG, bucketKey } from '../aggregate';
+import { type DayRecord, type Granularity, MONTHS_LONG, minusYears } from '../aggregate';
 import { app, ds, onDatasetLoaded, state } from '../app';
 import { type Coverage, computeCoverage, gapMonths, uncertainDays } from '../checks';
+import { bucketMarks, countIn, shortDate, uncertainText } from '../periods';
 import { activeRooms, esc, lastDay, roomName, table } from '../ui';
 import { html } from '../trusted';
+import { lazyCard } from '../lazy';
 
 let cached: Coverage | null = null;
 onDatasetLoaded(() => {
@@ -46,9 +48,7 @@ export function drawReconstitution() {
   if (!zone) return;
   if (!reconOn) return void (zone.innerHTML = html(''));
   zone.innerHTML = html('<p class="hint muted">Reconstitution en cours…</p>');
-  import('./reconstitution')
-    .then((m) => zone.isConnected && m.renderReconstitution(zone))
-    .catch(() => (zone.innerHTML = html('<p class="hint muted">Reconstitution indisponible.</p>')));
+  void lazyCard(() => import('./reconstitution'), (m) => zone.isConnected && m.renderReconstitution(zone), { zone, what: 'Reconstitution' });
 }
 
 // The "N jours estimés" link of the period total opens the card.
@@ -74,7 +74,7 @@ export function qualityCard(): string {
   if (lost && reconOn) queueMicrotask(drawReconstitution);
   return `<details class="card quality" id="quality">
     <summary><strong>Qualité des données</strong> · ${gaps.length} mois incomplet${gaps.length > 1 ? 's' : ''} (${years.join(', ')})</summary>
-    <p class="hint muted"><strong>Estimé</strong> : Intuis a gardé le total du mois mais perdu le détail de certains jours ; la collecte répartit l'écart sur ces jours. <strong>Perdu chez Intuis</strong> : ni le jour ni le total du mois ne sont disponibles ; la consommation de ces jours manque dans les totaux, qui ne contiennent que des valeurs mesurées. Sur les graphiques par jour et par semaine, les barres concernées sont plus pâles.</p>
+    <p class="hint muted"><strong>Estimé</strong> : Intuis a gardé le total du mois mais perdu le détail de certains jours ; la collecte répartit l'écart sur ces jours. <strong>Perdu chez Intuis</strong> : ni le jour ni le total du mois ne sont disponibles ; la consommation de ces jours manque dans les totaux, qui ne contiennent que des valeurs mesurées. Sur les graphiques, les barres qui contiennent de tels jours sont plus pâles à toutes les granularités (jour, semaine, mois, an), et leur infobulle donne le nombre de jours ; les évolutions par rapport à l'année précédente le signalent.</p>
     ${table(
       ['Mois', 'Jours estimés', 'Jours perdus chez Intuis', 'Pièces concernées'],
       gaps.map((g) => [
@@ -98,11 +98,36 @@ export function qualityCard(): string {
   </details>`;
 }
 
-/** Per chart bucket (day or week): does it contain an estimated or lost day? */
-export function uncertainBuckets(records: DayRecord[], keys: string[], from: string, to: string): boolean[] | undefined {
-  if (state.gran !== 'day' && state.gran !== 'week') return undefined;
-  const days = uncertainDays(records, ds!.estimated, from, to);
-  if (!days.size) return undefined;
-  const flagged = new Set([...days].map((d) => bucketKey(d, state.gran)));
-  return keys.map((k) => flagged.has(k));
+/** #297: the estimated or lost days behind a « vs N-1 » of [from, to] (HTML, empty when there are none). */
+export function yoyGapNote(records: DayRecord[], from: string, to: string): string {
+  const pf = minusYears(from);
+  const pt = minusYears(to);
+  const days = uncertainDays(records, ds!.estimated, pf, to);
+  const now = countIn(days, from, to);
+  const before = countIn(days, pf, pt);
+  const first = records.reduce((a, r) => (r.day < a ? r.day : a), records[0]?.day ?? pf);
+  const parts = [
+    ...(first > pf && first <= pt ? [`N-1 incomplète : collecte depuis le ${shortDate(first, true)}`] : []),
+    ...(now ? [`${from.slice(0, 4)} : ${uncertainText(now)}`] : []),
+    ...(before ? [`N-1 : ${uncertainText(before)}`] : []),
+  ];
+  return parts.length ? `<br><small class="muted">${esc(parts.join(' · '))}</small>` : '';
+}
+
+/**
+ * #297: what a bar chart over [from, to] must say about its buckets: paler when they hold
+ * estimated or lost days, hatched when the period or the data covers them only in part
+ * (first and last bucket of a sliding period, first data year, current month), and a
+ * tooltip note with the days (« 22 jours sur 30 », « 18 jours estimés ou manquants »).
+ */
+export function chartMarks(records: DayRecord[], keys: string[], from: string, to: string, g: Granularity = state.gran) {
+  const first = records.reduce((a, r) => (r.day < a ? r.day : a), records[0]?.day ?? from);
+  const lo = first > from ? first : from;
+  const hi = lastDay() < to ? lastDay() : to;
+  const marks = bucketMarks(keys, g, lo, hi, uncertainDays(records, ds!.estimated, lo, hi));
+  return {
+    muted: marks.some((m) => m.uncertain) ? marks.map((m) => m.uncertain > 0) : undefined,
+    partial: marks.some((m) => m.partial) ? marks.map((m) => m.partial) : undefined,
+    notes: marks.some((m) => m.note) ? marks.map((m) => m.note) : undefined,
+  };
 }

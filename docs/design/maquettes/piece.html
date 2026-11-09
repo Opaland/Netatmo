@@ -11,9 +11,32 @@
 <header class="top"><a class="back" href="pieces.html" aria-label="Retour">←</a><h1>Salon</h1><a class="icon-btn" href="parametres.html" aria-label="Paramètres"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/></svg></a></header>
 <main>
 
+<section class="card" aria-labelledby="now">
+  <h2 id="now" class="sr-only">Maintenant</h2>
+  <div class="now">
+    <div class="temp num">19,8<small> °C</small></div>
+    <dl>
+      <dt>Consigne</dt><dd>20 °C</dd>
+      <dt>Mode</dt><dd>Confort jusqu'à 22 h, puis économie 17 °C</dd>
+      <dt>Fenêtre</dt><dd>fermée</dd>
+      <dt>Humidité · CO₂</dt><dd>52 % · 780 ppm</dd>
+    </dl>
+  </div>
+  <div class="sched" role="img" aria-label="Planning d'aujourd'hui : confort de 6 h à 8 h et de 17 h à 22 h, économie le reste du temps ; heures creuses de 22 h à 6 h hachurées">
+    <div class="lane">
+      <i class="hc" style="left:0;width:25%"></i><i class="hc" style="left:91.7%;width:8.3%"></i>
+      <i class="eco" style="left:0;width:100%"></i>
+      <i class="comfort" style="left:25%;width:8.3%"></i><i class="comfort" style="left:70.8%;width:20.8%"></i>
+      <i class="now-line" style="left:79%"></i>
+    </div>
+    <div class="hours"><span>0 h</span><span>6 h</span><span>12 h</span><span>18 h</span><span>24 h</span></div>
+  </div>
+  <div class="legend"><span><i class="sw" style="background:var(--usage-heating)"></i>Confort</span><span><i class="sw" style="background:var(--usage-other)"></i>Économie</span><span><i class="hatch" style="background:repeating-linear-gradient(135deg,var(--accent-soft) 0 3px,transparent 3px 6px);border-color:var(--accent)"></i>Heures creuses</span><a href="outils.html">Vérifier mon planning</a></div>
+</section>
+
 <div class="tiles">
-  <div class="tile"><div class="label">Depuis le 1ᵉʳ janvier</div><div class="value">234 €</div><div class="delta down">▼ 20 % que l'an dernier</div></div>
-  <div class="tile"><div class="label">Température moyenne</div><div class="value">19,6 °C</div><div class="delta">consigne 20 °C</div></div>
+  <div class="tile"><div class="label">Depuis le 1ᵉʳ janvier</div><div class="value">234 €</div><div class="delta down"><b>−20 %</b> <span class="vs">vs 2025 à date</span></div></div>
+  <div class="tile"><div class="label">Moyenne depuis le 1ᵉʳ nov.</div><div class="value">19,6 °C</div><div class="delta">consigne 20 °C</div></div>
 </div>
 <section class="card">
   <div class="card-head"><h2>Température</h2><span class="sub">15 derniers jours</span></div>
@@ -27,7 +50,7 @@
 <circle cx="121.4" cy="71.2" r="5" fill="var(--state-warn)"/>
 <circle cx="144.3" cy="74.8" r="5" fill="var(--state-warn)"/>
 <text x="30" y="120">25 oct.</text><text x="350" y="120" text-anchor="end">8 nov.</text></svg>
-  <div class="legend"><span><i class="sw" style="background:var(--text)"></i>Mesurée (station)</span><span>- - Consigne</span><span><i class="sw" style="background:var(--state-warn);border-radius:50%"></i>Jour sous 19 °C</span></div>
+  <div class="legend"><span><i class="sw" style="background:var(--text)"></i>Mesurée (station)</span><span>– – Consigne</span><span><i class="sw" style="background:var(--state-warn);border-radius:50%"></i>Jour sous 19 °C</span></div>
 </section>
 <section class="card" id="froid">
   <div class="card-head"><h2>Pourquoi il a fait froid</h2><span class="sub">2 jours sous 19 °C</span></div>
@@ -38,7 +61,7 @@
   <details class="how"><summary>Comment c'est calculé</summary><p>Relevé horaire de l'état des radiateurs (fenêtre, boost, délestage, mode) croisé avec la température du module de la station lié à la pièce.</p></details>
 </section>
 <section class="card">
-  <div class="card-head"><h2>Consommation</h2><button class="period" type="button">12 derniers mois ▾</button></div>
+  <div class="card-head"><h2>Consommation</h2><span class="sub">12 derniers mois</span></div>
   <p class="sub"><b>1 263 kWh</b> en 2026 à date, contre 1 570 kWh l'an dernier.</p>
   <svg class="chart" viewBox="0 0 360 150" role="img" aria-labelledby="c3t"><title id="c3t">Salon, kWh par mois : pic en janvier (190 kWh), rien de juin à août.</title>
 <line class="grid" x1="30" x2="360" y1="120.0" y2="120.0"/><text x="24" y="124.0" text-anchor="end">0</text>

@@ -8,6 +8,7 @@ import { bedroomIds, householdView, translateRooms } from './household';
 import { sameContract, validContract } from './contract';
 import type { ContractPeriod } from './offers';
 import { DEFAULT_LOCK_MINUTES } from './session';
+import { DatasetDoc, DatasetHooks } from './loader';
 
 export type View = 'overview' | 'compare' | 'rooms' | 'analyse' | 'comfort' | 'report' | 'settings';
 export type CatFilter = 'all' | Category;
@@ -21,6 +22,8 @@ export interface State {
   split: 'category' | 'room';
   compareYears: number[];
   compareMode: 'monthly' | 'cumul' | 'season';
+  /** #298: heating seasons shown in Comparer, by start year (null: the last three, current one included). */
+  compareSeasons: number[] | null;
   roomsYear: number | null;
   focusRoom: string | null;
   prices: Prices;
@@ -57,6 +60,7 @@ export const DEFAULT: State = {
   split: 'category',
   compareYears: [],
   compareMode: 'monthly',
+  compareSeasons: null,
   roomsYear: null,
   focusRoom: null,
   prices: NO_PRICES,
@@ -122,11 +126,43 @@ export function rerender() {
 /** Decrypted dataset, null while locked (live binding). */
 export let ds: Dataset | null = null;
 let roomsWithData = new Set<string>();
-const resetHooks: (() => void)[] = [];
+const hooks = new DatasetHooks();
 
-/** Views register here what must be forgotten when another dataset is opened. */
+/**
+ * Views register here what must be forgotten when the dataset SHOWN changes: another dataset,
+ * the household view toggled, or the lock (#232: called with `ds` null, every cache emptied).
+ */
 export function onDatasetLoaded(fn: () => void) {
-  resetHooks.push(fn);
+  hooks.onView(fn);
+}
+
+/** Once per freshly decrypted dataset, not when only the display changes (#255). */
+export function onDatasetOpened(fn: () => void) {
+  hooks.onOpen(fn);
+}
+
+/** On lock only: raw caches (decrypted files, memoised series) to empty (#232). */
+export function onLock(fn: () => void) {
+  hooks.onLock(fn);
+}
+
+/**
+ * A document loaded on demand for the dataset shown (#247): see DatasetDoc. Forgotten when the
+ * dataset shown changes or on lock; a failure is retried when the network comes back.
+ */
+const docs: DatasetDoc<Dataset, unknown>[] = [];
+export function datasetDoc<T>(load: (d: Dataset) => Promise<T>): DatasetDoc<Dataset, T> {
+  const doc = new DatasetDoc<Dataset, T>(load);
+  docs.push(doc as DatasetDoc<Dataset, unknown>);
+  onDatasetLoaded(() => doc.reset());
+  return doc;
+}
+if (typeof window !== 'undefined') {
+  window.addEventListener('online', () => {
+    if (!ds || !docs.some((d) => d.status(ds) === 'failed')) return;
+    for (const d of docs) d.retry();
+    rerender();
+  });
 }
 
 /** Rooms shown in the app: not ignored, and with at least one record. */
@@ -136,10 +172,20 @@ export function activeRooms() {
 
 /** Install a freshly loaded dataset (or null when locking) and fix the state against it. */
 export function setDataset(next: Dataset | null) {
+  const fresh = next !== raw;
   raw = next;
   if (!next) revealed = false; // S-12.2: the detail stays visible only until the next lock
-  ds = next && state.groupBedrooms && !revealed ? householdView(next) : next;
-  if (next) initDefaults();
+  applyDisplay(fresh);
+}
+
+/** Apply the display transform (household view) to the raw dataset and run the hooks. */
+function applyDisplay(fresh: boolean) {
+  ds = raw && state.groupBedrooms && !revealed ? householdView(raw) : raw;
+  if (ds) initDefaults(fresh);
+  else {
+    roomsWithData = new Set();
+    hooks.changed(null, false);
+  }
 }
 
 // ------------------------------------------------------------------ household view (S-12.2)
@@ -162,24 +208,27 @@ export function householdStatus() {
   return { active: !!raw && ds !== raw, bedrooms: raw ? bedroomIds(raw.meta.rooms).length : 0, revealed, enabled: state.groupBedrooms };
 }
 
-/** Show (true) or hide again (false) the bedrooms detail, until the next lock. */
-export function revealBedrooms(show: boolean) {
+/**
+ * Show (true) or hide again (false) the bedrooms detail, until the next lock. A display
+ * change only (#255): the decrypted files are reused, nothing is downloaded again.
+ */
+export function revealBedrooms(show: boolean, redraw = true) {
   revealed = show;
-  setDataset(raw);
-  rerender();
+  if (raw) applyDisplay(false);
+  if (redraw) rerender();
 }
 
 /** Turn the household view on or off on this device (persisted). */
 export function setHousehold(on: boolean) {
   revealed = false;
   state = { ...state, groupBedrooms: on };
-  setDataset(raw);
+  if (raw) applyDisplay(false);
   setState({});
 }
 
-function initDefaults() {
+function initDefaults(fresh: boolean) {
   roomsWithData = new Set(ds!.records.map((r) => r.room));
-  for (const fn of resetHooks) fn();
+  hooks.changed(ds, fresh);
   const years = ds!.meta.years;
   const valid = new Set(activeRooms().map((r) => r.id));
   const patch: Partial<State> = {};

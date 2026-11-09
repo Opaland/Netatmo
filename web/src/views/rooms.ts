@@ -1,14 +1,17 @@
 // Rooms ("Pièces"): consumption per room, year-over-year waterfall and per-room detail.
-import { CATEGORY_LABEL, type DayRecord, MONTHS_SHORT, minusYears, monthlyByYear, pctChange, totalsBy } from '../aggregate';
+import { CATEGORY_LABEL, type DayRecord, MONTHS_SHORT, monthlyByYear, pctChange, totalsBy } from '../aggregate';
 import { roomDeltas } from '../analysis';
 import { ds, setState, state } from '../app';
 import { barChart, cssVar, hbarChart } from '../charts';
-import { effectiveMapping } from '../comfort';
+import { uncertainDays } from '../checks';
+import { coldWinterDays, effectiveMapping, seasonOf as seasonOfWinter } from '../comfort';
+import { bucketMarks, monthKeys, windowSuffix, yoyCaveat, yoyWindow } from '../periods';
 import {
   activeRooms,
   avgPrice,
   drawWaterfall,
   esc,
+  firstDay,
   lastDay,
   longDate,
   nf0,
@@ -26,9 +29,19 @@ export function renderRooms(view: HTMLElement, records: DayRecord[]) {
   const last = lastDay();
   const isCurrent = year === Number(last.slice(0, 4));
   const end = isCurrent ? last : `${year}-12-31`;
+  // #297: year over year on the same window (to date; from the first data day when N-1 started late)
+  const first = records.reduce((a, r) => (r.day < a ? r.day : a), records[0]?.day ?? firstDay());
+  const uncertain = uncertainDays(records, ds!.estimated, first, last);
+  const win = yoyWindow(year, first, last);
+  const caveat = yoyCaveat(win, uncertain);
+  const suffix = windowSuffix(win);
   const now = totalsBy(records, `${year}-01-01`, end, (r) => r.room);
-  const before = totalsBy(records, `${year - 1}-01-01`, minusYears(end), (r) => r.room);
+  const nowCmp = win ? totalsBy(records, win.from, win.to, (r) => r.room) : now;
+  const before = win ? totalsBy(records, win.prevFrom, win.prevTo, (r) => r.room) : new Map<string, number>();
   const sum = [...now.values()].reduce((a, b) => a + b, 0);
+  // #294: temperatures and cold days on the winter that ends in this year (Nov → Mar), as in Confort
+  const winter = year - 1;
+  const winterLabel = `hiver ${winter}–${year}`;
   const rooms = activeRooms().filter((r) => now.has(r.id) || before.has(r.id));
   const sorted = rooms.slice().sort((a, b) => (now.get(b.id) ?? 0) - (now.get(a.id) ?? 0));
   const focus = state.focusRoom && rooms.some((r) => r.id === state.focusRoom) ? state.focusRoom : null;
@@ -48,30 +61,45 @@ export function renderRooms(view: HTMLElement, records: DayRecord[]) {
           .join('')}</select></label>
       </div>
     </div>
-    <p class="hint muted">${isCurrent ? `Du 1er janvier au ${longDate(last)}, comparé à la même période de ${year - 1}.` : `Année ${year} complète, comparée à ${year - 1}.`} Touchez une pièce pour voir son détail.</p>
+    <p class="hint muted">${isCurrent ? `Du 1er janvier au ${longDate(last)}, comparé à la même période de ${year - 1}.` : `Année ${year} complète, comparée à ${year - 1}.`}${win?.cut ? ` La collecte a commencé le ${longDate(first)} : l'évolution porte sur la même période des deux années (${win.label}).` : ''}${
+      caveat.includes('jour') ? ` <strong>Attention</strong> : ${esc(caveat.split(' · ').filter((c) => c.includes('jour')).join(', '))}, l'évolution en est faussée.` : ''
+    } Touchez une pièce pour voir son détail.</p>
     <div class="chart" id="rooms-chart" style="height:${Math.max(220, sorted.length * 52 + 40)}px" role="img" aria-label="Consommation par pièce"></div>
     ${table(
-      ['Pièce', 'kWh', 'Part', `${year - 1}`, 'Évolution', ...(hasTemps ? ['Temp. moy.', 'Consigne moy.', `Jours sous ${thrLabel}`] : [])],
+      [
+        'Pièce',
+        'kWh',
+        'Part',
+        `${year - 1}${win?.cut ? ' (même période)' : ''}`,
+        'Évolution',
+        ...(hasTemps ? [`Temp. moy. (${winterLabel})`, 'Consigne moy.', `Jours à moyenne sous ${thrLabel}`] : []),
+      ],
       sorted.map((r) => {
         const v = now.get(r.id) ?? 0;
         const b = before.get(r.id) ?? 0;
-        const d = pctChange(v, b);
-        const tm = winterTemps(r.id, year);
-        const cold = r.category === 'heating' ? coldDays(r.id, year, thr) : null;
+        const d = win ? pctChange(nowCmp.get(r.id) ?? 0, b) : null;
+        const tm = winterTemps(r.id, winter);
+        const cold = r.category === 'heating' ? coldDays(r.id, winter, thr) : null;
         return [
           `<button type="button" class="link" data-focus="${esc(r.id)}"><span class="swatch" style="background:${roomColor(r.id)}"></span>${esc(r.name)}</button> <small class="muted">${CATEGORY_LABEL[r.category]}</small>`,
           v,
           sum ? `${nf0.format((v / sum) * 100)} %` : '—',
           b,
           d === null ? '—' : pct(d),
-          ...(hasTemps ? [tm ? `${tm[0].toFixed(1).replace('.', ',')} °C` : '—', tm?.[1] != null ? `${tm[1].toFixed(1).replace('.', ',')} °C` : '—', cold ? `${cold[0]} j${cold[1] === 'station' ? ' <small class="muted">station</small>' : ''}` : '—'] : []),
+          ...(hasTemps
+            ? [
+                tm ? `${tm[0].toFixed(1).replace('.', ',')} °C` : '—',
+                tm?.[1] != null ? `${tm[1].toFixed(1).replace('.', ',')} °C` : '—',
+                cold ? `${cold.under} j sur ${cold.n} <small class="muted">${cold.source === 'station' ? 'station' : 'radiateur'}</small>` : '—',
+              ]
+            : []),
         ];
       }),
     )}
-    ${hasTemps ? `<p class="hint muted">Températures : moyennes des jours chauffés de l'année (novembre à mars). Jours sous ${thrLabel} : jours de novembre à mars dont la moyenne est sous le seuil, mesurée par la station Netatmo quand la pièce y est liée (« station »), sinon par le radiateur. Seuil et heures détaillées dans Confort.</p>` : ''}
+    ${hasTemps ? `<p class="hint muted">Températures et jours froids : ${winterLabel} (1er novembre ${winter} → 31 mars ${year}), comme dans Confort. Jours à moyenne sous ${thrLabel} : jours dont la température moyenne est sous le seuil, sur les jours relevés de l'hiver ; mesurée par la station Netatmo quand la pièce y est liée (« station »), sinon par la sonde du radiateur. Seuil et heures détaillées dans Confort.</p>` : ''}
   </section>
   <section class="card">
-    <h2>Qu'est-ce qui a changé ? <small class="muted">${year - 1} → ${year}${isCurrent ? ', à date' : ''}</small></h2>
+    <h2>Qu'est-ce qui a changé ? <small class="muted">${year - 1} → ${year}${suffix}</small></h2>
     <p class="hint muted">Chaque barre montre de combien une pièce a fait monter (rouge) ou baisser (vert) le total.</p>
     <div class="chart" id="rooms-waterfall" role="img" aria-label="Évolution par pièce"></div>
   </section>
@@ -98,51 +126,55 @@ export function renderRooms(view: HTMLElement, records: DayRecord[]) {
     price: avgPrice(),
     onClick: (i) => setState({ focusRoom: sorted[i].id }),
   });
-  drawWaterfall(document.getElementById('rooms-waterfall')!, roomDeltas(records, `${year}-01-01`, end), year);
+  drawWaterfall(document.getElementById('rooms-waterfall')!, roomDeltas(records, win?.from ?? `${year}-01-01`, win?.to ?? end), year, suffix);
   if (focus) {
-    const m = monthlyByYear(records.filter((r) => r.room === focus));
+    const mine = records.filter((r) => r.room === focus);
+    const m = monthlyByYear(mine);
     const shown = years.filter((y) => y >= year - 2 && y <= year);
+    // #297: partial months and months with estimated or lost days of this room
+    const roomFirst = mine[0]?.day ?? first;
+    const roomUncertain = uncertainDays(mine, ds!.estimated, roomFirst, last);
     barChart(document.getElementById('room-detail')!, {
       labels: MONTHS_SHORT,
-      series: shown.map((y) => ({ name: String(y), color: yearColor(y), data: (m.get(y) ?? []).map((v) => (v === null ? null : Math.round(v))) })),
+      series: shown.map((y) => {
+        const marks = bucketMarks(monthKeys(y), 'month', roomFirst, last, roomUncertain);
+        return {
+          name: String(y),
+          color: yearColor(y),
+          data: (m.get(y) ?? []).map((v) => (v === null ? null : Math.round(v))),
+          raw: m.get(y) ?? [],
+          notes: marks.map((k) => k.note),
+          marks: marks.map((k) => k.partial || k.uncertain > 0),
+        };
+      }),
       stacked: false,
       price: avgPrice(),
     });
   }
 }
 
-/** Average measured temperature and setpoint over Nov–Mar days of that year. */
-function winterTemps(room: string, year: number): [number, number | null] | null {
+/** Average measured temperature and setpoint over the winter `season` (Nov → Mar, #294). */
+function winterTemps(room: string, season: number): [number, number | null] | null {
   const t = ds!.temps.get(room);
   if (!t) return null;
   let s = 0, sp = 0, n = 0, nsp = 0;
   for (const [d, [m, c]] of t) {
-    const mo = Number(d.slice(5, 7));
-    if (!d.startsWith(String(year)) || (mo > 3 && mo < 11)) continue;
+    if (seasonOfWinter(d) !== season) continue;
     (s += m), n++;
     if (c !== null) (sp += c), nsp++;
   }
   return n ? [s / n, nsp ? sp / nsp : null] : null;
 }
 
-/** S-11.3: heating-season days of that year whose mean temperature is below `thr` (station if linked). */
-function coldDays(room: string, year: number, thr: number): [number, 'station' | 'radiator'] | null {
+/** S-11.3, #294: days of the winter whose mean is below `thr`, station if linked (same rule as Confort). */
+function coldDays(room: string, season: number, thr: number): { under: number; n: number; source: 'station' | 'radiator' } | null {
   const st = ds!.station;
   const heating = activeRooms().filter((r) => r.category === 'heating');
   const k = st ? effectiveMapping(heating, st.modules, state.roomModuleMap).get(room) : undefined;
-  const means: [string, number][] =
-    k && st
-      ? Object.entries(st.daily[k] ?? {}).map(([d, v]) => [d, v[2]])
-      : [...(ds!.temps.get(room) ?? [])].map(([d, v]) => [d, v[0]]);
-  let n = 0;
-  let under = 0;
-  for (const [d, m] of means) {
-    const mo = Number(d.slice(5, 7));
-    if (!d.startsWith(String(year)) || (mo > 3 && mo < 11)) continue;
-    n++;
-    if (m < thr) under++;
-  }
-  return n ? [under, k ? 'station' : 'radiator'] : null;
+  const means: [string, number | null][] =
+    k && st ? Object.entries(st.daily[k] ?? {}).map(([d, v]) => [d, v[2]]) : [...(ds!.temps.get(room) ?? [])].map(([d, v]) => [d, v[0]]);
+  const c = coldWinterDays(means, season, thr);
+  return c ? { ...c, source: k ? 'station' : 'radiator' } : null;
 }
 
 // ------------------------------------------------------------------ events
