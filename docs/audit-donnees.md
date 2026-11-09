@@ -3,29 +3,28 @@
 > Ce que chaque appareil **peut** fournir, ce que le collecteur **garde**, ce que l'application
 > **exploite**, et ce qu'il reste à ajouter. Établi le 9 novembre 2026 par lecture du code
 > (`collector/`, `web/src/`) et de la documentation des API. Les cases marquées
-> **« à confirmer par le diagnostic »** attendent le premier passage de `diagnose --inventory` sur le
-> compte réel (§ 1).
+> **« à confirmer par le diagnostic »** attendent le premier passage de l'inventaire sur le
+> compte réel (§ 1 et § 5).
 
 ## 1. Méthode et inventaire automatique
 
-`python -m collector diagnose --inventory` (case **« Inventaire des données disponibles »** du workflow
-**Diagnostic**) interroge chaque source configurée et n'affiche que des **noms** : champs, types de
+L'inventaire interroge chaque source et n'affiche que des **noms** : champs, types de
 mesure, codes de type de module, nombre de points, échelles acceptées, statuts HTTP et profondeur
 d'historique (en jours). Jamais une valeur, un identifiant, un nom, une adresse MAC, des coordonnées
 ni le PRM : le journal d'un dépôt public est public (tests : `tests/test_inventory.py`).
 
-| Source | Ce qui est inventorié | Secrets lus |
+| Source | Ce qui est inventorié | Où le lancer |
 |---|---|---|
-| Intuis | champs de `homesdata` à tous les niveaux, **plannings compris** (`home.schedules[].timetable[]`, `zones[]`, `rooms_temp[]`…), champs de `homestatus` par type de module, `gethomemeasure` pour 8 types × 4 échelles (5 min, 30 min, heure, jour), profondeur par échelle (une fenêtre courte il y a 7 j … 5 ans) | `INTUIS_*` |
-| Station Netatmo | champs de `getstationsdata` (dont `dashboard_data`, `place`, champs de santé : batterie, radio, wifi, firmware, `reachable`, `last_seen`), `getmeasure` par module : types candidats (`pressure`, `noise`, `sum_rain`, `windstrength`…), échelles de 30 min à 1 mois, profondeur au pas de 30 min | `NETATMO_ACCESS_TOKEN` (voir plus bas) |
-| Linky (Conso API) | statut HTTP et nombre de points datés des 5 séries, sous leur nom 2026 et leur ancien nom, sur 7 jours, puis la consommation quotidienne d'il y a 3 ans. Les points d'accès identité, adresse et contrat ne sont **jamais** appelés | `ENEDIS_TOKEN`, `ENEDIS_PRM` |
+| Intuis | champs de `homesdata` à tous les niveaux, **plannings compris** (`home.schedules[].timetable[]`, `zones[]`, `rooms_temp[]`…), champs de `homestatus` par type de module, `gethomemeasure` pour 8 types × 4 échelles (5 min, 30 min, heure, jour), profondeur par échelle (une fenêtre courte il y a 7 j … 5 ans) | workflow **Diagnostic**, case « Inventaire » (`diagnose --inventory`) |
+| Station Netatmo | champs de `getstationsdata` (dont `dashboard_data`, `place`, champs de santé : batterie, radio, wifi, firmware, `reachable`, `last_seen`), `getmeasure` par module : types candidats (`pressure`, `noise`, `sum_rain`, `windstrength`…), échelles de 30 min à 1 mois, profondeur au pas de 30 min | workflow **Collecte quotidienne**, case « inventaire » (après la collecte) |
+| Linky (Conso API) | statut HTTP et nombre de points datés des 5 séries, sous leur nom 2026 et leur ancien nom, sur 7 jours, puis la consommation quotidienne d'il y a 3 ans. Les points d'accès identité, adresse et contrat ne sont **jamais** appelés | workflow **Diagnostic**, case « Inventaire » |
 
-**Station** : le jeton de rafraîchissement Netatmo change à chaque usage et le workflow Diagnostic ne
-peut pas enregistrer le nouveau (il ne commite pas). L'inventaire prend donc un **jeton d'accès** :
-générer un jeton (scope `read_station`) sur dev.netatmo.com, mettre le jeton d'accès dans le secret
-`NETATMO_ACCESS_TOKEN` (valable 3 h) et, par prudence, le jeton de rafraîchissement remis en même
-temps dans `NETATMO_REFRESH_TOKEN` (la collecte détecte un jeton neuf et repart de lui). Supprimer
-`NETATMO_ACCESS_TOKEN` ensuite.
+**Pourquoi la station passe par la collecte** : son jeton de rafraîchissement change à chaque usage
+et le workflow Diagnostic ne peut pas enregistrer le nouveau (il ne commite pas). L'inventaire de la
+station tourne donc à la fin de la collecte (`sync` avec `STATION_INVENTORY=true`), avec le jeton
+d'accès que la collecte vient d'obtenir : aucune nouvelle connexion, et le jeton renouvelé est
+enregistré chiffré dans `netatmo-token.enc.json` puis commité comme chaque nuit. Rien à générer à la
+main. Un échec de l'inventaire n'interrompt jamais la collecte.
 
 Les noms de champs déjà vus sur le compte réel (diagnostics précédents, #162, S-13.1) sont repris
 ci-dessous ; le reste vient de la documentation publique (Netatmo Weather API, Conso API) et des
@@ -176,12 +175,15 @@ Règle commune : toute nouvelle donnée passe par la minimisation de S-13.5 (agr
 c'est possible, chiffrement, regroupement des chambres en vue foyer, rien vers l'IA sans revue) et
 par [juridique.md](juridique.md).
 
-## 5. À faire lors du lancement réel
+## 5. Ce que le propriétaire doit lancer
 
-1. Lancer **Diagnostic** avec la case « Inventaire des données disponibles » (secrets `ENEDIS_*` et,
-   pour la station, `NETATMO_ACCESS_TOKEN` comme expliqué au § 1).
-2. Reporter dans ce document, à la place des « à confirmer par le diagnostic » : la structure des
+1. Actions → **Diagnostic** → cocher « Inventaire des données Intuis et Linky » (secrets existants :
+   `INTUIS_*`, `ENEDIS_TOKEN`, `ENEDIS_PRM`).
+2. Actions → **Collecte quotidienne** → *Run workflow* en cochant « inventaire » (laisser « historique »
+   décoché). La collecte se fait normalement, puis l'inventaire de la station s'affiche dans le journal
+   de l'étape « Collecte ». Aucun secret à ajouter.
+3. Reporter dans ce document, à la place des « à confirmer par le diagnostic » : la structure des
    plannings, les échelles acceptées (5 min, 30 min, `temperature` à l'heure), la profondeur horaire,
    les types de la station acceptés (`pressure`, `noise`, refus de `temperature` par un anémomètre),
    les séries Linky qui répondent (production, ancien nom de type encore accepté ou non).
-3. Fermer les issues dont la donnée n'existe pas sur le compte (par exemple S-1.24 (#222) sans production).
+4. Fermer les issues dont la donnée n'existe pas sur le compte (par exemple S-1.24 (#222) sans production).

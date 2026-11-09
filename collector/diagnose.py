@@ -663,8 +663,9 @@ def _json_or_none(resp) -> object:
 def inventory_station(token: str, http=None, now: int | None = None, min_interval: float = 0.5) -> dict:
     """getstationsdata structure, then getmeasure types / scales / depth per module.
 
-    Takes an ACCESS token (NETATMO_ACCESS_TOKEN): refreshing the stored refresh token here
-    would rotate it, and this job cannot save the new one for the nightly collection."""
+    Takes the ACCESS token the nightly collection already obtained (`sync` with
+    STATION_INVENTORY=true, input « inventaire » of collect.yml): no new login here, so the
+    rotating refresh token is only renewed, saved and committed by the collection itself."""
     import httpx
 
     now = int(now if now is not None else time.time())
@@ -781,22 +782,16 @@ def inventory_linky(token: str, prm: str, http=None, today=None, min_interval: f
 def inventory(settings, intuis: IntuisClient | None = None) -> None:
     """Every configured source; a source without its secrets is skipped, and a failing one
     never stops the others (only the class of the error is printed)."""
-    import os
-
     print("Inventaire des données disponibles (S-1.19) : noms et volumes seulement, aucune valeur.")
     sections = []
     if intuis is not None:
         sections.append(("Intuis", lambda: inventory_intuis(intuis)))
     else:
         print("\nIntuis : ignoré (identifiants INTUIS_* absents)")
-    access = os.environ.get("NETATMO_ACCESS_TOKEN", "").strip()
-    if access:
-        sections.append(("Station Netatmo", lambda: inventory_station(access)))
-    else:
-        print(
-            "\nStation Netatmo : ignorée (NETATMO_ACCESS_TOKEN absent : il faut un jeton d'accès, pas le "
-            "jeton de rafraîchissement, qui serait renouvelé ici sans pouvoir être enregistré)"
-        )
+    print(
+        "\nStation Netatmo : pas ici (son jeton de rafraîchissement change à chaque usage et ce job ne "
+        "peut pas l'enregistrer) ; lancer « Collecte quotidienne » avec la case « inventaire »"
+    )
     if settings.enedis_token and settings.enedis_prm:
         sections.append(("Linky", lambda: inventory_linky(settings.enedis_token, settings.enedis_prm)))
     else:

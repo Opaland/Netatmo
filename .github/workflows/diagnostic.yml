@@ -14,7 +14,7 @@ on:
         type: boolean
         default: false
       inventory:
-        description: "Inventaire des données disponibles par source : champs, types, échelles, profondeur (S-1.19)"
+        description: "Inventaire des données Intuis et Linky : champs, types, échelles, profondeur (S-1.19)"
         type: boolean
         default: false
 
@@ -29,10 +29,9 @@ jobs:
       INTUIS_PASSWORD: ${{ secrets.INTUIS_PASSWORD }}
       INTUIS_CLIENT_ID: ${{ secrets.INTUIS_CLIENT_ID }}
       INTUIS_CLIENT_SECRET: ${{ secrets.INTUIS_CLIENT_SECRET }}
-      # Inventory only (S-1.19). Station: an ACCESS token, never the refresh token (it would be
-      # rotated here and the nightly collection could not save the new one). Optional secrets:
-      # a source without them is skipped.
-      NETATMO_ACCESS_TOKEN: ${{ inputs.inventory && secrets.NETATMO_ACCESS_TOKEN || '' }}
+      # Inventory only (S-1.19): Intuis + Linky. The Netatmo station is inventoried by
+      # « Collecte quotidienne » (input « inventaire »), the only job that can save its rotating
+      # refresh token.
       ENEDIS_TOKEN: ${{ inputs.inventory && secrets.ENEDIS_TOKEN || '' }}
       ENEDIS_PRM: ${{ inputs.inventory && secrets.ENEDIS_PRM || '' }}
     steps:

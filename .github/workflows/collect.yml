@@ -10,6 +10,10 @@ on:
         description: "Récupérer tout l'historique disponible"
         type: boolean
         default: false
+      inventaire:
+        description: "Après la collecte, inventaire anonyme de la station Netatmo : champs, types, échelles (S-1.19)"
+        type: boolean
+        default: false
 
 concurrency:
   group: collect
@@ -102,6 +106,8 @@ jobs:
         env:
           RENEW_FILE: ${{ runner.temp }}/renew.txt
           COLD_FILE: ${{ runner.temp }}/cold.txt
+          # S-1.19: station inventory with the access token of this collection (names and counts only).
+          STATION_INVENTORY: ${{ inputs.inventaire && 'true' || '' }}
         run: python -m collector -v ${{ inputs.backfill && 'backfill' || 'sync' }}
       - name: Commit des données chiffrées
         if: steps.check.outputs.configured == 'true'

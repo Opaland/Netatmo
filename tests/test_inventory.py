@@ -322,9 +322,7 @@ def test_linky_inventory_prints_status_and_point_counts_never_the_prm(capsys):
     assert not any(ep in asked for ep in ("identite", "adresse", "contrats", "contracts", "identity", "addresses"))
 
 
-def test_inventory_skips_sources_without_secrets_and_survives_a_failing_one(capsys, monkeypatch):
-    monkeypatch.delenv("NETATMO_ACCESS_TOKEN", raising=False)
-
+def test_inventory_skips_sources_without_secrets_and_survives_a_failing_one(capsys):
     class Broken(FakeIntuis):
         def homesdata(self):
             raise RuntimeError("https://example/api?pointId=" + PRM)
@@ -332,7 +330,7 @@ def test_inventory_skips_sources_without_secrets_and_survives_a_failing_one(caps
     inventory(Settings(), Broken())  # type: ignore[arg-type]
     out = capsys.readouterr().out
     assert "Intuis : interrompu (RuntimeError)" in out
-    assert "Station Netatmo : ignorée" in out and "Linky : ignoré" in out
+    assert "Station Netatmo : pas ici" in out and "Linky : ignoré" in out
     assert PRM not in out
 
 
@@ -345,7 +343,6 @@ def test_cli_inventory_needs_no_intuis_secret(capsys, monkeypatch, tmp_path):
         "INTUIS_PASSWORD",
         "INTUIS_CLIENT_ID",
         "INTUIS_CLIENT_SECRET",
-        "NETATMO_ACCESS_TOKEN",
         "ENEDIS_TOKEN",
         "ENEDIS_PRM",
     ):
@@ -353,3 +350,74 @@ def test_cli_inventory_needs_no_intuis_secret(capsys, monkeypatch, tmp_path):
     main(["diagnose", "--inventory"])
     out = capsys.readouterr().out
     assert "Intuis : ignoré" in out
+
+
+def test_collection_inventories_the_station_with_its_own_access_token(tmp_path, monkeypatch, capsys):
+    """S-1.19: `sync` with STATION_INVENTORY=true reuses the access token of the collection: one
+    login only, the rotated refresh token saved in the archive, names and counts only."""
+    import argparse
+    import json
+    from pathlib import Path
+
+    import collector.__main__ as cli
+    from collector.api import IntuisClient
+    from collector.storage import Store
+
+    fixtures = Path(__file__).parent / "fixtures"
+
+    def intuis_handler(request: httpx.Request) -> httpx.Response:
+        path = request.url.path
+        if path == "/oauth2/token":
+            return httpx.Response(200, json={"access_token": "t", "expires_in": 3600})
+        if path == "/api/homesdata":
+            return httpx.Response(200, json=json.loads((fixtures / "homesdata.json").read_text()))
+        if path == "/api/gethomemeasure":
+            return httpx.Response(200, json=json.loads((fixtures / "gethomemeasure.json").read_text()))
+        return httpx.Response(404)
+
+    seen: list = []
+    station_api = _station_handler(seen)
+    logins: list = []
+
+    def netatmo(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/oauth2/token":
+            logins.append(1)
+            return httpx.Response(200, json={"access_token": "access", "refresh_token": "rotated"})
+        return station_api(request)
+
+    real_client = httpx.Client
+    intuis = IntuisClient(
+        Settings(username="u", password="p", client_id="c", client_secret="s", api_base="https://x"),
+        http=real_client(transport=httpx.MockTransport(intuis_handler)),
+        min_interval=0,
+    )
+    monkeypatch.setattr(cli, "_client", lambda s: intuis)
+    monkeypatch.setattr(
+        "collector.station.httpx.Client", lambda **kw: real_client(transport=httpx.MockTransport(netatmo))
+    )
+    monkeypatch.setattr("collector.station.Station.__init__.__defaults__", (None, 0.0))
+    monkeypatch.setattr("collector.diagnose.inventory_station.__defaults__", (None, None, 0.0))
+    monkeypatch.setenv("STATION_INVENTORY", "true")
+    monkeypatch.delenv("ROOM_STATE_DIR", raising=False)
+    data = tmp_path / "data"
+    s = Settings(
+        passphrase="pw",
+        data_dir=data,
+        netatmo_client_id="id",
+        netatmo_client_secret="sec",
+        netatmo_refresh_token="seed",
+    )
+    cli.cmd_sync(s, argparse.Namespace(days=10))
+    out = capsys.readouterr().out
+    assert len(logins) == 1  # the inventory does not log in again
+    assert "==== Station Netatmo ====" in out and "noise accepté" in out
+    assert Store(data, "pw").doc("netatmo-token")["refresh_token"] == "rotated"
+    for secret in (MAC_MAIN, MAC_OUT, MAC_WIND, "Jardin", "Paris", "1013", "rotated", "access"):
+        assert secret not in out, secret
+
+
+def test_collection_without_station_skips_the_inventory(capsys):
+    from collector.__main__ import _station_inventory
+
+    _station_inventory(None)
+    assert "Inventaire de la station : ignoré" in capsys.readouterr().out

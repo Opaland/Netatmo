@@ -276,8 +276,9 @@ def write_renew_file(alerts: list[str]) -> None:
         Path(path).write_text("".join(f"- {a}\n" for a in alerts), encoding="utf-8")
 
 
-def _weather(s: Settings, store: Store, home, sources: Sources) -> str | None:
-    """Outdoor temperatures: the Netatmo station if configured, else Open-Meteo. Never fatal."""
+def _weather(s: Settings, store: Store, home, sources: Sources, keep: dict | None = None) -> str | None:
+    """Outdoor temperatures: the Netatmo station if configured, else Open-Meteo. Never fatal.
+    `keep["station"]` receives the logged-in Station client (inventory, S-1.19)."""
     first = store.first_day()
     if not first:
         return None
@@ -286,9 +287,10 @@ def _weather(s: Settings, store: Store, home, sources: Sources) -> str | None:
 
         sources.credential("netatmo", s.netatmo_refresh_token)
         try:
-            Station(store, s.netatmo_client_id, s.netatmo_client_secret, s.netatmo_refresh_token).collect(
-                home.timezone, first
-            )
+            station = Station(store, s.netatmo_client_id, s.netatmo_client_secret, s.netatmo_refresh_token)
+            if keep is not None:
+                keep["station"] = station
+            station.collect(home.timezone, first)
             sources.ok("netatmo")
             return "netatmo"
         except (StationError, httpx.HTTPError, FormatError, CallCapReached) as err:
@@ -378,7 +380,8 @@ def cmd_sync(s: Settings, args: argparse.Namespace, backfill: bool = False) -> N
         _failure_summary(err)
         raise
     home = syncer.last_home
-    source = _weather(s, store, home, sources)
+    kept: dict = {}
+    source = _weather(s, store, home, sources, kept)
     extra = {"weather_source": source} if source else {}
     if s.enedis_token and s.enedis_prm and store.first_day():
         _linky(s, store, home.timezone, sources)
@@ -427,6 +430,23 @@ def cmd_sync(s: Settings, args: argparse.Namespace, backfill: bool = False) -> N
         print(line)
     print(_cold_label(cold, cold_counts))
     _job_summary(store, syncer, changed, rs_rows)
+    if _flag("STATION_INVENTORY"):
+        _station_inventory(kept.get("station"))
+
+
+def _station_inventory(station) -> None:
+    """S-1.19: inventory of the Netatmo station, after the collection, with the ACCESS token the
+    collection already obtained. No new login: the rotating refresh token was renewed (and saved,
+    then committed by the workflow) by the collection itself. Names and counts only; never fatal."""
+    from .diagnose import inventory_station
+
+    if station is None or not station.access:
+        print("Inventaire de la station : ignoré (station non configurée ou collecte de la station en échec)")
+        return
+    try:
+        inventory_station(station.access, http=station.http)
+    except Exception as err:  # optional diagnostic: never fails the collection, never echoes a message
+        print(f"Inventaire de la station : interrompu ({type(err).__name__})")
 
 
 def _cold_label(cfg: dict | None, counts: dict[str, int]) -> str:
