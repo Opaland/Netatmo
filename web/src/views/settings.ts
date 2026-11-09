@@ -74,6 +74,7 @@ export function renderSettings(view: HTMLElement) {
       ${status(!!(m as { has_shelly?: boolean }).has_shelly || !!src.shelly, 'Prises Shelly', 'shelly')}${noteLine(src.shelly)}
       ${src['home-assistant'] ? status(true, 'Home Assistant (import manuel)', 'home-assistant', false) : ''}
       ${status(!!ds!.insights, 'Analyse IA mensuelle', 'ia')}
+      ${status(!!m.has_roomstate, `Relevé horaire de l'état des pièces${src['releve-horaire']?.note ? ` (${esc(src['releve-horaire'].note)})` : ''}`, 'releve-horaire', false)}
     </ul>
     ${iaRateLine()}
     <p class="hint muted">Dernière collecte : ${m.updated ? esc(m.updated.replace('T', ' à ').slice(0, 21)) + ' (UTC)' : '—'}.</p>

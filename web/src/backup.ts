@@ -26,6 +26,7 @@ export function backupNames(meta: BackupMeta): string[] {
     'insights',
     'shelly',
     'ha',
+    ...(meta.has_roomstate ? ['roomstate'] : []),
     ...years(meta.years, ''),
     ...years(meta.hourly_years, '.hourly'),
     ...years(meta.station_hourly_years, '.station_h'),

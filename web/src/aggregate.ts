@@ -21,6 +21,7 @@ export interface Meta {
   has_tariffs?: boolean;
   has_temps?: boolean;
   has_linky?: boolean;
+  has_roomstate?: boolean; // E13: roomstate.enc.json (hourly room states, daily aggregates)
   weather_source?: string | null;
   contract?: unknown; // S-12.1: shared contract periods, validated in contract.ts
 }
