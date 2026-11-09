@@ -127,6 +127,38 @@ try {
     await checkViolations(page, view);
   }
 
+  // v1.5 figures (#245 #246 #294 #295 #297 #298)
+  progress('chiffres v1.5');
+  {
+    const label = () => page.locator('#cmp-chart').getAttribute('aria-label');
+    await page.click('[data-view=compare]');
+    await page.waitForSelector('#cmp-chart canvas');
+    const totals = await page.locator('table', { hasText: 'Évolution' }).first().innerText();
+    check(/jours? estimés? ou manquants?/.test(totals), '#297 : évolution annuelle sans mention des jours perdus');
+    await page.click('[data-set=compareMode][data-value=cumul]');
+    await page.waitForTimeout(400);
+    const cumul = (await label()) ?? '';
+    check(!/total/.test(cumul) && / kWh au \d+ /.test(cumul), `#295 : résumé du cumul faux (« ${cumul.slice(0, 160)} »)`);
+    await page.click('[data-set=compareMode][data-value=season]');
+    await page.waitForTimeout(400);
+    check((await page.locator('[data-season]', { hasText: 'en cours' }).count()) === 1, '#298 : pas de puce pour la saison en cours');
+    check(/\(en cours\) : [\d\s ]+ kWh au \d+/.test((await label()) ?? ''), '#298 : saison en cours absente du graphique');
+    await page.click('[data-set=compareMode][data-value=monthly]');
+    await page.click('[data-view=rooms]');
+    await page.waitForSelector('#rooms-chart canvas');
+    const head = await page.locator('#view table thead').first().innerText();
+    check(/Jours à moyenne sous/.test(head) && /hiver \d{4}–\d{4}/.test(head), `#294 : colonne des jours froids sans définition ni hiver (« ${head.replace(/\s+/g, ' ')} »)`);
+    await page.click('.menu summary');
+    await page.click('.menu-panel [data-view=report]');
+    await page.waitForSelector('.report .kpis');
+    const yr = await page.locator('select[data-set=reportYear] option').first().getAttribute('value');
+    await page.selectOption('select[data-set=reportYear]', yr);
+    await page.waitForTimeout(400);
+    const kpis = await page.locator('.report .kpis').innerText();
+    check(!/par mois en moyenne/.test(kpis) || /par mois en moyenne sur [\d,]+ mois/.test(kpis), `#246 : moyenne mensuelle de l'année en cours sans période (« ${kpis.replace(/\s+/g, ' ')} »)`);
+    await page.click('[data-view=overview]');
+  }
+
   // S-2.3: invoice
   progress('facture');
   await page.click('[data-view=overview]');

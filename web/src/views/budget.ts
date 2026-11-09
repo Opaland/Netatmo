@@ -48,7 +48,7 @@ function yearBudget() {
   if (spent === null) return null;
   const p = projectYear(all, last);
   const days = year % 4 === 0 ? 366 : 365;
-  return { year, ...budgetStatus(budget, spent, total(all, from, last), p ? p.projected : null, dayOfYear(last), days) };
+  return { year, ...budgetStatus(budget, spent, total(all, from, last), p ? p.projected : null, dayOfYear(last) + 1, days) }; // #244: the last day is paid, so it counts
 }
 
 /** Called by overview.ts once this module is loaded. */

@@ -59,7 +59,8 @@ export function budgetStatus(
   spent: number,
   ytdKwh: number,
   projectedKwh: number | null,
-  dayOfYear: number,
+  /** Days elapsed, the last day included (1 Jan = 1, #244). */
+  daysElapsed: number,
   daysInYear: number,
 ): BudgetStatus {
   let projected: number;
@@ -71,7 +72,7 @@ export function budgetStatus(
     share = ytdKwh / projectedKwh;
     method = 'profile';
   } else {
-    share = Math.min(1, dayOfYear / daysInYear);
+    share = Math.min(1, daysElapsed / daysInYear);
     projected = share > 0 ? spent / share : spent;
     method = 'prorata';
   }

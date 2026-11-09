@@ -6,6 +6,7 @@ import {
   type NightRow,
   type StationHourly,
   co2Modules,
+  coldWinterDays,
   dewPoint,
   effectiveMapping,
   heatedModules,
@@ -333,21 +334,21 @@ function coldCard(st: Station | null, map: Map<string, string>) {
   const waiting = needHourly && !hourly;
   const s = currentSeason();
   const t = `${f1(thr)} °C`;
+  // #294: one definition of a cold day everywhere (Pièces too): the day's mean under the threshold
+  const coldDaysCell = (r: ComfortRoom, season: number) => {
+    const means: [string, number | null][] =
+      r.source === 'radiator'
+        ? [...ds!.temps.get(r.room!)!].map(([d, [m]]) => [d, m])
+        : Object.entries(st!.daily[r.module!] ?? {}).map(([d, v]) => [d, v[2]]);
+    const c = coldWinterDays(means, season, thr);
+    return c ? `${c.under} j sur ${c.n}` : null;
+  };
   const cell = (r: ComfortRoom, season: number) => {
-    if (r.source === 'radiator') {
-      const temps = ds!.temps.get(r.room!)!;
-      let n = 0;
-      let under = 0;
-      for (const [d, [m]] of temps) {
-        if (seasonOf(d) !== season) continue;
-        n++;
-        if (m < thr) under++;
-      }
-      return n ? `${under} j sur ${n}` : '—';
-    }
+    const days = coldDaysCell(r, season);
+    if (r.source === 'radiator') return days ?? '—';
     const per = coldPerDay(st!, r.module!, thr);
     const sum = per && sumSeason(per, season);
-    return sum ? `${nf0.format(sum.hours)} h (${nf0.format((sum.hours / sum.n) * 100)} %) · ${sum.days} j` : waiting ? '…' : '—';
+    return sum ? `${nf0.format(sum.hours)} h (${nf0.format((sum.hours / sum.n) * 100)} %)${days ? ` · ${days}` : ''}` : waiting ? '…' : (days ?? '—');
   };
   const stationRooms = rooms.filter((r) => r.source === 'station');
   return `<section class="card">
@@ -364,7 +365,7 @@ function coldCard(st: Station | null, map: Map<string, string>) {
       rooms.map((r) => [esc(r.label), r.source === 'station' ? `Station (${esc(st!.modules[r.module!].name)})` : 'Radiateur', cell(r, s - 1), cell(r, s)]),
       2,
     )}
-    <p class="hint muted">Hiver = novembre à mars. « h (%) » : heures sous le seuil et part des heures relevées ; « j » : jours avec au moins une heure (station) ou une moyenne (radiateur) sous le seuil.</p>
+    <p class="hint muted">Hiver = 1er novembre → 31 mars. « h (%) » : heures sous le seuil et part des heures relevées (station) ; « j sur N » : <strong>jours à moyenne sous le seuil</strong> sur les jours relevés, même définition que dans Pièces, quelle que soit la source.</p>
   </section>`;
 }
 

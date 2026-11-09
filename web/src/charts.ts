@@ -12,6 +12,7 @@ import {
 } from 'echarts/components';
 import * as echarts from 'echarts/core';
 import { CanvasRenderer } from 'echarts/renderers';
+import { type Measure, summarize } from './summary';
 import { node } from './trusted';
 
 echarts.use([
@@ -37,6 +38,16 @@ export interface Series {
   colors?: string[];
   /** Unit of this series when it differs from the chart's (combo charts). */
   unit?: string;
+  /** #295: how the screen-reader summary sums it up (default: from the unit). */
+  measure?: Measure;
+  /** #295: unrounded values behind `data`, for the summary's total. */
+  raw?: (number | null)[];
+  /** #297: per point, a caveat shown in the tooltip (« 8 jours sur 30 », lost days…). */
+  notes?: (string | null)[];
+  /** #297: per point, hatch the bar (partial period, estimated or lost days). */
+  marks?: boolean[];
+  /** #295: day reached by a running total whose last month is still running. */
+  lastLabel?: string;
 }
 
 export const cssVar = (name: string) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
@@ -57,20 +68,11 @@ const tip =
 
 const observed = new WeakSet<HTMLElement>();
 
-/** S-7.2: a sentence a screen reader can read instead of the canvas. */
+/** S-7.2: a sentence a screen reader can read instead of the canvas (wording in summary.ts, #295). */
 function describe(el: HTMLElement, labels: string[], series: Series[], unit = 'kWh') {
   const base = el.getAttribute('data-label') ?? el.getAttribute('aria-label') ?? 'Graphique';
   el.setAttribute('data-label', base);
-  const parts = series.slice(0, 6).map((s) => {
-    const vals = s.data.map((v, i) => [v, i] as const).filter(([v]) => v !== null) as [number, number][];
-    if (!vals.length) return `${s.name} : pas de donnée`;
-    const [maxV, maxI] = vals.reduce((a, b) => (b[0] > a[0] ? b : a));
-    const sum = vals.reduce((a, [v]) => a + v, 0);
-    const u = s.unit ?? unit;
-    // °C, ppm, %: a total means nothing, give the mean instead
-    const head = /^(°C|ppm|%)$/.test(u) ? `moyenne ${nf1.format(sum / vals.length)} ${u}` : `total ${nf0.format(sum)} ${u}`;
-    return `${s.name} : ${head}, maximum ${nf1.format(maxV)} ${u} (${labels[maxI]})`;
-  });
+  const parts = summarize(labels, series, unit);
   el.setAttribute('aria-label', `${base}, de ${labels[0] ?? '—'} à ${labels[labels.length - 1] ?? '—'}. ${parts.join(' ; ')}.`);
 }
 
@@ -90,6 +92,11 @@ function decal(i: number) {
   return { color: ink, ...patterns[(i - 1) % patterns.length] };
 }
 
+/** #297: stripes over a bar whose period is partial or has estimated or lost days. */
+function hatch() {
+  return { color: cssVar('--surface-1') || 'rgba(255,255,255,0.7)', symbol: 'rect', dashArrayX: [1, 0], dashArrayY: [2, 3], rotation: -Math.PI / 4 };
+}
+
 function instance(el: HTMLElement): echarts.ECharts {
   // S-7.6: a chart with a summary can be reached with the keyboard, which reads that summary.
   if (el.getAttribute('role') === 'img' && !el.hasAttribute('tabindex')) el.tabIndex = 0;
@@ -105,8 +112,9 @@ export function disposeAll(root: HTMLElement) {
   root.querySelectorAll<HTMLElement>('.chart').forEach((el) => echarts.getInstanceByDom(el)?.dispose());
 }
 
-function tooltip(price: number | null, showTotal: boolean, unit = 'kWh') {
+function tooltip(price: number | null, showTotal: boolean, unit = 'kWh', series: Series[] = [], notes?: (string | null)[]) {
   const fmt = (v: number) => (unit === 'kWh' ? fmtKwh(v) : `${nf1.format(v)} ${unit}`);
+  const note = (t: string | null | undefined) => (t ? `<div class="tt-note">${escapeHtml(t)}</div>` : '');
   return {
     trigger: 'axis' as const,
     confine: true,
@@ -115,14 +123,14 @@ function tooltip(price: number | null, showTotal: boolean, unit = 'kWh') {
     textStyle: { color: cssVar('--text-primary'), fontFamily: 'inherit', fontSize: 12 },
     axisPointer: { type: 'line' as const, lineStyle: { color: cssVar('--text-muted'), width: 1 } },
     formatter: tip((params: unknown) => {
-      const list = (params as { seriesName: string; value: number | null; color: string; axisValueLabel: string }[]).filter(
-        (p) => p.value !== null && p.value !== undefined,
-      );
+      const list = (
+        params as { seriesName: string; seriesIndex: number; dataIndex: number; value: number | null; color: string; axisValueLabel: string }[]
+      ).filter((p) => p.value !== null && p.value !== undefined);
       if (!list.length) return '';
       const rows = list
         .map(
           (p) =>
-            `<div class="tt-row"><span class="tt-key" style="background:${p.color}"></span><strong>${fmt(p.value!)}</strong><span class="tt-name">${escapeHtml(p.seriesName)}</span></div>`,
+            `<div class="tt-row"><span class="tt-key" style="background:${p.color}"></span><strong>${fmt(p.value!)}</strong><span class="tt-name">${escapeHtml(p.seriesName)}</span></div>${note(series[p.seriesIndex]?.notes?.[p.dataIndex])}`,
         )
         .join('');
       const sum = list.reduce((s, p) => s + (p.value ?? 0), 0);
@@ -132,7 +140,7 @@ function tooltip(price: number | null, showTotal: boolean, unit = 'kWh') {
           : price && list.length === 1
             ? `<div class="tt-row tt-total"><span class="tt-name">${nf0.format(sum * price)} €</span></div>`
             : '';
-      return `<div class="tt"><div class="tt-title">${escapeHtml(list[0].axisValueLabel)}</div>${rows}${totalRow}</div>`;
+      return `<div class="tt"><div class="tt-title">${escapeHtml(list[0].axisValueLabel)}</div>${note(notes?.[list[0].dataIndex])}${rows}${totalRow}</div>`;
     }),
   };
 }
@@ -181,15 +189,23 @@ export function barChart(
     unit?: string;
     /** Buckets drawn paler (estimated or lost days, S-1.10). */
     muted?: boolean[];
+    /** #297: buckets cut by the period or the data, hatched. */
+    partial?: boolean[];
+    /** #297: per bucket, a caveat under the tooltip title. */
+    notes?: (string | null)[];
   },
 ) {
   const surface = cssVar('--surface-1');
   // Per-bar style only when needed: plain arrays keep the default fast path.
   const item = (s: Series) =>
-    s.colors || opts.muted?.some(Boolean)
+    s.colors || opts.muted?.some(Boolean) || opts.partial?.some(Boolean) || s.marks?.some(Boolean)
       ? s.data.map((v, j) => ({
           value: v,
-          itemStyle: { ...(s.colors ? { color: s.colors[j] } : {}), ...(opts.muted?.[j] ? { opacity: 0.4 } : {}) },
+          itemStyle: {
+            ...(s.colors ? { color: s.colors[j] } : {}),
+            ...(opts.muted?.[j] ? { opacity: 0.4 } : {}),
+            ...(opts.partial?.[j] || s.marks?.[j] ? { decal: hatch() } : {}),
+          },
         }))
       : s.data;
   const n = opts.series.length;
@@ -200,7 +216,7 @@ export function barChart(
       animationDuration: 300,
       ...axes(opts.labels),
       legend: legend(opts.series),
-      tooltip: tooltip(opts.price, opts.stacked && !opts.unit, opts.unit),
+      tooltip: tooltip(opts.price, opts.stacked && !opts.unit, opts.unit, opts.series, opts.notes),
       dataZoom: opts.zoom ? [{ type: 'inside', minValueSpan: 6 }] : [],
       series: opts.series.map((s, i) => ({
         type: 'bar',
@@ -239,7 +255,7 @@ export function lineChart(
       // zoomed axis (°C around 20): keep one decimal so ticks never repeat
       yAxis: opts.scale ? { ...ax.yAxis, scale: true, axisLabel: { ...ax.yAxis.axisLabel, formatter: (v: number) => nf1.format(v) } } : ax.yAxis,
       legend: { ...legend(opts.series), icon: 'rect', itemWidth: 14, itemHeight: 3 },
-      tooltip: tooltip(opts.price, false, opts.unit),
+      tooltip: tooltip(opts.price, false, opts.unit, opts.series),
       series: opts.series.map((s) => ({
         type: 'line',
         name: s.name,
