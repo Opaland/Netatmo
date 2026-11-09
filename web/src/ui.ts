@@ -1,8 +1,9 @@
 // Helpers shared by several views: formatting, HTML fragments, colours, rooms, costs.
 import { type Category, type DayRecord, MONTHS_LONG, addDays, applyFilter, minusYears, pctChange } from './aggregate';
 import { energyCost, energyCostTrve, hasPrices, offPeakColumn, offPeakShares, subscriptionCost, subscriptionTrve, trveAt } from './analysis';
-import { activeRooms, ds, state } from './app';
+import { type State, activeRooms, ds, state } from './app';
 import { cssVar, escapeHtml as esc, waterfallChart } from './charts';
+import { type ResolvedContract, resolveContract } from './contract';
 import { type ContractPeriod, periodAt } from './offers';
 
 export { esc };
@@ -64,15 +65,28 @@ export function filtered(): DayRecord[] {
 }
 
 // ------------------------------------------------------------------ contract and costs
+let resolved: { args: unknown[]; value: ResolvedContract } | null = null;
+/** S-12.1: contract in force on this device (shared > local > default), memoised. */
+export function contractInfo(): ResolvedContract {
+  const args = [ds!.meta.contract, state.contracts, state.contractLocalEdit, firstDay(), state.kva];
+  if (!resolved || resolved.args.some((a, i) => a !== args[i])) {
+    resolved = { args, value: resolveContract(args[0], state.contracts, state.contractLocalEdit, firstDay(), state.kva) };
+  }
+  return resolved.value;
+}
 export function contracts(): ContractPeriod[] {
-  return state.contracts.length ? state.contracts : [{ from: firstDay(), offer: 'edf-trv-hphc', kva: state.kva || 9 }];
+  return contractInfo().periods;
+}
+/** A shared contract means the official tariffs, unless changed on this device. */
+export function priceMode(): State['priceMode'] {
+  return contractInfo().source === 'shared' ? 'trve' : state.priceMode;
 }
 /** Regulated price row in force on that day, under the contract of that day. */
 export function priceAt(day: string) {
   const c = periodAt(contracts(), day);
   return c ? trveAt(ds!.offers.get(c.offer) ?? [], c.kva, day) : null;
 }
-const useTrve = () => state.priceMode === 'trve' && ds!.offers.size > 0;
+const useTrve = () => priceMode() === 'trve' && ds!.offers.size > 0;
 export const costAvailable = () => useTrve() || hasPrices(state.prices);
 export function offCol(): 1 | 2 {
   const water = ds!.meta.rooms.filter((r) => r.category === 'water_heater').map((r) => r.id);

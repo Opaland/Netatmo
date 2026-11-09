@@ -3,8 +3,10 @@
 import { type DayRecord, type Meta, toRecords } from './aggregate';
 import { loadOffers, loadTempo } from './offers';
 import { type Hourly, type TariffMap, type TempoRow, type TrveRow, type Weather, parseTrveCsv } from './analysis';
+import type { Coverage } from './checks';
 import type { DayHours, Night, StationHourly } from './comfort';
 import { type Envelope, type KeyInfo, decryptEnvelope, deriveKey } from './crypto';
+import { type RememberedKey, freshKey } from './session';
 
 export type Source = 'data' | 'demo';
 
@@ -20,6 +22,7 @@ export interface Dataset {
   linky: Map<string, number>; // day -> kWh, whole home
   insights: Insights | null;
   estimated: Set<string>; // "room|day" rebuilt from a monthly total
+  coverage: Coverage | null; // room -> "YYYY-MM" -> [real, estimated, missing] days, from the collector (S-1.10)
   trve: TrveRow[]; // EDF regulated HP/HC tariff history (CRE open data)
   offers: Map<string, TrveRow[]>; // price history per supplier offer
   pmax: Map<string, number>; // day -> max power drawn (kVA), Linky
@@ -59,6 +62,7 @@ interface YearDoc {
   tariffs?: Record<string, Record<string, [number, number, number]>>;
   temps?: Record<string, Record<string, [number, number | null]>>;
   estimated?: Record<string, Record<string, number>>;
+  coverage?: Record<string, Record<string, [number, number, number]>>;
 }
 
 export class NoData extends Error {}
@@ -123,7 +127,16 @@ export async function load(source: Source, key: CryptoKey): Promise<Dataset> {
   const tariffs: TariffMap = new Map();
   const temps: Dataset['temps'] = new Map();
   const estimated = new Set<string>();
+  let coverage: Coverage | null = null;
   for (const [, doc] of years) {
+    if (doc.coverage) {
+      coverage ??= new Map();
+      for (const [room, months] of Object.entries(doc.coverage)) {
+        const m = coverage.get(room) ?? new Map<string, [number, number, number]>();
+        for (const [k, v] of Object.entries(months)) m.set(k, v);
+        coverage.set(room, m);
+      }
+    }
     toMap2(doc.tariffs, tariffs);
     toMap2(doc.temps, temps);
     for (const [room, days] of Object.entries(doc.estimated ?? {})) for (const d of Object.keys(days)) estimated.add(`${room}|${d}`);
@@ -143,6 +156,7 @@ export async function load(source: Source, key: CryptoKey): Promise<Dataset> {
     linky: new Map(Object.entries(linkyDoc?.daily ?? {}).map(([d, wh]) => [d, wh / 1000])),
     insights,
     estimated,
+    coverage,
     trve,
     offers,
     tempo,
@@ -208,17 +222,23 @@ async function tx<T>(mode: IDBTransactionMode, fn: (s: IDBObjectStore) => IDBReq
   });
 }
 
-export async function rememberKey(source: Source, key: CryptoKey): Promise<void> {
+/** S-8.11: the key is kept with the date it was remembered (REMEMBER_DAYS at most). */
+export async function rememberKey(source: Source, key: CryptoKey, now = Date.now()): Promise<void> {
   try {
-    await tx('readwrite', (s) => s.put(key, source));
+    const entry: RememberedKey = { key, at: now };
+    await tx('readwrite', (s) => s.put(entry, source));
   } catch {
     /* private browsing: just don't remember */
   }
 }
 
-export async function recallKey(source: Source): Promise<CryptoKey | null> {
+/** The remembered key, or null; an expired (or undated, v1.2) key is forgotten. */
+export async function recallKey(source: Source, now = Date.now()): Promise<CryptoKey | null> {
   try {
-    return ((await tx('readonly', (s) => s.get(source))) as CryptoKey | undefined) ?? null;
+    const entry = await tx('readonly', (s) => s.get(source));
+    const key = freshKey(entry, now);
+    if (!key && entry !== undefined) await tx('readwrite', (s) => s.delete(source));
+    return key;
   } catch {
     return null;
   }

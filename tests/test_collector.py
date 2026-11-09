@@ -363,6 +363,30 @@ def test_monthly_totals_fill_days_lost_by_the_backend(tmp_path):
     assert sum(feb.values()) == 31000.0
     assert feb["2024-02-28"] == feb["2024-02-29"] == 2000.0
     assert store.doc("2024")["estimated"]["100"] == {"2024-02-28": 1, "2024-02-29": 1}
+    # S-1.10: coverage per month, written at save time
+    assert store.doc("2024")["coverage"]["100"]["2024-02"] == [27, 2, 0]
+
+
+def test_coverage_counts_real_estimated_and_missing_days_of_stored_years(tmp_path):
+    """Years stored before coverage existed get it on the next save (S-1.10)."""
+    store = Store(tmp_path, "pw")
+    for d in range(1, 11):  # 1-10 March real
+        store.merge("r1", f"2024-03-{d:02d}", 500.0)
+    for d in range(11, 16):  # 11-15 estimated from the monthly total
+        store.merge("r1", f"2024-03-{d:02d}", 700.0)
+        store.put("2024", "estimated", "r1", f"2024-03-{d:02d}", 1)
+    store.merge("r1", "2024-04-02", 500.0)  # 16 Mar - 1 Apr lost, nothing after 2 Apr
+    store.merge("r2", "2024-04-01", 100.0)  # a room that starts later
+    store.merge("r2", "2024-04-02", 100.0)
+    store.save({"id": "h"}, [])
+    assert "coverage" not in Store(tmp_path, "pw").doc("2024")  # plain save: unchanged format
+
+    again = Store(tmp_path, "pw")
+    again.update_coverage()
+    again.save({"id": "h"}, [])
+    cov = Store(tmp_path, "pw").doc("2024")["coverage"]
+    assert cov["r1"] == {"2024-03": [10, 5, 16], "2024-04": [1, 0, 1]}
+    assert cov["r2"] == {"2024-04": [2, 0, 0]}
 
 
 def test_insights_use_only_computed_numbers(tmp_path):
@@ -777,3 +801,80 @@ def test_station_night_crosses_midnight_and_counts_thresholds(tmp_path):
     hours = store.doc("station")["hours"]["m2"]
     assert hours["2025-12-31"] == {"n": 3, "humid": 2, "cold": 2}  # 70, 66 > 65; 19.0 is not < 19
     assert hours["2026-01-01"] == {"n": 5, "humid": 0, "cold": 0}
+
+
+# ---------------------------------------------------------------- S-12.1 shared contract
+def test_contract_json_is_validated_without_quoting_values():
+    from collector.__main__ import ContractError, parse_contract
+
+    ok = (
+        '[{"from": "2022-01-01", "offer": "edf-trv-hphc", "kva": 12},'
+        ' {"from": "2025-10-14", "offer": "edf-trv-hphc", "kva": 9.0}]'
+    )
+    assert parse_contract(ok) == [
+        {"from": "2022-01-01", "offer": "edf-trv-hphc", "kva": 12},
+        {"from": "2025-10-14", "offer": "edf-trv-hphc", "kva": 9},
+    ]
+    p = lambda day, offer="edf-trv-base", kva="9": f'{{"from": "{day}", "offer": "{offer}", "kva": {kva}}}'  # noqa: E731
+    bad = {
+        "{": "illisible",
+        "[]": "liste",
+        p("2022-01-01"): "liste",
+        f"[{p('2022-13-01')}]": "date",
+        f"[{p('1/1/2022')}]": "date",
+        f"[{p('2022-01-01', 'secret-offer')}]": "offre inconnue",
+        f"[{p('2022-01-01', kva='10')}]": "puissance",
+        f"[{p('2022-01-01', kva='true')}]": "puissance",
+        f"[{p('2023-01-01')}, {p('2022-01-01')}]": "triées",
+    }
+    for raw, why in bad.items():
+        with pytest.raises(ContractError, match=why) as err:
+            parse_contract(raw)
+        assert "secret-offer" not in str(err.value) and "2022-13-01" not in str(err.value)
+
+
+def test_shared_contract_goes_into_the_encrypted_meta_and_only_a_count_in_the_summary(tmp_path, monkeypatch, capsys):
+    from collector.__main__ import _job_summary, shared_contract
+
+    store = Store(tmp_path, "pw")
+    store.merge("100", "2024-01-01", 1.0)
+    previous = [{"from": "2022-01-01", "offer": "edf-trv-hphc", "kva": 12}]
+    monkeypatch.delenv("CONTRACT_JSON", raising=False)
+    assert shared_contract(previous) is None  # variable removed: no shared contract any more
+    monkeypatch.setenv("CONTRACT_JSON", "not json")
+    assert shared_contract(previous) == previous  # invalid: keep the last good one
+    assert "not json" not in capsys.readouterr().out
+    monkeypatch.setenv(
+        "CONTRACT_JSON",
+        '[{"from": "2022-01-01", "offer": "edf-trv-hphc", "kva": 12},'
+        ' {"from": "2025-10-14", "offer": "edf-trv-hphc", "kva": 9}]',
+    )
+    contract = shared_contract(None)
+    store.save({"id": "h"}, [], {"contract": contract})
+    assert Store(tmp_path, "pw").meta["contract"][1] == {"from": "2025-10-14", "offer": "edf-trv-hphc", "kva": 9}
+    assert "2025-10-14" not in (tmp_path / "meta.enc.json").read_text()  # encrypted
+    summary = tmp_path / "summary.md"
+    monkeypatch.setenv("GITHUB_STEP_SUMMARY", str(summary))
+    _job_summary(store, Syncer(None, store), [])  # type: ignore[arg-type]
+    text = summary.read_text()
+    assert "| Contrat partagé | oui (2 périodes) |" in text
+    assert "2025-10-14" not in text and "edf-trv" not in text
+
+
+def test_renew_file_lists_only_what_must_be_renewed(tmp_path, monkeypatch):
+    from collector.__main__ import Sources, write_renew_file
+
+    path = tmp_path / "renew.txt"
+    monkeypatch.setenv("RENEW_FILE", str(path))
+    s = Sources(None)
+    s.credential("netatmo", "seed-secret")
+    s.failed("netatmo", "invalid_grant", auth=True)
+    write_renew_file(s.alerts())
+    text = path.read_text()
+    assert text.startswith("- Renouveler le jeton netatmo") and text.count("\n") == 1
+    assert "seed-secret" not in text
+    s.ok("netatmo")
+    write_renew_file(s.alerts())
+    assert path.read_text() == ""
+    monkeypatch.delenv("RENEW_FILE")
+    write_renew_file(["x"])  # no file asked: nothing written, no error

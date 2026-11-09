@@ -1,6 +1,6 @@
 import sodium from 'libsodium-wrappers';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { listSecrets, putSecret, repoFromLocation, runCollect, setToken, validate } from './settings';
+import { expiryInfo, listSecrets, putSecret, putVariable, repoFromLocation, runCollect, setToken, validate } from './settings';
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -63,5 +63,48 @@ describe('settings', () => {
     await expect(listSecrets('o/r')).rejects.toThrow(/droits insuffisants/);
     await runCollect('o/r', true);
     expect(JSON.parse(calls[1].body!)).toEqual({ ref: 'main', inputs: { backfill: true } });
+  });
+
+  it('shares the contract as a repository variable: update, else create (S-12.1)', async () => {
+    const calls: { url: string; method?: string; body?: string }[] = [];
+    let exists = false;
+    vi.stubGlobal('fetch', async (url: string, init?: RequestInit) => {
+      calls.push({ url, method: init?.method, body: init?.body as string });
+      if (init?.method === 'PATCH') return new Response(null, { status: exists ? 204 : 404 });
+      exists = true;
+      return new Response(null, { status: 201 });
+    });
+    setToken('github_pat_test');
+    const value = '[{"from":"2022-01-01","offer":"edf-trv-hphc","kva":12}]';
+    await putVariable('o/r', 'CONTRACT_JSON', value);
+    expect(calls.map((c) => `${c.method} ${c.url}`)).toEqual([
+      'PATCH https://api.github.com/repos/o/r/actions/variables/CONTRACT_JSON',
+      'POST https://api.github.com/repos/o/r/actions/variables',
+    ]);
+    expect(JSON.parse(calls[1].body!)).toEqual({ name: 'CONTRACT_JSON', value });
+    await putVariable('o/r', 'CONTRACT_JSON', value);
+    expect(calls).toHaveLength(3);
+    expect(calls[2].method).toBe('PATCH');
+    await expect(putVariable('o/r', 'INTUIS_ROOM_CATEGORIES', '{}')).rejects.toThrow(/ne peut pas/);
+    expect(calls).toHaveLength(3);
+  });
+
+  it('reports a missing variables permission instead of creating blindly', async () => {
+    vi.stubGlobal('fetch', async () => new Response('', { status: 403 }));
+    setToken('t');
+    await expect(putVariable('o/r', 'CONTRACT_JSON', '[]')).rejects.toThrow(/Variables/);
+  });
+
+  it('shows the token expiry, estimated or unknown, and when to renew (S-1.12)', () => {
+    const today = '2026-11-09';
+    expect(expiryInfo({ credential: 'abc', expires: '2027-06-01', expires_estimated: true }, today)).toMatchObject({
+      date: '2027-06-01',
+      estimated: true,
+      renew: false,
+    });
+    expect(expiryInfo({ credential: 'abc', expires: '2026-12-01' }, today)).toMatchObject({ renew: true, daysLeft: 22 });
+    expect(expiryInfo({ credential: 'abc' }, today)).toMatchObject({ date: null, renew: false }); // « expiration inconnue »
+    expect(expiryInfo({ credential: 'abc', auth_expired: true }, today)?.renew).toBe(true);
+    expect(expiryInfo({ ok: '2026-11-09T04:00:00+00:00' }, today)).toBeNull(); // no tracked token (Intuis)
   });
 });

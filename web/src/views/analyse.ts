@@ -7,6 +7,8 @@ import { calendarChart, cssVar, gridHeatmap, lineChart, scatterChart } from '../
 import { loadHourly } from '../data';
 import { renderMarkdown } from '../markdown';
 import { activeRooms, catColor, esc, fmtKwh, lastDay, longDate, seg, series, table, tariffNames } from '../ui';
+import { drawSetpoint, setpointCard } from './setpoint';
+import { drawWaterHeater, hcAlerts, waterHeaterCard } from './waterheater';
 
 let hourly: Hourly | null = null;
 let hourlyLoading = false;
@@ -49,6 +51,7 @@ export function renderAnalyse(view: HTMLElement, records: DayRecord[]) {
   </section>`
       : `<section class="card"><h2>Signature énergétique</h2><p class="hint muted">Disponible dès que la collecte a récupéré la météo (prochaine collecte).</p></section>`
   }
+  ${setpointCard(records)}
   ${anomaliesCard(records)}
   <section class="card">
     <div class="card-head"><h2>Calendrier <small class="muted">kWh par jour</small></h2>
@@ -72,6 +75,7 @@ export function renderAnalyse(view: HTMLElement, records: DayRecord[]) {
       <p class="hint muted">Détection automatique : la colonne où le chauffe-eau consomme le plus est considérée comme les heures creuses.</p></section>`
       : ''
   }
+  ${waterHeaterCard()}
   ${stationCard()}
   ${
     tempRoom
@@ -144,13 +148,17 @@ export function renderAnalyse(view: HTMLElement, records: DayRecord[]) {
   }
   drawStation();
   drawHourly(records);
+  drawWaterHeater(hourly);
+  drawSetpoint(records);
 }
 
 function anomaliesCard(records: DayRecord[]) {
   if (!ds!.weather) return '';
   const list = anomalies(records, ds!.weather).slice(0, 12);
-  if (!list.length) return '';
+  const alerts = hcAlerts();
+  if (!list.length) return alerts ? `<section class="card"><h2>Jours inhabituels</h2>${alerts}</section>` : '';
   return `<section class="card"><h2>Jours inhabituels <small class="muted">chauffage, écart à la signature</small></h2>
+    ${alerts}
     <p class="hint muted">Jours où le chauffage s'écarte nettement de ce qu'annonce la température extérieure (plus de 2 fois l'écart habituel et plus de 3 kWh) : fenêtre ouverte, absence, invités, réglage oublié…</p>
     ${table(
       ['Jour', 'Consommé', 'Attendu', 'Écart'],
