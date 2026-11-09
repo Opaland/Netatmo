@@ -23,6 +23,7 @@ from zoneinfo import ZoneInfo
 
 import httpx
 
+from .errors import SourceError, endpoint_of, raise_for_status
 from .http import Paced
 from .schema import FormatError, dated_records, safe_keys
 from .storage import Store
@@ -54,17 +55,18 @@ CURVE_MIN_SLOTS = 46  # a complete day has 48 half hours (46 on the spring DST d
 MIN_INTERVAL = 0.3
 
 
-class LinkyError(RuntimeError):
-    def __init__(self, message: str, auth: bool = False) -> None:
-        super().__init__(message)
-        self.auth = auth  # token refused: consent expired or revoked
+class LinkyError(SourceError):
+    """`auth`: token refused, consent expired or revoked. Never the URL (its query holds the
+    PRM) nor the response body (S-1.16 #263)."""
+
+    source = "Linky (Conso API)"
 
 
 class _Paced(Paced):
     """GET with the Conso API token, at most one call every `min_interval` seconds."""
 
     def __init__(self, http: httpx.Client, token: str, min_interval: float | None) -> None:
-        super().__init__(http, "linky", MIN_INTERVAL if min_interval is None else min_interval)
+        super().__init__(http, "linky", MIN_INTERVAL if min_interval is None else min_interval, LinkyError)
         self.token = token
 
     def get(self, url: str, params: dict) -> httpx.Response:  # type: ignore[override]
@@ -169,12 +171,12 @@ def collect(
         resp = api.get(API, {"pointId": prm, "dateDebut": chunk_start.isoformat(), "dateFin": chunk_end.isoformat()})
         if resp.status_code in (401, 403):
             raise LinkyError(
-                f"Linky (Conso API) : HTTP {resp.status_code}, jeton refusé — renouvelez l'accord sur "
-                "conso.boris.sh et mettez le nouveau jeton dans ENEDIS_TOKEN",
+                endpoint=endpoint_of(API),
+                status=resp.status_code,
+                hint="renouvelez l'accord sur conso.boris.sh et mettez le nouveau jeton dans ENEDIS_TOKEN",
                 auth=True,
             )
-        if resp.status_code != 200:
-            raise LinkyError(f"Linky (Conso API) : HTTP {resp.status_code} {resp.text[:150]}")
+        raise_for_status(resp, LinkyError, endpoint_of(API))
         body = _json(resp, "consommation_quotidienne")
         bodies.append(body)
         found = _readings(body)
@@ -328,8 +330,7 @@ def collect_curve(
         resp = api.get(API_CURVE, {"pointId": prm, "dateDebut": start.isoformat(), "dateFin": end.isoformat()})
         if resp.status_code != 200:
             raise LinkyError(
-                f"Linky, courbe de charge : HTTP {resp.status_code} {resp.text[:150]}",
-                auth=resp.status_code in (401, 403),
+                endpoint=endpoint_of(API_CURVE), status=resp.status_code, auth=resp.status_code in (401, 403)
             )
         body = _json(resp, "courbe_de_charge_consommation")
         _check_found(body, len(_points(body)), "courbe_de_charge_consommation")

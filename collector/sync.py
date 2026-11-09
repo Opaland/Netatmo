@@ -64,7 +64,8 @@ class Syncer:
         if not homes:
             raise ApiError("Aucune maison trouvée sur ce compte")
         if len(homes) > 1:
-            log.warning("Plusieurs maisons trouvées, seule la première est collectée : %s", homes[0].name)
+            # S-1.16 #264: a count only, never the name of the home (often a family name or an address).
+            log.warning("Plusieurs maisons trouvées (%d), seule la première est collectée", len(homes))
         return homes[0]
 
     # ------------------------------------------------------------ low level

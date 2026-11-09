@@ -13,15 +13,21 @@ from typing import Any
 import httpx
 
 from .budget import METER
+from .errors import SourceError, endpoint_of, guarded
 
 
 class Paced:
-    """`http.request` spaced by `min_interval` seconds and counted under `source`."""
+    """`http.request` spaced by `min_interval` seconds and counted under `source`.
 
-    def __init__(self, http: Any, source: str, min_interval: float) -> None:
+    With `error` (a SourceError subclass), a transport error becomes that error, carrying only
+    the endpoint path and the httpx class name (S-1.16: an httpx message holds the full URL,
+    query included). Without it, httpx errors propagate (the caller retries or converts them)."""
+
+    def __init__(self, http: Any, source: str, min_interval: float, error: type[SourceError] | None = None) -> None:
         self.http = http
         self.source = source
         self.min_interval = min_interval
+        self.error = error
         self.last = 0.0
 
     def wait(self) -> None:
@@ -32,7 +38,10 @@ class Paced:
     def request(self, method: str, url: str, **kw: Any) -> httpx.Response:
         self.wait()
         try:
-            with METER.call(self.source):
+            if self.error is None:
+                with METER.call(self.source):
+                    return self.http.request(method, url, **kw)
+            with guarded(self.error, endpoint_of(url)), METER.call(self.source):
                 return self.http.request(method, url, **kw)
         finally:
             self.last = time.monotonic()

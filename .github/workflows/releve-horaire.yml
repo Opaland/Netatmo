@@ -23,22 +23,14 @@ jobs:
     if: vars.ROOM_STATE_HOURLY == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 5
-    env:
-      INTUIS_USERNAME: ${{ secrets.INTUIS_USERNAME }}
-      INTUIS_PASSWORD: ${{ secrets.INTUIS_PASSWORD }}
-      INTUIS_CLIENT_ID: ${{ secrets.INTUIS_CLIENT_ID }}
-      INTUIS_CLIENT_SECRET: ${{ secrets.INTUIS_CLIENT_SECRET }}
-      DATA_PASSPHRASE: ${{ secrets.DATA_PASSPHRASE }}
-      # S-13.5: presence is read only with this opt-in, and only daily hours are ever kept.
-      ROOM_STATE_PRESENCE: ${{ vars.ROOM_STATE_PRESENCE }}
-      MAX_CALLS_INTUIS_HOURLY: ${{ vars.MAX_CALLS_INTUIS_HOURLY }}
     steps:
-      # Only the collector, the salt and the encrypted meta (home id): no data history.
+      # Only the collector, its locked dependencies, the salt and the encrypted meta (home id):
+      # no data history.
       - uses: actions/checkout@v5
         with:
           sparse-checkout: |
             collector
-            pyproject.toml
+            requirements-lock.txt
             data/keyinfo.json
             data/meta.enc.json
           sparse-checkout-cone-mode: false
@@ -46,8 +38,20 @@ jobs:
         with:
           python-version: "3.12"
           cache: pip
-      - run: pip install .
+          cache-dependency-path: requirements-lock.txt
+      # S-1.16 #265: locked versions with hashes, and no secret in this step's environment
+      # (a compromised package would run here). The collector runs from the checkout, not installed.
+      - run: pip install --require-hashes -r requirements-lock.txt
       - name: Relevé
+        env:
+          INTUIS_USERNAME: ${{ secrets.INTUIS_USERNAME }}
+          INTUIS_PASSWORD: ${{ secrets.INTUIS_PASSWORD }}
+          INTUIS_CLIENT_ID: ${{ secrets.INTUIS_CLIENT_ID }}
+          INTUIS_CLIENT_SECRET: ${{ secrets.INTUIS_CLIENT_SECRET }}
+          DATA_PASSPHRASE: ${{ secrets.DATA_PASSPHRASE }}
+          # S-13.5: presence is read only with this opt-in, and only daily hours are ever kept.
+          ROOM_STATE_PRESENCE: ${{ vars.ROOM_STATE_PRESENCE }}
+          MAX_CALLS_INTUIS_HOURLY: ${{ vars.MAX_CALLS_INTUIS_HOURLY }}
         run: python -m collector snapshot --out "$RUNNER_TEMP/etat"
       - uses: actions/upload-artifact@v4
         with:

@@ -22,6 +22,8 @@ concurrency:
 jobs:
   collect:
     runs-on: ubuntu-latest
+    # A stuck request or a long Retry-After never holds the runner (and the secrets) for hours.
+    timeout-minutes: 30
     permissions:
       contents: write
       issues: write
@@ -29,43 +31,15 @@ jobs:
       actions: read
     outputs:
       configured: ${{ steps.check.outputs.configured }}
-    env:
-      INTUIS_USERNAME: ${{ secrets.INTUIS_USERNAME }}
-      INTUIS_PASSWORD: ${{ secrets.INTUIS_PASSWORD }}
-      INTUIS_CLIENT_ID: ${{ secrets.INTUIS_CLIENT_ID }}
-      INTUIS_CLIENT_SECRET: ${{ secrets.INTUIS_CLIENT_SECRET }}
-      DATA_PASSPHRASE: ${{ secrets.DATA_PASSPHRASE }}
-      INTUIS_ROOM_CATEGORIES: ${{ vars.INTUIS_ROOM_CATEGORIES }}
-      # S-12.1: contract shared between devices (not secret: a repository variable written by
-      # Settings). Validated by the collector, stored in the encrypted meta, never printed.
-      CONTRACT_JSON: ${{ vars.CONTRACT_JSON }}
-      # S-12.5: prolonged cold alert (rooms and threshold, disabled when unset). Never printed:
-      # the issue below only carries pseudonyms (Pièce A, B…), the log only counts.
-      COLD_ALERT_JSON: ${{ vars.COLD_ALERT_JSON }}
-      # S-1.14: optional caps on API calls per collection (empty = default, see docs/api-notes.md).
-      MAX_CALLS_INTUIS: ${{ vars.MAX_CALLS_INTUIS }}
-      MAX_CALLS_NETATMO: ${{ vars.MAX_CALLS_NETATMO }}
-      MAX_CALLS_LINKY: ${{ vars.MAX_CALLS_LINKY }}
-      MAX_CALLS_OPEN_METEO: ${{ vars.MAX_CALLS_OPEN_METEO }}
-      # Optional: Netatmo weather station (see README)
-      NETATMO_CLIENT_ID: ${{ secrets.NETATMO_CLIENT_ID }}
-      NETATMO_CLIENT_SECRET: ${{ secrets.NETATMO_CLIENT_SECRET }}
-      NETATMO_REFRESH_TOKEN: ${{ secrets.NETATMO_REFRESH_TOKEN }}
-      # Optional: Linky meter through Conso API (see README)
-      ENEDIS_TOKEN: ${{ secrets.ENEDIS_TOKEN }}
-      ENEDIS_PRM: ${{ secrets.ENEDIS_PRM }}
-      # Optional: Shelly smart plugs through the Shelly Cloud (see README)
-      SHELLY_AUTH_KEY: ${{ secrets.SHELLY_AUTH_KEY }}
-      SHELLY_SERVER: ${{ secrets.SHELLY_SERVER }}
-      MAX_CALLS_SHELLY: ${{ vars.MAX_CALLS_SHELLY }}
-      # Optional: monthly analysis written by Claude (see README)
-      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-      # S-13.5: presence hours per day, opt-in only (see README)
-      ROOM_STATE_PRESENCE: ${{ vars.ROOM_STATE_PRESENCE }}
+    # S-1.16 #265: no job-level env. Secrets and private variables are given only to the step
+    # « Collecte », the one that needs them (never to pip, gh or git).
     steps:
       - id: check
+        env:
+          # "true" / "false" only: the values themselves are not exposed to this step.
+          CONFIGURED: ${{ secrets.INTUIS_USERNAME != '' && secrets.DATA_PASSPHRASE != '' }}
         run: |
-          if [ -z "$INTUIS_USERNAME" ] || [ -z "$DATA_PASSPHRASE" ]; then
+          if [ "$CONFIGURED" != "true" ]; then
             echo "::notice::Secrets non configurés : voir le README (section Installation). Collecte ignorée."
             echo "configured=false" >> "$GITHUB_OUTPUT"
           else
@@ -78,10 +52,15 @@ jobs:
         with:
           python-version: "3.12"
           cache: pip
+          cache-dependency-path: requirements-lock.txt
+      # S-1.16 #265: locked versions with hashes, and no secret in this step's environment
+      # (a compromised package would run here). The collector runs from the checkout, not installed.
       - if: steps.check.outputs.configured == 'true'
-        run: pip install ".[ai]"
+        run: pip install --require-hashes -r requirements-lock.txt
       # S-13.2: encrypted hourly snapshots, kept 3 days as artifacts, never committed.
       # Already counted hours are skipped by the collector, so reading a snapshot twice is harmless.
+      # S-1.16 #271: only artifacts of this repository's own « Relevé horaire » runs (schedule or
+      # manual run) on the default branch; never one uploaded by a pull request or a fork.
       - name: Relevés horaires des pièces
         if: steps.check.outputs.configured == 'true' && vars.ROOM_STATE_HOURLY == 'true'
         env:
@@ -90,8 +69,18 @@ jobs:
         run: |
           mkdir -p "$DEST"
           n=0
-          for id in $(gh api --paginate "repos/$GITHUB_REPOSITORY/actions/artifacts?per_page=100" \
-              --jq '.artifacts[] | select(.expired | not) | select(.name | startswith("etat-pieces-")) | .id'); do
+          # Never fatal: on an API error no snapshot is read (the collector reports it).
+          branch=$(gh api "repos/$GITHUB_REPOSITORY" --jq .default_branch) || branch=main
+          runs=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/releve-horaire.yml/runs?branch=$branch&per_page=100" \
+            --jq '[.workflow_runs[] | select(.head_repository.id == .repository.id)
+                   | select(.event == "schedule" or .event == "workflow_dispatch") | .id]') || runs='[]'
+          ids=$(gh api --paginate "repos/$GITHUB_REPOSITORY/actions/artifacts?per_page=100" --jq '.artifacts[]' \
+            | jq -r --argjson runs "$runs" --arg branch "$branch" '
+                select(.expired | not) | select((.name // "") | startswith("etat-pieces-"))
+                | select(.workflow_run.head_branch == $branch)
+                | select(.workflow_run.head_repository_id == .workflow_run.repository_id)
+                | select(.workflow_run.id as $r | $runs | index($r)) | .id') || ids=""
+          for id in $ids; do
             if gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$id/zip" > "$RUNNER_TEMP/etat.zip" \
               && unzip -o -q "$RUNNER_TEMP/etat.zip" -d "$DEST/$id"; then
               n=$((n + 1))
@@ -105,6 +94,38 @@ jobs:
         id: collect
         if: steps.check.outputs.configured == 'true'
         env:
+          INTUIS_USERNAME: ${{ secrets.INTUIS_USERNAME }}
+          INTUIS_PASSWORD: ${{ secrets.INTUIS_PASSWORD }}
+          INTUIS_CLIENT_ID: ${{ secrets.INTUIS_CLIENT_ID }}
+          INTUIS_CLIENT_SECRET: ${{ secrets.INTUIS_CLIENT_SECRET }}
+          DATA_PASSPHRASE: ${{ secrets.DATA_PASSPHRASE }}
+          INTUIS_ROOM_CATEGORIES: ${{ vars.INTUIS_ROOM_CATEGORIES }}
+          # S-12.1: contract shared between devices (not secret: a repository variable written by
+          # Settings). Validated by the collector, stored in the encrypted meta, never printed.
+          CONTRACT_JSON: ${{ vars.CONTRACT_JSON }}
+          # S-12.5: prolonged cold alert (rooms and threshold, disabled when unset). Never printed:
+          # the issue below only carries pseudonyms (Pièce A, B…), the log only counts.
+          COLD_ALERT_JSON: ${{ vars.COLD_ALERT_JSON }}
+          # S-1.14: optional caps on API calls per collection (empty = default, see docs/api-notes.md).
+          MAX_CALLS_INTUIS: ${{ vars.MAX_CALLS_INTUIS }}
+          MAX_CALLS_NETATMO: ${{ vars.MAX_CALLS_NETATMO }}
+          MAX_CALLS_LINKY: ${{ vars.MAX_CALLS_LINKY }}
+          MAX_CALLS_OPEN_METEO: ${{ vars.MAX_CALLS_OPEN_METEO }}
+          MAX_CALLS_SHELLY: ${{ vars.MAX_CALLS_SHELLY }}
+          # Optional: Netatmo weather station (see README)
+          NETATMO_CLIENT_ID: ${{ secrets.NETATMO_CLIENT_ID }}
+          NETATMO_CLIENT_SECRET: ${{ secrets.NETATMO_CLIENT_SECRET }}
+          NETATMO_REFRESH_TOKEN: ${{ secrets.NETATMO_REFRESH_TOKEN }}
+          # Optional: Linky meter through Conso API (see README)
+          ENEDIS_TOKEN: ${{ secrets.ENEDIS_TOKEN }}
+          ENEDIS_PRM: ${{ secrets.ENEDIS_PRM }}
+          # Optional: Shelly smart plugs through the Shelly Cloud (see README)
+          SHELLY_AUTH_KEY: ${{ secrets.SHELLY_AUTH_KEY }}
+          SHELLY_SERVER: ${{ secrets.SHELLY_SERVER }}
+          # Optional: monthly analysis written by Claude (see README)
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          # S-13.5: presence hours per day, opt-in only (see README)
+          ROOM_STATE_PRESENCE: ${{ vars.ROOM_STATE_PRESENCE }}
           RENEW_FILE: ${{ runner.temp }}/renew.txt
           COLD_FILE: ${{ runner.temp }}/cold.txt
           # S-1.19: station inventory with the access token of this collection (names and counts only).
