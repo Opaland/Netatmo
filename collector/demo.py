@@ -34,6 +34,27 @@ OTHER_WEEKDAY += _EVENING_WEEKDAY
 OTHER_WEEKEND = [120, 120] + [0] * 12 + [200, 400, 600, 500, 350, 300, 300, 350] + [400, 900, 1300, 1100, 400]
 OTHER_WEEKEND += [300] * 9 + _EVENING_WEEKEND
 CURVE_DAYS = 60
+# S-1.8 / S-1.10: data-quality cases shown by the demo, like those of the real account.
+# Days lost at Intuis (neither the day nor the month): every room, then two rooms only.
+LOST = [
+    (date(2024, 2, 12), date(2024, 3, 8), None),
+    (date(2024, 11, 4), date(2024, 11, 17), {"r-salon", "r-cuisine"}),
+]
+# Days spread from a monthly total (estimated), heating rooms.
+ESTIMATED = (date(2023, 12, 4), date(2023, 12, 8))
+# Real days recorded far too low by Intuis (Linky saw the real consumption): "suspects".
+SUSPECT = {date(2025, 1, 14): 0.12, date(2025, 1, 15): 0.15}
+# Contract periods (meta.contract, S-12.1): Base, then HP/HC from October 2023 (12 kVA).
+CONTRACT = [
+    {"from": "2022-01-01", "offer": "edf-trv-base", "kva": 12},
+    {"from": "2023-10-01", "offer": "edf-trv-hphc", "kva": 12},
+]
+
+
+def is_lost(rid: str, d: date) -> bool:
+    return any(a <= d <= b and (rooms is None or rid in rooms) for a, b, rooms in LOST)
+
+
 KIDS_CO2 = [700, 780, 840, 890, 930, 960, 980, 900, 250, 80, 0, 0, 0, 0, 0, 0, 50, 80, 100, 120, 150, 300, 450, 600]
 
 
@@ -79,6 +100,25 @@ def _curve_day(store: Store, rnd: random.Random, d: date, hours_wh: list[float],
     return round(total, 1)
 
 
+def _sources(today: date) -> dict:
+    """State of the sources (S-1.7, S-1.12) as the settings screen shows it."""
+    ok = f"{today.isoformat()}T04:12:00+00:00"
+    linky_since = date(today.year - 1, 3, 2)
+    return {
+        "intuis": {"ok": ok},
+        "open-meteo": {"ok": ok},
+        "netatmo": {"ok": ok, "since": "2023-11-20"},
+        "linky": {
+            "ok": ok,
+            "since": linky_since.isoformat(),
+            "expires": linky_since.replace(year=linky_since.year + 3).isoformat(),
+            "expires_estimated": True,
+        },
+        "linky-30min": {"ok": ok},
+        "ia": {"ok": ok},
+    }
+
+
 def generate(out_dir: Path, passphrase: str = "demo", start_year: int = 2022) -> list[str]:
     rnd = random.Random(42)
     rnd_hours = random.Random(11)  # separate stream: the rest of the demo stays identical
@@ -92,6 +132,7 @@ def generate(out_dir: Path, passphrase: str = "demo", start_year: int = 2022) ->
     # The house gets a little better each year (réglages, isolation).
     efficiency = {y: 1.0 - 0.05 * (y - start_year) for y in range(start_year, today.year + 1)}
     winter_noise: dict[int, float] = {}
+    spread: dict[str, dict[str, float]] = {}  # estimated days: room -> day -> real Wh
     while d < today:
         doy = d.timetuple().tm_yday
         # Outdoor temperature: seasonal curve + a different winter each year + daily weather.
@@ -135,9 +176,15 @@ def generate(out_dir: Path, passphrase: str = "demo", start_year: int = 2022) ->
                     base *= 0.4
                 kwh = base * rnd.uniform(0.85, 1.15) if dju > 1.5 else 0.0
             wh = round(max(kwh, 0) * 1000, 1)
-            store.merge(rid, d.isoformat(), wh)
-            day_total += wh
-            if d >= tariffs_from and wh:
+            day_total += wh  # what the meter saw, whatever Intuis kept
+            lost = is_lost(rid, d)  # random draws stay the same: the rest of the demo is unchanged
+            if cat == HEATING and d in SUSPECT:
+                wh = round(wh * SUSPECT[d], 1)
+            if not lost and cat == HEATING and ESTIMATED[0] <= d <= ESTIMATED[1]:
+                spread.setdefault(rid, {})[d.isoformat()] = wh
+            if not lost:
+                store.merge(rid, d.isoformat(), wh)
+            if d >= tariffs_from and wh and not lost:
                 hc_share = 0.9 if cat == WATER_HEATER else 0.32
                 store.put(
                     str(d.year),
@@ -148,7 +195,8 @@ def generate(out_dir: Path, passphrase: str = "demo", start_year: int = 2022) ->
                 )
             if setpoint is not None:
                 measured = setpoint - (0.4 if dju > 12 else 0) + rnd.gauss(0, 0.3)
-                store.put(str(d.year), "temps", rid, d.isoformat(), [round(measured, 1), setpoint])
+                if not lost:
+                    store.put(str(d.year), "temps", rid, d.isoformat(), [round(measured, 1), setpoint])
             if d >= hourly_from and wh:
                 shape = WATER_SHAPE if cat == WATER_HEATER else HEAT_SHAPE
                 s = sum(shape)
@@ -168,6 +216,13 @@ def generate(out_dir: Path, passphrase: str = "demo", start_year: int = 2022) ->
                 store.put("linky", "daily", d.isoformat(), None, round(day_total + other, 1))
             store.put("linky", "pmax", d.isoformat(), None, round(min(11.8, 3.2 + 0.28 * dju + rnd.uniform(0, 2.5)), 2))
         d += timedelta(days=1)
+    # Estimated days: Intuis kept the month, the collector spread it evenly (S-1.10).
+    for rid, days in spread.items():
+        share = round(sum(days.values()) / len(days), 1)
+        for day in days:
+            store.merge(rid, day, share)
+            store.put(day[:4], "estimated", rid, day, 1)
+    store.update_coverage()
     for key in ("m0", "m1", "m2", "m3"):
         aggregate_days(store, key, key != "m1", hourly_from, today)
     store.set_top("weather", "source", "open-meteo")
@@ -191,6 +246,8 @@ def generate(out_dir: Path, passphrase: str = "demo", start_year: int = 2022) ->
         "has_linky": True,
         "has_station": True,
         "weather_source": "open-meteo",
+        "contract": CONTRACT,
+        "sources": _sources(today),
     }
     store.replace(
         "insights",
@@ -210,6 +267,24 @@ def generate(out_dir: Path, passphrase: str = "demo", start_year: int = 2022) ->
                 "- Baisser la consigne de la **salle de bain** hors des créneaux du matin.\n"
                 "- Vérifier la relance de 7 h dans le **bureau** le week-end."
             ),
+            # What would have been sent: pseudonyms only (S-5.7), and the usage of the call (S-5.8)
+            "facts": {
+                "mois": "exemple",
+                "pieces": [{"piece": "Pièce A", "usage": "chauffage", "kwh": 310.0, "kwh_annee_precedente": 340.0}],
+                "station_confort": {"Capteur A": {"co2_moyen_ppm": 870, "heures_nuit_co2_sup_1000_ppm": 42}},
+            },
+            "pseudonyms": {"Pièce A": "Salon", "Capteur A": "Chambre enfants"},
+            "usage": {
+                "requests": 1,
+                "input_tokens": 2100,
+                "output_tokens": 900,
+                "cache_read_input_tokens": 0,
+                "cache_creation_input_tokens": 0,
+                "cost_usd": 0.0264,
+                "cost_eur": 0.023,
+                "eur_per_usd": 0.87,
+                "served_by": ["claude-opus-5-5"],
+            },
         },
     )
     return store.save({"id": "demo", "name": "Maison démo", "timezone": "Europe/Paris"}, rooms, extra)

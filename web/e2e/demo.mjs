@@ -9,9 +9,13 @@ const OUT = process.env.E2E_OUT ?? 'e2e/screenshots';
 mkdirSync(OUT, { recursive: true });
 const server = spawn('npx', ['vite', 'preview', '--port', String(PORT), '--strictPort'], { stdio: 'ignore' });
 const base = `http://localhost:${PORT}/`;
+// With --strictPort the server exits at once when the port is taken: never test someone else's build.
+let serverExited = false;
+server.on('exit', () => (serverExited = true));
 
 async function waitForServer() {
   for (let i = 0; i < 50; i++) {
+    if (serverExited) throw new Error(`port ${PORT} déjà utilisé (choisir E2E_PORT=…)`);
     try {
       if ((await fetch(base)).ok) return;
     } catch {}
@@ -29,6 +33,8 @@ try {
     ['mobile-clair', { ...devices['iPhone 13'] }],
     ['mobile-sombre', { ...devices['Pixel 7'], colorScheme: 'dark' }],
     ['bureau', { viewport: { width: 1280, height: 900 } }],
+    // smallest common Android width: only the tab bar and the comfort view (five tabs must fit)
+    ['mobile-360', { viewport: { width: 360, height: 740 }, hasTouch: true }],
   ]) {
     const ctx = await browser.newContext({ ...opts, deviceScaleFactor: 1, acceptDownloads: true });
     const page = await ctx.newPage();
@@ -37,7 +43,7 @@ try {
     await page.goto(base);
     await page.click('#demo');
     await page.waitForSelector('.kpi', { timeout: 30000 });
-    for (const view of ['overview', 'compare', 'rooms', 'analyse']) {
+    for (const view of name === 'mobile-360' ? [] : ['overview', 'compare', 'rooms', 'analyse']) {
       await page.click(`[data-view=${view}]`);
       await page.waitForTimeout(view === 'analyse' ? 2000 : 600);
       if (view === 'overview') {
@@ -50,11 +56,49 @@ try {
         } catch (err) {
           errors.push(`${name}/overview: carte « Courbe de charge » non rendue (${err})`);
         }
+        // S-1.10: lost days rebuilt apart, on demand (lazy module)
+        try {
+          await page.click('#quality summary');
+          await page.check('[data-recon]');
+          await page.waitForSelector('#recon-chart canvas', { timeout: 15000 });
+          if (!(await page.getByText('Jours suspects').count())) errors.push(`${name}/overview: jours suspects absents`);
+        } catch (err) {
+          errors.push(`${name}/overview: reconstitution non rendue (${err})`);
+        }
+      }
+      if (view === 'analyse') {
+        // S-3.7: indoor − outdoor signature (lazy module)
+        try {
+          await page.waitForSelector('#indoor-sig-chart canvas', { timeout: 15000 });
+        } catch (err) {
+          errors.push(`${name}/analyse: signature intérieur − extérieur non rendue (${err})`);
+        }
       }
       const charts = await page.locator('.chart canvas').count();
       if (!charts) errors.push(`${name}/${view}: aucun graphique rendu`);
+      if (view === 'analyse' && !(await page.locator('#insight-card .insight-usage').count())) errors.push(`${name}/analyse: carte IA (S-5.8) non rendue`);
       await page.screenshot({ path: `${OUT}/${name}-${view}.png`, fullPage: true });
     }
+    // S-11 / S-3.8: comfort view (lazy chunk), bedroom detail on a deliberate gesture, other threshold
+    await page.click('[data-view=comfort]');
+    await page.waitForSelector('#cold-chart canvas', { timeout: 15000 });
+    await page.click('[data-comfort=show-bedrooms]');
+    await page.waitForSelector('#co2-0 canvas');
+    await page.selectOption('select[data-comfort=threshold]', '18');
+    await page.waitForFunction(() => !document.querySelector('#view td.num')?.closest('table')?.textContent?.includes('…'), null, { timeout: 15000 });
+    await page.waitForTimeout(600);
+    for (const id of ['co2-0', 'cellar-0', 'cold-chart', 'probe-0']) {
+      if (!(await page.locator(`#${id} canvas`).count())) errors.push(`${name}/comfort: graphique ${id} absent`);
+    }
+    if (!(await page.getByText('Heures sous 18,0 °C').count())) errors.push(`${name}/comfort: seuil 18 °C non appliqué`);
+    const overflow = await page.evaluate(() => {
+      const t = document.querySelector('.tabs');
+      return t ? t.scrollWidth > t.clientWidth + 1 : false;
+    });
+    if (overflow) errors.push(`${name}: barre d'onglets plus large que l'écran`);
+    await page.screenshot({ path: `${OUT}/${name}-comfort.png`, fullPage: true });
+    await page.selectOption('select[data-comfort=threshold]', '19');
+
     await page.click('.menu summary');
     await page.click('.menu-panel [data-view=report]');
     await page.waitForSelector('.report');
@@ -65,12 +109,18 @@ try {
     } catch (err) {
       errors.push(`${name}/report: comparateur ou pic de puissance absent (${err})`);
     }
+    // S-5.9: a canned question answered by code
+    await page.click('[data-question=normal]');
+    await page.waitForSelector('.question-answer li', { timeout: 5000 });
     await page.screenshot({ path: `${OUT}/${name}-report.png`, fullPage: true });
     // S-6.4: anonymised report, without any room or home name of the demo
+    const roomNames = await page.locator('#report-waterfall ~ .table-wrap').first().locator('tbody td:first-child').allInnerTexts();
+    const homeName = (await page.locator('.top h1').innerText()).replace(/\s*démo$/i, '').trim();
+    if (roomNames.length < 2) errors.push(`${name}/report: tableau des pièces introuvable`);
     await page.click('#report-anon');
     await page.waitForSelector('.anon-report #anon-chart canvas', { timeout: 15000 });
     const anon = await page.locator('.anon-report').innerText();
-    for (const secret of ['Maison démo', 'Salon', 'Cuisine', 'Chambre parentale', 'Chambre enfant', 'Salle de bain', 'Bureau', 'r-salon']) {
+    for (const secret of [homeName, ...roomNames.filter((n) => !/^chauffe-eau$/i.test(n.trim()))]) {
       if (anon.includes(secret)) errors.push(`${name}/anonymisé: « ${secret} » apparaît`);
     }
     if (!/Pièce A/.test(anon) || !/Période/.test(anon)) errors.push(`${name}/anonymisé: pseudonymes ou période absents`);

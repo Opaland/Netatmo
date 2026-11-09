@@ -18,6 +18,7 @@ import {
   validate,
 } from '../settings';
 import { contractInfo, esc, longDate, table } from '../ui';
+import { loadVotes, usefulRate } from '../insight';
 
 let settingsRepo = repoFromLocation() ?? 'Opaland/Netatmo';
 let configured: Set<string> | null = null;
@@ -70,6 +71,7 @@ export function renderSettings(view: HTMLElement) {
       ${status(!!m.has_linky || !!src.linky, 'Compteur Linky', 'linky')}
       ${status(!!ds!.insights, 'Analyse IA mensuelle', 'ia')}
     </ul>
+    ${iaRateLine()}
     <p class="hint muted">Dernière collecte : ${m.updated ? esc(m.updated.replace('T', ' à ').slice(0, 21)) + ' (UTC)' : '—'}.</p>
   </section>
   ${
@@ -243,4 +245,13 @@ export function handleClick(btn: HTMLElement): boolean {
     return true;
   }
   return false;
+}
+
+/** S-5.8 / ADR-5: share of the last 3 monthly analyses judged useful on this device. */
+function iaRateLine() {
+  if (!ds!.insights) return '';
+  const r = usefulRate(loadVotes(), new Date().toISOString().slice(0, 10));
+  return `<p class="hint muted">Analyse IA jugée utile sur cet appareil : ${
+    r.rated ? `<strong>${r.useful} sur ${r.rated}</strong> analyse${r.rated > 1 ? 's' : ''} notée${r.rated > 1 ? 's' : ''} des 3 derniers mois` : 'aucune analyse notée sur les 3 derniers mois'
+  } (règle ADR-5 : la garder si elle est utile au moins 2 mois sur 3 ; notez-la dans l'onglet Analyse).</p>`;
 }
