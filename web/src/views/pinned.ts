@@ -3,6 +3,7 @@
 import { MONTHS_LONG, total } from '../aggregate';
 import { ds, state } from '../app';
 import { activeRooms, costOf, esc, fmtEur, fmtKwh, lastDay } from '../ui';
+import { pinnedTemp, plainEur, plainNum } from '../plain';
 
 const nfTemp = new Intl.NumberFormat('fr-FR', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 
@@ -50,6 +51,18 @@ export function pinnedTiles(): string {
   const cost = costOf(records, from, last);
   const temp = meanTemp(ds!.temps.get(room.id), from, last);
   const name = esc(room.name);
+  if (state.simple) {
+    // S-7.13: plain language, rounded figures
+    const days = ds!.temps.get(room.id);
+    let cold = 0;
+    for (const [d, [t]] of days ?? []) if (d >= from && d <= last && typeof t === 'number' && t < state.comfortThreshold) cold++;
+    const p = temp === null ? null : pinnedTemp(temp, cold, state.comfortThreshold);
+    return `${p ? `<article class="kpi pinned"><h3>${name} : température en ${month}</h3>
+    <p class="kpi-value">${p.value}</p>
+    <p class="kpi-sub">${p.sub}</p></article>` : ''}<article class="kpi pinned"><h3>${name} : ${cost === null ? 'consommation' : 'coût'} en ${month}</h3>
+    <p class="kpi-value">${cost === null ? `${plainNum(kwh)} kWh` : plainEur(cost)}</p>
+    ${cost === null ? '' : `<p class="kpi-sub">Pour ${plainNum(kwh)} kWh.</p>`}</article>`;
+  }
   const tempTile =
     temp === null
       ? ''

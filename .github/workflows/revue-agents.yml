@@ -1,0 +1,133 @@
+name: Revue par agents
+
+# S-1.16: code or design review by a Claude agent, on demand only (fin de version).
+# Process and prompts: docs/PROJET.md § 10, docs/revues-agents/.
+#
+# Least privilege:
+# - manual trigger only (workflow_dispatch: people with write access to the repository);
+# - the agent job can only READ the repository (contents: read) and has a single secret,
+#   ANTHROPIC_API_KEY, given to the action step alone; no Intuis / Netatmo / data key here;
+# - the agent may read files, run read-only git commands (diff, log, show) and write files
+#   in the runner's checkout (only revue-constats.json is kept): no other shell command, no
+#   network tool, no push (read-only token, credentials not persisted), no GitHub API;
+# - issues are opened by a second job, without the model and without the API key, by a
+#   fixed script that validates every field (scripts/revue_issues.py), and only when asked.
+# The repository is public: the run log is public too. The data in data/ is encrypted and
+# the findings describe code, never personal data.
+
+on:
+  workflow_dispatch:
+    inputs:
+      revue:
+        description: "Type de revue"
+        type: choice
+        options: [code, design]
+        default: code
+      base:
+        description: "Référence de départ du diff (étiquette ou commit de la version précédente) ; vide = tout le code"
+        type: string
+        default: ""
+      version:
+        description: "Version relue (ex. v1.4)"
+        type: string
+        required: true
+      creer_issues:
+        description: "Ouvrir les issues des constats (sinon : artefact seulement)"
+        type: boolean
+        default: false
+
+permissions: {}
+
+concurrency:
+  group: revue-agents
+  cancel-in-progress: false
+
+jobs:
+  revue:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    env:
+      HAS_KEY: ${{ secrets.ANTHROPIC_API_KEY != '' }}
+      REVUE: ${{ inputs.revue }}
+      BASE: ${{ inputs.base }}
+      VERSION: ${{ inputs.version }}
+    steps:
+      - name: Clé d'API présente
+        if: env.HAS_KEY != 'true'
+        run: |
+          echo "::error::Secret ANTHROPIC_API_KEY absent : ajoutez-le dans Settings → Secrets and variables → Actions, ou faites la revue en local (docs/PROJET.md § 10)."
+          exit 1
+      - name: Entrées valides
+        run: |
+          [[ "$VERSION" =~ ^v[0-9]+\.[0-9]+$ ]] || { echo "::error::version attendue au format vX.Y"; exit 1; }
+          [[ -z "$BASE" || "$BASE" =~ ^[A-Za-z0-9._/-]+$ ]] || { echo "::error::base invalide"; exit 1; }
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        if: inputs.revue == 'design'
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Captures de la démo (revue design)
+        if: inputs.revue == 'design'
+        working-directory: web
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+          npm run build
+          npm run e2e
+      - name: Consigne
+        id: consigne
+        run: |
+          if [ -n "$BASE" ]; then scope="le diff git $BASE..HEAD (git diff $BASE..HEAD, git log $BASE..HEAD)"; else scope="tout le code, par lots"; fi
+          {
+            echo "prompt<<FIN_CONSIGNE"
+            echo "Suis exactement la consigne du fichier docs/revues-agents/revue-$REVUE.md."
+            echo "Version relue : $VERSION. Périmètre : $scope."
+            if [ "$REVUE" = design ]; then echo "Captures : web/e2e/screenshots/*.png (lis-les avec l'outil Read). Inventaire : docs/design/inventaire.md."; fi
+            echo "Écris uniquement le fichier revue-constats.json à la racine du dépôt, au format de la consigne. Ne modifie aucun autre fichier."
+            echo "FIN_CONSIGNE"
+          } >> "$GITHUB_OUTPUT"
+      # The validator is copied out of the checkout first: the agent may write in the checkout.
+      - name: Copie du validateur
+        run: cp scripts/revue_issues.py "$RUNNER_TEMP/revue_issues.py"
+      - name: Agent de revue
+        uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          github_token: ${{ github.token }}
+          prompt: ${{ steps.consigne.outputs.prompt }}
+          claude_args: >-
+            --max-turns 80
+            --allowedTools "Read,Glob,Grep,Write,Bash(git diff:*),Bash(git log:*),Bash(git show:*)"
+      - name: Constats valides
+        run: python3 -I "$RUNNER_TEMP/revue_issues.py" revue-constats.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: revue-${{ inputs.revue }}-${{ inputs.version }}
+          path: revue-constats.json
+          retention-days: 30
+
+  issues:
+    needs: revue
+    if: inputs.creer_issues
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: revue-${{ inputs.revue }}-${{ inputs.version }}
+      - name: Ouvrir les issues (gh, script fixe)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 scripts/revue_issues.py revue-constats.json --create --repo "$GITHUB_REPOSITORY"

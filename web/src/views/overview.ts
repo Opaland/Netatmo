@@ -23,6 +23,7 @@ import {
   contracts,
   delta,
   esc,
+  costOf,
   eurOf,
   firstDay,
   fmtEur,
@@ -41,11 +42,21 @@ import {
 } from '../ui';
 import { qualityCard, uncertainBuckets, uncertainDays } from './quality';
 import { html } from '../trusted';
+import { comparedToLastYear, costSentence, glossarySection, kpiTitle, plainNum, term, verdictSentences, verdictTitle } from '../plain';
 
-function kpi(label: string, from: string, to: string, records: DayRecord[], cls = '') {
+function kpi(label: string, from: string, to: string, records: DayRecord[], cls = '', simple: string | null = null) {
   const now = total(records, from, to);
   const before = total(records, minusYears(from), minusYears(to));
   const hasBefore = records.some((r) => r.day <= minusYears(to));
+  if (simple !== null) {
+    // S-7.13: plain language, rounded figures, no acronym.
+    const cost = costOf(records, from, to);
+    return `<article class="kpi${cls}">
+    <h3>${esc(simple)}</h3>
+    <p class="kpi-value">${plainNum(now)}\u00a0kWh</p>
+    <p class="kpi-sub">${costSentence(cost)} ${comparedToLastYear(now, hasBefore ? before : null)}</p>
+  </article>`;
+  }
   return `<article class="kpi${cls}">
     <h3>${esc(label)}</h3>
     <p class="kpi-value">${fmtKwh(now)}</p>
@@ -82,16 +93,19 @@ export function renderOverview(view: HTMLElement, records: DayRecord[]) {
     .filter((c) => byCat.get(c))
     .map((c) => ({ c, v: byCat.get(c)!, p: (byCat.get(c)! / periodTotal) * 100 }));
 
+  const simple = state.simple;
+  const plain = (k: Parameters<typeof kpiTitle>[0]) => (simple ? kpiTitle(k, last) : null);
   view.innerHTML = html`
-  ${verdictCard(records, monthStart, last)}
+  ${simple ? plainVerdictCard(records, monthStart, last) : verdictCard(records, monthStart, last)}
   <div id="grid-zone"></div>
   <section class="kpis">
-    ${kpi(`${MONTHS_LONG[Number(last.slice(5, 7)) - 1]} ${last.slice(0, 4)} (au ${Number(last.slice(8, 10))})`, monthStart, last, records)}
-    ${kpi(`Depuis le 1er janvier ${last.slice(0, 4)}`, yearStart, last, records)}
-    ${kpi('12 derniers mois', addDays(minusYears(last), 1), last, records, ' kpi-detail')}
-    ${projectionTile(records, last)}
+    ${kpi(`${MONTHS_LONG[Number(last.slice(5, 7)) - 1]} ${last.slice(0, 4)} (au ${Number(last.slice(8, 10))})`, monthStart, last, records, '', plain('month'))}
+    ${kpi(`Depuis le 1er janvier ${last.slice(0, 4)}`, yearStart, last, records, '', plain('year'))}
+    ${kpi('12 derniers mois', addDays(minusYears(last), 1), last, records, ' kpi-detail', plain('12m'))}
+    ${projectionTile(records, last, simple)}
     <article class="kpi kpi-budget" id="budget-kpi" hidden></article>
   </section>
+  ${simple ? glossarySection() : ''}
   <div id="money-zone"></div>
   ${linkyCard()}
   <div id="invoice-zone"></div>
@@ -177,12 +191,36 @@ function verdictCard(records: DayRecord[], from: string, to: string) {
   </section>`;
 }
 
-function projectionTile(records: DayRecord[], last: string) {
+/** S-7.13: the verdict in plain language; the first "kWh" is a glossary term. */
+function plainVerdictCard(records: DayRecord[], from: string, to: string) {
+  const v = verdict(records, from, to, ds!.weather);
+  if (!v) return '';
+  const price = avgPrice();
+  const iconTxt = { low: '▼', normal: '=', high: '▲' }[v.level];
+  const [first, ...rest] = verdictSentences({ ...v, eur: price ? (v.actual - v.expected) * price : null }, from, '{kwh}');
+  const sentences = [esc(first).replace('{kwh}', term('kwh')), ...rest.map((s) => esc(s))];
+  return `<section class="verdict verdict-${v.level}" aria-live="polite">
+    <span class="verdict-icon" aria-hidden="true">${iconTxt}</span>
+    <div>
+      <p class="verdict-title">${esc(verdictTitle(v.level))}</p>
+      <p class="verdict-sub">${sentences.join(' ')}</p>
+    </div>
+  </section>`;
+}
+
+function projectionTile(records: DayRecord[], last: string, simple = false) {
   const p = projectYear(records, last);
   if (!p) return '';
   const year = last.slice(0, 4);
   const prev = total(records, `${Number(year) - 1}-01-01`, `${Number(year) - 1}-12-31`);
   const price = avgPrice();
+  if (simple) {
+    return `<article class="kpi kpi-detail">
+    <h3>${esc(kpiTitle('projection', last))}</h3>
+    <p class="kpi-value">Environ ${plainNum(p.projected)}\u00a0kWh</p>
+    <p class="kpi-sub">${costSentence(price ? p.projected * price : null)} ${comparedToLastYear(p.projected, prev || null)}</p>
+  </article>`;
+  }
   return `<article class="kpi kpi-detail">
     <h3>Fin ${year} estimée</h3>
     <p class="kpi-value">≈ ${fmtKwh(p.projected)}</p>
