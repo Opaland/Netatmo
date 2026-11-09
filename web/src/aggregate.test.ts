@@ -75,3 +75,29 @@ describe('crypto', () => {
     await expect(decryptEnvelope(vector, key)).rejects.toThrow('Phrase de passe incorrecte');
   });
 });
+
+import { energyCostTrve, parseTrveCsv, subscriptionTrve, trveAt } from './analysis';
+
+describe('regulated tariff (CRE open data)', () => {
+  const csv = `DATE_DEBUT;DATE_FIN;P_SOUSCRITE;PART_FIXE_HT;PART_FIXE_TTC;PART_VARIABLE_HC_HT;PART_VARIABLE_HC_TTC;PART_VARIABLE_HP_HT;PART_VARIABLE_HP_TTC\r
+01/02/2024;31/01/2025;9;161,4;200,33;0,1513;0,2068;0,204;0,27\r
+01/02/2025;;9;172,8;214,88;0,1076;0,1696;0,1451;0,2146\r
+`;
+  const rows = parseTrveCsv(csv);
+  it('parses French dates and decimals', () => {
+    expect(rows[0]).toEqual({ from: '2024-02-01', to: '2025-01-31', kva: 9, fixedYear: 200.33, hc: 0.2068, hp: 0.27 });
+    expect(trveAt(rows, 9, '2025-06-01')!.hc).toBe(0.1696);
+    expect(trveAt(rows, 6, '2025-06-01')).toBeNull();
+  });
+  it('prices each day at the tariff in force, estimating the split without detail', () => {
+    const tariffs = new Map([['a', new Map([['2025-03-01', [0, 2, 8] as [number, number, number]]])]]);
+    const recs = [rec('2025-03-01', 10), rec('2024-03-01', 10)];
+    const c = energyCostTrve(recs, tariffs, rows, 9, 2, { perRoom: new Map([['a', 0.8]]), overall: 0.5 });
+    const expected = 8 * 0.1696 + 2 * 0.2146 + 10 * (0.8 * 0.2068 + 0.2 * 0.27);
+    expect(c.energy).toBeCloseTo(expected, 6);
+    expect(c.estimatedKwh).toBe(10);
+  });
+  it('prorates the yearly subscription per day', () => {
+    expect(subscriptionTrve(rows, 9, '2025-03-01', '2025-03-02')).toBeCloseTo((2 * 214.88) / 365, 6);
+  });
+});

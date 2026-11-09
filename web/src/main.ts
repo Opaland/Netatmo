@@ -25,7 +25,11 @@ import {
   dayProfile,
   djuBetween,
   energyCost,
+  energyCostTrve,
   fitSeason,
+  offPeakShares,
+  subscriptionTrve,
+  trveAt,
   hasPrices,
   monthlyDju,
   offPeakColumn,
@@ -73,6 +77,8 @@ interface State {
   roomsYear: number | null;
   focusRoom: string | null;
   prices: Prices;
+  priceMode: 'trve' | 'manual';
+  kva: number;
   climate: boolean;
   analyseYear: number | null;
   tempRoom: string | null;
@@ -92,6 +98,8 @@ const DEFAULT: State = {
   roomsYear: null,
   focusRoom: null,
   prices: NO_PRICES,
+  priceMode: 'trve',
+  kva: 9,
   climate: false,
   analyseYear: null,
   tempRoom: null,
@@ -133,11 +141,23 @@ const pct = (p: number) => {
   return `${r > 0 ? '+' : r < 0 ? '−' : ''}${nf0.format(Math.abs(r))} %`;
 };
 const fmtEur = (v: number) => `${nf0.format(v)} €`;
+const useTrve = () => state.priceMode === 'trve' && ds!.trve.some((r) => r.kva === state.kva);
+const costAvailable = () => useTrve() || hasPrices(state.prices);
+function offCol(): 1 | 2 {
+  const water = ds!.meta.rooms.filter((r) => r.category === 'water_heater').map((r) => r.id);
+  return offPeakColumn(ds!.tariffs, water) ?? 2;
+}
 /** Energy cost of these records in [from, to], subscription prorated when asked. */
 function costOf(records: DayRecord[], from: string, to: string, withSub = false): number | null {
-  if (!hasPrices(state.prices)) return null;
+  if (!costAvailable()) return null;
+  const recs = records.filter((r) => r.day >= from && r.day <= to);
+  if (useTrve()) {
+    const off = offCol();
+    const c = energyCostTrve(recs, ds!.tariffs, ds!.trve, state.kva, off, offPeakShares(ds!.tariffs, off));
+    return c.energy + (withSub ? subscriptionTrve(ds!.trve, state.kva, from, to) : 0);
+  }
   const sub = withSub ? subscriptionCost(from, to, state.prices) : 0;
-  return energyCost(records.filter((r) => r.day >= from && r.day <= to), ds!.tariffs, state.prices) + sub;
+  return energyCost(recs, ds!.tariffs, state.prices) + sub;
 }
 const eurOf = (records: DayRecord[], from: string, to: string) => {
   const c = costOf(records, from, to);
@@ -542,7 +562,7 @@ function renderCompare(view: HTMLElement, records: DayRecord[]) {
         'Total kWh',
         'Chauffage',
         'Chauffe-eau',
-        ...(hasPrices(state.prices) ? ['Coût'] : []),
+        ...(costAvailable() ? ['Coût'] : []),
         ...(ds!.weather ? ['DJU', 'kWh chauffage / DJU'] : []),
         'Évolution',
       ],
@@ -728,11 +748,26 @@ function pricesForm() {
   const [n1, n2] = tariffNames();
   const input = (key: keyof Prices, label: string, ph: string) =>
     `<label>${esc(label)}<input data-price="${key}" type="number" inputmode="decimal" step="0.0001" min="0" placeholder="${ph}" value="${p[key] ?? ''}"></label>`;
-  return `<fieldset class="prices"><legend>Prix (€)</legend>
-    ${input('base', ds!.meta.has_tariffs ? 'Prix unique / avant HP-HC (€/kWh)' : 'Prix du kWh (€/kWh)', 'ex. 0,2516')}
+  const kvas = [...new Set(ds!.trve.map((r) => r.kva))].sort((a, b) => a - b);
+  const now = trveAt(ds!.trve, state.kva, lastDay());
+  const fmt4 = (v: number) => v.toFixed(4).replace('.', ',');
+  const trve = ds!.trve.length
+    ? `<label class="check"><input type="radio" name="pmode" data-pmode="trve" ${state.priceMode === 'trve' ? 'checked' : ''}> Tarif réglementé EDF heures pleines / creuses (historique officiel)</label>
+      ${
+        state.priceMode === 'trve'
+          ? `<label>Puissance souscrite<select data-set="kva">${kvas.map((k) => `<option value="${k}" ${k === state.kva ? 'selected' : ''}>${k} kVA</option>`).join('')}</select></label>
+        ${now ? `<p class="hint muted">Depuis le ${longDate(now.from)} : HP ${fmt4(now.hp)} €, HC ${fmt4(now.hc)} €/kWh, abonnement ${nf0.format(now.fixedYear / 12)} €/mois TTC. Chaque jour est compté au tarif en vigueur ce jour-là (source : CRE, open data).</p>` : ''}`
+          : ''
+      }
+      <label class="check"><input type="radio" name="pmode" data-pmode="manual" ${state.priceMode === 'manual' ? 'checked' : ''}> Mes propres prix</label>`
+    : '';
+  const manual =
+    state.priceMode === 'manual' || !ds!.trve.length
+      ? `${input('base', ds!.meta.has_tariffs ? 'Prix unique / avant HP-HC (€/kWh)' : 'Prix du kWh (€/kWh)', 'ex. 0,2516')}
     ${ds!.meta.has_tariffs ? input('t1', `${n1} (€/kWh)`, 'ex. 0,27') + input('t2', `${n2} (€/kWh)`, 'ex. 0,20') : ''}
-    ${input('sub', 'Abonnement (€/mois)', 'ex. 15,65')}
-  </fieldset>`;
+    ${input('sub', 'Abonnement (€/mois)', 'ex. 15,65')}`
+      : '';
+  return `<fieldset class="prices"><legend>Prix</legend>${trve}${manual}</fieldset>`;
 }
 
 function estimatedNote(records: DayRecord[], from: string, to: string) {
@@ -1147,6 +1182,16 @@ app.addEventListener('change', (e) => {
   if (t.dataset.price) {
     const v = parseFloat(t.value.replace(',', '.'));
     setState({ prices: { ...state.prices, [t.dataset.price]: Number.isFinite(v) && v > 0 ? v : null } });
+    document.querySelector<HTMLDetailsElement>('.menu')?.setAttribute('open', '');
+    return;
+  }
+  if (t.dataset.pmode) {
+    setState({ priceMode: t.dataset.pmode as State['priceMode'] });
+    document.querySelector<HTMLDetailsElement>('.menu')?.setAttribute('open', '');
+    return;
+  }
+  if (t.dataset.set === 'kva') {
+    setState({ kva: Number(t.value) });
     document.querySelector<HTMLDetailsElement>('.menu')?.setAttribute('open', '');
     return;
   }
