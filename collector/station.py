@@ -46,7 +46,9 @@ COLD_BELOW = 19  # °C, strictly below (indoor modules only)
 
 
 class StationError(RuntimeError):
-    pass
+    def __init__(self, message: str, auth: bool = False) -> None:
+        super().__init__(message)
+        self.auth = auth  # refresh token refused: it must be generated again
 
 
 class Station:
@@ -98,7 +100,10 @@ class Station:
                 "invalid_grant": "refresh token refusé ou déjà utilisé : régénérez-le (scope read_station) "
                 "et mettez-le dans NETATMO_REFRESH_TOKEN",
             }.get(code, "régénérez un jeton sur dev.netatmo.com et mettez-le dans NETATMO_REFRESH_TOKEN")
-            raise StationError(f"Station Netatmo : HTTP {resp.status_code} {code} — {hint}")
+            raise StationError(
+                f"Station Netatmo : HTTP {resp.status_code} {code} — {hint}",
+                auth=code == "invalid_grant" or resp.status_code in (401, 403),
+            )
         body = resp.json()
         self.access = body["access_token"]
         seed_hash = hashlib.sha256(self.seed_token.encode()).hexdigest()[:16]

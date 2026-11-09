@@ -326,6 +326,7 @@ def test_linky_parser_accepts_unknown_shapes_and_kwh(tmp_path):
         "2024-01-01",
         "Europe/Paris",
         http=httpx.Client(transport=httpx.MockTransport(handler)),
+        min_interval=0,
     )
     assert n > 0
     assert store.doc("linky")["daily"]["2024-01-01"] == 21500.0  # kWh payload converted to Wh
@@ -424,7 +425,7 @@ def test_linky_reads_the_2026_enedis_format(tmp_path):
 
     store = Store(tmp_path, "pw")
     http = httpx.Client(transport=httpx.MockTransport(handler))
-    collect(store, "tok", "12345678901234", "2024-01-01", "Europe/Paris", http=http)
+    collect(store, "tok", "12345678901234", "2024-01-01", "Europe/Paris", http=http, min_interval=0)
     assert store.doc("linky")["daily"] == {"2024-01-01": 23500.0}
     assert store.doc("linky")["pmax"]["2024-01-01"] == 8.12
 
@@ -460,6 +461,51 @@ def test_station_explains_which_credential_is_refused(tmp_path):
     )
     with pytest.raises(StationError, match="NETATMO_CLIENT_ID"):
         st.login()
+
+
+# ---------------------------------------------------------------- S-1.11 Linky load curve
+def _curve_points(day: str, step: str = "PT30M", watts: int = 1000) -> list[dict]:
+    """One day of points stamped at the END of each step, Enedis style (winter, +01:00)."""
+    from datetime import datetime, timedelta
+
+    minutes = int(step[2:-1])
+    start = datetime.fromisoformat(f"{day}T00:00:00+01:00")
+    return [
+        {"d": (start + timedelta(minutes=minutes * (i + 1))).isoformat(), "v": str(watts), "p": step}
+        for i in range(24 * 60 // minutes)
+    ]
+
+
+def test_load_curve_converts_watts_to_wh_for_30_and_10_minute_steps():
+    from collector.enedis import parse_curve
+
+    half = parse_curve({"grandeur": [{"points": _curve_points("2024-01-01", "PT30M", 1000)}]}, "Europe/Paris")
+    assert len(half) == 48
+    assert half["2024-01-01T00:00"] == 500.0  # 1000 W over 30 min, stamped 00:30 = start 00:00
+    assert half["2024-01-01T23:30"] == 500.0
+    ten = parse_curve({"grandeur": [{"points": _curve_points("2024-01-01", "PT10M", 600)}]}, "Europe/Paris")
+    assert len(ten) == 48 and ten["2024-01-01T00:00"] == 300.0  # 3 × 600 W × 10 min
+    # Point without step: 30 min assumed; UTC stamps converted to Paris time; bare days ignored.
+    body = [{"date": "2024-07-01T10:00:00Z", "value": 2000}, {"d": "2024-07-01", "v": "9"}]
+    assert parse_curve(body, "Europe/Paris") == {"2024-07-01T11:30": 1000.0}
+
+
+def _curve_handler(calls: list, empty: bool = False):
+    from datetime import date, timedelta
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.url.path == "/api/courbe_de_charge_consommation"
+        assert request.headers["Authorization"] == "Bearer tok"
+        start, end = request.url.params["dateDebut"], request.url.params["dateFin"]
+        calls.append((start, end))
+        points = []
+        d = date.fromisoformat(start)
+        while not empty and d < date.fromisoformat(end):
+            points += _curve_points(d.isoformat())
+            d += timedelta(days=1)
+        return httpx.Response(200, json={"grandeur": [{"unite": "W", "points": points}]})
+
+    return handler
 
 
 # ------------------------------------------------------------------ station: hourly readings (S-11)
@@ -536,6 +582,121 @@ def _hourly_station(calls):
         return httpx.Response(404)
 
     return handler
+
+
+def test_load_curve_backfills_by_7_days_then_only_missing_days(tmp_path):
+    from datetime import date
+
+    from collector.enedis import collect_curve
+
+    calls: list = []
+    store = Store(tmp_path, "pw")
+    kw = {"http": httpx.Client(transport=httpx.MockTransport(_curve_handler(calls))), "min_interval": 0}
+    n = collect_curve(store, "tok", "1", "2023-12-15", "Europe/Paris", today=date(2024, 1, 2), **kw)
+    assert n == 18 * 48
+    assert calls == [("2023-12-15", "2023-12-22"), ("2023-12-22", "2023-12-29"), ("2023-12-29", "2024-01-02")]
+    assert store.doc("2023.linky30")["curve"]["2023-12-31T23:30"] == 500.0
+    assert store.doc("linky")["curve_scan"] == "2024-01-01"
+    store.merge("100", "2024-01-01", 1.0)
+    store.save({"id": "h"}, [])
+    assert store.meta["linky_curve_years"] == [2023, 2024] and store.meta["years"] == [2024]
+
+    calls.clear()
+    collect_curve(Store(tmp_path, "pw"), "tok", "1", "2023-12-15", "Europe/Paris", today=date(2024, 1, 3), **kw)
+    assert calls == [("2023-12-31", "2024-01-03")]  # the last 3 days again, nothing older
+
+
+def test_load_curve_initial_backfill_is_capped_to_a_year_and_tolerates_empty_answers(tmp_path):
+    from datetime import date
+
+    from collector.enedis import collect_curve
+
+    calls: list = []
+    kw = {"http": httpx.Client(transport=httpx.MockTransport(_curve_handler(calls, empty=True))), "min_interval": 0}
+    store = Store(tmp_path, "pw")
+    assert collect_curve(store, "tok", "1", "2020-01-01", "Europe/Paris", today=date(2024, 6, 1), **kw) == 0
+    assert calls[0][0] == "2023-06-02" and len(calls) == 53
+    # Empty answer (curve collection not enabled): not an error, and not asked again.
+    calls.clear()
+    collect_curve(store, "tok", "1", "2020-01-01", "Europe/Paris", today=date(2024, 6, 2), **kw)
+    assert calls == [("2024-05-30", "2024-06-02")]
+    assert store.linky_curve_years() == []
+
+
+def test_sync_keeps_going_without_load_curve_consent_and_flags_expired_token(tmp_path, monkeypatch):
+    import collector.enedis as enedis
+    from collector.__main__ import Sources, _linky
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("courbe_de_charge_consommation"):
+            return httpx.Response(403, json={"error": "no consent"})
+        return httpx.Response(200, json={"grandeur": [{"points": [{"d": "2024-01-01", "v": "23500"}]}]})
+
+    def refused(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(401, json={"error": "expired"})
+
+    monkeypatch.setattr(enedis, "MIN_INTERVAL", 0)
+    monkeypatch.setattr(enedis, "_client", lambda: httpx.Client(transport=httpx.MockTransport(handler)))
+    store = Store(tmp_path, "pw")
+    store.merge("100", "2024-01-01", 1.0)
+    settings = Settings(enedis_token="tok", enedis_prm="1")
+    sources = Sources(None)
+    _linky(settings, store, "Europe/Paris", sources)
+    assert sources.state["linky"]["ok"] and "auth_expired" not in sources.state["linky"]
+    assert "HTTP 403" in sources.state["linky-30min"]["message"]
+    assert store.doc("linky")["daily"]["2024-01-01"] == 23500.0
+    assert "tok" not in json.dumps(sources.state)  # only a hash of the secret
+
+    monkeypatch.setattr(enedis, "_client", lambda: httpx.Client(transport=httpx.MockTransport(refused)))
+    _linky(settings, store, "Europe/Paris", sources)
+    assert sources.state["linky"]["auth_expired"] is True
+    assert any(a.startswith("Renouveler le jeton linky") for a in sources.alerts())
+
+
+# ---------------------------------------------------------------- S-1.12 expiry reminders
+def test_expiry_is_estimated_and_announced_30_days_ahead():
+    import base64
+    from datetime import date
+
+    from collector.__main__ import LINKY_CONSENT_DAYS, Sources
+    from collector.enedis import token_dates
+
+    s = Sources(None)
+    s.credential("linky", "secret-a")
+    s.ok("linky")
+    s.state["linky"]["since"] = "2023-12-01"
+    s.expiry("linky", None, None, LINKY_CONSENT_DAYS)
+    assert s.state["linky"]["expires"] == "2026-11-30" and s.state["linky"]["expires_estimated"]
+    assert s.alerts(date(2026, 10, 1)) == []
+    assert "dans 29 jours" in s.alerts(date(2026, 11, 1))[0]
+    # A new token restarts the clock.
+    s.credential("linky", "secret-b")
+    assert "since" not in s.state["linky"] and "expires" not in s.state["linky"]
+    # A JWT carrying exp gives the real date.
+    payload = base64.urlsafe_b64encode(json.dumps({"iat": 1700000000, "exp": 1794700000}).encode()).decode()
+    assert token_dates(f"h.{payload.rstrip('=')}.sig") == ("2023-11-14", "2026-11-14")
+    assert token_dates("not-a-jwt") == (None, None)
+
+
+def test_netatmo_invalid_grant_marks_the_token_expired(tmp_path):
+    from collector.__main__ import Sources
+    from collector.station import Station, StationError
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(400, json={"error": "invalid_grant"})
+
+    st = Station(
+        Store(tmp_path, "pw"), "id", "secret", "seed", http=httpx.Client(transport=httpx.MockTransport(handler))
+    )
+    with pytest.raises(StationError) as err:
+        st.login()
+    assert err.value.auth
+    s = Sources(None)
+    s.credential("netatmo", "seed")
+    s.failed("netatmo", str(err.value), auth=err.value.auth)
+    assert "NETATMO_REFRESH_TOKEN" in s.alerts()[0]
+    s.ok("netatmo")
+    assert s.alerts() == [] and s.state["netatmo"]["since"]
 
 
 def test_station_hourly_backfills_a_year_in_chunks_then_three_days(tmp_path):

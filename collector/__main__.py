@@ -12,11 +12,12 @@ from __future__ import annotations
 
 import argparse
 import csv
+import hashlib
 import json
 import logging
 import os
 import sys
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 
 import httpx
@@ -62,20 +63,81 @@ def _warn(msg: str) -> None:
     print(f"::warning::{msg}" if os.environ.get("GITHUB_ACTIONS") else f"Attention : {msg}")
 
 
+# Conso API consent / token lifetime when the token carries no date: 3 years (à vérifier).
+LINKY_CONSENT_DAYS = 3 * 365
+EXPIRY_WARNING_DAYS = 30
+RENEW = {
+    "linky": "nouvel accord sur conso.boris.sh, puis secret ENEDIS_TOKEN",
+    "netatmo": "nouveau refresh token (scope read_station) sur dev.netatmo.com, puis secret NETATMO_REFRESH_TOKEN",
+}
+
+
 class Sources:
-    """Last success / failure per data source (S-1.7), kept in the encrypted meta."""
+    """Last success / failure per data source (S-1.7), kept in the encrypted meta.
+
+    S-1.12: per credential, a short hash (never the secret), the date of its first success
+    (`since`), `auth_expired` when the source refused it, and `expires` when known or
+    estimated (`expires_estimated`)."""
 
     def __init__(self, previous: dict | None) -> None:
         self.state: dict[str, dict] = {k: dict(v) for k, v in (previous or {}).items()}
         self.now = datetime.now(UTC).isoformat(timespec="seconds")
 
-    def ok(self, name: str) -> None:
-        self.state.setdefault(name, {})["ok"] = self.now
-        self.state[name].pop("message", None)
+    def credential(self, name: str, secret: str) -> None:
+        """A new secret (hash changed) starts a new lifetime."""
+        digest = hashlib.sha256(secret.encode()).hexdigest()[:12]
+        st = self.state.setdefault(name, {})
+        if st.get("credential") != digest:
+            for key in ("since", "auth_expired", "expires", "expires_estimated"):
+                st.pop(key, None)
+            st["credential"] = digest
 
-    def failed(self, name: str, message: str) -> None:
-        self.state.setdefault(name, {})["error"] = self.now
-        self.state[name]["message"] = message[:160]
+    def ok(self, name: str, note: str | None = None) -> None:
+        st = self.state.setdefault(name, {})
+        st["ok"] = self.now
+        st.pop("message", None)
+        st.pop("auth_expired", None)
+        st.pop("note", None)
+        if "credential" in st:
+            st.setdefault("since", self.now[:10])
+        if note:
+            st["note"] = note[:160]  # informative, not an error
+
+    def failed(self, name: str, message: str, auth: bool = False) -> None:
+        st = self.state.setdefault(name, {})
+        st["error"] = self.now
+        st["message"] = message[:160]
+        if auth:
+            st["auth_expired"] = True
+
+    def expiry(self, name: str, expires: str | None, issued: str | None = None, days: int | None = None) -> None:
+        """Expiry date from the token itself, else estimated from its issue date or first success."""
+        st = self.state.setdefault(name, {})
+        start = issued or st.get("since")
+        if expires:
+            st["expires"], st["expires_estimated"] = expires, False
+        elif start and days:
+            st["expires"] = (date.fromisoformat(start) + timedelta(days=days)).isoformat()
+            st["expires_estimated"] = True
+
+    def alerts(self, today: date | None = None) -> list[str]:
+        return expiry_alerts(self.state, today or datetime.now(UTC).date())
+
+
+def expiry_alerts(state: dict[str, dict], today: date) -> list[str]:
+    """What the owner must renew: refused tokens, and tokens expiring within 30 days."""
+    out = []
+    for name, st in sorted(state.items()):
+        how = RENEW.get(name, "mettre à jour le secret")
+        if st.get("auth_expired"):
+            out.append(f"Renouveler le jeton {name} : refusé depuis le {st.get('error', '?')[:10]} — {how}")
+        elif st.get("expires"):
+            left = (date.fromisoformat(st["expires"]) - today).days
+            if left <= EXPIRY_WARNING_DAYS:
+                kind = "estimée" if st.get("expires_estimated") else "indiquée par le jeton"
+                when = f"dans {left} jours" if left >= 0 else f"dépassée de {-left} jours"
+                out.append(f"Renouveler le jeton {name} : expiration {kind} le {st['expires']} ({when}) — {how}")
+    return out
 
 
 def _weather(s: Settings, store: Store, home, sources: Sources) -> str | None:
@@ -86,6 +148,7 @@ def _weather(s: Settings, store: Store, home, sources: Sources) -> str | None:
     if s.netatmo_client_id and s.netatmo_refresh_token:
         from .station import Station, StationError
 
+        sources.credential("netatmo", s.netatmo_refresh_token)
         try:
             Station(store, s.netatmo_client_id, s.netatmo_client_secret, s.netatmo_refresh_token).collect(
                 home.timezone, first
@@ -93,7 +156,7 @@ def _weather(s: Settings, store: Store, home, sources: Sources) -> str | None:
             sources.ok("netatmo")
             return "netatmo"
         except (StationError, httpx.HTTPError) as err:
-            sources.failed("netatmo", str(err))
+            sources.failed("netatmo", str(err), auth=getattr(err, "auth", False))
             _warn(f"{err} — repli sur Open-Meteo")
     if home.latitude is None or home.longitude is None:
         _warn("Coordonnées de la maison inconnues : pas de météo")
@@ -108,6 +171,37 @@ def _weather(s: Settings, store: Store, home, sources: Sources) -> str | None:
         sources.failed("open-meteo", str(err))
         _warn(f"Météo Open-Meteo indisponible : {err}")
         return store.meta.get("weather_source")
+
+
+def _linky(s: Settings, store: Store, tz: str, sources: Sources) -> None:
+    """Daily totals then the 30-min load curve (S-1.11). Never fatal."""
+    from .enedis import LinkyError, collect, collect_curve, token_dates
+
+    first = store.first_day() or ""
+    sources.credential("linky", s.enedis_token)
+    try:
+        collect(store, s.enedis_token, s.enedis_prm, first, tz)
+        sources.ok("linky")
+    except (LinkyError, httpx.HTTPError) as err:
+        sources.failed("linky", str(err), auth=getattr(err, "auth", False))
+        _warn(str(err))
+    issued, expires = token_dates(s.enedis_token)
+    sources.expiry("linky", expires, issued, LINKY_CONSENT_DAYS)
+    if sources.state["linky"].get("auth_expired"):
+        return  # same token: the curve would be refused too
+    try:
+        n = collect_curve(store, s.enedis_token, s.enedis_prm, first, tz)
+        has_curve = any(store.doc(f"{y}.linky30").get("curve") for y in store.linky_curve_years())
+        note = (
+            None
+            if n or has_curve
+            else ("aucune mesure : activez la collecte de la courbe de charge dans votre espace Enedis")
+        )
+        sources.ok("linky-30min", note)
+    except (LinkyError, httpx.HTTPError) as err:
+        # Usually no consent for the load curve: the daily totals are unaffected.
+        sources.failed("linky-30min", str(err))
+        _warn(f"{err} — la consommation quotidienne Linky n'est pas affectée")
 
 
 def cmd_sync(s: Settings, args: argparse.Namespace, backfill: bool = False) -> None:
@@ -125,14 +219,7 @@ def cmd_sync(s: Settings, args: argparse.Namespace, backfill: bool = False) -> N
     source = _weather(s, store, home, sources)
     extra = {"weather_source": source} if source else {}
     if s.enedis_token and s.enedis_prm and store.first_day():
-        from .enedis import LinkyError, collect
-
-        try:
-            collect(store, s.enedis_token, s.enedis_prm, store.first_day(), home.timezone)
-            sources.ok("linky")
-        except (LinkyError, httpx.HTTPError) as err:
-            sources.failed("linky", str(err))
-            _warn(str(err))
+        _linky(s, store, home.timezone, sources)
     if store.doc("linky").get("daily"):
         extra["has_linky"] = True
     if store.doc("station").get("daily"):
@@ -147,10 +234,20 @@ def cmd_sync(s: Settings, args: argparse.Namespace, backfill: bool = False) -> N
             sources.failed("ia", str(err))
             _warn(f"Analyse IA non rédigée : {err}")
     extra["sources"] = sources.state
+    for alert in sources.alerts():
+        _warn(alert)
     changed = syncer.save(home, extra)
     print("Fichiers modifiés : " + (", ".join(changed) if changed else "aucun"))
     print(f"Couverture : {store.first_day()} → {store.last_day()}")
     _job_summary(store, syncer, changed)
+
+
+def _expiry_label(st: dict) -> str:
+    if st.get("auth_expired"):
+        return "refusé, à renouveler"
+    if st.get("expires"):
+        return st["expires"] + (" (estimée)" if st.get("expires_estimated") else "")
+    return "inconnue" if "credential" in st else "—"
 
 
 def _job_summary(store: Store, syncer: Syncer, changed: list[str]) -> None:
@@ -171,16 +268,21 @@ def _job_summary(store: Store, syncer: Syncer, changed: list[str]) -> None:
         f"| Météo | {m.get('weather_source') or '—'} |",
         f"| Station Netatmo (tous modules) | {yes(m.get('has_station'))} |",
         f"| Linky | {yes(m.get('has_linky'))} |",
+        f"| Linky, courbe de charge 30 min | {yes(m.get('linky_curve_years'))} |",
         f"| Analyse IA | {yes(store.doc('insights').get('period'))} |",
         f"| Fichiers chiffrés modifiés | {len(changed)} |",
         "",
-        "| Source | Dernier succès | Dernier échec |",
-        "|---|---|---|",
+        "| Source | Dernier succès | Dernier échec | Expiration du jeton |",
+        "|---|---|---|---|",
         *(
-            f"| {name} | {v.get('ok', '—')} | {v.get('error', '—') if v.get('error', '') > v.get('ok', '') else '—'} |"
+            f"| {name} | {v.get('ok', '—')} | {v.get('error', '—') if v.get('error', '') > v.get('ok', '') else '—'} "
+            f"| {_expiry_label(v)} |"
             for name, v in sorted(m.get("sources", {}).items())
         ),
     ]
+    alerts = expiry_alerts(m.get("sources", {}), datetime.now(UTC).date())
+    if alerts:
+        lines += ["", "### À renouveler", "", *(f"- ⚠️ {a}" for a in alerts)]
     with open(path, "a", encoding="utf-8") as fh:
         fh.write("\n".join(lines) + "\n")
 
