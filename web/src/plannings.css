@@ -1,0 +1,15 @@
+/* S-4.13 (#211): Outils → Mes plannings et les heures creuses (lazy chunk). */
+.plan-rises {
+  list-style: none;
+  margin: 8px 0 12px;
+  padding: 0;
+  display: grid;
+  gap: 12px;
+}
+.plan-rises li > p {
+  margin: 0 0 6px;
+  overflow-wrap: anywhere;
+}
+.plan-room .sched {
+  margin-top: 4px;
+}
