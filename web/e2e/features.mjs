@@ -66,9 +66,10 @@ async function go(page, key) {
  * opened and must show the listed elements. « text: » checks a sentence of the page instead.
  */
 const DESTINATIONS = {
-  accueil: ['.verdict', '#grid-card', '.kpis .kpi', '#main-chart canvas', '[data-set=cat]', '#insight-card .md'],
+  // #311: period, verdict and its gauge, 3 tiles, alerts, what counted, consumption and cold, AI summary
+  accueil: ['.periodbar [data-set=home]', '.periodbar .scope', '.verdict .gauge', '.home-tiles .kpi', '#grid-card .alert', '#counted-card .list .row', '#home-chart canvas', '#insight-card .md', 'a[href="#historique"]'],
   pieces: ['.rooms-picker', '#rooms-chart canvas', 'a[href="#confort"]', 'a[href="#chauffe-eau"]'],
-  historique: ['.kpis-one .kpi', '#cmp-chart canvas', 'text:Totaux annuels', '#rooms-waterfall canvas', '#sig-chart canvas', '#indoor-sig-chart canvas', '#unusual-card', '#cal-chart canvas', '#station-chart canvas'],
+  historique: ['.kpis-one .kpi', '#explore-card #main-chart canvas', '#explore-card [data-set=cat]', '#explore-card [data-set=gran]', '#cmp-chart canvas', 'text:Totaux annuels', '#rooms-waterfall canvas', '#sig-chart canvas', '#indoor-sig-chart canvas', '#unusual-card', '#cal-chart canvas', '#station-chart canvas'],
   compteur: ['#linky-chart canvas', '#pmax-chart canvas', '#offload-zone table', '#curve-day-chart canvas', '#bd-chart canvas', '#hour-grid canvas', 'text:Heures pleines / heures creuses'],
   confort: ['#cold-chart canvas', '#windows-chart canvas', '#ha-card table', '#cellar-0 canvas', '#probe-0 canvas'],
   'chauffe-eau': ['#wh-month-chart canvas', '#contactor-line:not([hidden])'],
@@ -103,6 +104,22 @@ async function audit(page, where) {
     errors.push(`${BROWSER} ${where} : axe ${v.impact} « ${v.id} » ${v.help} → ${nodes.join(' | ')}`);
   }
 }
+
+/** #311: the amounts of the tiles (every page, components.ts tile()) stay on one line and inside their tile. */
+const tileAmounts = (page) =>
+  page.evaluate(() =>
+    [...document.querySelectorAll('body:not(.is-simple) #view .kpis .kpi-value')].flatMap((el) => {
+      const range = document.createRange();
+      range.selectNodeContents(el);
+      const lines = new Set([...range.getClientRects()].filter((r) => r.width > 0).map((r) => Math.round(r.top)));
+      const tile = el.closest('.kpi').getBoundingClientRect();
+      const box = range.getBoundingClientRect();
+      const out = [];
+      if (lines.size > 1) out.push(`« ${el.textContent} » sur ${lines.size} lignes`);
+      if (box.right > tile.right + 1 || box.left < tile.left - 1) out.push(`« ${el.textContent} » sort de sa tuile`);
+      return out;
+    }),
+  );
 
 const recordViolations = () => {
   window.__csp = [];
@@ -152,6 +169,109 @@ try {
     await ctx.close();
   }
 
+  // ---------------------------------------------------------------- #334 / #335: session under /Netatmo/
+  // Served under a sub-path like GitHub Pages (the storage names depend on it, #229): the demo
+  // files answer as real data (passphrase « demo »). The legacy names are migrated once; with
+  // « Rester connecté » a reload keeps the app open; a tab left alone does not log out the tab
+  // in use; after the inactivity delay it locks and says why. Fake clock (Playwright).
+  {
+    progress('session sous /Netatmo/');
+    const sub = `${base}Netatmo/`;
+    const ctx = await browser.newContext({ serviceWorkers: 'block' });
+    await ctx.clock.install();
+    await ctx.route('**/Netatmo/**', async (r) => {
+      const rest = new URL(r.request().url()).pathname.slice('/Netatmo/'.length);
+      const url = rest.startsWith('data/') ? `${base}demo/${rest.slice(5)}` : `${base}${rest}`;
+      await r.fulfill({ response: await r.fetch({ url }) });
+    });
+    const page = await ctx.newPage();
+    page.on('pageerror', (e) => errors.push(`${BROWSER} session: ${e.message}`));
+    const locked = (p) => p.locator('#pass').count().then(Boolean);
+    try {
+      // names of v1.4 (before #229), on the same origin
+      await page.goto(base);
+      await page.waitForSelector('#demo');
+      await page.evaluate(
+        () =>
+          new Promise((res) => {
+            localStorage.setItem('intuis-history:remembered', JSON.stringify({ source: 'data', at: Date.now() }));
+            localStorage.setItem('intuis-history:state', JSON.stringify({ comfortThreshold: 18 }));
+            const req = indexedDB.open('intuis-history', 1);
+            req.onupgradeneeded = () => req.result.createObjectStore('keys');
+            req.onsuccess = () => (req.result.close(), res());
+            req.onerror = () => res();
+          }),
+      );
+      await page.goto(sub);
+      await page.waitForSelector('#pass', { timeout: 15000 });
+      const ls = (k) => page.evaluate((k) => localStorage.getItem(k), k);
+      const dbs = () => page.evaluate(async () => (indexedDB.databases ? (await indexedDB.databases()).map((d) => d.name) : null));
+      check((await ls('intuis-history@Netatmo:migrated')) === '1', 'migration : marque absente');
+      check((await ls('intuis-history:remembered')) === null, 'migration : ancienne marque de clé gardée');
+      check(JSON.parse((await ls('intuis-history@Netatmo:state')) ?? '{}').comfortThreshold === 18, 'migration : préférences non reprises');
+      await page.waitForFunction(async () => !indexedDB.databases || !(await indexedDB.databases()).some((d) => d.name === 'intuis-history'), null, { timeout: 5000 }).catch(() => errors.push(`${BROWSER} migration : ancienne base IndexedDB gardée`));
+
+      // #335: show / hide the passphrase
+      const toggle = page.locator('#unlock .reveal');
+      check((await toggle.getAttribute('aria-pressed')) === 'false', 'afficher : aria-pressed absent');
+      check(/Afficher la phrase de passe/.test(await toggle.innerText().catch(() => '')) || /Afficher la phrase de passe/.test((await toggle.getAttribute('title')) ?? ''), 'afficher : libellé absent');
+      const box = await toggle.boundingBox();
+      check(box && box.width >= 44 && box.height >= 44, `afficher : cible de ${box?.width}×${box?.height} px`);
+      await page.fill('#pass', 'phrase fausse');
+      await toggle.click();
+      check((await page.getAttribute('#pass', 'type')) === 'text' && (await toggle.getAttribute('aria-pressed')) === 'true', 'afficher : la phrase reste masquée');
+      check((await page.getAttribute('#pass', 'autocomplete')) === 'off', 'afficher : autocomplétion gardée sur le champ en clair');
+      await audit(page, 'verrou-phrase-affichee');
+      await page.click('#unlock button.primary');
+      check((await page.getAttribute('#pass', 'type')) === 'password', 'afficher : la phrase reste en clair après validation');
+      await page.waitForFunction(() => document.querySelector('.lock .error')?.textContent === 'Phrase de passe incorrecte.', null, { timeout: 30000 });
+      check((await page.getAttribute('#pass', 'autocomplete')) === 'current-password', 'afficher : autocomplete non rétabli');
+
+      // #334: « Rester connecté », then reload
+      await page.fill('#pass', 'demo');
+      check(await page.isChecked('#remember'), '« Rester connecté » non coché par défaut');
+      await page.click('#unlock button.primary');
+      await ready(page, 60000);
+      await page.evaluate(() => localStorage.setItem('intuis-history:sentinelle', '1'));
+      for (let i = 0; i < 2; i++) {
+        await page.reload();
+        await page.waitForSelector('#pass, #view[data-ready]', { state: 'attached', timeout: 60000 });
+        check(!(await locked(page)), `rechargement ${i + 1} : la phrase de passe est redemandée`);
+      }
+      check((await ls('intuis-history:sentinelle')) === '1', 'migration : rejouée au rechargement');
+      check((await dbs())?.includes('intuis-history@Netatmo') ?? true, 'clé mémorisée : base IndexedDB absente');
+
+      // a second tab in use, this one left alone: nobody is logged out
+      const other = await ctx.newPage();
+      await other.goto(sub);
+      await ready(other, 60000);
+      for (let i = 0; i < 17; i++) {
+        await ctx.clock.runFor(60_000);
+        await other.keyboard.press('Shift');
+      }
+      check(!(await locked(page)), 'onglet laissé seul verrouillé alors qu’un autre est utilisé');
+      await other.reload();
+      await other.waitForSelector('#pass, #view[data-ready]', { state: 'attached', timeout: 60000 });
+      check(!(await locked(other)), 'onglet utilisé : déconnecté au rechargement à cause de l’onglet laissé seul');
+
+      // nobody for 15 min: locked, and the lock screen says why (also after a reload)
+      await ctx.clock.runFor(16 * 60_000);
+      for (const p of [other, page]) {
+        await p.waitForSelector('#lock-notice', { timeout: 15000 }).catch(() => {});
+        const n = await p.locator('#lock-notice').innerText().catch(() => '');
+        check(/^Verrouillé après 15 min sans activité/.test(n), `inactivité : message attendu, lu « ${n} »`);
+      }
+      await other.reload();
+      await other.waitForSelector('#pass', { timeout: 15000 });
+      check(/sans activité/.test(await other.locator('#lock-notice').innerText().catch(() => '')), 'inactivité : message perdu au rechargement');
+      await other.screenshot({ path: `${OUT}/${BROWSER}-verrou-inactivite.png`, fullPage: true });
+      await audit(other, 'verrou-inactivite');
+    } catch (err) {
+      errors.push(`${BROWSER} session : ${err}`);
+    }
+    await ctx.close();
+  }
+
   // ---------------------------------------------------------------- demo on an iPhone
   const ctx = await browser.newContext({ ...iphone, acceptDownloads: true });
   await ctx.addInitScript(recordViolations);
@@ -180,6 +300,28 @@ try {
     await checkViolations(page, view);
   }
 
+  // #311 / #302: Accueil holds in 3 iPhone screens; one period for the screen, each comparison named
+  progress('accueil');
+  {
+    await go(page, 'accueil');
+    const [h, screenH] = await page.evaluate(() => [document.documentElement.scrollHeight, window.screen.height]);
+    check(h <= 3 * screenH, `#311 : l'Accueil fait ${h} px, plus de 3 écrans (${3 * screenH} px)`);
+    const tiles = await page.locator('.home-tiles').innerText();
+    check(/vs nov\. \d{4} au \d+/.test(tiles) && /vs attendu à météo comparable/.test(tiles), `#302 : tuile du mois sans ses deux références nommées (« ${tiles.replace(/\s+/g, ' ').slice(0, 200)} »)`);
+    check(/attendus à météo comparable/.test(await page.locator('.verdict').innerText()), '#302 : verdict sans sa référence');
+    check(!/N-1/.test(await page.locator('#view').innerText()), '#302 : « N-1 » encore affiché');
+    for (const [p, want] of [['season', /^Saison de chauffe/], ['12m', /^12 derniers mois/], ['year', /^Année \d{4}/], ['month', /^[A-Z][a-zéû]+ \d{4}, du 1er au/]]) {
+      await page.click(`.periodbar [data-value="${p}"]`);
+      await ready(page);
+      const scope = await page.locator('.periodbar .scope').innerText();
+      check(want.test(scope) && /hors abonnement/.test(scope), `#311 : ligne « ce qui est compté » inattendue pour ${p} (« ${scope} »)`);
+      check((await page.locator('#home-chart canvas').count()) === 1, `#311 : graphique absent pour ${p}`);
+    }
+    const cut = await tileAmounts(page);
+    check(!cut.length, `#311 : montant de tuile coupé (iPhone 13) → ${cut.join(', ')}`);
+    await audit(page, 'accueil');
+  }
+
   // v1.5 figures (#245 #246 #294 #295 #297 #298)
   progress('chiffres v1.5');
   {
@@ -195,7 +337,19 @@ try {
     await page.click('[data-set=compareMode][data-value=season]');
     await ready(page);
     check((await page.locator('[data-season]', { hasText: 'en cours' }).count()) === 1, '#298 : pas de puce pour la saison en cours');
-    check(/\(en cours\) : [\d\s ]+ kWh au \d+/.test((await label()) ?? ''), '#298 : saison en cours absente du graphique');
+    check(/\(en cours\) : total [\d\s  ]+ kWh/.test((await label()) ?? ''), '#298 : saison en cours absente du graphique');
+    // maquette « Historique » : hiver contre hiver, deux hivers complets chiffrés, à climat égal, l'hiver en cours en pointillé
+    check((await page.locator('#cmp-card .kpis-pair .kpi').count()) === 2, 'Historique : les deux hivers complets ne sont pas chiffrés');
+    check(/à climat égal/.test(await page.locator('#cmp-card').innerText()), 'Historique : pas de comparaison « à climat égal »');
+    check((await page.locator('#cmp-legend .legend i.line').count()) === 1, 'Historique : hiver en cours non signalé (pointillé)');
+    // #303 : un seul tableau de signature, saison courte « provisoire »
+    check((await page.locator('#indoor-sig table').count()) === 0, '#303 : deuxième tableau de signature');
+    check(/provisoire|en cours/.test(await page.locator('#sig-table').innerText()), '#303 : saison en cours non signalée dans la signature');
+    // #305 : résumés chiffrés des graphiques sans série
+    for (const id of ['#rooms-waterfall', '#sig-chart', '#cal-chart']) {
+      const a = (await page.locator(id).getAttribute('aria-label')) ?? '';
+      check(/\d/.test(a.split('. ').slice(1).join('. ')), `#305 : ${id} sans résumé chiffré (« ${a.slice(0, 120)} »)`);
+    }
     await page.click('[data-set=compareMode][data-value=monthly]');
     await go(page, 'pieces');
     await page.waitForSelector('#rooms-chart canvas');

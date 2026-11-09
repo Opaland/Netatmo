@@ -7,12 +7,13 @@ import { esc, longDate } from '../ui';
 import { localDateTime } from '../glossary';
 import { html } from '../trusted';
 
-/** Summary for Accueil (#308): the first heading of the text and its first sentence block. */
-function summaryOf(md: string): string {
+/** Summary for Accueil (#308, #311): the first heading of the text and the first two sentences after it. */
+export function summaryOf(md: string): string {
   const lines = md.split('\n').map((l) => l.trim()).filter(Boolean);
   const title = lines.find((l) => l.startsWith('#'))?.replace(/^#+\s*/, '');
   const text = lines.find((l) => !/^(#|[-*] |\d+\. |\|)/.test(l));
-  return [title ? `**${title}**` : '', text ?? ''].filter(Boolean).join('\n\n');
+  const two = text?.split(/(?<=[.!?…])\s+(?=[A-ZÀ-ÖØ-Þ«])/).slice(0, 2).join(' ');
+  return [title ? `**${title}**` : '', two ?? ''].filter(Boolean).join('\n\n');
 }
 
 export function mountInsight(el: HTMLElement | null, summary = false) {
@@ -22,7 +23,7 @@ export function mountInsight(el: HTMLElement | null, summary = false) {
     el.removeAttribute('aria-busy');
     el.innerHTML = html`<div class="card-head"><h2>Analyse du mois</h2><span class="tag">rédigée par l'IA</span></div>
     <div class="md">${renderMarkdown(summaryOf(ins.markdown))}</div>
-    <a class="link" href="#outils-analyse">Lire l'analyse complète</a>`;
+    <a class="btn secondary" href="#outils-analyse">Lire l'analyse complète</a>`;
     return;
   }
   const vote = loadVotes()[ins.period];

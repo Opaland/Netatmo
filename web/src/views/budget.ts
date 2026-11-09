@@ -26,6 +26,7 @@ import {
 import { contracts, costAvailable, costOf, esc, fmtEur, fmtKwh, lastDay, longDate, nf0, offCol, pct, priceMode } from '../ui';
 import { html } from '../trusted';
 import { onCard } from '../events';
+import { alert, gauge } from '../components';
 
 const signedEur = (v: number) => `${v > 0 ? '+' : v < 0 ? '−' : ''}${fmtEur(Math.abs(v))}`;
 const num = (v: number, d = 2) => v.toLocaleString('fr-FR', { minimumFractionDigits: d, maximumFractionDigits: d });
@@ -52,8 +53,8 @@ function yearBudget() {
   return { year, ...budgetStatus(budget, spent, total(all, from, last), p ? p.projected : null, dayOfYear(last) + 1, days) }; // #244: the last day is paid, so it counts
 }
 
-/** Called by overview.ts once this module is loaded. */
-export function fillOverview() {
+/** #311: called by Accueil (views/home.ts) once this module is loaded. */
+export function fillHome() {
   put('grid-zone', gridCard());
   const b = yearBudget();
   const tile = document.getElementById('budget-kpi');
@@ -64,12 +65,39 @@ export function fillOverview() {
     tile.innerHTML = html`<h3>Budget ${b.year} : ${b.over ? 'dépassement prévu' : 'marge prévue'}</h3>
       <p class="kpi-value">${p.value}</p>
       <p class="kpi-sub">${p.sub}</p>`;
-  } else if (tile && b) {
-    tile.hidden = false;
-    tile.innerHTML = html`<h3>Budget ${b.year}</h3>
-      <p class="kpi-value">${signedEur(b.gap)}</p>
-      <p class="kpi-sub"><span class="delta ${b.over ? 'up' : 'down'}"><span aria-hidden="true">${b.over ? '▲' : '▼'}</span> ${b.over ? 'au-dessus du budget' : 'dans le budget'}</span> · ${fmtEur(b.projected)} projetés pour ${fmtEur(b.budget)}</p>`;
   } else tile?.remove();
+  if (state.simple) return;
+  // « Fin d'année estimée »: its gap to the budget, or where to set one
+  const line = document.getElementById('budget-line');
+  if (line) {
+    line.innerHTML = html(
+      b
+        ? `<br><span class="delta ${b.over ? 'up' : 'down'}"><b>${fmtEur(Math.abs(b.gap))} ${b.over ? 'au-dessus du' : 'de marge sur le'}</b> <span class="vs">budget de ${fmtEur(b.budget)}</span></span>`
+        : costAvailable()
+          ? '<br><a class="link" href="#parametres-objectifs">Fixer un budget annuel</a>'
+          : '',
+    );
+  }
+  put('budget-zone', b ? budgetCard(b) : '');
+}
+
+/** #311: the annual budget on Accueil: spent, hatched projection, margin (maquette « Budget 2026 »). */
+function budgetCard(b: NonNullable<ReturnType<typeof yearBudget>>): string {
+  const max = Math.max(b.budget, b.projected) * 1.02;
+  return `<section class="card" id="budget-card" aria-labelledby="budget-title">
+    <div class="card-head"><h2 id="budget-title">Budget ${b.year}</h2><span class="sub muted">${fmtEur(b.budget)} hors abonnement</span></div>
+    ${gauge({
+      label: `Budget ${b.year} : ${fmtEur(b.spent)} dépensés, fin d'année estimée à ${fmtEur(b.projected)}, soit ${fmtEur(Math.abs(b.gap))} ${b.over ? 'au-dessus du budget' : 'de marge'}`,
+      value: b.spent,
+      max,
+      projected: b.projected,
+      expected: b.projected > b.budget ? b.budget : null,
+      color: b.over ? '--state-bad' : '--accent',
+      scale: [`${fmtEur(b.spent)} dépensés`, `fin d'année ≈ ${fmtEur(b.projected)}`],
+    })}
+    <p class="delta ${b.over ? 'up' : 'down'}"><b>${fmtEur(Math.abs(b.gap))} ${b.over ? 'au-dessus du budget' : 'de marge'}</b> <span class="vs">si l'hiver est normal</span></p>
+    <p class="card-foot"><a class="link" href="#parametres-objectifs">Changer le budget</a></p>
+  </section>`;
 }
 
 /** #309: the budget and CO₂ inputs, on ⚙ Objectifs et alertes. */
@@ -144,18 +172,15 @@ function gridCard(): string {
   const imp = gridImpact(at(g.prev), at(g.next), g.prev, g.next);
   const kwh = recs.reduce((s, r) => s + r.kwh, 0);
   const future = g.next.from > last;
-  const up = imp.total > 0;
   const priceLine = (r: typeof g.prev) =>
     r.hc === r.hp ? `${num(r.hp, 4)} €/kWh` : `HC ${num(r.hc, 4)} · HP ${num(r.hp, 4)} €/kWh`;
-  return `<section class="verdict verdict-${up ? 'high' : 'low'}" id="grid-card" role="status">
-    <span class="verdict-icon" aria-hidden="true">${up ? '▲' : '▼'}</span>
-    <div><p class="verdict-title">Nouveau tarif réglementé ${future ? 'à partir du' : 'depuis le'} ${longDate(g.next.from)}</p>
-    <p class="verdict-sub">Sur votre consommation des 12 derniers mois : <strong>${signedEur(imp.total)} par an</strong>${imp.pct !== null ? ` (${pct(imp.pct)})` : ''}, dont ${signedEur(imp.energy)} d'énergie et ${signedEur(imp.subscription)} d'abonnement.</p>
+  // #311 (constat C2): a tariff change is information, not an overconsumption: an « info » alert
+  const action = `<p><strong>${signedEur(imp.total)} par an</strong>${imp.pct !== null ? ` (${pct(imp.pct)})` : ''} pour votre consommation.</p>
     <details class="table-details"><summary>Comment c'est calculé</summary>
-      <p class="hint">Les mêmes ${fmtKwh(kwh)} (chauffage + chauffe-eau, du ${longDate(from)} au ${longDate(last)}, avec leur répartition heures pleines / creuses) sont chiffrés à l'ancienne grille (${priceLine(g.prev)}, abonnement ${fmtEur(g.prev.fixedYear)} par an) puis à la nouvelle (${priceLine(g.next)}, abonnement ${fmtEur(g.next.fixedYear)} par an), pour ${c.kva} kVA. Source : grille publiée par la CRE (open data EDF). Le reste du logement n'est pas compté.</p>
+      <p class="hint">Dont ${signedEur(imp.energy)} d'énergie et ${signedEur(imp.subscription)} d'abonnement. Les mêmes ${fmtKwh(kwh)} (chauffage + chauffe-eau, du ${longDate(from)} au ${longDate(last)}, avec leur répartition heures pleines / creuses) sont chiffrés à l'ancienne grille (${priceLine(g.prev)}, abonnement ${fmtEur(g.prev.fixedYear)} par an) puis à la nouvelle (${priceLine(g.next)}, abonnement ${fmtEur(g.next.fixedYear)} par an), pour ${c.kva} kVA. Source : grille publiée par la CRE (open data EDF). Le reste du logement n'est pas compté.</p>
     </details>
-    <button type="button" class="link grid-seen" id="grid-seen">Masquer jusqu'au prochain tarif</button></div>
-  </section>`;
+    <p class="alert-actions"><a class="link" href="#outils-offres">Comparer les offres</a> <button type="button" class="link grid-seen" id="grid-seen">Masquer jusqu'au prochain tarif</button></p>`;
+  return `<div id="grid-card">${alert('info', `Nouveau tarif réglementé ${future ? 'à partir du' : 'depuis le'} ${longDate(g.next.from)}`, '', action)}</div>`;
 }
 
 // ------------------------------------------------------------------ events (#257: registered, dispatched by main.ts)

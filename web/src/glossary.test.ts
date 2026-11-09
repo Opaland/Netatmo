@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { dayLong, dayShort, hour, hourMin, hourRange, localDateTime, localDay, monthShort, rangeLabel, seasonLabel, signedPct, vsLabel } from './glossary';
+import { dayLong, dayShort, hour, hourMin, hourRange, localDateTime, localDay, monthShort, periodBounds, periodLine, rangeLabel, seasonLabel, signedPct, vsLabel } from './glossary';
 
 describe('glossaire : dates et heures (#299)', () => {
   it('écrit « 1er » et les mois en français', () => {
@@ -24,6 +24,25 @@ describe('glossaire : dates et heures (#299)', () => {
     expect(localDay(new Date(2026, 10, 9, 0, 30))).toBe('2026-11-09');
     expect(localDateTime('not a date')).toBe('not a date');
     expect(localDateTime(new Date(2026, 10, 9, 13, 5).toISOString())).toBe('9 novembre 2026 à 13 h 05');
+  });
+});
+
+describe('périodes standard avec leurs bornes (§ 7.1, #299)', () => {
+  const last = '2026-11-08';
+  it('bornes', () => {
+    expect(periodBounds('12m', last)).toEqual(['2025-11-09', last]);
+    expect(periodBounds('30j', last)).toEqual(['2026-10-10', last]);
+    expect(periodBounds('saison', last)).toEqual(['2026-09-01', last]);
+    expect(periodBounds('hiver', last)).toEqual(['2026-11-01', last]);
+    expect(periodBounds('hiver', '2026-07-01')).toEqual(['2025-11-01', '2026-03-31']);
+  });
+  it('libellés', () => {
+    expect(periodLine('mois', last)).toBe('novembre 2026 (au 8)');
+    expect(periodLine('annee', last)).toBe('2026 (au 8 nov.)');
+    expect(periodLine('12m', last)).toBe('12 mois (9 nov. 2025 – 8 nov. 2026)');
+    expect(periodLine('30j', last)).toBe('30 jours (10 oct. – 8 nov. 2026)');
+    expect(periodLine('saison', last)).toBe('saison 2026–2027 (sept. – août, au 8 nov.)');
+    expect(periodLine('hiver', '2026-07-01')).toBe('hiver 2025–2026 (nov. – mars)');
   });
 });
 
