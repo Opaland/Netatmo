@@ -21,6 +21,7 @@ import { contractInfo, esc, longDate, table } from '../ui';
 import { html } from '../trusted';
 import { showBuild } from '../build';
 import { loadVotes, usefulRate } from '../insight';
+import { tenant, tenantNote } from '../tenant';
 
 let settingsRepo = repoFromLocation() ?? 'Opaland/Netatmo';
 let configured: Set<string> | null = null;
@@ -79,6 +80,8 @@ export function renderSettings(view: HTMLElement) {
     ${iaRateLine()}
     <p class="hint muted">Dernière collecte : ${m.updated ? esc(m.updated.replace('T', ' à ').slice(0, 21)) + ' (UTC)' : '—'}.</p>
   </section>
+  <section class="card" id="tenant-card" hidden></section>
+  <section class="card" id="cold-card" hidden></section>
   ${
     ds!.source === 'demo'
       ? '<section class="card"><p class="notice">Mode démonstration : les paramètres sont désactivés.</p></section>'
@@ -103,7 +106,7 @@ export function renderSettings(view: HTMLElement) {
     ${groups}
     <button class="primary" type="submit" ${hasToken() ? '' : 'disabled'}>Chiffrer et enregistrer dans GitHub</button>
   </form>
-  ${contractSection()}
+  ${tenant().on ? tenantNote('Le contrat partagé est masqué') : contractSection()}
   <section class="card">
     <h2>4. Lancer la collecte</h2>
     <p class="hint muted">Utile après avoir ajouté une connexion. La collecte prend quelques minutes, puis le site se met à jour.</p>
@@ -124,6 +127,7 @@ export function renderSettings(view: HTMLElement) {
         ['Journaux de collecte', 'GitHub Actions (public)', 'Tout le monde : uniquement des comptes et des codes, jamais de valeur'],
         ['Prix saisis ici, contrat non partagé', 'Votre appareil (stockage du navigateur)', 'Vous seul'],
         ['Contrat partagé (dates, offre, puissance)', 'Variable GitHub CONTRACT_JSON, puis données chiffrées', 'Les administrateurs du dépôt ; chiffré dans data/'],
+        ['Alerte froid prolongé (pièces suivies, seuil)', 'Variable GitHub COLD_ALERT_JSON ; issue publique', 'Variable : les administrateurs du dépôt ; issue : tout le monde, avec des pseudonymes seulement (ni nom ni température)'],
       ],
       99,
     )}
@@ -150,6 +154,9 @@ export function renderSettings(view: HTMLElement) {
   </section>
   ${settingsMsg ? `<p class="settings-msg ${settingsMsg.ok ? 'ok' : 'ko'}" role="status">${esc(settingsMsg.text)}</p>` : ''}`;
   void showBuild(document.getElementById('build-info'));
+  // S-12.6 tenant mode, S-12.5 prolonged cold alert: lazy modules
+  void import('./tenant-card').then((x) => x.mountTenant(document.getElementById('tenant-card'))).catch(() => {});
+  void import('./coldalert').then((x) => x.mountColdSettings(document.getElementById('cold-card'), () => settingsRepo)).catch(() => {});
 }
 
 /** Informative note of a source (counts only, written by the collector), e.g. plugs without a counter. */

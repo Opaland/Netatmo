@@ -5,6 +5,7 @@ import { type State, activeRooms, ds, state } from './app';
 import { cssVar, escapeHtml as esc, waterfallChart } from './charts';
 import { type ResolvedContract, resolveContract } from './contract';
 import { type ContractPeriod, periodAt } from './offers';
+import { tenant } from './tenant';
 
 export { esc };
 export { fmtKwh } from './charts';
@@ -79,6 +80,7 @@ export function contracts(): ContractPeriod[] {
 }
 /** A shared contract means the official tariffs, unless changed on this device. */
 export function priceMode(): State['priceMode'] {
+  if (tenant().on) return 'manual'; // S-12.6: the tenant's average price, never the holder's contract
   return contractInfo().source === 'shared' ? 'trve' : state.priceMode;
 }
 /** Regulated price row in force on that day, under the contract of that day. */
@@ -87,7 +89,9 @@ export function priceAt(day: string) {
   return c ? trveAt(ds!.offers.get(c.offer) ?? [], c.kva, day) : null;
 }
 const useTrve = () => priceMode() === 'trve' && ds!.offers.size > 0;
-export const costAvailable = () => useTrve() || hasPrices(state.prices);
+/** Manual prices; a tenant's average price applies to every kWh (S-12.6). */
+const manualPrices = () => (tenant().on ? { ...state.prices, t1: null, t2: null } : state.prices);
+export const costAvailable = () => useTrve() || hasPrices(manualPrices());
 export function offCol(): 1 | 2 {
   const water = ds!.meta.rooms.filter((r) => r.category === 'water_heater').map((r) => r.id);
   return offPeakColumn(ds!.tariffs, water) ?? 2;
@@ -101,8 +105,8 @@ export function costOf(records: DayRecord[], from: string, to: string, withSub =
     const c = energyCostTrve(recs, ds!.tariffs, priceAt, 0, off, offPeakShares(ds!.tariffs, off));
     return c.energy + (withSub ? subscriptionTrve(priceAt, 0, from, to) : 0);
   }
-  const sub = withSub ? subscriptionCost(from, to, state.prices) : 0;
-  return energyCost(recs, ds!.tariffs, state.prices) + sub;
+  const sub = withSub ? subscriptionCost(from, to, manualPrices()) : 0;
+  return energyCost(recs, ds!.tariffs, manualPrices()) + sub;
 }
 export const eurOf = (records: DayRecord[], from: string, to: string) => {
   const c = costOf(records, from, to);

@@ -35,6 +35,9 @@ jobs:
       # S-12.1: contract shared between devices (not secret: a repository variable written by
       # Settings). Validated by the collector, stored in the encrypted meta, never printed.
       CONTRACT_JSON: ${{ vars.CONTRACT_JSON }}
+      # S-12.5: prolonged cold alert (rooms and threshold, disabled when unset). Never printed:
+      # the issue below only carries pseudonyms (Pièce A, B…), the log only counts.
+      COLD_ALERT_JSON: ${{ vars.COLD_ALERT_JSON }}
       # S-1.14: optional caps on API calls per collection (empty = default, see docs/api-notes.md).
       MAX_CALLS_INTUIS: ${{ vars.MAX_CALLS_INTUIS }}
       MAX_CALLS_NETATMO: ${{ vars.MAX_CALLS_NETATMO }}
@@ -98,6 +101,7 @@ jobs:
         if: steps.check.outputs.configured == 'true'
         env:
           RENEW_FILE: ${{ runner.temp }}/renew.txt
+          COLD_FILE: ${{ runner.temp }}/cold.txt
         run: python -m collector -v ${{ inputs.backfill && 'backfill' || 'sync' }}
       - name: Commit des données chiffrées
         if: steps.check.outputs.configured == 'true'
@@ -170,6 +174,38 @@ jobs:
             fi
           elif [ -n "$num" ]; then
             gh issue close "$num" --repo "$GITHUB_REPOSITORY" --comment "Plus aucun jeton à renouveler le $(date -u +%F)."
+          fi
+
+      # S-12.5: one open issue while a followed room stays below its threshold, closed when none
+      # is. cold.txt holds pseudonyms and day counts only, never a room name or a temperature.
+      - name: Alerte froid prolongé
+        if: success() && steps.check.outputs.configured == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          COLD_FILE: ${{ runner.temp }}/cold.txt
+        run: |
+          title="🥶 Alerte froid prolongé"
+          num=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search "\"$title\" in:title" --json number --jq '.[0].number // empty')
+          if [ -s "$COLD_FILE" ]; then
+            body="$(cat "$COLD_FILE")"
+            if [ -z "$num" ]; then
+              gh issue create --repo "$GITHUB_REPOSITORY" --title "$title" --body "@${{ github.repository_owner }} une pièce suivie est restée sous le seuil choisi :
+
+          $body
+
+          L'application (Paramètres → Alerte froid prolongé) indique quelle pièce correspond à chaque pseudonyme. Avec une collecte par nuit, l'alerte peut arriver jusqu'à 24 h après la journée froide : ce n'est pas un dispositif de sécurité. Cette issue se fermera toute seule au retour au-dessus du seuil."
+            else
+              last=$(gh api "repos/$GITHUB_REPOSITORY/issues/$num/comments" --jq '[.[] | select(.user.login == "github-actions[bot]")] | last | .body // empty')
+              [ -n "$last" ] || last=$(gh api "repos/$GITHUB_REPOSITORY/issues/$num" --jq .body)
+              case "$last" in
+                *"$body"*) echo "Alerte froid déjà ouverte (#$num), inchangée." ;;
+                *) gh issue comment "$num" --repo "$GITHUB_REPOSITORY" --body "Mise à jour du $(date -u +%F) :
+
+          $body" ;;
+              esac
+            fi
+          elif [ -n "$num" ]; then
+            gh issue close "$num" --repo "$GITHUB_REPOSITORY" --comment "Plus aucune pièce suivie sous le seuil le $(date -u +%F)."
           fi
 
   # A push made with GITHUB_TOKEN does not trigger other workflows: deploy explicitly.
