@@ -1,0 +1,29 @@
+{
+  // S-10.5 : environnement prêt à l'emploi (VS Code « Reopen in Container », GitHub Codespaces).
+  // Mêmes versions que la CI (.github/workflows/ci.yml) : Python 3.12, Node 22.
+  // Aucun secret n'est nécessaire : tests Python, Vitest et l'application en mode démo
+  // fonctionnent sans compte (API simulée, données de démonstration chiffrées « demo »).
+  "name": "Historique énergie",
+  "image": "mcr.microsoft.com/devcontainers/python:1-3.12-bookworm",
+  "features": {
+    "ghcr.io/devcontainers/features/node:1": { "version": "22" }
+  },
+  "postCreateCommand": "pip install -e '.[dev]' && cd web && npm ci && npx playwright install --with-deps chromium",
+  // L'application démarre à chaque ouverture : ouvrez le port 5173 puis « Essayer avec des données de démonstration ».
+  "postAttachCommand": {
+    "appli": "cd web && npm run dev -- --host 0.0.0.0 --port 5173"
+  },
+  "forwardPorts": [5173],
+  "portsAttributes": {
+    "5173": { "label": "Application (démo)", "onAutoForward": "openBrowser" }
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": ["charliermarsh.ruff", "ms-python.python", "vitest.explorer"],
+      "settings": {
+        "python.testing.pytestEnabled": true,
+        "[python]": { "editor.defaultFormatter": "charliermarsh.ruff" }
+      }
+    }
+  }
+}

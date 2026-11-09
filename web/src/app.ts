@@ -4,6 +4,7 @@
 import type { Category, Granularity } from './aggregate';
 import { NO_PRICES, type Prices } from './analysis';
 import type { Dataset } from './data';
+import { bedroomIds, householdView } from './household';
 import { sameContract, validContract } from './contract';
 import type { ContractPeriod } from './offers';
 import { DEFAULT_LOCK_MINUTES } from './session';
@@ -40,6 +41,7 @@ export interface State {
   comfortThreshold: number; // °C, hours below it count as cold (S-11.3)
   /** S-3.8: Intuis room id -> station module key ('' = deliberately not linked). Shared later by S-12.1. */
   roomModuleMap: Record<string, string>;
+  household: boolean; // S-12.2: bedrooms merged into « Chambres » on this device
 }
 
 export const DEFAULT: State = {
@@ -70,6 +72,7 @@ export const DEFAULT: State = {
   pinnedRoom: null,
   comfortThreshold: 19,
   roomModuleMap: {},
+  household: true,
 };
 
 const LS_KEY = 'intuis-history:state';
@@ -127,8 +130,37 @@ export function activeRooms() {
 
 /** Install a freshly loaded dataset (or null when locking) and fix the state against it. */
 export function setDataset(next: Dataset | null) {
-  ds = next;
+  raw = next;
+  if (!next) revealed = false; // S-12.2: the detail stays visible only until the next lock
+  ds = next && state.household && !revealed ? householdView(next) : next;
   if (next) initDefaults();
+}
+
+// ------------------------------------------------------------------ household view (S-12.2)
+/** Dataset as decrypted, before the household view merges the bedrooms. */
+let raw: Dataset | null = null;
+/** « Afficher le détail des chambres » was chosen since the last unlock (never persisted). */
+let revealed = false;
+
+/** Whether the bedrooms are merged right now, and whether there is anything to merge. */
+export function householdStatus() {
+  return { active: !!raw && ds !== raw, bedrooms: raw ? bedroomIds(raw.meta.rooms).length : 0, revealed, enabled: state.household };
+}
+
+/** Show (true) or hide again (false) the bedrooms detail, until the next lock. */
+export function revealBedrooms(show: boolean) {
+  revealed = show;
+  state = { ...state, rooms: null, tempRoom: null, focusRoom: null };
+  setDataset(raw);
+  rerender();
+}
+
+/** Turn the household view on or off on this device (persisted). */
+export function setHousehold(on: boolean) {
+  revealed = false;
+  state = { ...state, household: on, rooms: null, tempRoom: null, focusRoom: null };
+  setDataset(raw);
+  setState({});
 }
 
 function initDefaults() {

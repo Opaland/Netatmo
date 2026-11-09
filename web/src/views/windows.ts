@@ -5,6 +5,7 @@ import { ds, onDatasetLoaded, rerender, state } from '../app';
 import { barChart } from '../charts';
 import { isBedroom } from '../comfort';
 import { loadRoomState } from '../data';
+import { BEDROOMS_ID } from '../household';
 import { esc, longDate, nf0, roomColor, table, tableToggle } from '../ui';
 import {
   type RoomState,
@@ -24,7 +25,7 @@ import {
   totals,
 } from '../windows';
 
-const BEDROOMS = '__chambres__';
+const BEDROOMS = BEDROOMS_ID;
 const EXCLUDE_HOURS = 2;
 let doc: RoomState | null = null;
 let loading = false;
@@ -62,8 +63,11 @@ function roomLabel(id: string) {
 
 /** S-13.5: bedrooms merged into one line unless the household asked to see them. */
 function grouping(showBedrooms: boolean) {
-  const bedroom = new Set(ds!.meta.rooms.filter((r) => isBedroom(r.name)).map((r) => r.id));
-  return (room: string) => (!showBedrooms && bedroom.has(room) ? BEDROOMS : room);
+  const known = new Set(ds!.meta.rooms.map((r) => r.id));
+  // S-12.2: in household view the dataset already merged the bedrooms: their ids are gone.
+  const merged = known.has(BEDROOMS);
+  const bedroom = new Set(ds!.meta.rooms.filter((r) => r.id !== BEDROOMS && isBedroom(r.name)).map((r) => r.id));
+  return (room: string) => ((merged && !known.has(room)) || (!showBedrooms && bedroom.has(room)) ? BEDROOMS : room);
 }
 
 const head = `<div class="card-head"><h2>Fenêtres ouvertes et radiateurs <small class="muted">relevé horaire de l'état des pièces</small></h2></div>`;
@@ -98,7 +102,7 @@ export function windowsCard(showBedrooms: boolean): string {
         .filter(([, h]) => h >= 0.5)
         .map(([m, h]) => `${esc(modeLabel(m))} ${nf0.format(h)} h`)
         .join(', ');
-      return [esc(roomLabel(k)), h1(t.open), h1(t.boost), t.boost ? `≈ ${f1(boost30(k))} kWh` : '—', h1(t.heating), h1(t.offload), modes || '—', `${nf0.format((t.n / (t.days * 24)) * 100)} %`];
+      return [esc(roomLabel(k)), h1(t.open), h1(t.boost), t.boost && k !== BEDROOMS ? `≈ ${f1(boost30(k))} kWh` : '—', h1(t.heating), h1(t.offload), modes || '—', `${nf0.format((t.n / (t.days * 24)) * 100)} %`];
     });
   // monthly open-window hours, last 12 months
   const monthly = monthlyOpen(rs, group);
@@ -199,7 +203,7 @@ export function drawWindows(showBedrooms: boolean) {
     labels: days.map((d) => bucketLabel(d, 'day')),
     series: [...per.keys()]
       .sort()
-      .map((k) => ({ name: roomLabel(k), color: roomColor(k === BEDROOMS ? firstBedroom() : k), data: per.get(k)! })),
+      .map((k) => ({ name: roomLabel(k), color: roomColor(k === BEDROOMS && !ds!.meta.rooms.some((r) => r.id === BEDROOMS) ? firstBedroom() : k), data: per.get(k)! })),
     stacked: true,
     price: null,
     unit: 'h',
