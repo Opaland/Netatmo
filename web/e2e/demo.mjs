@@ -351,6 +351,7 @@ try {
       errors.push(`${name}/settings: cartes locataire ou alerte froid non rendues (${err})`);
     }
     await audit(page, `${name}/settings`);
+    await page.screenshot({ path: `${OUT}/${name}-settings.png`, fullPage: true }); // S-7.14: inventaire
     if (name === 'bureau') {
       // S-12.6: tenant mode hides the comparator and Linky cards, costs at the average price, lease report
       await page.check('#tenant-on');
@@ -414,6 +415,12 @@ try {
         (await page.locator('.kpis > .kpi').first().getAttribute('class')).includes('pinned'),
         `${name}/épingle : la pièce épinglée n'est pas en premier`,
       );
+      // S-7.13: plain language and glossary terms, read aloud when touched.
+      check(/vous consommez/.test(await page.textContent('.verdict-title')), `${name}/FALC : verdict non réécrit`);
+      check(!/N-1/.test(await page.textContent('#view')), `${name}/FALC : sigle N-1 en mode simple`);
+      await page.click('.glossary [data-term=dju]');
+      check(await page.locator('.glossary [data-term=dju][aria-expanded=true] + .term-def:visible').count(), `${name}/FALC : définition non affichée`);
+      check(/degrés-jours/.test(await page.textContent('#sr-status')), `${name}/FALC : définition non annoncée`);
       await page.addStyleTag({ content: 'html { font-size: 200% !important; }' });
       await page.waitForTimeout(300);
       const cut = await page.evaluate(() => {
@@ -461,6 +468,12 @@ try {
       await page.waitForTimeout(800);
       await page.screenshot({ path: `${OUT}/${name}-${view}.png`, fullPage: true });
       await audit(page, `${name}/${view}`, { enhanced: name !== 'couleurs-forcees' });
+    }
+    // S-7.14: captures of the other views for the design inventory (not audited at 7:1 yet: v1.6).
+    for (const view of ['rooms', 'analyse', 'comfort']) {
+      await page.click(`[data-view=${view}]`);
+      await page.waitForTimeout(1500);
+      await page.screenshot({ path: `${OUT}/${name}-${view}.png`, fullPage: true });
     }
     await ctx.close();
   }

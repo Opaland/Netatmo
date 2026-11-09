@@ -1,0 +1,87 @@
+import { describe, expect, it } from 'vitest';
+import {
+  GLOSSARY,
+  budgetSentences,
+  comparedToLastYear,
+  costSentence,
+  glossarySection,
+  kpiTitle,
+  pinnedTemp,
+  plainEur,
+  plainNum,
+  roundKwh,
+  sentenceLengths,
+  term,
+  verdictSentences,
+  verdictTitle,
+  visibleText,
+} from './plain';
+
+/** Every text of the simple mode, for a spread of inputs. */
+function allTexts(): string[] {
+  const out: string[] = [];
+  for (const level of ['low', 'normal', 'high'] as const) out.push(verdictTitle(level));
+  for (const climate of [true, false])
+    for (const eur of [null, 42.4, -1234.5, 0.2])
+      out.push(...verdictSentences({ level: 'high', actual: 1234.56, expected: 987.6, climate, eur }, '2026-11-01'));
+  for (const [now, before] of [
+    [100, null],
+    [100, 0],
+    [100, 100],
+    [110, 100],
+    [90, 100],
+  ] as [number, number | null][])
+    out.push(comparedToLastYear(now, before));
+  out.push(costSentence(152.3), costSentence(12.6));
+  for (const k of ['month', 'year', '12m', 'projection'] as const) out.push(kpiTitle(k, '2026-11-09'));
+  for (const over of [true, false]) out.push(budgetSentences(over, 123, 1500).sub);
+  for (const cold of [0, 1, 5]) out.push(pinnedTemp(18.6, cold, 19).sub);
+  out.push(...Object.values(GLOSSARY).map((g) => g.def));
+  out.push(visibleText(glossarySection()));
+  return out;
+}
+
+describe('S-7.13 mode simple en langage clair', () => {
+  it('phrases de 15 mots au plus', () => {
+    for (const t of allTexts()) for (const n of sentenceLengths(t)) expect(n, t).toBeLessThanOrEqual(15);
+  });
+
+  it('aucun sigle sans explication (kWh est un mot du glossaire)', () => {
+    for (const t of allTexts()) {
+      // An acronym = two capitals or more in a row; N-1, HP/HC and DJU are banned.
+      expect(t, t).not.toMatch(/\b[A-Z]{2,}\b|N-1|vs\b/);
+    }
+  });
+
+  it('chiffres arrondis', () => {
+    expect(roundKwh(12.4)).toBe(12);
+    expect(roundKwh(1234.56)).toBe(1230);
+    expect(plainNum(1234.56)).toMatch(/^1\s230$/);
+    expect(plainEur(1234.5)).toMatch(/^1\s230\s€$/);
+    expect(plainEur(42.4)).toBe('42\u00a0€');
+    expect(pinnedTemp(18.6, 0, 19).value).toBe('19 °C');
+    for (const t of allTexts()) expect(t, t).not.toMatch(/\d,\d/); // no decimals
+  });
+
+  it('le verdict dit plus ou moins en euros, sans signe', () => {
+    const s = verdictSentences({ level: 'low', actual: 900, expected: 1000, climate: true, eur: -25 }, '2026-11-01');
+    expect(s[0]).toBe('Depuis le 1er novembre : 900\u00a0kWh consommés.');
+    expect(s).toContain('Ce calcul tient compte du froid de ce mois.');
+    expect(s.at(-1)).toBe('Cela fait environ 25\u00a0€ de moins.');
+    // under one euro: no money sentence
+    expect(verdictSentences({ level: 'normal', actual: 900, expected: 900, climate: false, eur: 0.2 }, '2026-11-01')).toHaveLength(2);
+  });
+
+  it('un terme se touche : bouton avec sa définition d\'une phrase', () => {
+    const h = term('kwh');
+    expect(h).toMatch(/<button type="button" class="term" data-term="kwh" aria-expanded="false" aria-controls="def-kwh-\d+">kWh<\/button>/);
+    expect(h).toMatch(/<span class="term-def" id="def-kwh-\d+" hidden>/);
+    expect(term('kwh')).not.toBe(h); // unique ids
+    for (const g of Object.values(GLOSSARY)) expect(sentenceLengths(g.def)).toHaveLength(1);
+    for (const t of ['kwh', 'hc', 'dju']) expect(glossarySection()).toContain(`data-term="${t}"`);
+  });
+
+  it('compte les mots comme un lecteur', () => {
+    expect(sentenceLengths("D'habitude, à cette date : 1 230 kWh. Ce calcul tient compte du froid.")).toEqual([6, 6]);
+  });
+});

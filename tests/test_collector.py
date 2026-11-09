@@ -1021,3 +1021,23 @@ def test_demo_shows_every_data_quality_case_and_the_contract(tmp_path):
     assert s.year(2025)["r-salon"]["2025-01-14"] < 0.3 * s.year(2025)["r-salon"]["2025-01-13"]
     assert parse_contract(json.dumps(s.meta["contract"])) == s.meta["contract"]
     assert s.meta["sources"]["linky"]["expires_estimated"] is True
+
+
+def test_station_keys_stay_stable_when_a_module_is_added(tmp_path):
+    from collector.station import Station
+
+    store = Store(tmp_path, "pw")
+    st = Station(store, "id", "secret", "tok", http=object())
+    main = {"id": "70:ee", "module": None, "type": "NAMain"}
+    out = {"id": "70:ee", "module": "02:aa", "type": "NAModule1"}
+    kids = {"id": "70:ee", "module": "03:bb", "type": "NAModule4"}
+    cellar = {"id": "70:ee", "module": "03:cc", "type": "NAModule4"}
+    # First run after the change: keys follow today's order, like before.
+    assert st.module_keys([main, out, kids, cellar]) == ["m0", "m1", "m2", "m3"]
+    # A new indoor module listed in the middle by the API gets the next free key.
+    new = {"id": "70:ee", "module": "03:dd", "type": "NAModule4"}
+    assert st.module_keys([main, out, new, kids, cellar]) == ["m0", "m1", "m4", "m2", "m3"]
+    # Still the same after a save and reload.
+    store.save({"id": "h"}, [])
+    st2 = Station(Store(tmp_path, "pw"), "id", "secret", "tok", http=object())
+    assert st2.module_keys([cellar, new, main, out, kids]) == ["m3", "m4", "m0", "m1", "m2"]

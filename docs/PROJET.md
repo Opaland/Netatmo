@@ -14,6 +14,8 @@ qui travaillent sur le dépôt.
 | **Travail à faire / en cours** | [Issues GitHub](https://github.com/Opaland/Netatmo/issues), une par récit, rangées par **jalon** |
 | Stratégie de test, définition de « fini » | `docs/bmad/06-qa-strategy.md` |
 | Revues multi-personas | `docs/bmad/02-revue-50-personas.md` (initiale) et `docs/bmad/revues/` (une par version) |
+| Revues par agents (code, design) : consignes | `docs/revues-agents/` (voir § 10) |
+| Inventaire de l'interface (base du design system) | `docs/design/inventaire.md` |
 | Études (faut-il le faire ?) | `docs/etudes/` |
 | Historique des versions | `CHANGELOG.md` |
 | Règles du projet | `docs/PROJET.md` |
@@ -39,6 +41,7 @@ qui travaillent sur le dépôt.
 | Taille | `taille: S` (≤ ½ j), `taille: M` (1-2 j), `taille: L` (> 2 j) |
 | Domaine | `collecteur`, `app`, `ia`, `sécurité`, `accessibilité`, `domotique`, `doc` |
 | État | `bloqué`, `conditionnel` (dépend d'une étude ou d'une mesure) |
+| Revue par agents (§ 10) | `revue-code`, `revue-design` (+ `design`), gravité : `gravité: critique`, `gravité: majeure`, `gravité: mineure`, `gravité: suggestion` |
 
 ## 4. Jalons et versions
 
@@ -46,7 +49,8 @@ qui travaillent sur le dépôt.
 - Un **jalon GitHub par version** (`v1.2`, `v1.3`, `v1.4`, `v1.5`, `v1.6`, `v2`) ; la priorité dans un
   jalon suit MoSCoW. Les issues de personas sont rangées dans le jalon de la prochaine revue.
 - Une version est **livrée** quand toutes ses issues `P: must` sont fermées, le `CHANGELOG.md` est à
-  jour et la revue multi-personas de la version est écrite.
+  jour, la revue multi-personas de la version est écrite et les **deux revues par agents** (code et
+  design, § 10) sont faites, sans constat `critique` ouvert.
 
 ## 5. Revue multi-personas (obligatoire à chaque version)
 
@@ -77,6 +81,10 @@ Reprise de `docs/bmad/06-qa-strategy.md` :
 - capture de l'application (mobile + bureau, clair + sombre) quand l'interface change ;
 - README et docs à jour ; `CHANGELOG.md` complété.
 
+Pour une **version** (en plus de chaque récit) : revue de code et revue design par agents faites
+(§ 10), chaque constat corrigé ou tracé en issue, aucun constat `critique` ouvert, aucun `majeure`
+sans jalon.
+
 ## 7. Règles de sécurité et de confidentialité
 
 - Identifiants, jetons, clés : **uniquement** en secrets GitHub (jamais en variables, jamais dans le code).
@@ -91,7 +99,7 @@ Reprise de `docs/bmad/06-qa-strategy.md` :
 |---|---|
 | Chaque nuit | Collecte automatique ; une issue s'ouvre si elle échoue |
 | Chaque mois | Lecture de l'analyse IA ; tri des issues (nouveau, priorité, jalon) |
-| Chaque version | Revue multi-personas (cadrage et fin), CHANGELOG, démonstration sur téléphone |
+| Chaque version | Revue multi-personas (cadrage et fin), revues par agents (code et design), CHANGELOG, démonstration sur téléphone |
 | Chaque hiver | Contrôle des totaux contre l'application Intuis et une facture |
 
 ## 9. Feuille de route v1.4 à v1.6
@@ -107,3 +115,65 @@ Décidée par le propriétaire en novembre 2026, à la fin de la v1.3. Détail d
 
 Pendant la v1.5 et la v1.6, les revues multi-personas continuent (cadrage et fin de version), mais leurs
 propositions de **nouvelles fonctions** vont au jalon suivant (v1.7 ou v2), pas à la version en cours.
+
+## 10. Revues par agents (code et design)
+
+Obligatoires à la **fin de chaque version** (S-1.16), avant la revue multi-personas de fin de version :
+elles cherchent les défauts, la revue multi-personas juge l'intérêt. La v1.5 applique la revue de
+code à **tout** le code, la v1.6 la revue design à **toute** l'interface.
+
+### Les deux revues
+
+| | Revue de code | Revue design (UX / UI) |
+|---|---|---|
+| Consigne réutilisable | [`revues-agents/revue-code.md`](revues-agents/revue-code.md) | [`revues-agents/revue-design.md`](revues-agents/revue-design.md) |
+| Matériau | `git diff <version précédente>..HEAD` (tout le code en v1.5) | captures de la démo (`npm run e2e` : mobile clair et sombre, bureau, 360 px, contraste élevé, couleurs forcées, mode simple à 200 %), [`design/inventaire.md`](design/inventaire.md), code des vues |
+| Grille | justesse ; sécurité (secrets, journaux publics, chiffrement, CSP et Trusted Types, workflows, dépendances) ; tests ; performance et taille ; simplicité | hiérarchie et lisibilité ; cohérence (jetons, composants) ; accessibilité (WCAG 2.2 AA, 7:1 en contraste élevé) ; mobile ; langage clair |
+| Étiquettes des issues | `revue-code` + gravité | `revue-design` + `design` + gravité |
+
+### Gravité et suites
+
+| Gravité | Suite |
+|---|---|
+| `critique` | Corrigé avant de livrer la version |
+| `majeure` | Corrigé dans la version, ou issue au jalon suivant avec la raison du report |
+| `mineure` | Issue, sans jalon imposé |
+| `suggestion` | Issue facultative ; les pistes design vont au design system (v1.6) |
+
+Un constat refusé est fermé « non retenu » avec la raison, comme une proposition de persona.
+
+### Format des constats
+
+L'agent écrit un fichier JSON unique (`revue-constats.json`) décrit dans chaque consigne : pour chaque
+constat, `titre`, `gravite`, `categorie`, `fichiers` (`fichier:ligne` ou capture), `constat`,
+`proposition`, `verification`. Le script [`scripts/revue_issues.py`](../scripts/revue_issues.py) le
+vérifie, l'affiche, puis (avec `--create`) ouvre une issue par constat (« Revue code · … »), avec ses
+étiquettes, sans doublon avec une issue ouverte de même titre.
+
+### Procédure locale (par défaut)
+
+1. Ouvrir une session Claude Code (ou un autre agent) dans le dépôt, sur `main` à jour.
+2. Revue de code : « Suis `docs/revues-agents/revue-code.md`. Version v1.4, périmètre
+   `git diff v1.3..HEAD`. Écris `revue-constats.json`. » Revue design : faire d'abord
+   `cd web && npm run build && npm run e2e`, puis « Suis `docs/revues-agents/revue-design.md`… ».
+   Une session par revue, pour que la revue design ne soit pas influencée par la lecture du code.
+3. `python scripts/revue_issues.py revue-constats.json` (vérifier, relire), puis
+   `python scripts/revue_issues.py revue-constats.json --create`. Ne pas committer
+   `revue-constats.json`.
+4. Trier les issues (jalon, priorité) et noter dans la revue de fin de version le nombre de constats par
+   gravité et ce qui reste ouvert.
+
+### Workflow GitHub (facultatif)
+
+[`revue-agents.yml`](../.github/workflows/revue-agents.yml) fait la même chose dans GitHub Actions,
+**uniquement à la demande** (`Actions → Revue par agents → Run workflow` : type, base, version, ouvrir
+ou non les issues). Il demande un secret `ANTHROPIC_API_KEY` ; sans lui, il s'arrête avec un message et
+la procédure locale reste la voie normale. Moindre privilège :
+
+- le job de l'agent n'a que `contents: read`, ne reçoit **que** la clé d'API (aucun secret Intuis,
+  Netatmo ni clé des données) et ne peut que lire, lancer `git diff / log / show` et écrire dans sa copie
+  de travail : pas d'autre commande, pas de réseau, pas de push ;
+- les issues sont ouvertes par un **second job sans modèle ni clé d'API**, par le script fixe, qui
+  valide chaque champ et retire les mentions `@` ;
+- le dépôt est public : le journal du run l'est aussi ; les consignes interdisent toute donnée
+  personnelle dans les constats, et l'agent n'a accès qu'aux données chiffrées.
