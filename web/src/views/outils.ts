@@ -48,6 +48,7 @@ export function renderOutils(view: HTMLElement, status: Freshness & { label: str
   ${list(
     [
       row('facture', 'recouper le coût avec une facture'),
+      row('plannings', 'chauffe-t-on en heures creuses, la pièce monte-t-elle vraiment ?'),
       { title: 'État des données', sub: etatSub, href: '#etat', color: status.level === 'ok' ? '--state-good' : status.level === 'warn' ? '--state-warn' : '--state-bad', value: status.level === 'ok' ? '' : status.stale ? 'en retard' : 'à vérifier' },
     ],
     'Vérifier',

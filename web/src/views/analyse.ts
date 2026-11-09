@@ -134,7 +134,8 @@ export function renderAnalyse(view: HTMLElement, records: DayRecord[], part: Ana
         .join('')}</select></label></div>
     </div>
     <div class="chart" id="cal-chart" style="height:190px" role="img" aria-label="Calendrier de consommation"></div>
-  </section>`,
+  </section>
+  <div id="hist-absence-zone"></div>`,
     ],
     ['absences', () => '<div id="absence-zone"></div>'],
     [

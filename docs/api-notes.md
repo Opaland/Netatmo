@@ -166,6 +166,32 @@ snapshot` : jeton + **une** requête `homestatus` (l'identifiant de la maison es
 | IA | Seulement les **totaux du mois** d'heures de fenêtre ouverte et de boost, par pseudonyme (« Pièce A »), les chambres **regroupées en une ligne** « Chambres (regroupées) », et la couverture du relevé (S-5.10). Ni jour, ni heure, ni présence, ni mode de consigne. Ces nombres sont vérifiés dans le texte comme les autres. |
 | Risque résiduel | Un agrégat « fenêtre ouverte / absence par jour » révèle des habitudes : il reste chiffré comme le reste, et l'option présence est à n'activer qu'avec l'accord du foyer. |
 
+### Mode absent automatique et périodes d'absence (S-13.7, #210)
+
+Les radiateurs Muller / Intuis passent d'eux-mêmes en **mode absent** quand leur détecteur ne voit
+plus personne pendant un certain temps. Ce que l'appli en fait (`web/src/away.ts`) :
+
+- **Valeurs retenues** : `therm_setpoint_mode` vaut `away` (absent) ou `hg` / `frost_guard`
+  (hors-gel) ; les deux comptent comme absence (`ABSENCE_MODES`). `presence` n'est pas utilisé (il
+  suppose l'accord du foyer, `ROOM_STATE_PRESENCE`). **À vérifier sur le compte réel** : les noms
+  exacts observés sont gardés chiffrés dans `values.therm_setpoint_mode` de `roomstate.enc.json`
+  (diagnostic `--qualite`) ; une autre valeur pour l'absence automatique s'ajoute à `ABSENCE_MODES`.
+- **Délai de déclenchement** : environ **12 h** sans présence détectée d'après le propriétaire
+  (`AUTO_AWAY_DELAY_H`), **non encore mesuré** : le relevé ne garde que des heures par jour, il ne
+  peut pas le dater. L'appli le signale (« l'absence a sans doute commencé vers … ») et propose
+  d'avancer le début d'autant ; la correction est chiffrée sur l'appareil, comme les autres.
+- **Reconstitution à l'heure près** : heures d'absence du logement d'un jour = le minimum, sur les
+  pièces à radiateur, des heures en mode absent / hors-gel. Des jours consécutifs forment une
+  période (le premier jour est absent jusqu'à minuit, le dernier depuis minuit) : début = 24 − heures
+  du premier jour, fin = heures du dernier. Une période de moins de 6 h n'est pas une absence ; une
+  pièce seule en mode absent est une absence **de pièce**, listée à part (chambres regroupées).
+- **Usage** : ces périodes sont la source prioritaire des absences (#119), la détection par la
+  consommation reste le repli ; économie estimée = chauffage attendu par la signature à la même météo
+  − chauffage mesuré, au prorata des heures d'absence. Les jours d'absence sont mis de côté dans
+  « Mes plannings » et rappelés à côté des comparaisons d'hiver à hiver (Historique).
+- **Minimisation (S-13.5)** : rien de plus n'est stocké (des heures par jour, déjà là) ; le calcul a
+  lieu dans le navigateur ; jamais dans les journaux, les issues ni les faits envoyés à l'IA.
+
 ## Schémas de référence et changements de format (S-1.13)
 
 `collector/schema.py` décrit, pour chaque réponse utilisée, les champs attendus et leur type :
