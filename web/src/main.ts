@@ -10,7 +10,7 @@ import { clearMemo } from './memo';
 import { viewRendered } from './ready';
 import { framedHtml, isFramed } from './frame';
 import { prefetchForOffline, unavailable, updateNetStatus } from './offline';
-import { IdleLock, LOCK_CHOICES, REMEMBER_DAYS, idleSince } from './session';
+import { IdleLock, LOCK_CHOICES, REMEMBER_DAYS, idleSince, clearLockNotice, lockNotice, markIdleLock } from './session';
 import { isIos, keyLoss, lossMessage, readMark, writeMark } from './storage';
 import { type SwipeDir, onSwipe, step } from './swipe';
 import { esc, filtered, keepMenuOpen, lastDay, longDate, roomColor, seg } from './ui';
@@ -339,14 +339,16 @@ window.addEventListener('offline', () => void updateNetStatus(ds));
 
 // ------------------------------------------------------------------ lock (S-8.11)
 /** Forget the decrypted data, the remembered key and the GitHub token, then show the lock screen. */
-async function lockApp() {
+async function lockApp(idleFor = 0) {
   idle.stop();
+  if (idleFor) markIdleLock(idleFor); // #334: the lock screen says why
+  else clearLockNotice(); // locked on purpose: no stale explanation
   settings.forgetToken();
   if (ds?.source !== 'demo') await forgetKeys();
   setDataset(null);
   await start();
 }
-const idle = new IdleLock(() => void lockApp());
+const idle = new IdleLock(() => void lockApp(state.lockAfter));
 // #255: once per decrypted dataset, not when the household view is toggled.
 onDatasetOpened(() => idle.start(state.lockAfter));
 onDatasetOpened(() => prefetchForOffline(ds!));
@@ -368,6 +370,7 @@ async function start() {
     let key = await recallKey('data');
     // Away longer than the inactivity delay (tab closed, phone asleep): the key is forgotten.
     if (key && idleSince(state.lockAfter)) {
+      markIdleLock(state.lockAfter);
       await forgetKeys();
       key = null;
     }
@@ -397,7 +400,8 @@ async function showLockScreen() {
     // Offline, never cached: the form stays (the passphrase may work once online), with a word.
     return renderLock(navigator.onLine ? '' : unavailable('Données'), true);
   }
-  renderLock('', resp.ok, resp.ok ? lossMessage(loss, isIos(navigator.userAgent, navigator.maxTouchPoints)) : '');
+  const why = lockNotice() || lossMessage(loss, isIos(navigator.userAgent, navigator.maxTouchPoints)); // #334
+  renderLock('', resp.ok, resp.ok ? why : '');
 }
 
 /** #250: why the remembered key did not open the data, in words. */
