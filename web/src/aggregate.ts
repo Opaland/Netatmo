@@ -34,6 +34,17 @@ export interface DayRecord {
   room: string;
   cat: Category;
   kwh: number;
+  /** S-12.2 household view: the raw records a merged « Chambres » day is made of. */
+  parts?: DayRecord[];
+}
+
+/**
+ * The raw per-room records behind these records (#238, #239): a merged « Chambres » day is
+ * replaced by its bedrooms. Every computation that looks a room up in another per-room
+ * document (tariff detail, estimated days, room states) works on these.
+ */
+export function rawRecords(records: DayRecord[]): DayRecord[] {
+  return records.some((r) => r.parts) ? records.flatMap((r) => r.parts ?? [r]) : records;
 }
 
 export type Granularity = 'day' | 'week' | 'month' | 'year';

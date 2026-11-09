@@ -1,6 +1,6 @@
 // Pure analysis helpers: cost, degree days, energy signature, projection, verdict, profiles.
 
-import { type DayRecord, addDays, dayOfYear, minusYears, seasonOf } from './aggregate';
+import { type DayRecord, addDays, dayOfYear, minusYears, rawRecords, seasonOf } from './aggregate';
 
 // ------------------------------------------------------------------ cost
 export interface Prices {
@@ -19,7 +19,7 @@ export type TariffMap = Map<string, Map<string, [number, number, number]>>;
 export function energyCost(records: DayRecord[], tariffs: TariffMap, p: Prices): number {
   const base = p.base ?? p.t1 ?? p.t2 ?? 0;
   let eur = 0;
-  for (const r of records) {
+  for (const r of rawRecords(records)) {
     const t = tariffs.get(r.room)?.get(r.day);
     if (t && (p.t1 !== null || p.t2 !== null)) {
       eur += t[0] * base + t[1] * (p.t1 ?? base) + t[2] * (p.t2 ?? base);
@@ -48,7 +48,7 @@ export function offPeakColumn(tariffs: TariffMap, waterRooms: string[]): 1 | 2 |
 export function tariffSplit(records: DayRecord[], tariffs: TariffMap): [number, number, number, number] {
   // [$0, $1, $2, without detail]
   const out: [number, number, number, number] = [0, 0, 0, 0];
-  for (const r of records) {
+  for (const r of rawRecords(records)) {
     const t = tariffs.get(r.room)?.get(r.day);
     if (t) (out[0] += t[0]), (out[1] += t[1]), (out[2] += t[2]);
     else out[3] += r.kwh;
@@ -334,7 +334,7 @@ export function energyCostTrve(
   let energy = 0;
   let estimatedKwh = 0;
   const cache = new Map<string, TrveRow | null>();
-  for (const r of records) {
+  for (const r of rawRecords(records)) {
     let p = cache.get(r.day);
     if (p === undefined) cache.set(r.day, (p = priceAt(r.day)));
     if (!p) continue;
@@ -419,7 +419,7 @@ export function daySplits(
 ): DaySplit[] {
   const on = off === 1 ? 2 : 1;
   const byDay = new Map<string, { hc: number; hp: number; total: number }>();
-  for (const r of records) {
+  for (const r of rawRecords(records)) {
     const e = byDay.get(r.day) ?? { hc: 0, hp: 0, total: 0 };
     const t = tariffs.get(r.room)?.get(r.day);
     if (t && t[1] + t[2] > 0) (e.hc += t[off]), (e.hp += t[on] + t[0]);

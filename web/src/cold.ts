@@ -2,6 +2,36 @@
 // (collector/cold.py): a room is « cold » when its daily mean temperature stayed below the
 // threshold on its last `days` measured days (a daily mean = 24 h), and « without recent
 // reading » when its last reading is more than 2 days older than the archive.
+import type { Dataset } from './data';
+
+export interface Sensor {
+  id: string;
+  name: string;
+  kind: 'radiateur' | 'station';
+  means: Map<string, number>; // day -> mean °C
+}
+
+/**
+ * Rooms with a daily temperature: Intuis heating rooms with data (radiator probe) and indoor
+ * station modules. Give it the RAW dataset (#242): the collector knows only raw ids, never
+ * « Chambres », and a mean of bedrooms would hide a cold one.
+ */
+export function coldSensors(d: Pick<Dataset, 'meta' | 'records' | 'temps' | 'station'>): Sensor[] {
+  const withData = new Set(d.records.map((r) => r.room));
+  const out: Sensor[] = [];
+  for (const r of d.meta.rooms) {
+    const t = d.temps.get(r.id);
+    if (r.category !== 'heating' || !withData.has(r.id) || !t?.size) continue;
+    out.push({ id: r.id, name: r.name, kind: 'radiateur', means: new Map([...t].map(([day, v]) => [day, v[0]])) });
+  }
+  for (const [id, m] of Object.entries(d.station?.modules ?? {})) {
+    if (!m.indoor) continue;
+    const means = new Map<string, number>();
+    for (const [day, v] of Object.entries(d.station!.daily[id] ?? {})) if (typeof v[2] === 'number') means.set(day, v[2]);
+    if (means.size) out.push({ id, name: m.name, kind: 'station', means });
+  }
+  return out;
+}
 
 export interface ColdConfig {
   threshold: number; // °C
