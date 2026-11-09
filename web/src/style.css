@@ -966,3 +966,14 @@ body.is-simple .kpis {
 @media (prefers-reduced-motion: reduce) {
   .sk { animation: none; }
 }
+
+/* S-1.10: suspect days (very low against the signature) */
+.badge-suspect {
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: 6px;
+  border: 1px dashed var(--text-muted);
+  color: var(--text-secondary);
+  white-space: nowrap;
+}

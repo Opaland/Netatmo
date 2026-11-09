@@ -56,6 +56,23 @@ try {
         } catch (err) {
           errors.push(`${name}/overview: carte « Courbe de charge » non rendue (${err})`);
         }
+        // S-1.10: lost days rebuilt apart, on demand (lazy module)
+        try {
+          await page.click('#quality summary');
+          await page.check('[data-recon]');
+          await page.waitForSelector('#recon-chart canvas', { timeout: 15000 });
+          if (!(await page.getByText('Jours suspects').count())) errors.push(`${name}/overview: jours suspects absents`);
+        } catch (err) {
+          errors.push(`${name}/overview: reconstitution non rendue (${err})`);
+        }
+      }
+      if (view === 'analyse') {
+        // S-3.7: indoor − outdoor signature (lazy module)
+        try {
+          await page.waitForSelector('#indoor-sig-chart canvas', { timeout: 15000 });
+        } catch (err) {
+          errors.push(`${name}/analyse: signature intérieur − extérieur non rendue (${err})`);
+        }
       }
       const charts = await page.locator('.chart canvas').count();
       if (!charts) errors.push(`${name}/${view}: aucun graphique rendu`);
