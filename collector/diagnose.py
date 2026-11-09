@@ -7,6 +7,7 @@ no energy values.
 
 from __future__ import annotations
 
+import re
 import time
 
 from .api import ApiError, IntuisClient
@@ -242,3 +243,112 @@ def history_deep(client: IntuisClient) -> None:
             except ApiError as err:
                 txt += f" getroommeasure=erreur {str(err)[:40]}"
             print(f"  {t:<28} {txt}")
+
+
+# S-13.1: measure types that might hold a history of window / boost / presence states.
+# Netatmo Energy cites `temperature`, `heating_power_request`, `sum_boiler_on` / `boileron` for its
+# own thermostats (dev.netatmo.com Energy API and its community forum); the others mirror the
+# `homestatus` field names seen on a real Intuis account (open_window, boost_status, presence,
+# radiator_state, offload…), alone or with the `sum_` prefix of the energy types. None is documented
+# for Intuis. `temperature` is a control:
+# it is known to answer.
+PROBE_TYPES = (
+    "temperature",
+    "open_window",
+    "sum_open_window",
+    "window_open",
+    "boost",
+    "sum_boost",
+    "boost_status",
+    "sum_boost_duration",
+    "presence",
+    "sum_presence",
+    "therm_setpoint_mode",
+    "heating_power_request",
+    "sum_heating_power_request",
+    "sum_boiler_on",
+    "boileron",
+    "radiator_state",
+    "sum_radiator_state",
+    "offload",
+    "sum_offload",
+    "anticipating",
+)
+PROBE_DAYS = 7
+PROBE_SCALE = "1hour"
+
+
+def count_points(measures: object) -> int:
+    """Non-null values in measure blocks ([{beg_time, value: [[v, ...]]}] or {"<ts>": [v]})."""
+    rows: list = []
+    if isinstance(measures, dict):
+        rows = list(measures.values())
+    elif isinstance(measures, list):
+        for block in measures:
+            if isinstance(block, dict):
+                rows += list(block.get("value") or [])
+    n = 0
+    for row in rows:
+        for v in row if isinstance(row, list) else [row]:
+            n += v is not None
+    return n
+
+
+def _refusal(err: Exception) -> str:
+    """Why a type was refused, without the body of the answer (it may echo the request)."""
+    if isinstance(err, FormatError):
+        return "format inattendu"
+    m = re.search(r"HTTP (\d{3})", str(err))
+    return f"HTTP {m.group(1)}" if m else "erreur de l'API"
+
+
+def probe_history(client: IntuisClient, types: tuple[str, ...] = PROBE_TYPES, days: int = PROBE_DAYS) -> dict:
+    """Try each candidate type on gethomemeasure (all rooms) and getroommeasure (first room),
+    scale 1 hour, over the last `days` days. Prints, per type and endpoint, only « accepté »
+    with the number of non-null points, or « refusé » with the HTTP status: no value, id or name."""
+    h = client.homesdata()["body"]["homes"][0]
+    modules = h.get("modules", [])
+    bridge = next((m["id"] for m in modules if m.get("type") == "NMG"), "")
+    room_ids = [str(r["id"]) for r in h.get("rooms", [])]
+    now = int(time.time())
+    begin = now - days * DAY
+    print(f"Types candidats sur {days} jours, échelle {PROBE_SCALE} (points non nuls, aucune valeur) :")
+    print(f"  {'type':<28} {'gethomemeasure':<24} getroommeasure (1re pièce)")
+    results: dict[str, tuple[str, str]] = {}
+    for t in types:
+        try:
+            p = client.home_measure(
+                h["id"], bridge, room_ids, measure_type=t, scale=PROBE_SCALE, date_begin=begin, date_end=now
+            )
+            home = p.get("body", {}).get("home", {})
+            n = sum(count_points(x.get("measures")) for x in home.get("rooms", []) or [])
+            home_txt = f"accepté, {n} points"
+        except (ApiError, FormatError) as err:
+            home_txt = f"refusé ({_refusal(err)})"
+        if room_ids:
+            try:
+                p = client.room_measure(
+                    h["id"], room_ids[0], measure_type=t, scale=PROBE_SCALE, date_begin=begin, date_end=now
+                )
+                room_txt = f"accepté, {count_points(p.get('body'))} points"
+            except (ApiError, FormatError) as err:
+                room_txt = f"refusé ({_refusal(err)})"
+        else:
+            room_txt = "aucune pièce"
+        results[t] = (home_txt, room_txt)
+        print(f"  {t:<28} {home_txt:<24} {room_txt}")
+    useful = [t for t, (a, b) in results.items() if t != "temperature" and (_has_points(a) or _has_points(b))]
+    print(
+        "\nVerdict : "
+        + (
+            f"historique possible avec {', '.join(useful)} (voir S-13.1)"
+            if useful
+            else "aucun type historique ne renvoie de points : relevé horaire de homestatus (S-13.2)"
+        )
+    )
+    return results
+
+
+def _has_points(txt: str) -> bool:
+    m = re.match(r"accepté, (\d+) points", txt)
+    return bool(m and int(m.group(1)))

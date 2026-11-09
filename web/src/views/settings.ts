@@ -72,6 +72,7 @@ export function renderSettings(view: HTMLElement) {
       ${status(!!(m as { has_station?: boolean }).has_station, 'Station Netatmo, tous les modules', 'netatmo')}
       ${status(!!m.has_linky || !!src.linky, 'Compteur Linky', 'linky')}
       ${status(!!ds!.insights, 'Analyse IA mensuelle', 'ia')}
+      ${status(!!m.has_roomstate, `Relevé horaire de l'état des pièces${src['releve-horaire']?.note ? ` (${esc(src['releve-horaire'].note)})` : ''}`, 'releve-horaire', false)}
     </ul>
     ${iaRateLine()}
     <p class="hint muted">Dernière collecte : ${m.updated ? esc(m.updated.replace('T', ' à ').slice(0, 21)) + ' (UTC)' : '—'}.</p>

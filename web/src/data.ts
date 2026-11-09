@@ -228,6 +228,11 @@ export async function loadStationHourly(ds: Dataset): Promise<StationHourly> {
   return out;
 }
 
+/** Daily room states from the hourly snapshots (E13, roomstate.enc.json), loaded on demand. */
+export function loadRoomState(ds: Dataset): Promise<import('./windows').RoomState | null> {
+  return optional(ds.source, 'roomstate', ds.key);
+}
+
 /** Linky 30-min load curve (S-1.11), one document per year, loaded on demand. */
 export async function loadCurve(ds: Dataset): Promise<Map<string, number>> {
   const years = (ds.meta as Meta & { linky_curve_years?: number[] }).linky_curve_years ?? [];

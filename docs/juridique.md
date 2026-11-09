@@ -46,6 +46,10 @@ chaque service et on met à jour la date de lecture ci-dessous. Une date de plus
 - Ce que fait le projet pour limiter la charge et le risque : une collecte par nuit, un **plafond
   d'appels** par collecte (300 par défaut), une détection des changements de format qui arrête la
   collecte au lieu d'insister, aucune commande envoyée aux radiateurs (le collecteur ne fait que lire : inventaire, état, mesures).
+- **Relevé horaire de l'état des pièces** (facultatif, S-13.2, variable `ROOM_STATE_HOURLY`) : il
+  change le profil d'usage (24 lectures de `homestatus` par jour, 48 appels avec le jeton, en plus de
+  la collecte nocturne). Il reste en lecture seule, plafonné à 4 appels par relevé et désactivé par
+  défaut ; à couper si Intuis le demandait.
 - **Si l'accès est coupé** : l'historique déjà collecté reste dans le dépôt, et la
   [sauvegarde chiffrée](../README.md#sauvegarde-chiffrée-hors-github) permet de le garder hors de
   GitHub. L'application continue d'afficher ce qui a été archivé.
@@ -62,6 +66,12 @@ chaque service et on met à jour la date de lecture ci-dessous. Une date de plus
     (consommation, profils horaires, températures, CO₂ de la station) ; le détail s'affiche seulement
     sur un geste volontaire (menu ⋮), jusqu'au verrouillage suivant ;
   - **verrouillage** après inactivité et clé mémorisée 30 jours au plus (S-8.11) ;
+  - **fenêtres ouvertes, boost, modes de consigne** (S-13.5) : seulement des heures **par pièce et
+    par jour**, chiffrées ; les relevés horaires, chiffrés eux aussi, expirent après 3 jours et ne
+    sont jamais commités ; la **présence** n'est pas lue, sauf option `ROOM_STATE_PRESENCE`
+    (heures par jour, avec l'accord du foyer) ; chambres regroupées comme ailleurs ; rien n'est
+    envoyé à l'IA. Analyse d'impact courte (finalité, durée, qui voit quoi) :
+    [api-notes.md](api-notes.md#données-doccupation--analyse-dimpact-courte-s-135) ;
   - **IA** : seuls des totaux mensuels et les noms des pièces partent chez Anthropic ; l'application
     montre exactement ce qui a été envoyé. Choisir des noms de pièces neutres (« Chambre 1 » plutôt
     qu'un prénom) limite ce qui est transmis.
