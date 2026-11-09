@@ -26,6 +26,7 @@ import {
   djuBetween,
   energyCost,
   anomalies,
+  inferKvaChange,
   compareOffers,
   daysAbove,
   daySplits,
@@ -322,6 +323,7 @@ async function open(source: Source, pass: string, remember: boolean) {
   try {
     const key = await unlock(source, pass);
     if (remember) await rememberKey(source, key);
+    renderLoading();
     ds = await load(source, key);
     initDefaults();
     render();
@@ -817,6 +819,7 @@ function pricesForm() {
         state.priceMode === 'trve'
           ? `<p class="hint muted">Mon contrat, période par période (date de début, offre, puissance souscrite) :</p>${rows}
         <button type="button" class="link" id="contract-add">+ Ajouter un changement (puissance, offre)</button>
+        ${kvaHint()}
         ${now ? `<p class="hint muted">Aujourd'hui : HP ${fmt4(now.hp)} €, HC ${fmt4(now.hc)} €/kWh, abonnement ${nf0.format(now.fixedYear / 12)} €/mois TTC. Chaque jour est compté au tarif en vigueur ce jour-là (CRE, open data).</p>` : ''}`
           : ''
       }
@@ -1093,8 +1096,21 @@ let settingsMsg: { ok: boolean; text: string } | null = null;
 
 function renderSettings(view: HTMLElement) {
   const m = ds!.meta;
-  const status = (on: boolean, label: string) =>
-    `<li><span class="${on ? 'ok' : 'ko'}" aria-hidden="true">${on ? '✓' : '○'}</span> ${label} <span class="muted">${on ? 'actif' : 'non configuré'}</span></li>`;
+  const src = ((m as { sources?: Record<string, { ok?: string; error?: string; message?: string }> }).sources ?? {}) as Record<
+    string,
+    { ok?: string; error?: string; message?: string }
+  >;
+  const when = (iso?: string) => (iso ? `${longDate(iso.slice(0, 10))} à ${iso.slice(11, 16)} UTC` : '');
+  const status = (on: boolean, label: string, key?: string) => {
+    const s = key ? src[key] : undefined;
+    const failing = s?.error && (!s.ok || s.error > s.ok);
+    const detail = failing
+      ? `<span class="ko-red">échec le ${when(s!.error)}${s!.message ? ` : ${esc(s!.message)}` : ''}</span>`
+      : s?.ok
+        ? `<span class="muted">dernier succès le ${when(s.ok)}</span>`
+        : `<span class="muted">${on ? 'actif' : 'non configuré'}</span>`;
+    return `<li><span class="${failing ? 'ko-red' : on ? 'ok' : 'ko'}" aria-hidden="true">${failing ? '⚠️' : on ? '✓' : '○'}</span> ${label} ${detail}</li>`;
+  };
   const groups = GROUPS.map(
     (g) => `<fieldset class="secrets" data-group="${g.id}"><legend>${esc(g.title)}</legend>
       <p class="hint muted">${esc(g.help)}</p>
@@ -1114,11 +1130,11 @@ function renderSettings(view: HTMLElement) {
   <section class="card">
     <div class="card-head"><h2>Paramètres et connexions</h2><button type="button" class="link" data-view="overview">Fermer</button></div>
     <ul class="status-list">
-      ${status(true, 'Radiateurs et chauffe-eau Intuis')}
-      ${status(!!m.weather_source, `Météo (${m.weather_source === 'netatmo' ? 'station Netatmo' : 'Open-Meteo'})`)}
-      ${status(!!(m as { has_station?: boolean }).has_station, 'Station Netatmo, tous les modules')}
-      ${status(!!m.has_linky, 'Compteur Linky')}
-      ${status(!!ds!.insights, 'Analyse IA mensuelle')}
+      ${status(true, 'Radiateurs et chauffe-eau Intuis', 'intuis')}
+      ${status(!!m.weather_source, `Météo (${m.weather_source === 'netatmo' ? 'station Netatmo' : 'Open-Meteo'})`, m.weather_source === 'netatmo' ? 'netatmo' : 'open-meteo')}
+      ${status(!!(m as { has_station?: boolean }).has_station, 'Station Netatmo, tous les modules', 'netatmo')}
+      ${status(!!m.has_linky, 'Compteur Linky', 'linky')}
+      ${status(!!ds!.insights, 'Analyse IA mensuelle', 'ia')}
     </ul>
     <p class="hint muted">Dernière collecte : ${m.updated ? esc(m.updated.replace('T', ' à ').slice(0, 21)) + ' (UTC)' : '—'}.</p>
   </section>
@@ -1244,6 +1260,21 @@ function comparison() {
   }));
   const all = compareOffers(splits, kvaAt, base, hphc, ds!.tempo.rows, ds!.tempo.days);
   return { perYear, all, scope: linky ? 'logement' : 'chauffage' };
+}
+
+/** S-2.8: propose the subscribed-power change the Linky max power reveals. */
+function kvaHint() {
+  if (!ds!.pmax.size) return '';
+  const list = contracts();
+  const first = list[0];
+  const change = inferKvaChange(ds!.pmax, first.kva);
+  if (!change) return `<p class="hint muted">Linky : votre puissance maximale n'a jamais dépassé ${first.kva} kVA.</p>`;
+  const known = list.some((c) => c.kva >= change.to && c.from <= change.firstOver);
+  if (known) return `<p class="hint muted">Linky : cohérent avec votre contrat (dépassement de ${first.kva} kVA le ${longDate(change.firstOver)}).</p>`;
+  return `<div class="notice"><p>Votre Linky a dépassé <strong>${change.from} kVA</strong> pour la première fois le <strong>${longDate(change.firstOver)}</strong> : le compteur coupe au-delà de la puissance souscrite, vous étiez donc déjà en <strong>${change.to} kVA</strong> ce jour-là${
+    change.lastWithin ? ` (passage entre le ${longDate(change.lastWithin)} et le ${longDate(change.firstOver)}, ou plus tôt)` : ''
+  }.</p>
+    <button type="button" class="primary small" id="kva-apply" data-day="${change.firstOver}" data-kva="${change.to}">Ajouter ce changement à mon contrat</button></div>`;
 }
 
 function simWarning() {
@@ -1571,6 +1602,14 @@ app.addEventListener('click', async (e) => {
       return `Collecte lancée${backfill ? ' (tout l\'historique)' : ''}. Revenez dans quelques minutes.`;
     });
   }
+  if (btn.id === 'kva-apply') {
+    const list = contracts().map((c) => ({ ...c }));
+    const prev = periodAt(list, btn.dataset.day!)!;
+    list.push({ from: btn.dataset.day!, offer: prev.offer, kva: Number(btn.dataset.kva) });
+    setState({ contracts: list.sort((a, b) => (a.from < b.from ? -1 : 1)) });
+    document.querySelector<HTMLDetailsElement>('.menu')?.setAttribute('open', '');
+    return;
+  }
   if (btn.id === 'contract-add' || btn.dataset.contractDel !== undefined) {
     const list = contracts().map((c) => ({ ...c }));
     if (btn.id === 'contract-add') list.push({ ...list[list.length - 1], from: lastDay() });
@@ -1649,10 +1688,20 @@ app.addEventListener('toggle', (e) => {
 window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => ds && render());
 
 // ------------------------------------------------------------------ boot
+function renderLoading() {
+  disposeAll(app);
+  app.innerHTML = `<div class="skeleton" aria-busy="true" aria-live="polite">
+    <span class="sr-only">Chargement et déchiffrement des données…</span>
+    <div class="sk sk-title"></div><div class="sk sk-card"></div>
+    <div class="kpis"><div class="sk sk-kpi"></div><div class="sk sk-kpi"></div><div class="sk sk-kpi"></div></div>
+    <div class="sk sk-chart"></div></div>`;
+}
+
 async function start() {
   try {
     const key = await recallKey('data');
     if (key) {
+      renderLoading();
       ds = await load('data', key);
       initDefaults();
       return render();

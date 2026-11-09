@@ -154,3 +154,18 @@ function addDaysTest(day: string, n: number) {
   d.setUTCDate(d.getUTCDate() + n);
   return d.toISOString().slice(0, 10);
 }
+
+import { inferKvaChange } from './analysis';
+
+describe('subscribed power inferred from Linky', () => {
+  it('finds the first day above the declared power and the new standard power', () => {
+    const pmax = new Map([
+      ['2024-01-01', 8.7],
+      ['2024-01-02', 8.95],
+      ['2024-02-10', 10.4],
+      ['2024-12-01', 11.6],
+    ]);
+    expect(inferKvaChange(pmax, 9)).toEqual({ from: 9, to: 12, firstOver: '2024-02-10', lastWithin: '2024-01-02' });
+    expect(inferKvaChange(pmax, 12)).toBeNull();
+  });
+});

@@ -48,6 +48,20 @@ export function escapeHtml(s: string): string {
 
 const observed = new WeakSet<HTMLElement>();
 
+/** S-7.2: a sentence a screen reader can read instead of the canvas. */
+function describe(el: HTMLElement, labels: string[], series: Series[], unit = 'kWh') {
+  const base = el.getAttribute('data-label') ?? el.getAttribute('aria-label') ?? 'Graphique';
+  el.setAttribute('data-label', base);
+  const parts = series.slice(0, 6).map((s) => {
+    const vals = s.data.map((v, i) => [v, i] as const).filter(([v]) => v !== null) as [number, number][];
+    if (!vals.length) return `${s.name} : pas de donnée`;
+    const [maxV, maxI] = vals.reduce((a, b) => (b[0] > a[0] ? b : a));
+    const sum = vals.reduce((a, [v]) => a + v, 0);
+    return `${s.name} : total ${nf0.format(sum)} ${unit}, maximum ${nf1.format(maxV)} ${unit} (${labels[maxI]})`;
+  });
+  el.setAttribute('aria-label', `${base}, de ${labels[0] ?? '—'} à ${labels[labels.length - 1] ?? '—'}. ${parts.join(' ; ')}.`);
+}
+
 function instance(el: HTMLElement): echarts.ECharts {
   const chart = echarts.getInstanceByDom(el) ?? echarts.init(el);
   if (!observed.has(el)) {
@@ -133,6 +147,7 @@ export function barChart(
   const surface = cssVar('--surface-1');
   const n = opts.series.length;
   const chart = instance(el);
+  describe(el, opts.labels, opts.series, opts.unit);
   chart.setOption(
     {
       animationDuration: 300,
@@ -166,6 +181,7 @@ export function lineChart(
   opts: { labels: string[]; series: Series[]; price: number | null; emphasize?: string; unit?: string },
 ) {
   const chart = instance(el);
+  describe(el, opts.labels, opts.series, opts.unit);
   chart.setOption(
     {
       animationDuration: 300,

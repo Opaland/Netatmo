@@ -425,3 +425,16 @@ def test_linky_reads_the_2026_enedis_format(tmp_path):
     collect(store, "tok", "12345678901234", "2024-01-01", "Europe/Paris", http=http)
     assert store.doc("linky")["daily"] == {"2024-01-01": 23500.0}
     assert store.doc("linky")["pmax"]["2024-01-01"] == 8.12
+
+
+def test_sources_keep_last_success_and_failure():
+    from collector.__main__ import Sources
+
+    s = Sources({"linky": {"ok": "2026-01-01T00:00:00+00:00"}})
+    s.ok("intuis")
+    s.failed("linky", "HTTP 401 " + "x" * 300)
+    assert s.state["intuis"]["ok"] == s.now
+    assert s.state["linky"]["ok"] == "2026-01-01T00:00:00+00:00"
+    assert s.state["linky"]["error"] == s.now and len(s.state["linky"]["message"]) == 160
+    s.ok("linky")
+    assert "message" not in s.state["linky"]

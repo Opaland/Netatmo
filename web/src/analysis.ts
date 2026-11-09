@@ -509,3 +509,29 @@ export function daysAbove(daily: Record<string, (number | null)[]>, col: number,
   for (const [d, v] of Object.entries(daily)) if (d >= from && d <= to && (v[col] ?? -Infinity) > threshold) n++;
   return n;
 }
+
+// ------------------------------------------------------------------ subscribed power inferred from Linky (S-2.8)
+export const KVA_STEPS = [3, 6, 9, 12, 15, 18, 24, 30, 36];
+
+export interface KvaChange {
+  from: number; // kVA before
+  to: number; // smallest standard power compatible with what was drawn after
+  firstOver: string; // first day the max power exceeded `from`: the change happened on or before it
+  lastWithin: string | null; // last day before that one with data (change happened after it, if the old power was really `from`)
+}
+
+/**
+ * The Linky meter cuts at the subscribed power (plus a small tolerance), so the first
+ * day the daily max power exceeds the declared power bounds the date of an upgrade.
+ * Returns null when the data never exceeds `declared`.
+ */
+export function inferKvaChange(pmax: Map<string, number>, declared: number, tolerance = 0.3): KvaChange | null {
+  const days = [...pmax.keys()].sort();
+  const first = days.find((d) => pmax.get(d)! > declared + tolerance);
+  if (!first) return null;
+  const after = days.filter((d) => d >= first).map((d) => pmax.get(d)!);
+  const peak = Math.max(...after);
+  const to = KVA_STEPS.find((k) => k >= peak - tolerance) ?? 36;
+  const before = days.filter((d) => d < first);
+  return { from: declared, to, firstOver: first, lastWithin: before.length ? before[before.length - 1] : null };
+}
