@@ -7,6 +7,7 @@ import { ds, rerender, state } from '../app';
 import { barChart, cssVar, gridHeatmap } from '../charts';
 import { belowThreshold, hcVerdict, hourByMonth, peakExtraCost, waterHeaterHc } from '../checks';
 import { activeRooms, esc, fmtEur, fmtKwh, lastDay, nf0, offCol, priceAt, series, table, tableToggle } from '../ui';
+import { html } from '../trusted';
 
 const LS_THRESHOLD = 'intuis-history:hc-threshold';
 function threshold(): number {
@@ -135,7 +136,7 @@ export function drawWaterHeater(hourly: Hourly | null) {
   if (!zone || !hourly) return;
   const g = hourByMonth(hourly, new Set(rooms), from, to);
   if (!g.months.length) {
-    zone.innerHTML = '<p class="hint muted">Pas de données horaires pour le chauffe-eau.</p>';
+    zone.innerHTML = html('<p class="hint muted">Pas de données horaires pour le chauffe-eau.</p>');
     return;
   }
   // Hours carrying most of the energy, as a quick reading of the schedule.
@@ -147,7 +148,7 @@ export function drawWaterHeater(hourly: Hourly | null) {
     .filter((_, i, arr) => arr.slice(0, i).reduce((s, x) => s + x[0], 0) < all * 0.8)
     .map(([, h]) => h)
     .sort((a, b) => a - b);
-  zone.innerHTML = `<p class="hint">80 % de l'énergie passe entre ces heures : <strong>${top.map((h) => `${h} h`).join(', ')}</strong>. Si des heures de journée apparaissent, le chauffe-eau chauffe hors des heures creuses.</p>
+  zone.innerHTML = html`<p class="hint">80 % de l'énergie passe entre ces heures : <strong>${top.map((h) => `${h} h`).join(', ')}</strong>. Si des heures de journée apparaissent, le chauffe-eau chauffe hors des heures creuses.</p>
     <div class="chart" id="wh-hour-grid" style="height:${Math.max(200, 26 * g.months.length + 60)}px" role="img" aria-label="Consommation du chauffe-eau par heure et par mois"></div>`;
   gridHeatmap(document.getElementById('wh-hour-grid')!, {
     xLabels: Array.from({ length: 24 }, (_, h) => `${h}h`),

@@ -945,3 +945,9 @@ body.is-simple .kpis {
 @media (prefers-reduced-motion: reduce) {
   .sk { animation: none; }
 }
+
+/* S-8.10: SHA-256 of the deployed manifest (Paramètres) */
+code.hash {
+  word-break: break-all;
+  font-size: 0.85em;
+}

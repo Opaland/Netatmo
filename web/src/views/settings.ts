@@ -18,6 +18,8 @@ import {
   validate,
 } from '../settings';
 import { contractInfo, esc, longDate, table } from '../ui';
+import { html } from '../trusted';
+import { showBuild } from '../build';
 
 let settingsRepo = repoFromLocation() ?? 'Opaland/Netatmo';
 let configured: Set<string> | null = null;
@@ -60,7 +62,7 @@ export function renderSettings(view: HTMLElement) {
         .join('')}
     </fieldset>`,
   ).join('');
-  view.innerHTML = `
+  view.innerHTML = html`
   <section class="card">
     <div class="card-head"><h2>Paramètres et connexions</h2><button type="button" class="link" data-view="overview">Fermer</button></div>
     <ul class="status-list">
@@ -134,7 +136,9 @@ export function renderSettings(view: HTMLElement) {
       99,
     )}
   </section>
+  <section class="card" id="build-info" aria-live="polite"></section>
   ${settingsMsg ? `<p class="settings-msg ${settingsMsg.ok ? 'ok' : 'ko'}" role="status">${esc(settingsMsg.text)}</p>` : ''}`;
+  void showBuild(document.getElementById('build-info'));
 }
 
 /** S-12.1: the contract used on this device, and the button that shares it with the others. */

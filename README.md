@@ -330,6 +330,41 @@ docs/               notes sur l'API, étude de l'existant, feuille de route, rè
 - Données : AES-256-GCM, clé dérivée par PBKDF2-SHA256 (600 000 itérations). Le sel est public
   (`data/keyinfo.json`), c'est normal.
 - Le site ne contacte aucun service tiers et n'envoie rien : il lit les fichiers chiffrés du dépôt.
+- Politique de sécurité du contenu (CSP) stricte, dans `web/index.html`, avec **Trusted Types** :
+  le navigateur refuse toute chaîne brute affectée à `innerHTML`. Tout le HTML de l'application passe
+  par une seule politique nommée (`web/src/trusted.ts`), qui refuse en plus le balisage exécutable
+  (`<script>`, gestionnaires `on…=`, `javascript:`). La politique `default` n'accepte que la chaîne vide
+  (ECharts vide ses infobulles) et le service worker du site. Le test de bout en bout échoue à la
+  moindre violation de la CSP.
+
+### Vérifier le site publié
+
+Chaque déploiement publie, avec le site :
+
+- `SHA256SUMS` : l'empreinte SHA-256 de chaque fichier servi (code et données chiffrées) ;
+- `build.json` : le commit déployé, la date, le numéro du déploiement et l'empreinte de `SHA256SUMS`,
+  affichés dans **Paramètres → Version déployée** ;
+- une **attestation de provenance GitHub** (SLSA, signée via Sigstore) pour `SHA256SUMS`,
+  `build.json`, chacun des fichiers listés et l'artefact Pages (`artifact.tar`).
+
+Pour vérifier, avec [`gh`](https://cli.github.com/) (remplacer l'adresse par celle de votre site) :
+
+```bash
+SITE=https://opaland.github.io/Netatmo
+mkdir verif && cd verif
+curl -fsSO "$SITE/SHA256SUMS"
+sha256sum SHA256SUMS                       # = l'empreinte affichée dans Paramètres
+gh attestation verify SHA256SUMS -R Opaland/Netatmo   # construit par le workflow de ce dépôt
+# Télécharger chaque fichier servi et comparer à son empreinte :
+while read -r _ f; do mkdir -p "$(dirname "$f")"; curl -fsS "$SITE/$f" -o "$f"; done < SHA256SUMS
+sha256sum -c SHA256SUMS                    # chaque ligne doit finir par « OK »
+```
+
+`gh attestation verify` indique aussi le commit et le workflow (`deploy.yml`) qui ont produit le
+fichier ; il fonctionne sur n'importe quel fichier téléchargé du site (par exemple
+`gh attestation verify index.html -R Opaland/Netatmo`). L'artefact Pages lui-même se télécharge depuis
+le déploiement (onglet Actions, conservé un jour) : décompresser le zip puis
+`gh attestation verify artifact.tar -R Opaland/Netatmo`. Le déploiement ne crée pas de release GitHub.
 
 ## Gestion du projet
 

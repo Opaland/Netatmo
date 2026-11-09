@@ -19,6 +19,7 @@ import {
 import { loadCurve, loadHourly } from '../data';
 import { periodAt } from '../offers';
 import { activeRooms, catColor, contracts, fmtEur, longDate, nf0, priceAt, series } from '../ui';
+import { html } from '../trusted';
 
 let curve: Curve | null = null;
 let hourly: Hourly | null = null;
@@ -57,7 +58,7 @@ export function renderCurveCard(card: HTMLElement) {
   if (!ds) return;
   if (!curve) {
     card.hidden = false;
-    card.innerHTML = '<div class="card-head"><h2>Courbe de charge <small class="muted">Linky, pas de 30 min</small></h2></div><p class="hint muted">Chargement de la courbe de charge…</p>';
+    card.innerHTML = html('<div class="card-head"><h2>Courbe de charge <small class="muted">Linky, pas de 30 min</small></h2></div><p class="hint muted">Chargement de la courbe de charge…</p>');
     loading ??= Promise.all([loadCurve(ds), loadHourly(ds).catch(() => null)]).then(([c, h]) => {
       curve = c;
       hourly = h;
@@ -79,7 +80,7 @@ export function renderCurveCard(card: HTMLElement) {
   const first = [...curve.keys()].reduce((a, b) => (b < a ? b : a)).slice(0, 10);
   if (!pickedDay || pickedDay < first || pickedDay > last) pickedDay = last;
   card.hidden = false;
-  card.innerHTML = `
+  card.innerHTML = html`
     <div class="card-head">
       <h2>Courbe de charge <small class="muted">Linky, puissance moyenne par demi-heure</small></h2>
       <div class="controls">
@@ -161,9 +162,10 @@ function drawTypical(from: string, last: string, days: Set<string>) {
     'aria-label',
     `Journée type du logement (${group === 'weekday' ? 'semaine' : 'week-end'}), puissance moyenne par demi-heure : ${kw(mean)} en moyenne, maximum ${kw(maxW)} à ${SLOTS[maxI]}.`,
   );
-  document.getElementById('curve-summary')!.innerHTML =
+  document.getElementById('curve-summary')!.innerHTML = html(
     `Journée type sur les 30 jours jusqu'au ${longDate(last)} (${n} ${group === 'weekday' ? 'jours de semaine' : 'jours de week-end'}) : ${kw(mean)} en moyenne, pointe à <strong>${SLOTS[maxI]}</strong> (${kw(maxW)}).` +
-    (heat || water ? ' Les aplats montrent ce que mesurent les radiateurs et le chauffe-eau ; le reste, ce sont les autres usages.' : '');
+    (heat || water ? ' Les aplats montrent ce que mesurent les radiateurs et le chauffe-eau ; le reste, ce sont les autres usages.' : ''),
+  );
 }
 
 function drawTalon(from: string, last: string) {
@@ -174,12 +176,12 @@ function drawTalon(from: string, last: string) {
   const t = net ?? talon(curve!, tz, from, last);
   const el = document.getElementById('curve-talon')!;
   if (!t) {
-    el.innerHTML = '<span class="muted">Pas assez de mesures de nuit pour l\'estimer.</span>';
+    el.innerHTML = html('<span class="muted">Pas assez de mesures de nuit pour l\'estimer.</span>');
     return;
   }
   const kwhYear = (t.watts * 8760) / 1000;
   const price = flatPrice(last);
-  el.innerHTML = `≈ <strong>${nf0.format(t.watts)} W</strong> en permanence, soit ≈ ${nf0.format(kwhYear)} kWh par an${
+  el.innerHTML = html`≈ <strong>${nf0.format(t.watts)} W</strong> en permanence, soit ≈ ${nf0.format(kwhYear)} kWh par an${
     price ? ` et ≈ <strong>${fmtEur(kwhYear * price)} par an</strong> au prix actuel` : ''
   }. C'est ce que le logement consomme quand tout dort (box, réfrigérateur, VMC, veilles) : le niveau bas des nuits entre 1 h et 5 h sur 30 jours (10<sup>e</sup> centile)${
     net ? ', radiateurs et chauffe-eau déduits' : ''
@@ -195,7 +197,7 @@ function drawPeak(last: string) {
   const day = p.key.slice(0, 10);
   const kva = periodAt(contracts(), day)?.kva;
   const span = [...curve!.keys()].some((k) => k.slice(0, 10) <= from) ? 'sur 12 mois' : 'depuis le début de la courbe';
-  el.innerHTML = `${span[0].toUpperCase()}${span.slice(1)} : <strong>${kw(p.watts)}</strong> en moyenne le ${longDate(day)} de ${p.key.slice(11, 16)} à ${
+  el.innerHTML = html`${span[0].toUpperCase()}${span.slice(1)} : <strong>${kw(p.watts)}</strong> en moyenne le ${longDate(day)} de ${p.key.slice(11, 16)} à ${
     SLOTS[(SLOTS.indexOf(p.key.slice(11, 16)) + 1) % 48]
   }${kva ? `, pour ${kva} kVA souscrits (${nf0.format((p.watts / 1000 / kva) * 100)} %)` : ''}. Une moyenne sur 30 minutes lisse les appels brefs (four, bouilloire) : pour le disjoncteur, la puissance maximale du jour ci-dessus reste la référence.`;
 }

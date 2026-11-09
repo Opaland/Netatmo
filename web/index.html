@@ -13,10 +13,12 @@
     <meta name="apple-mobile-web-app-title" content="Énergie" />
     <meta name="robots" content="noindex" />
     <!-- GitHub Pages cannot send HTTP headers: the policy lives here. Only this site and the
-         GitHub API (Paramètres) are reachable; no inline script, no third-party script. -->
+         GitHub API (Paramètres) are reachable; no inline script, no third-party script.
+         S-8.9: Trusted Types. Every HTML sink goes through the `energie` policy (src/trusted.ts);
+         `default` only lets ECharts empty its tooltip. Any other policy name is refused. -->
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' https://api.github.com; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'"
+      content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' https://api.github.com; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; require-trusted-types-for 'script'; trusted-types energie default"
     />
     <meta name="referrer" content="no-referrer" />
     <link rel="icon" href="icons/icon.svg" type="image/svg+xml" />

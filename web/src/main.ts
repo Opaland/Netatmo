@@ -15,6 +15,7 @@ import * as prices from './views/prices';
 import * as report from './views/report';
 import * as rooms from './views/rooms';
 import * as settings from './views/settings';
+import { html } from './trusted';
 import './style.css';
 
 // ------------------------------------------------------------------ shell
@@ -42,7 +43,7 @@ function render() {
     ['analyse', 'Analyse'],
   ];
   const roomsCount = state.rooms ? state.rooms.length : activeRooms().length;
-  app.innerHTML = `
+  app.innerHTML = html`
   <header class="top">
     <div class="title">
       <h1>${esc(meta.home.name)}${ds.source === 'demo' ? ' <span class="badge">démo</span>' : ''}</h1>
@@ -87,7 +88,7 @@ function render() {
   const view = document.getElementById('view')!;
   const records = filtered();
   if (!records.length && state.view !== 'settings') {
-    view.innerHTML = `<p class="empty">Aucune donnée pour cette sélection.</p>`;
+    view.innerHTML = html`<p class="empty">Aucune donnée pour cette sélection.</p>`;
   } else if (state.view === 'overview') overview.renderOverview(view, records);
   else if (state.view === 'compare') compare.renderCompare(view, records);
   else if (state.view === 'analyse') analyse.renderAnalyse(view, records);

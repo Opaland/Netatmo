@@ -33,6 +33,7 @@ import {
   tableToggle,
   yearColor,
 } from '../ui';
+import { html } from '../trusted';
 
 export function renderCompare(view: HTMLElement, records: DayRecord[]) {
   const years = ds!.meta.years;
@@ -71,7 +72,7 @@ export function renderCompare(view: HTMLElement, records: DayRecord[]) {
       ];
     });
 
-  view.innerHTML = `
+  view.innerHTML = html`
   <section class="card">
     <div class="card-head">
       <h2>Comparer les années <small class="muted">kWh</small></h2>
@@ -122,7 +123,7 @@ export function renderCompare(view: HTMLElement, records: DayRecord[]) {
     <p class="hint muted">L'évolution de l'année en cours est calculée à date : du 1er janvier au ${Number(last.slice(8, 10))} ${MONTHS_LONG[Number(last.slice(5, 7)) - 1]} des deux années.</p>
   </section>`;
 
-  view.insertAdjacentHTML('beforeend', comparatorCard());
+  view.insertAdjacentHTML('beforeend', html(comparatorCard()));
   drawComparator();
   const el = document.getElementById('cmp-chart')!;
   let ser: Series[] = [];
@@ -190,12 +191,12 @@ export function renderCompare(view: HTMLElement, records: DayRecord[]) {
     lineChart(el, { labels, series: ser, price: avgPrice() });
   }
   const step = state.compareMode === 'cumul' ? 7 : 1;
-  document.getElementById('cmp-table')!.innerHTML = tableToggle(
+  document.getElementById('cmp-table')!.innerHTML = html(tableToggle(
     table(
       ['', ...ser.map((s) => s.name)],
       labels.filter((_, i) => i % step === 0).map((l, j) => [esc(l), ...ser.map((s) => s.data[j * step] ?? '—')]),
     ),
-  );
+  ));
 }
 
 // ------------------------------------------------------------------ EDF offer comparator
@@ -269,12 +270,12 @@ function drawComparator() {
     { name: 'Tempo', color: series(2), data: rows.map((p) => cost(p.r, 'tempo')) },
   ];
   barChart(el, { labels: rows.map((p) => `${p.y}${p.r.hphc.days < 360 ? ` (${p.r.hphc.days} j)` : ''}`), series: ser, stacked: false, price: null, unit: '€' });
-  document.getElementById('offers-table')!.innerHTML = tableToggle(
+  document.getElementById('offers-table')!.innerHTML = html(tableToggle(
     table(
       ['Année', 'Base', 'HP / HC', 'Tempo'],
       rows.map((p) => [String(p.y), fmtEur(cost(p.r, 'base')), fmtEur(cost(p.r, 'hphc')), fmtEur(cost(p.r, 'tempo'))]),
     ),
-  );
+  ));
 }
 
 // ------------------------------------------------------------------ events
