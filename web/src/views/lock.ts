@@ -17,7 +17,7 @@ export function renderLock(message = '', hasRealData = true) {
           ? `<form id="unlock">
         <label for="pass">Phrase de passe</label>
         <input id="pass" type="password" autocomplete="current-password" required autofocus>
-        <label class="check"><input id="remember" type="checkbox" checked> Rester connecté sur cet appareil</label>
+        <label class="check"><input id="remember" type="checkbox" checked> Rester connecté sur cet appareil (30 jours au plus)</label>
         <button class="primary" type="submit">Déverrouiller</button>
       </form>`
           : `<p class="notice">Aucune donnée n'a encore été collectée. Suivez le guide d'installation du README, ou essayez la démo.</p>`

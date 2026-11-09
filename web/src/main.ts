@@ -1,11 +1,12 @@
 // Shell: header, tabs, menu and filters; view router; delegated events; boot.
 // Each view lives in src/views/, shared helpers in src/ui.ts, state in src/app.ts.
 import { CATEGORY_LABEL, toCsv } from './aggregate';
-import { type State, type View, activeRooms, app, ds, setDataset, setRenderer, setState, state } from './app';
+import { type State, type View, activeRooms, app, ds, onDatasetLoaded, setDataset, setRenderer, setState, state } from './app';
 import { disposeAll } from './charts';
 import { WrongPassphrase } from './crypto';
 import { NoData, forgetKeys, load, recallKey } from './data';
-import { esc, filtered, lastDay, longDate, roomColor, seg } from './ui';
+import { IdleLock, LOCK_CHOICES, idleSince } from './session';
+import { esc, filtered, keepMenuOpen, lastDay, longDate, roomColor, seg } from './ui';
 import * as analyse from './views/analyse';
 import * as compare from './views/compare';
 import { renderLoading, renderLock } from './views/lock';
@@ -57,6 +58,9 @@ function render() {
         <button type="button" data-view="report">${icon('report')} Rapport annuel imprimable</button>
         <button type="button" data-view="settings">${icon('settings')} Paramètres et connexions</button>
         <label class="check"><input type="checkbox" data-toggle="simple" ${state.simple ? 'checked' : ''}> Mode simple (grands caractères, l'essentiel)</label>
+        <label class="lock-after">Verrouiller sans activité
+          <select data-lock-after>${LOCK_CHOICES.map((m) => `<option value="${m}" ${m === state.lockAfter ? 'selected' : ''}>${m ? (m < 60 ? `après ${m} min` : `après ${m / 60} h`) : 'jamais sur cet appareil'}</option>`).join('')}</select>
+        </label>
         <button type="button" id="export">Exporter en CSV (filtres appliqués)</button>
         <button type="button" id="lock">${ds.source === 'demo' ? 'Quitter la démo' : 'Verrouiller'}</button>
       </div>
@@ -128,18 +132,18 @@ app.addEventListener('click', async (e) => {
     a.click();
     setTimeout(() => URL.revokeObjectURL(a.href), 1000);
   }
-  if (btn.id === 'lock') {
-    settings.forgetToken();
-    if (ds.source === 'data') await forgetKeys();
-    setDataset(null);
-    start();
-  }
+  if (btn.id === 'lock') await lockApp();
 });
 
 app.addEventListener('change', (e) => {
   const t = e.target as HTMLInputElement | HTMLSelectElement;
   if (!ds) return;
   if (changeHandlers.some((h) => h(t))) return;
+  if (t.dataset.lockAfter !== undefined) {
+    setState({ lockAfter: Number(t.value) });
+    idle.configure(state.lockAfter);
+    return keepMenuOpen();
+  }
   if (t.dataset.toggle === 'simple') return setState({ simple: (t as HTMLInputElement).checked, view: 'overview' });
   if (t instanceof HTMLInputElement && t.dataset.room) {
     const all = activeRooms().map((r) => r.id);
@@ -161,10 +165,27 @@ app.addEventListener('toggle', (e) => {
 // Redraw charts with the right colours when the OS theme flips.
 window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => ds && render());
 
+// ------------------------------------------------------------------ lock (S-8.11)
+/** Forget the decrypted data, the remembered key and the GitHub token, then show the lock screen. */
+async function lockApp() {
+  idle.stop();
+  settings.forgetToken();
+  if (ds?.source !== 'demo') await forgetKeys();
+  setDataset(null);
+  await start();
+}
+const idle = new IdleLock(() => void lockApp());
+onDatasetLoaded(() => idle.start(state.lockAfter));
+
 // ------------------------------------------------------------------ boot
 async function start() {
   try {
-    const key = await recallKey('data');
+    let key = await recallKey('data');
+    // Away longer than the inactivity delay (tab closed, phone asleep): the key is forgotten.
+    if (key && idleSince(state.lockAfter)) {
+      await forgetKeys();
+      key = null;
+    }
     if (key) {
       renderLoading();
       setDataset(await load('data', key));

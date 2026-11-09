@@ -4,7 +4,9 @@
 import type { Category, Granularity } from './aggregate';
 import { NO_PRICES, type Prices } from './analysis';
 import type { Dataset } from './data';
+import { sameContract, validContract } from './contract';
 import type { ContractPeriod } from './offers';
+import { DEFAULT_LOCK_MINUTES } from './session';
 
 export type View = 'overview' | 'compare' | 'rooms' | 'analyse' | 'report' | 'settings';
 export type CatFilter = 'all' | Category;
@@ -24,6 +26,7 @@ export interface State {
   priceMode: 'trve' | 'manual';
   kva: number; // legacy (v1.1), migrated to contracts
   contracts: ContractPeriod[];
+  contractLocalEdit: boolean; // S-12.1: edited here while a shared contract exists
   climate: boolean;
   analyseYear: number | null;
   tempRoom: string | null;
@@ -32,6 +35,7 @@ export interface State {
   simKva: number | null; // comparator: simulate another subscribed power
   simple: boolean; // simple mode (S-7.1)
   showTables: boolean;
+  lockAfter: number; // S-8.11: minutes without interaction before locking, 0 = never
 }
 
 export const DEFAULT: State = {
@@ -49,6 +53,7 @@ export const DEFAULT: State = {
   priceMode: 'trve',
   kva: 9,
   contracts: [],
+  contractLocalEdit: false,
   climate: false,
   analyseYear: null,
   tempRoom: null,
@@ -57,6 +62,7 @@ export const DEFAULT: State = {
   simKva: null,
   simple: false,
   showTables: false,
+  lockAfter: DEFAULT_LOCK_MINUTES,
 };
 
 const LS_KEY = 'intuis-history:state';
@@ -132,6 +138,11 @@ function initDefaults() {
   if (!state.analyseYear || !years.includes(state.analyseYear)) patch.analyseYear = lastYear;
   if (!state.reportYear || !years.includes(state.reportYear)) patch.reportYear = years.length > 1 ? years[years.length - 2] : lastYear;
   if (!ds!.weather) patch.climate = false;
+  // S-12.1: once the shared contract caught up with this device's edit, follow it again.
+  const shared = validContract(ds!.meta.contract);
+  if (state.contractLocalEdit && (!shared || (state.priceMode === 'trve' && sameContract(shared, state.contracts)))) {
+    patch.contractLocalEdit = false;
+  }
   state = { ...state, ...patch };
 }
 

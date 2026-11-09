@@ -5,6 +5,7 @@ import { loadOffers, loadTempo } from './offers';
 import { type Hourly, type TariffMap, type TempoRow, type TrveRow, type Weather, parseTrveCsv } from './analysis';
 import type { Coverage } from './checks';
 import { type Envelope, type KeyInfo, decryptEnvelope, deriveKey } from './crypto';
+import { type RememberedKey, freshKey } from './session';
 
 export type Source = 'data' | 'demo';
 
@@ -200,17 +201,23 @@ async function tx<T>(mode: IDBTransactionMode, fn: (s: IDBObjectStore) => IDBReq
   });
 }
 
-export async function rememberKey(source: Source, key: CryptoKey): Promise<void> {
+/** S-8.11: the key is kept with the date it was remembered (REMEMBER_DAYS at most). */
+export async function rememberKey(source: Source, key: CryptoKey, now = Date.now()): Promise<void> {
   try {
-    await tx('readwrite', (s) => s.put(key, source));
+    const entry: RememberedKey = { key, at: now };
+    await tx('readwrite', (s) => s.put(entry, source));
   } catch {
     /* private browsing: just don't remember */
   }
 }
 
-export async function recallKey(source: Source): Promise<CryptoKey | null> {
+/** The remembered key, or null; an expired (or undated, v1.2) key is forgotten. */
+export async function recallKey(source: Source, now = Date.now()): Promise<CryptoKey | null> {
   try {
-    return ((await tx('readonly', (s) => s.get(source))) as CryptoKey | undefined) ?? null;
+    const entry = await tx('readonly', (s) => s.get(source));
+    const key = freshKey(entry, now);
+    if (!key && entry !== undefined) await tx('readwrite', (s) => s.delete(source));
+    return key;
   } catch {
     return null;
   }
