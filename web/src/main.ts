@@ -62,6 +62,7 @@ function render() {
           <select data-lock-after>${LOCK_CHOICES.map((m) => `<option value="${m}" ${m === state.lockAfter ? 'selected' : ''}>${m ? (m < 60 ? `après ${m} min` : `après ${m / 60} h`) : 'jamais sur cet appareil'}</option>`).join('')}</select>
         </label>
         <button type="button" id="export">Exporter en CSV (filtres appliqués)</button>
+        <button type="button" id="backup" title="Tous les fichiers chiffrés en un seul, toujours chiffrés : à garder hors de GitHub">Télécharger une sauvegarde chiffrée</button>
         <button type="button" id="lock">${ds.source === 'demo' ? 'Quitter la démo' : 'Verrouiller'}</button>
       </div>
     </details>
@@ -131,6 +132,19 @@ app.addEventListener('click', async (e) => {
     a.download = `consommation-${lastDay()}.csv`;
     a.click();
     setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  }
+  if (btn.id === 'backup') {
+    // S-1.15: lazy module, the envelopes are copied as served (never decrypted).
+    const label = btn.textContent;
+    btn.textContent = 'Sauvegarde en cours…';
+    try {
+      const { downloadBackup } = await import('./backup');
+      const n = await downloadBackup(ds.source, ds.meta);
+      btn.textContent = `Sauvegarde téléchargée (${n} fichiers)`;
+    } catch (err) {
+      btn.textContent = `Sauvegarde impossible : ${err instanceof Error ? err.message : err}`;
+    }
+    setTimeout(() => (btn.textContent = label), 4000);
   }
   if (btn.id === 'lock') await lockApp();
 });

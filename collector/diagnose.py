@@ -11,6 +11,7 @@ import time
 
 from .api import ApiError, IntuisClient
 from .model import parse_measure_blocks
+from .schema import FormatError, safe_keys
 
 TYPES = [
     "sum_energy_elec",
@@ -27,7 +28,37 @@ def _nonzero_days(blocks: object) -> int:
     return sum(1 for _ts, v in parse_measure_blocks(blocks, DAY) if v)
 
 
-def run(client: IntuisClient, days: int = 60) -> None:
+# Window-open detection (#162): names this field may take, to check on a real run.
+OPEN_WINDOW_KEYS = ("open_window", "window_open", "open_window_detected")
+
+
+def status_keys(payload: object) -> dict[str, list[str]]:
+    """Field NAMES of the rooms and modules of a homestatus response: sorted, deduplicated,
+    identifiers only. Never a value, an id or a name (public log)."""
+    home = (payload.get("body", {}) if isinstance(payload, dict) else {}).get("home", {})
+    home = home if isinstance(home, dict) else {}
+    out = {}
+    for part in ("rooms", "modules"):
+        items = home.get(part) or []
+        out[part] = safe_keys(k for x in items if isinstance(x, dict) for k in x)
+    return out
+
+
+def print_status_keys(client: IntuisClient, home_id: str) -> None:
+    """#162: does /syncapi/v1/homestatus expose open_window for Intuis radiators?"""
+    print("\nChamps de /syncapi/v1/homestatus (noms seulement) :")
+    try:
+        keys = status_keys(client.homestatus(home_id))
+    except (ApiError, FormatError) as err:
+        print(f"  erreur : {str(err)[:80]}")
+        return
+    for part, label in (("rooms", "pièces"), ("modules", "modules")):
+        print(f"  {label:<8}: {', '.join(keys[part]) or '(aucun)'}")
+    found = [k for k in OPEN_WINDOW_KEYS if k in keys["rooms"] or k in keys["modules"]]
+    print(f"  fenêtre ouverte : {', '.join(found) + ' présent' if found else 'aucun champ open_window'}")
+
+
+def run(client: IntuisClient, days: int = 60, status_only: bool = False) -> None:
     raw = client.homesdata()
     homes = raw.get("body", {}).get("homes", [])
     print(f"Maisons : {len(homes)}")
@@ -37,6 +68,9 @@ def run(client: IntuisClient, days: int = 60) -> None:
         rooms = h.get("rooms", [])
         room_of = {mid: f"P{ri}" for ri, r in enumerate(rooms) for mid in r.get("module_ids", [])}
         print(f"\n== Maison {hi} : {len(rooms)} pièces, {len(modules)} modules ==")
+        print_status_keys(client, h["id"])
+        if status_only:
+            continue
         print("Champs d'un module :", sorted({k for m in modules for k in m}))
         for mi, m in enumerate(modules):
             extra = {k: m[k] for k in ("subtype", "appliance_type", "muller_type", "category") if k in m}

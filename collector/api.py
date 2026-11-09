@@ -14,6 +14,8 @@ from typing import Any
 
 import httpx
 
+from . import schema
+from .budget import METER
 from .config import Settings
 
 log = logging.getLogger(__name__)
@@ -48,7 +50,8 @@ class IntuisClient:
             **data,
         }
         try:
-            resp = self.http.post(f"{self.base}/oauth2/token", data=payload)
+            with METER.call("intuis"):
+                resp = self.http.post(f"{self.base}/oauth2/token", data=payload)
         except httpx.TransportError as exc:
             if self.base != FALLBACK_API_BASE:
                 log.warning("%s injoignable (%s), essai de %s", self.base, exc, FALLBACK_API_BASE)
@@ -58,7 +61,7 @@ class IntuisClient:
         if resp.status_code != 200:
             # Never echo the request (it holds the password); the body only has an error code.
             raise ApiError(f"Authentification refusée (HTTP {resp.status_code}) : {resp.text[:200]}")
-        body = resp.json()
+        body = schema.check("Intuis", "/oauth2/token", schema.INTUIS_TOKEN, resp.json())
         self._access_token = body["access_token"]
         self._refresh_token = body.get("refresh_token", self._refresh_token)
         self._expires_at = time.time() + int(body.get("expires_in", 3600)) - 60
@@ -96,7 +99,8 @@ class IntuisClient:
         for attempt in range(5):
             self._throttle()
             headers = {"Authorization": f"Bearer {self._ensure_token()}"}
-            resp = self.http.request(method, f"{self.base}{path}", headers=headers, json=json, data=data)
+            with METER.call("intuis"):
+                resp = self.http.request(method, f"{self.base}{path}", headers=headers, json=json, data=data)
             if resp.status_code in (401, 403) and attempt == 0:
                 # Token invalidated server-side: force a fresh login once.
                 self._access_token = None
@@ -116,11 +120,16 @@ class IntuisClient:
             return body
         raise ApiError(f"{path} : échec après plusieurs tentatives")
 
+    def _checked(self, spec: Any, method: str, path: str, **kw: Any) -> Any:
+        """S-1.13: a response whose shape changed raises schema.FormatError (never ApiError,
+        so that it is not mistaken for "this measure type does not answer")."""
+        return schema.check("Intuis", path, spec, self._call(method, path, **kw))
+
     def homesdata(self) -> dict:
-        return self._call("GET", "/api/homesdata")
+        return self._checked(schema.INTUIS_HOMESDATA, "GET", "/api/homesdata")
 
     def homestatus(self, home_id: str) -> dict:
-        return self._call("POST", "/syncapi/v1/homestatus", data={"home_id": home_id})
+        return self._checked(schema.INTUIS_HOMESTATUS, "POST", "/syncapi/v1/homestatus", data={"home_id": home_id})
 
     def home_measure(
         self,
@@ -148,13 +157,14 @@ class IntuisClient:
             "date_end": date_end,
             "home": home,
         }
-        return self._call("POST", "/api/gethomemeasure", json=body)
+        return self._checked(schema.INTUIS_HOMEMEASURE, "POST", "/api/gethomemeasure", json=body)
 
     def room_measure(
         self, home_id: str, room_id: str, *, measure_type: str, scale: str, date_begin: int, date_end: int
     ) -> dict:
         """One room per call; fallback when gethomemeasure returns empty measures."""
-        return self._call(
+        return self._checked(
+            schema.INTUIS_ROOMMEASURE,
             "POST",
             "/api/getroommeasure",
             data={
