@@ -116,6 +116,29 @@ enregistré. La phrase de passe des données ne se change pas ici (voir plus bas
 
 En local : `python -m collector strength` estime la robustesse de la phrase actuelle.
 
+### Sauvegarde chiffrée (hors GitHub)
+
+Tout l'historique tient dans le dépôt. Pour ne pas dépendre d'un seul compte, menu ⋮ →
+**Télécharger une sauvegarde chiffrée** : un seul fichier `sauvegarde-energie-AAAA-MM-JJ.json`
+contient `keyinfo.json` et tous les fichiers `*.enc.json` connus (années, horaires, station,
+courbe Linky, météo, analyse…), **toujours chiffrés** : rien n'est déchiffré pour le construire.
+Le jeton Netatmo (`netatmo-token.enc.json`) n'y est pas : il change à chaque collecte. Gardez ce
+fichier où vous voulez (clé USB, NAS) ; sans la phrase de passe il est illisible.
+
+Pour restaurer (nouveau dépôt, autre machine) :
+
+```bash
+export DATA_PASSPHRASE="la phrase de passe"
+python -m collector restore-backup sauvegarde-energie-2026-11-09.json --dry-run   # vérifie sans écrire
+python -m collector restore-backup sauvegarde-energie-2026-11-09.json             # écrit dans data/
+python -m collector verify                                                        # mêmes totaux que l'appli
+```
+
+Chaque fichier est déchiffré en mémoire avec `DATA_PASSPHRASE` avant d'écrire quoi que ce soit :
+une mauvaise phrase ou un fichier abîmé arrête la restauration. Les fichiers sont ensuite écrits
+tels quels (toujours chiffrés) dans `data/` (ou `DATA_DIR`), en remplaçant ceux du même nom ;
+commitez-les pour que le site les serve.
+
 ### Options (facultatives)
 
 Chaque option s'active en ajoutant des secrets. Sans eux, l'application fonctionne normalement.
@@ -156,6 +179,13 @@ Netatmo renouvelle le jeton à chaque utilisation : le collecteur garde le nouve
    tranches de 7 jours, puis seulement les jours manquants (les 3 derniers jours chaque nuit) ;
    elle est rangée chiffrée dans `data/AAAA.linky30.enc.json`. Sans cette activation, rien
    n'échoue : l'état de la source `linky-30min` l'indique.
+
+   Dès qu'elle existe, la Synthèse affiche sous la carte Linky une carte **Courbe de charge**
+   (chargée à la demande) : la journée type des 30 derniers jours (semaine ou week-end), avec le
+   chauffage et le chauffe-eau mesurés en aplats et les autres usages en différence ; le **talon de
+   veille** (10ᵉ centile des demi-heures entre 1 h et 5 h, radiateurs et chauffe-eau déduits quand
+   les données horaires existent) en W, kWh/an et €/an au prix du moment ; la demi-heure la plus
+   chargée des 12 derniers mois face à la puissance souscrite ; et la courbe d'un jour au choix.
 
 **Expiration des accès.** Le résumé de chaque collecte affiche la date d'expiration des jetons
 quand elle est connue (lue dans le jeton Conso API s'il la contient, sinon estimée à 3 ans après
@@ -253,6 +283,7 @@ python -m collector discover
 | `python -m collector export-csv -o conso.csv` | Export CSV (séparateur `;`, décimales `,`, pour Excel) |
 | `python -m collector insights [--force]` | Analyse du dernier mois par Claude (`ANTHROPIC_API_KEY`) |
 | `python -m collector diagnose [--history]` | Diagnostic anonyme de l'API (modules, types de mesure, profondeur) |
+| `python -m collector restore-backup FICHIER [--dry-run]` | Restaure dans `data/` une sauvegarde chiffrée téléchargée depuis l'appli |
 | `python -m collector demo` | Régénère les données de démonstration |
 
 Application web :

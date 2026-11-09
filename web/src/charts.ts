@@ -433,6 +433,47 @@ export function gridHeatmap(
   );
 }
 
+/** Stacked areas (parts of a whole) plus optional plain lines, e.g. a load curve in W. */
+export function areaChart(
+  el: HTMLElement,
+  opts: { labels: string[]; areas: Series[]; lines?: Series[]; unit: string; zoom?: boolean },
+) {
+  const chart = instance(el);
+  const lines = opts.lines ?? [];
+  describe(el, opts.labels, [...lines, ...opts.areas], opts.unit);
+  chart.setOption(
+    {
+      animationDuration: 300,
+      ...axes(opts.labels),
+      legend: legend([...opts.areas, ...lines]),
+      tooltip: tooltip(null, false, opts.unit),
+      dataZoom: opts.zoom ? [{ type: 'inside', minValueSpan: 4 }] : [],
+      series: [
+        ...opts.areas.map((s) => ({
+          type: 'line',
+          name: s.name,
+          data: s.data,
+          stack: 'parts',
+          showSymbol: false,
+          lineStyle: { width: 0 },
+          areaStyle: { color: s.color, opacity: 0.85 },
+          itemStyle: { color: s.color },
+        })),
+        ...lines.map((s) => ({
+          type: 'line',
+          name: s.name,
+          data: s.data,
+          showSymbol: false,
+          connectNulls: false,
+          lineStyle: { width: 2, color: s.color },
+          itemStyle: { color: s.color },
+        })),
+      ],
+    },
+    { notMerge: true },
+  );
+}
+
 /** Waterfall: start total → one bar per room delta → end total. */
 export function waterfallChart(
   el: HTMLElement,
