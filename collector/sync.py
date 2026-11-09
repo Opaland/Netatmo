@@ -272,6 +272,7 @@ class Syncer:
             **keep,
             **(extra or {}),
         }
+        self.store.update_coverage()
         return self.store.save(
             {"id": home.id, "name": home.name, "timezone": home.timezone},
             [asdict(r) for r in home.rooms],
