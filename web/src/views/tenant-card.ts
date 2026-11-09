@@ -31,7 +31,7 @@ export function mountTenant(card: HTMLElement | null) {
     <details class="table-details" ${t.on ? 'open' : ''}><summary>Ce qui change en mode locataire</summary>
       <ul class="facts">
         <li><strong>Coûts</strong> : votre prix moyen au kWh (et, si vous le saisissez dans le menu ⋮ → Prix, votre abonnement), jamais le contrat du titulaire.</li>
-        <li><strong>Masqués, avec une phrase d'explication</strong> : les cartes Linky (part du logement, puissance maximale, courbe de charge), le comparateur d'offres et la simulation de recharge, le contrat partagé. Ils supposent le compteur et le contrat du titulaire.</li>
+        <li><strong>Masqués, avec une phrase d'explication</strong> : les cartes Linky (part du logement, puissance maximale, courbe de charge), le comparateur d'offres et la simulation de recharge, le contrat partagé, les travaux (avant / après, affaire du propriétaire). Ils supposent le compteur et le contrat du titulaire.</li>
         <li><strong>Rapport anonymisé</strong> : la période du bail seulement, sans comparaison avec l'année d'avant (un autre occupant).</li>
         <li><strong>Inchangé</strong> : consommation des radiateurs et du chauffe-eau, comparaison des années, signature énergétique, consigne, pompe à chaleur, confort.</li>
       </ul>

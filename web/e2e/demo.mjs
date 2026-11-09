@@ -265,6 +265,16 @@ try {
       if (!(await page.locator(`#${id} canvas`).count())) errors.push(`${name}/comfort: graphique ${id} absent`);
     }
     if (!(await page.getByText('Heures sous 18,0 °C').count())) errors.push(`${name}/comfort: seuil 18 °C non appliqué`);
+    // E13 (S-13.3): open windows per room (lazy document), signature without the window days
+    try {
+      await page.waitForSelector('#windows-chart canvas', { timeout: 15000 });
+      if (!(await page.getByText('Pourquoi cette pièce était froide ?').count())) errors.push(`${name}/comfort: question « pièce froide » absente`);
+      await page.check('[data-windows=exclude]');
+      await page.waitForSelector('#windows-signature', { timeout: 5000 });
+      if (!/jours? exclus?/.test(await page.locator('#windows-signature').innerText())) errors.push(`${name}/comfort: signature sans les jours fenêtre ouverte absente`);
+    } catch (err) {
+      errors.push(`${name}/comfort: carte « Fenêtres ouvertes » non rendue (${err})`);
+    }
     const overflow = await page.evaluate(() => {
       const t = document.querySelector('.tabs');
       return t ? t.scrollWidth > t.clientWidth + 1 : false;

@@ -26,6 +26,15 @@ Ce que l'application mobile ne fait pas, et que celle-ci fait :
 - l'**export CSV** pour Excel et un **export long** JSON / CSV au format documenté
   ([docs/export-long.md](docs/export-long.md), schéma JSON publié) pour Home Assistant ou Node-RED,
   préparés dans le navigateur, sans rien envoyer ;
+- un **export recherche** horaire anonymisé (pièces en pseudonymes, dates décalées, licence au choix,
+  zone climatique facultative), vérifié par le détecteur du rapport anonymisé
+  ([docs/export-recherche.md](docs/export-recherche.md)) ;
+- le **recoupement avec une facture** : la période et le montant TTC d'une facture, comparés au coût
+  calculé (compteur Linky × tarif du contrat + abonnement au prorata), écart expliqué (relevé estimé,
+  jours manquants, abonnement, taxes) et part du chauffage et de l'eau chaude ;
+- les **surfaces** des pièces et des **marqueurs « travaux »** datés (isolation, fenêtres,
+  radiateur…) : signature avant / après (deux droites), kWh/m² et kWh par degré-jour ; ces saisies et
+  les factures restent **chiffrées sur l'appareil** ;
 - une **analyse du mois rédigée par l'IA** (Claude), facultative.
 
 Tout tourne sur GitHub, gratuitement, sans serveur à maintenir :
@@ -108,6 +117,13 @@ Sans activité (toucher, clavier) pendant **15 minutes**, l'application se verro
 les données déchiffrées, la clé mémorisée et le jeton GitHub sont oubliés, la phrase est redemandée.
 Le délai se règle dans le menu ⋮ (5 min, 15 min, 1 h, ou jamais sur cet appareil) ; il compte aussi
 quand l'onglet est fermé, si bien qu'un téléphone volé ne livre pas l'historique.
+
+Sur iPhone, iOS peut **effacer la clé mémorisée** (quelques jours sans ouvrir l'appli dans Safari, ou
+manque de place) : l'appli le détecte et l'écrit (« iOS a effacé la clé, vos données sont intactes »),
+puis redemande la phrase. Les données ne sont pas touchées : elles restent chiffrées dans le dépôt.
+L'appli demande au navigateur de conserver son stockage (`navigator.storage.persist()`) ; l'installer
+sur l'écran d'accueil le protège mieux. Les notes privées de l'appareil (absences, factures, travaux)
+sont, elles, perdues avec le stockage. Chaque version est testée sur WebKit (moteur de Safari) en CI.
 
 ### Le plus simple : l'écran Paramètres
 
@@ -247,6 +263,25 @@ l'activation des tarifs dans l'application Intuis (2025), la répartition heures
 n'existe pas : elle est estimée pour chaque pièce à partir de sa répartition mesurée depuis. Vous
 pouvez aussi saisir vos propres prix. Ces réglages restent sur votre appareil.
 
+**Fenêtres ouvertes, boost et état des radiateurs** (relevé horaire, facultatif) : l'API Intuis ne
+donne l'état des pièces qu'en instantané. Pour en garder l'historique :
+1. D'abord, **Actions → Diagnostic → Run workflow**, case « Chercher un historique des fenêtres /
+   boost » : si un type de mesure répond, le relevé horaire est inutile (voir
+   [docs/api-notes.md](docs/api-notes.md#un-historique-déjà-servi--s-131-172)).
+2. Sinon, ajoutez la **variable** (onglet *Variables*) `ROOM_STATE_HOURLY` = `true`. Le workflow
+   « Relevé horaire des pièces » fait alors une requête par heure (48 appels Intuis par jour, jeton
+   compris), chiffre le relevé avec votre phrase de passe et le garde 3 jours hors du dépôt (artefact
+   GitHub), **sans aucun commit**. Chaque nuit, la collecte en tire les heures par pièce et par jour
+   de fenêtre ouverte, boost, chauffe, délestage et mode de consigne (absence, hors-gel, manuel).
+   Un relevé manqué est compensé au prorata et la couverture est affichée.
+3. La vue **Confort** affiche alors la carte « Fenêtres ouvertes et radiateurs » : heures par pièce
+   (30 jours et par mois), « pourquoi cette pièce était froide ? », la signature énergétique sans
+   les jours d'aération, l'énergie estimée pendant les boosts, les absences confirmées par le mode
+   de consigne et les délestages face au pic Linky. Les chambres y sont regroupées par défaut.
+
+La **présence** détectée par les radiateurs n'est jamais lue, sauf si vous ajoutez la variable
+`ROOM_STATE_PRESENCE` = `true` (avec l'accord du foyer) : seules des heures par jour sont alors
+gardées. Analyse d'impact courte dans [docs/api-notes.md](docs/api-notes.md#données-doccupation--analyse-dimpact-courte-s-135).
 ### Vue foyer : chambres regroupées
 
 Les consommations, profils horaires, températures et le CO₂ par chambre disent beaucoup des
@@ -395,6 +430,8 @@ python -m collector discover
 | `python -m collector insights [--force]` | Analyse du dernier mois par Claude (`ANTHROPIC_API_KEY`) |
 | `python -m collector diagnose [--history]` | Diagnostic anonyme de l'API (modules, types de mesure, profondeur, noms des champs de `homestatus`) |
 | `python -m collector diagnose --status` | Seulement les noms des champs des pièces et modules de `homestatus` (fenêtre ouverte ?) |
+| `python -m collector diagnose --probe-history` | Types de mesure candidats pour un historique des fenêtres / du boost : accepté ou refusé, nombre de points (S-13.1) |
+| `python -m collector snapshot --out DOSSIER` | Un relevé chiffré de l'état des pièces (utilisé par le workflow « Relevé horaire ») |
 | `python -m collector restore-backup FICHIER [--dry-run]` | Restaure dans `data/` une sauvegarde chiffrée téléchargée depuis l'appli |
 | `python -m collector demo` | Régénère les données de démonstration |
 

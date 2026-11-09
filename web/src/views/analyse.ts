@@ -12,6 +12,7 @@ import { uncertainDays } from './quality';
 import { drawSetpoint, setpointCard } from './setpoint';
 import { drawWaterHeater, hcAlerts, waterHeaterCard } from './waterheater';
 import { html } from '../trusted';
+import { tenant } from '../tenant'; // S-12.6: works are the owner's business
 
 let hourly: Hourly | null = null;
 let hourlyLoading = false;
@@ -46,6 +47,7 @@ export function renderAnalyse(view: HTMLElement, records: DayRecord[]) {
   <section class="card" id="indoor-sig" hidden></section>`
       : `<section class="card"><h2>Signature énergétique</h2><p class="hint muted">Disponible dès que la collecte a récupéré la météo (prochaine collecte).</p></section>`
   }
+  ${tenant().on ? '' : '<div id="works-zone"></div>'}
   ${setpointCard(records)}
   ${ds!.weather ? '<section class="card" id="hp-card" hidden></section>' : ''}
   <div id="shutters-zone"></div>
@@ -131,6 +133,8 @@ export function renderAnalyse(view: HTMLElement, records: DayRecord[]) {
   calendarChart(document.getElementById('cal-chart')!, cal);
   // S-4.9 telework cost, S-4.10 absences (marks on the calendar), loaded on demand (S-7.10)
   import('./habits').then((m) => m.fillAnalyse(cal)).catch(() => {});
+  // S-6.2: surfaces and works markers, signature before / after (lazy module)
+  import('./works').then((m) => m.fillWorks(records)).catch(() => {});
   // temperatures
   if (tempRoom) {
     const from = addDays(minusYears(last), 1);

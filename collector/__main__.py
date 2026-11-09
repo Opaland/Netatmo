@@ -7,6 +7,7 @@ verify      Déchiffre les données locales et affiche un résumé
 export-csv  Exporte les données déchiffrées en CSV
 demo        Génère des données de démonstration chiffrées (phrase « demo »)
 restore-backup FICHIER  Restaure dans data/ une sauvegarde chiffrée téléchargée depuis l'appli
+snapshot    Relevé horaire de l'état des pièces, chiffré dans un dossier (workflow « Relevé horaire »)
 """
 
 from __future__ import annotations
@@ -20,6 +21,7 @@ import os
 import sys
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 import httpx
 
@@ -52,14 +54,70 @@ def cmd_discover(s: Settings, args: argparse.Namespace) -> None:
 
 
 def cmd_diagnose(s: Settings, args: argparse.Namespace) -> None:
-    from .diagnose import history, history_deep, run
+    from .diagnose import history, history_deep, probe_history, run
 
     client = _client(s)
-    if args.history:
+    if args.probe_history:
+        probe_history(client)
+    elif args.history:
         history(client)
         history_deep(client)
     else:
         run(client, status_only=args.status)
+
+
+def _flag(name: str) -> bool:
+    return os.environ.get(name, "").strip().lower() in ("1", "true", "oui", "yes")
+
+
+def cmd_snapshot(s: Settings, args: argparse.Namespace) -> None:
+    """S-13.2: one homestatus request, encrypted into --out. Never writes to data/."""
+    from .roomstate import take
+
+    s.require("passphrase")
+    store = Store(s.data_dir, s.passphrase)
+    # Token + homestatus (+ homesdata before the first collection, + one retry): 4 at most.
+    raw = os.environ.get("MAX_CALLS_INTUIS_HOURLY", "").strip()
+    METER.reset({"intuis": int(raw) if raw.isdigit() else 4})
+    take(_client(s), store, Path(args.out), presence=_flag("ROOM_STATE_PRESENCE"))
+    print(f"Relevé chiffré enregistré ({METER.calls.get('intuis', 0)} appels Intuis)")
+
+
+def _room_states(s: Settings, store: Store, syncer: Syncer, sources: Sources) -> list[str]:
+    """S-13.2: hourly snapshots downloaded by the workflow -> daily hours per room. Never fatal.
+    Returns rows for the job summary (counts only)."""
+    folder = os.environ.get("ROOM_STATE_DIR", "").strip()
+    if not folder or syncer.last_home is None:
+        return []
+    from .roomstate import coverage, merge_snapshots, module_rooms, read_snapshots
+
+    home = syncer.last_home
+    try:
+        snaps, bad = read_snapshots(Path(folder), s.passphrase) if Path(folder).is_dir() else ([], 0)
+        stats = merge_snapshots(
+            store,
+            snaps,
+            home.timezone,
+            module_rooms(syncer.last_homesdata, home.water_heaters),
+            presence=_flag("ROOM_STATE_PRESENCE"),
+        )
+    except Exception as err:  # never lose the night's energy data because of this optional step
+        sources.failed("releve-horaire", f"agrégation impossible ({type(err).__name__})")
+        _warn(f"Relevé horaire non agrégé : {type(err).__name__}")
+        return []
+    if stats["calls"]:
+        METER.calls["intuis-horaire"] = stats["calls"]
+    got, expected = coverage(store, datetime.now(ZoneInfo(home.timezone)).date().isoformat())
+    note = f"{got} relevés sur {expected} heures (7 derniers jours)"
+    if snaps or got:
+        sources.ok("releve-horaire", note)
+    else:
+        sources.failed("releve-horaire", "aucun relevé horaire reçu (workflow « Relevé horaire » actif ?)")
+    print(
+        f"Relevé horaire : {stats['snapshots']} relevés lus, {stats['added']} ajoutés, "
+        f"{stats['duplicates']} déjà comptés, {stats['pending']} du jour en cours, {bad} illisibles ; {note}"
+    )
+    return [f"| Relevé horaire des pièces | {note} |"]
 
 
 def _warn(msg: str) -> None:
@@ -306,6 +364,9 @@ def cmd_sync(s: Settings, args: argparse.Namespace, backfill: bool = False) -> N
     extra = {"weather_source": source} if source else {}
     if s.enedis_token and s.enedis_prm and store.first_day():
         _linky(s, store, home.timezone, sources)
+    rs_rows = _room_states(s, store, syncer, sources)
+    if store.doc("roomstate").get("rooms"):
+        extra["has_roomstate"] = True
     if store.doc("linky").get("daily"):
         extra["has_linky"] = True
     if store.doc("station").get("daily"):
@@ -341,7 +402,7 @@ def cmd_sync(s: Settings, args: argparse.Namespace, backfill: bool = False) -> N
     for line in _call_lines():
         print(line)
     print(_cold_label(cold, cold_counts))
-    _job_summary(store, syncer, changed)
+    _job_summary(store, syncer, changed, rs_rows)
 
 
 def _cold_label(cfg: dict | None, counts: dict[str, int]) -> str:
@@ -421,7 +482,7 @@ def _failure_summary(err: Exception) -> None:
         fh.write("\n".join(lines) + "\n")
 
 
-def _job_summary(store: Store, syncer: Syncer, changed: list[str]) -> None:
+def _job_summary(store: Store, syncer: Syncer, changed: list[str], extra_rows: list[str] | None = None) -> None:
     """GitHub job summary: sources and counts only, never names or values (public log)."""
     path = os.environ.get("GITHUB_STEP_SUMMARY")
     if not path:
@@ -442,6 +503,7 @@ def _job_summary(store: Store, syncer: Syncer, changed: list[str]) -> None:
         f"| Linky, courbe de charge 30 min | {yes(m.get('linky_curve_years'))} |",
         f"| Analyse IA | {yes(store.doc('insights').get('period'))} |",
         f"| Contrat partagé | {_contract_label(m.get('contract'))} |",
+        *(extra_rows or []),
         f"| Fichiers chiffrés modifiés | {len(changed)} |",
         "",
         "| Source | Dernier succès | Dernier échec | Expiration du jeton |",
@@ -570,6 +632,11 @@ def main(argv: list[str] | None = None) -> None:
     dg = sub.add_parser("diagnose", help="diagnostic anonyme (sans noms ni valeurs)")
     dg.add_argument("--history", action="store_true", help="profondeur d'historique par échelle")
     dg.add_argument("--status", action="store_true", help="seulement les noms des champs de homestatus")
+    dg.add_argument(
+        "--probe-history", action="store_true", help="types de mesure candidats pour l'historique des fenêtres (S-13.1)"
+    )
+    sn = sub.add_parser("snapshot", help="relevé horaire chiffré de l'état des pièces (S-13.2)")
+    sn.add_argument("--out", required=True, metavar="DOSSIER")
     for name in ("sync", "backfill"):
         sp = sub.add_parser(name)
         sp.add_argument("--days", type=int, default=35, help="jours re-téléchargés à chaque sync (défaut 35)")
@@ -602,6 +669,7 @@ def main(argv: list[str] | None = None) -> None:
         "export-csv": cmd_export,
         "demo": cmd_demo,
         "restore-backup": cmd_restore_backup,
+        "snapshot": cmd_snapshot,
     }[args.cmd](s, args)
 
 

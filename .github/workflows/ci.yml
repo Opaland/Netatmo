@@ -53,9 +53,37 @@ jobs:
       - run: npx playwright install --with-deps chromium
       - run: npm run build
       - run: npm run e2e
+      - run: npm run e2e:features # v1.4: facture, travaux, export recherche, clé effacée
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: captures-demo
+          path: web/e2e/screenshots
+          retention-days: 7
+
+  # S-7.9: Safari iOS. WebKit (moteur de Safari) en iPhone 13 : les cinq vues de la démo,
+  # la clé effacée par iOS, et les écrans v1.4.
+  e2e-webkit:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+      - run: npx playwright install --with-deps webkit
+      - run: npm run build
+      - run: npm run e2e:features
+        env:
+          E2E_BROWSER: webkit
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: captures-webkit
           path: web/e2e/screenshots
           retention-days: 7
