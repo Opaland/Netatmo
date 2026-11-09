@@ -7,7 +7,15 @@ import time
 from dataclasses import asdict
 
 from .api import SCALE_SECONDS, ApiError, IntuisClient, chunk_ranges
-from .model import IGNORE, Home, parse_homes, parse_measure_blocks, parse_room_measures, to_local_day
+from .model import (
+    IGNORE,
+    Home,
+    parse_homes,
+    parse_measure_blocks,
+    parse_module_measures,
+    parse_room_measures,
+    to_local_day,
+)
 from .storage import Store
 
 log = logging.getLogger(__name__)
@@ -46,21 +54,39 @@ class Syncer:
     # ------------------------------------------------------------ fetching
     def _fetch_with(self, strategy: tuple[str, str], home: Home, begin: int, end: int) -> Series:
         endpoint, mtype = strategy
-        rooms = [r.id for r in home.rooms if r.category != IGNORE]
+        rooms = home.api_room_ids()
+        active = {r.id for r in home.rooms if r.category != IGNORE}
+        heaters = {mid: sid for mid, sid in home.water_heaters.items() if sid in active}
         out: Series = {rid: [] for rid in rooms}
+        module_pts: Series = {mid: [] for mid in heaters}
         for b, e in chunk_ranges(begin, end, SCALE):
             if endpoint == "home":
                 payload = self.client.home_measure(
-                    home.id, home.bridge_id, rooms, measure_type=mtype, scale=SCALE, date_begin=b, date_end=e
+                    home.id,
+                    home.bridge_id,
+                    rooms,
+                    measure_type=mtype,
+                    scale=SCALE,
+                    date_begin=b,
+                    date_end=e,
+                    module_ids=list(heaters) or None,
                 )
                 for rid, pts in parse_room_measures(payload, SCALE_SECONDS[SCALE]).items():
                     out.setdefault(rid, []).extend(pts)
+                for mid, pts in parse_module_measures(payload, SCALE_SECONDS[SCALE]).items():
+                    if mid in module_pts:
+                        module_pts[mid].extend(pts)
             else:
                 for rid in rooms:
                     payload = self.client.room_measure(
                         home.id, rid, measure_type=mtype, scale=SCALE, date_begin=b, date_end=e
                     )
                     out[rid].extend(parse_measure_blocks(payload.get("body", []), SCALE_SECONDS[SCALE]))
+        # Water heaters report only at module level (their room returns nothing):
+        # module data replaces the room's, never adds to it, so nothing is counted twice.
+        for mid, pts in module_pts.items():
+            if any(v for _ts, v in pts):
+                out[heaters[mid]] = pts
         return out
 
     def detect_strategy(self, home: Home, now: int) -> tuple[str, str]:

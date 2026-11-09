@@ -51,6 +51,14 @@ une colonne par type demandé ; ou forme simple `{"<timestamp>": [v, ...]}`. Les
 
 ## Comportements à connaître
 
+- **Chauffe-eau (module `NMW`, Aqua Manager)** : la pièce qui le contient ne renvoie **aucune**
+  consommation ; il faut l'interroger **au niveau du module** (liste `home.modules` de
+  `gethomemeasure`). Constaté sur une installation réelle avec `python -m collector diagnose` :
+  pièce = 0 jour de données, module = données en `$1` et `$2`. Les types `sum_energy_elec_heating`
+  et `sum_energy_elec_hot_water` ne renvoient rien, ni par pièce ni par module.
+- Les radiateurs `NMH` en fil pilote (`muller_type` FPN) remontent bien leur consommation au niveau
+  de la pièce. Les modules `NMR` ne renvoient rien.
+
 - **Les données arrivent en retard** (jusqu'à un jour). Chaque collecte re-télécharge les 35 derniers
   jours et remplace les valeurs.
 - **La consommation est mesurée par pièce**, pas par radiateur : plusieurs radiateurs d'une même pièce

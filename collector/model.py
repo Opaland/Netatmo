@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import unicodedata
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
@@ -13,9 +13,9 @@ IGNORE = "ignore"
 
 # Words that identify the water-heater "room" in the app (accents stripped, lower case).
 WATER_HEATER_WORDS = ("chauffe-eau", "chauffe eau", "ballon", "cumulus", "eau chaude", "water heater")
-# Module types known to be water heaters / their control modules. Completed from
-# the `discover` output if your installation reports another type.
-WATER_HEATER_MODULE_TYPES = {"NMW", "NWH", "NLC"}
+# Module types of water heaters (Intuis "Aqua Manager" = NMW). Their consumption is
+# only reported at module level: the room that holds them returns nothing.
+WATER_HEATER_MODULE_TYPES = {"NMW", "NWH"}
 
 
 @dataclass
@@ -24,6 +24,9 @@ class Room:
     name: str
     category: str
     module_types: list[str]
+    # True for a water heater that sits in no room: its id is the module id, it is
+    # never sent in the `rooms` list of a measure request.
+    virtual: bool = False
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -36,6 +39,11 @@ class Home:
     timezone: str
     bridge_id: str
     rooms: list[Room]
+    # Water-heater module id -> id under which its consumption is stored (its room).
+    water_heaters: dict[str, str] = field(default_factory=dict)
+
+    def api_room_ids(self) -> list[str]:
+        return [r.id for r in self.rooms if r.category != IGNORE and not r.virtual]
 
 
 def _norm(text: str) -> str:
@@ -75,6 +83,24 @@ def parse_homes(payload: dict, overrides: dict[str, str] | None = None) -> list[
                     module_types=mtypes,
                 )
             )
+        room_of_module = {mid: str(r["id"]) for r in h.get("rooms", []) for mid in r.get("module_ids", [])}
+        water_heaters: dict[str, str] = {}
+        for m in modules:
+            if m.get("type") not in WATER_HEATER_MODULE_TYPES:
+                continue
+            storage = room_of_module.get(m["id"]) or (str(m["room_id"]) if m.get("room_id") else None)
+            if storage is None or not any(r.id == storage for r in rooms):
+                storage = m["id"]
+                rooms.append(
+                    Room(
+                        id=storage,
+                        name=m.get("name") or "Chauffe-eau",
+                        category=overrides.get(storage, WATER_HEATER),
+                        module_types=[m["type"]],
+                        virtual=True,
+                    )
+                )
+            water_heaters[m["id"]] = storage
         homes.append(
             Home(
                 id=h["id"],
@@ -82,6 +108,7 @@ def parse_homes(payload: dict, overrides: dict[str, str] | None = None) -> list[
                 timezone=h.get("timezone", "Europe/Paris"),
                 bridge_id=bridge or "",
                 rooms=rooms,
+                water_heaters=water_heaters,
             )
         )
     return homes
@@ -116,6 +143,12 @@ def parse_room_measures(payload: dict, scale_seconds: int) -> dict[str, list[tup
     """Return {room_id: [(timestamp, value), ...]} from a gethomemeasure response."""
     rooms = payload.get("body", {}).get("home", {}).get("rooms", [])
     return {str(r.get("id")): parse_measure_blocks(r.get("measures") or [], scale_seconds) for r in rooms}
+
+
+def parse_module_measures(payload: dict, scale_seconds: int) -> dict[str, list[tuple[int, float]]]:
+    """Same as parse_room_measures, for the `modules` part of a gethomemeasure response."""
+    modules = payload.get("body", {}).get("home", {}).get("modules", []) or []
+    return {str(m.get("id")): parse_measure_blocks(m.get("measures") or [], scale_seconds) for m in modules}
 
 
 def to_local_day(ts: int, tz: str) -> str:
