@@ -44,22 +44,22 @@ class Settings:
     @classmethod
     def from_env(cls) -> Settings:
         _load_dotenv(Path(".env"))
-        overrides_raw = os.environ.get("INTUIS_ROOM_CATEGORIES", "").strip()
+        overrides_raw = os.environ.get("INTUIS_ROOM_CATEGORIES", "").strip().strip()
         overrides = json.loads(overrides_raw) if overrides_raw else {}
         return cls(
-            username=os.environ.get("INTUIS_USERNAME", ""),
-            password=os.environ.get("INTUIS_PASSWORD", ""),
-            client_id=os.environ.get("INTUIS_CLIENT_ID", ""),
-            client_secret=os.environ.get("INTUIS_CLIENT_SECRET", ""),
+            username=os.environ.get("INTUIS_USERNAME", "").strip(),
+            password=os.environ.get("INTUIS_PASSWORD", "").strip(),
+            client_id=os.environ.get("INTUIS_CLIENT_ID", "").strip(),
+            client_secret=os.environ.get("INTUIS_CLIENT_SECRET", "").strip(),
             api_base=os.environ.get("INTUIS_API_BASE", DEFAULT_API_BASE).rstrip("/"),
             user_prefix=os.environ.get("INTUIS_USER_PREFIX", "muller"),
             app_identifier=os.environ.get("INTUIS_APP_IDENTIFIER", "app_muller"),
-            passphrase=os.environ.get("DATA_PASSPHRASE", ""),
-            netatmo_client_id=os.environ.get("NETATMO_CLIENT_ID", ""),
-            netatmo_client_secret=os.environ.get("NETATMO_CLIENT_SECRET", ""),
-            netatmo_refresh_token=os.environ.get("NETATMO_REFRESH_TOKEN", ""),
-            enedis_token=os.environ.get("ENEDIS_TOKEN", ""),
-            enedis_prm=os.environ.get("ENEDIS_PRM", ""),
+            passphrase=os.environ.get("DATA_PASSPHRASE", "").strip(),
+            netatmo_client_id=os.environ.get("NETATMO_CLIENT_ID", "").strip(),
+            netatmo_client_secret=os.environ.get("NETATMO_CLIENT_SECRET", "").strip(),
+            netatmo_refresh_token=os.environ.get("NETATMO_REFRESH_TOKEN", "").strip(),
+            enedis_token=os.environ.get("ENEDIS_TOKEN", "").strip(),
+            enedis_prm=os.environ.get("ENEDIS_PRM", "").strip(),
             data_dir=Path(os.environ.get("DATA_DIR", "data")),
             room_categories=overrides,
         )

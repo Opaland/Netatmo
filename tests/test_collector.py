@@ -438,3 +438,23 @@ def test_sources_keep_last_success_and_failure():
     assert s.state["linky"]["error"] == s.now and len(s.state["linky"]["message"]) == 160
     s.ok("linky")
     assert "message" not in s.state["linky"]
+
+
+def test_settings_strip_pasted_whitespace(monkeypatch):
+    monkeypatch.setenv("NETATMO_REFRESH_TOKEN", " abc|def \n")
+    monkeypatch.setenv("INTUIS_USERNAME", "moi@example.com ")
+    s = Settings.from_env()
+    assert s.netatmo_refresh_token == "abc|def" and s.username == "moi@example.com"
+
+
+def test_station_explains_which_credential_is_refused(tmp_path):
+    from collector.station import Station, StationError
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(400, json={"error": "invalid_client"})
+
+    st = Station(
+        Store(tmp_path, "pw"), "id", "secret", "seed", http=httpx.Client(transport=httpx.MockTransport(handler))
+    )
+    with pytest.raises(StationError, match="NETATMO_CLIENT_ID"):
+        st.login()
