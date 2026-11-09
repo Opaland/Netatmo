@@ -1,6 +1,6 @@
 # Historique des versions
 
-## v1.2 — en cours
+## v1.2 — novembre 2026 : contrat, comparateur, station, paramètres
 
 - Mode projet : règles BMAD (`docs/PROJET.md`), gabarits d'issues et de PR, jalons, une issue par récit.
 - Station Netatmo complète : salon, chambre des enfants, cave, extérieur (température, humidité, CO₂).
