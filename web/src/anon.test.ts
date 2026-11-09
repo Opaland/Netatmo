@@ -64,6 +64,16 @@ describe('anonymised report', () => {
     expect(text).not.toMatch(/\b\d{1,2}:\d{2}\b/); // no time of day
   });
 
+  it('S-12.6: covers the lease only, without any comparison with the year before', () => {
+    const lease = anonReportHtml({ ...report, from: '2024-07-01', to: '2025-06-30', lease: true, leaseChoice: true, prevTotal: 0, extras: '' });
+    const t = lease.replace(/<[^>]+>/g, ' ');
+    expect(t).toContain('période du bail');
+    expect(t).toContain('du 1er juillet 2024 au 30 juin 2025 (365 jours)');
+    expect(t).not.toContain('vs 2024');
+    expect(t).not.toContain('Évolution');
+    expect(lease).toContain('<option value="lease" selected>');
+  });
+
   it('leak detector finds whole names and ignores generic or short ones', () => {
     expect(leaks('Pièce A : Chambre de Léa', ['Chambre de Léa', 'Léa', 'Chauffe-eau', 'A'])).toEqual(['Chambre de Léa', 'Léa']);
     expect(leaks('Salonnière', ['Salon'])).toEqual([]);

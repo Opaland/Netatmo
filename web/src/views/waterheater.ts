@@ -6,7 +6,8 @@ import { type Hourly, hasPrices } from '../analysis';
 import { ds, rerender, state } from '../app';
 import { barChart, cssVar, gridHeatmap } from '../charts';
 import { belowThreshold, hcVerdict, hourByMonth, peakExtraCost, waterHeaterHc } from '../checks';
-import { activeRooms, esc, fmtEur, fmtKwh, lastDay, nf0, offCol, priceAt, series, table, tableToggle } from '../ui';
+import { activeRooms, esc, fmtEur, fmtKwh, lastDay, nf0, offCol, priceAt, priceMode, series, table, tableToggle } from '../ui';
+import { tenant } from '../tenant';
 import { html } from '../trusted';
 
 const LS_THRESHOLD = 'intuis-history:hc-threshold';
@@ -21,12 +22,13 @@ function threshold(): number {
 
 /** Current off-peak / peak prices (€/kWh): regulated tariff under today's contract, else manual prices. */
 export function currentHcHp(): { hc: number; hp: number; source: string } | null {
-  if (state.priceMode === 'trve' && ds!.offers.size) {
+  if (priceMode() === 'trve' && ds!.offers.size) {
     const p = priceAt(lastDay());
     if (p) return { hc: p.hc, hp: p.hp, source: 'tarif réglementé en vigueur' };
   }
   if (!hasPrices(state.prices)) return null;
   const p = state.prices;
+  if (tenant().on) return p.base === null ? null : { hc: p.base, hp: p.base, source: 'prix moyen saisi (locataire)' }; // S-12.6
   const base = p.base ?? p.t1 ?? p.t2 ?? 0;
   const off = offCol();
   const hc = (off === 1 ? p.t1 : p.t2) ?? base;

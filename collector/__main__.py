@@ -28,6 +28,7 @@ import httpx
 
 from .api import IntuisClient
 from .budget import METER, CallCapReached, caps_from_env
+from .cold import cold_alerts, cold_config, write_cold_file
 from .config import Settings
 from .schema import FormatError
 from .storage import Store
@@ -54,8 +55,12 @@ def cmd_discover(s: Settings, args: argparse.Namespace) -> None:
 
 
 def cmd_diagnose(s: Settings, args: argparse.Namespace) -> None:
-    from .diagnose import history, history_deep, probe_history, run
+    from .diagnose import history, history_deep, inventory, probe_history, run
 
+    if args.inventory:  # S-1.19: every configured source, Intuis optional
+        has_intuis = all((s.username, s.password, s.client_id, s.client_secret))
+        inventory(s, IntuisClient(s) if has_intuis else None)
+        return
     client = _client(s)
     if args.probe_history:
         probe_history(client)
@@ -271,8 +276,9 @@ def write_renew_file(alerts: list[str]) -> None:
         Path(path).write_text("".join(f"- {a}\n" for a in alerts), encoding="utf-8")
 
 
-def _weather(s: Settings, store: Store, home, sources: Sources) -> str | None:
-    """Outdoor temperatures: the Netatmo station if configured, else Open-Meteo. Never fatal."""
+def _weather(s: Settings, store: Store, home, sources: Sources, keep: dict | None = None) -> str | None:
+    """Outdoor temperatures: the Netatmo station if configured, else Open-Meteo. Never fatal.
+    `keep["station"]` receives the logged-in Station client (inventory, S-1.19)."""
     first = store.first_day()
     if not first:
         return None
@@ -281,9 +287,10 @@ def _weather(s: Settings, store: Store, home, sources: Sources) -> str | None:
 
         sources.credential("netatmo", s.netatmo_refresh_token)
         try:
-            Station(store, s.netatmo_client_id, s.netatmo_client_secret, s.netatmo_refresh_token).collect(
-                home.timezone, first
-            )
+            station = Station(store, s.netatmo_client_id, s.netatmo_client_secret, s.netatmo_refresh_token)
+            if keep is not None:
+                keep["station"] = station
+            station.collect(home.timezone, first)
             sources.ok("netatmo")
             return "netatmo"
         except (StationError, httpx.HTTPError, FormatError, CallCapReached) as err:
@@ -373,7 +380,8 @@ def cmd_sync(s: Settings, args: argparse.Namespace, backfill: bool = False) -> N
         _failure_summary(err)
         raise
     home = syncer.last_home
-    source = _weather(s, store, home, sources)
+    kept: dict = {}
+    source = _weather(s, store, home, sources, kept)
     extra = {"weather_source": source} if source else {}
     if s.enedis_token and s.enedis_prm and store.first_day():
         _linky(s, store, home.timezone, sources)
@@ -409,12 +417,46 @@ def cmd_sync(s: Settings, args: argparse.Namespace, backfill: bool = False) -> N
     for alert in alerts:
         _warn(alert)
     write_renew_file(alerts)
+    # S-12.5: prolonged cold in the rooms chosen (repository variable), pseudonyms only.
+    cold = cold_config(_warn)
+    if cold:
+        extra["cold_alert"] = cold
+    cold_lines, cold_counts = cold_alerts(store, cold)
+    write_cold_file(cold_lines)
     changed = syncer.save(home, extra)
     print("Fichiers modifiés : " + (", ".join(changed) if changed else "aucun"))
     print(f"Couverture : {store.first_day()} → {store.last_day()}")
     for line in _call_lines():
         print(line)
+    print(_cold_label(cold, cold_counts))
     _job_summary(store, syncer, changed, rs_rows)
+    if _flag("STATION_INVENTORY"):
+        _station_inventory(kept.get("station"))
+
+
+def _station_inventory(station) -> None:
+    """S-1.19: inventory of the Netatmo station, after the collection, with the ACCESS token the
+    collection already obtained. No new login: the rotating refresh token was renewed (and saved,
+    then committed by the workflow) by the collection itself. Names and counts only; never fatal."""
+    from .diagnose import inventory_station
+
+    if station is None or not station.access:
+        print("Inventaire de la station : ignoré (station non configurée ou collecte de la station en échec)")
+        return
+    try:
+        inventory_station(station.access, http=station.http)
+    except Exception as err:  # optional diagnostic: never fails the collection, never echoes a message
+        print(f"Inventaire de la station : interrompu ({type(err).__name__})")
+
+
+def _cold_label(cfg: dict | None, counts: dict[str, int]) -> str:
+    # Counts only: neither the rooms, nor the threshold, nor a temperature (public log).
+    if not cfg:
+        return "Alerte froid : désactivée"
+    return (
+        f"Alerte froid : {counts['suivies']} pièce(s) suivie(s), {counts['froides']} sous le seuil, "
+        f"{counts['sans_mesure']} sans mesure récente"
+    )
 
 
 def _expiry_label(st: dict) -> str:
@@ -527,7 +569,7 @@ def _job_summary(store: Store, syncer: Syncer, changed: list[str], extra_rows: l
 
 
 # Meta keys that a command other than sync keeps as they are.
-KEPT_META = ("weather_source", "sources", "contract", "backfill_pending")
+KEPT_META = ("weather_source", "sources", "contract", "cold_alert", "backfill_pending")
 
 
 def cmd_insights(s: Settings, args: argparse.Namespace) -> None:
@@ -664,6 +706,11 @@ def main(argv: list[str] | None = None) -> None:
     dg.add_argument("--status", action="store_true", help="seulement les noms des champs de homestatus")
     dg.add_argument(
         "--probe-history", action="store_true", help="types de mesure candidats pour l'historique des fenêtres (S-13.1)"
+    )
+    dg.add_argument(
+        "--inventory",
+        action="store_true",
+        help="inventaire des champs, types de mesure, échelles et profondeur par source (S-1.19)",
     )
     sn = sub.add_parser("snapshot", help="relevé horaire chiffré de l'état des pièces (S-13.2)")
     sn.add_argument("--out", required=True, metavar="DOSSIER")

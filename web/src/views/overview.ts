@@ -42,6 +42,7 @@ import {
 } from '../ui';
 import { qualityCard, uncertainBuckets, uncertainDays } from './quality';
 import { html } from '../trusted';
+import { tenant, tenantNote } from '../tenant';
 import { comparedToLastYear, costSentence, glossarySection, kpiTitle, plainNum, term, verdictSentences, verdictTitle } from '../plain';
 
 function kpi(label: string, from: string, to: string, records: DayRecord[], cls = '', simple: string | null = null) {
@@ -229,6 +230,7 @@ function projectionTile(records: DayRecord[], last: string, simple = false) {
 }
 
 function linkyCard() {
+  if (tenant().on) return tenantNote('Les cartes Linky (part du logement, puissance, courbe de charge) sont masquées'); // S-12.6
   if (!ds!.linky.size) return '';
   return `<section class="card">
     <div class="card-head"><h2>Part dans la consommation du logement <small class="muted">compteur Linky</small></h2></div>
@@ -249,7 +251,7 @@ function drawOffload() {
 /** Linky 30-min load curve: placeholder filled by the lazily imported ./linky module. */
 function curveCard() {
   const years = (ds!.meta as { linky_curve_years?: number[] }).linky_curve_years;
-  return years?.length ? '<section class="card" id="curve-card" hidden></section>' : '';
+  return years?.length && !tenant().on ? '<section class="card" id="curve-card" hidden></section>' : '';
 }
 
 function drawCurve() {
@@ -260,7 +262,7 @@ function drawCurve() {
 
 /** S-4.12 / S-1.17: breakdown of the Linky "other usages", lazily imported ./breakdown module. */
 function breakdownCard() {
-  return ds!.linky.size ? '<section class="card" id="breakdown-card" hidden></section>' : '';
+  return ds!.linky.size && !tenant().on ? '<section class="card" id="breakdown-card" hidden></section>' : '';
 }
 
 function drawBreakdown() {

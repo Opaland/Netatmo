@@ -209,7 +209,29 @@ try {
           errors.push(`${name}/overview: délestage par pièce non rendu (${err})`);
         }
       }
+      if (view === 'compare') {
+        // S-2.14: EV charging simulator (lazy module), costs per offer and peaks on the Linky curve
+        try {
+          await page.waitForSelector('#ev-card #ev-result table', { timeout: 15000 });
+          await page.waitForSelector('#ev-peak h3', { timeout: 15000 });
+          const ev = await page.locator('#ev-card').innerText();
+          if (!/Avec la voiture/.test(ev) || !/demi-heure/.test(ev) || !/Comment c'est calculé/.test(ev)) errors.push(`${name}/compare: simulation de recharge incomplète`);
+        } catch (err) {
+          errors.push(`${name}/compare: simulation de recharge non rendue (${err})`);
+        }
+      }
       if (view === 'analyse') {
+        // S-2.15: heat pump estimate (lazy module)
+        try {
+          await page.waitForSelector('#hp-card #hp-result table', { timeout: 15000 });
+          const hp = await page.locator('#hp-card').innerText();
+          if (!/pas une étude thermique/.test(hp) || !/France Rénov/.test(hp)) errors.push(`${name}/analyse: carte PAC sans avertissement ni lien France Rénov'`);
+          await page.selectOption('#hp-mode', 'curve');
+          await page.waitForFunction(() => /COP saisonnier/.test(document.querySelector('#hp-result')?.textContent ?? ''));
+          await page.selectOption('#hp-mode', 'scop');
+        } catch (err) {
+          errors.push(`${name}/analyse: estimation pompe à chaleur non rendue (${err})`);
+        }
         // S-3.7: indoor − outdoor signature (lazy module)
         try {
           await page.waitForSelector('#indoor-sig-chart canvas', { timeout: 15000 });
@@ -365,6 +387,16 @@ try {
     await audit(page, `${name}/menu`);
     await page.click('.menu-panel [data-view=settings]');
     await page.waitForTimeout(400);
+    // S-12.6 tenant mode, S-12.5 prolonged cold alert (lazy cards)
+    try {
+      await page.waitForSelector('#tenant-card #tenant-on', { timeout: 15000 });
+      await page.waitForSelector('#cold-card [data-cold-room]', { timeout: 15000 });
+      await page.locator('#cold-card [data-cold-room]').first().check();
+      await page.waitForSelector('#cold-card td:text-is("Pièce A")', { timeout: 5000 });
+      if (!/pas un dispositif de sécurité/.test(await page.locator('#cold-card').innerText())) errors.push(`${name}/settings: avertissement « pas un dispositif de sécurité » absent`);
+    } catch (err) {
+      errors.push(`${name}/settings: cartes locataire ou alerte froid non rendues (${err})`);
+    }
     await audit(page, `${name}/settings`);
     await page.screenshot({ path: `${OUT}/${name}-settings.png`, fullPage: true }); // S-7.14: inventaire
     // S-12.3: invite a member of the household: a QR code of the address, never the passphrase
@@ -380,6 +412,40 @@ try {
       }
     } catch (err) {
       errors.push(`${name}/invitation: QR code non rendu (${err})`);
+    }
+    if (name === 'bureau') {
+      // S-12.6: tenant mode hides the comparator and Linky cards, costs at the average price, lease report
+      await page.check('#tenant-on');
+      await page.waitForSelector('#tenant-price');
+      await page.fill('#tenant-price', '0.25');
+      await page.locator('#tenant-price').blur();
+      await page.waitForTimeout(300);
+      await page.fill('#tenant-from', '2024-07-01');
+      await page.locator('#tenant-from').blur();
+      await page.waitForTimeout(300);
+      await page.click('[data-view=compare]');
+      await page.waitForTimeout(800);
+      if (await page.locator('#offers-chart, #ev-card').count()) errors.push('locataire : comparateur ou recharge encore affichés');
+      if (!(await page.locator('.tenant-note').count())) errors.push('locataire : phrase d\'explication absente dans Comparer');
+      await audit(page, 'locataire/compare');
+      await page.click('[data-view=overview]');
+      await page.waitForTimeout(600);
+      if (await page.locator('#linky-chart, #curve-card').count()) errors.push('locataire : cartes Linky encore affichées');
+      if (!/€/.test(await page.locator('.kpis').innerText())) errors.push('locataire : coûts absents malgré le prix moyen');
+      await page.click('.menu summary');
+      await page.click('.menu-panel [data-view=report]');
+      await page.waitForSelector('#report-anon');
+      await page.click('#report-anon');
+      await page.waitForSelector('.anon-report #anon-chart canvas', { timeout: 15000 });
+      const lease = await page.locator('.anon-report').innerText();
+      if (!/période du bail/i.test(lease) || !/1er juillet 2024/.test(lease)) errors.push('locataire : le rapport anonymisé ne couvre pas le bail');
+      await page.screenshot({ path: `${OUT}/${name}-locataire-rapport.png`, fullPage: true });
+      await audit(page, 'locataire/rapport');
+      await page.click('.menu summary');
+      await page.click('.menu-panel [data-view=settings]');
+      await page.waitForSelector('#tenant-on');
+      await page.uncheck('#tenant-on');
+      await page.waitForTimeout(300);
     }
 
     if (name === 'bureau') await keyboard(page, name);

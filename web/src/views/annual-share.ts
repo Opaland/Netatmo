@@ -9,8 +9,9 @@ import { activeRooms, ds } from '../app';
 import { barChart, disposeAll } from '../charts';
 import { periodAt } from '../offers';
 import { offersForYear, offersSectionHtml, pmaxForYear, pmaxSectionHtml } from '../report-sections';
-import { contracts, costOf, esc, lastDay, offCol, yearColor } from '../ui';
+import { contracts, costOf, esc, firstDay, lastDay, offCol, series, yearColor } from '../ui';
 import { html } from '../trusted';
+import { leaseWindow, tenant } from '../tenant';
 
 function reportWindow(year: number) {
   const last = lastDay();
@@ -20,6 +21,7 @@ function reportWindow(year: number) {
 
 /** S-6.3: HTML of the two sections (offers, maximum power) for the report year. */
 export function extrasHtml(year: number): string {
+  if (tenant().on) return ''; // S-12.6: offers and Linky power assume the holder's contract and meter
   const d = ds!;
   const kvaAt = (day: string) => periodAt(contracts(), day)?.kva ?? null;
   let offers = null;
@@ -45,19 +47,28 @@ export function renderReportExtras(el: HTMLElement | null, year: number) {
 }
 
 /** Everything the anonymised report shows, as figures and pseudonymisable ids only. */
-function anonData(year: number): AnonReport {
+/** S-12.6: the lease of a tenant, clipped to the archive, or null. */
+const lease = () => (tenant().on ? leaseWindow(tenant(), firstDay(), lastDay()) : null);
+
+/** S-12.6: a tenant with a known lease gets the lease report first. */
+export const anonDefault = (year: number): number | 'lease' => (lease() ? 'lease' : year);
+
+function anonData(choice: number | 'lease'): AnonReport {
   const d = ds!;
-  const { from, to } = reportWindow(year);
+  const isLease = choice === 'lease' && lease() !== null;
+  const { from, to } = isLease ? lease()! : reportWindow(choice === 'lease' ? Number(lastDay().slice(0, 4)) : choice);
+  const year = Number(to.slice(0, 4));
   const all = d.records;
   const yr = all.filter((r) => r.day >= from && r.day <= to);
-  const prev = all.filter((r) => r.day >= `${year - 1}-01-01` && r.day <= minusYears(to));
+  // A lease is never compared with the days before it (another occupant, or none).
+  const prev = isLease ? [] : all.filter((r) => r.day >= `${year - 1}-01-01` && r.day <= minusYears(to));
   const sum = (rs: DayRecord[], cat?: string) => rs.reduce((s, r) => s + (!cat || r.cat === cat ? r.kwh : 0), 0);
   const w = d.weather ? djuBetween(d.weather, from, to) : null;
-  const wPrev = d.weather ? djuBetween(d.weather, `${year - 1}-01-01`, minusYears(to)) : null;
+  const wPrev = d.weather && !isLease ? djuBetween(d.weather, `${year - 1}-01-01`, minusYears(to)) : null;
   const byDay = new Map<string, number>();
   for (const r of yr) byDay.set(r.day, (byDay.get(r.day) ?? 0) + r.kwh);
   const peak = [...byDay].reduce<{ day: string; kwh: number } | null>((b, [day, kwh]) => (!b || kwh > b.kwh ? { day, kwh } : b), null);
-  const deltas = roomDeltas(all, from, to);
+  const deltas = roomDeltas(isLease ? yr : all, from, to);
   const heatNow = sum(yr, 'heating');
   const heatPrev = sum(prev, 'heating');
   const first = yr[0]?.day ?? from;
@@ -79,12 +90,14 @@ function anonData(year: number): AnonReport {
     rooms: activeRooms()
       .filter((r) => deltas.has(r.id))
       .map((r) => ({ id: r.id, category: r.category, now: deltas.get(r.id)!.now, before: deltas.get(r.id)!.before })),
-    estimated: [...d.estimated].some((k) => k.slice(-10).startsWith(String(year))),
-    sources: ['Intuis', d.weather ? `météo ${d.meta.weather_source === 'netatmo' ? 'station Netatmo (extérieur)' : 'Open-Meteo'}` : '', d.linky.size || d.pmax.size ? 'compteur Linky' : '']
+    estimated: [...d.estimated].some((k) => (isLease ? k.slice(-10) >= from && k.slice(-10) <= to : k.slice(-10).startsWith(String(year)))),
+    sources: ['Intuis', d.weather ? `météo ${d.meta.weather_source === 'netatmo' ? 'station Netatmo (extérieur)' : 'Open-Meteo'}` : '', (d.linky.size || d.pmax.size) && !tenant().on ? 'compteur Linky' : '']
       .filter(Boolean)
       .join(', '),
     generated: new Date().toISOString().slice(0, 10),
     extras: extrasHtml(year),
+    lease: isLease,
+    leaseChoice: lease() !== null,
   };
 }
 
@@ -100,9 +113,10 @@ function secrets(): string[] {
 }
 
 /** S-6.4: replace the content of the report view with the anonymised report. */
-export function renderAnonymised(view: HTMLElement, year: number) {
+export function renderAnonymised(view: HTMLElement, year: number | 'lease') {
   disposeAll(view);
-  const markup = anonReportHtml(anonData(year));
+  const data = anonData(year);
+  const markup = anonReportHtml(data);
   const found = leaks(markup.replace(/<[^>]+>/g, ' '), secrets());
   if (found.length) {
     // Belt and braces: the report is built from pseudonyms only, but never show a leak.
@@ -110,16 +124,32 @@ export function renderAnonymised(view: HTMLElement, year: number) {
     return;
   }
   view.innerHTML = html(markup);
-  const m = monthlyByYear(ds!.records);
-  barChart(view.querySelector<HTMLElement>('#anon-chart')!, {
-    labels: MONTHS_SHORT,
-    series: [year - 1, year]
-      .filter((y) => m.has(y))
-      .map((y) => ({ name: String(y), color: yearColor(y), data: m.get(y)!.map((v) => (v === null ? null : Math.round(v))) })),
-    stacked: false,
-    price: null,
-  });
+  const chart = view.querySelector<HTMLElement>('#anon-chart')!;
+  if (data.lease) {
+    // S-12.6: the months of the lease only
+    const months = new Map<string, number>();
+    for (const r of ds!.records) if (r.day >= data.from && r.day <= data.to) months.set(r.day.slice(0, 7), (months.get(r.day.slice(0, 7)) ?? 0) + r.kwh);
+    const keys = [...months.keys()].sort();
+    barChart(chart, {
+      labels: keys.map((k) => `${MONTHS_SHORT[Number(k.slice(5, 7)) - 1]} ${k.slice(0, 4)}`),
+      series: [{ name: 'Bail', color: series(0), data: keys.map((k) => Math.round(months.get(k)!)) }],
+      stacked: false,
+      price: null,
+    });
+  } else {
+    const y = data.year;
+    const m = monthlyByYear(ds!.records);
+    barChart(chart, {
+      labels: MONTHS_SHORT,
+      series: [y - 1, y]
+        .filter((v) => m.has(v))
+        .map((v) => ({ name: String(v), color: yearColor(v), data: m.get(v)!.map((x) => (x === null ? null : Math.round(x))) })),
+      stacked: false,
+      price: null,
+    });
+  }
   view.querySelector<HTMLSelectElement>('[data-anon-year]')!.addEventListener('change', (e) => {
-    renderAnonymised(view, Number((e.target as HTMLSelectElement).value));
+    const v = (e.target as HTMLSelectElement).value;
+    renderAnonymised(view, v === 'lease' ? 'lease' : Number(v));
   });
 }

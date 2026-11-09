@@ -12,6 +12,7 @@ import { uncertainDays } from './quality';
 import { drawSetpoint, setpointCard } from './setpoint';
 import { drawWaterHeater, hcAlerts, waterHeaterCard } from './waterheater';
 import { html } from '../trusted';
+import { tenant } from '../tenant'; // S-12.6: works are the owner's business
 
 let hourly: Hourly | null = null;
 let hourlyLoading = false;
@@ -76,8 +77,9 @@ export function renderAnalyse(view: HTMLElement, records: DayRecord[]) {
   <section class="card" id="indoor-sig" hidden></section>`
       : `<section class="card"><h2>Signature énergétique</h2><p class="hint muted">Disponible dès que la collecte a récupéré la météo (prochaine collecte).</p></section>`
   }
-  <div id="works-zone"></div>
+  ${tenant().on ? '' : '<div id="works-zone"></div>'}
   ${setpointCard(records)}
+  ${ds!.weather ? '<section class="card" id="hp-card" hidden></section>' : ''}
   <div id="shutters-zone"></div>
   ${anomaliesCard(records)}
   <section class="card" id="calendar-card">
@@ -186,6 +188,8 @@ export function renderAnalyse(view: HTMLElement, records: DayRecord[]) {
   drawHourly(records);
   drawWaterHeater(hourly);
   drawSetpoint(records);
+  // S-2.15: heat pump estimate, lazy module
+  void import('./heatpump').then((m) => m.mountHeatPump(document.getElementById('hp-card'), records)).catch(() => {});
   drawIndoorSignature(records);
   // S-9.6: « volets fermés » journal, lazy module
   void import('./shutters').then((m) => document.getElementById('shutters-zone') && m.renderShutters(document.getElementById('shutters-zone')!));
