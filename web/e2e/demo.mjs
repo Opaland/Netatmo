@@ -574,7 +574,8 @@ try {
     for (const view of ['overview', 'rooms', 'analyse', 'compare', 'comfort']) {
       progress(`360 px, texte 200 % : ${view}`);
       await page.click(`[data-view=${view}]`);
-      await page.waitForTimeout(view === 'analyse' ? 2000 : 900);
+      await ready(page);
+      await nextFrame(page);
       const out = await page.evaluate(() => {
         const found = [];
         if (document.documentElement.scrollWidth > window.innerWidth + 1) found.push(`page ${document.documentElement.scrollWidth}px > ${window.innerWidth}px`);

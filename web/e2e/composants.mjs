@@ -35,7 +35,8 @@ try {
     await page.goto(base);
     await page.waitForSelector('#demo-bar canvas', { timeout: 30000 });
     if (big) await page.addStyleTag({ content: 'html { font-size: 200% !important; }' });
-    await page.waitForTimeout(500);
+    // next laid-out frame after the style change (no fixed delay, as in demo.mjs #260)
+    await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(() => r()))));
     const tags = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', ...(enhanced ? ['wcag2aaa'] : [])];
     const builder = new AxeBuilder({ page }).withTags(tags);
     if (enhanced) builder.withRules(['color-contrast-enhanced']);
