@@ -58,10 +58,17 @@ class Station:
             },
         )
         if resp.status_code != 200:
-            raise StationError(
-                f"Station Netatmo : jeton refusé (HTTP {resp.status_code}). Régénérez un jeton sur dev.netatmo.com "
-                "et mettez-le dans le secret NETATMO_REFRESH_TOKEN."
-            )
+            try:
+                code = resp.json().get("error", "")
+            except ValueError:
+                code = ""
+            hint = {
+                "invalid_client": "client_id / client_secret refusés : vérifiez NETATMO_CLIENT_ID "
+                "et NETATMO_CLIENT_SECRET",
+                "invalid_grant": "refresh token refusé ou déjà utilisé : régénérez-le (scope read_station) "
+                "et mettez-le dans NETATMO_REFRESH_TOKEN",
+            }.get(code, "régénérez un jeton sur dev.netatmo.com et mettez-le dans NETATMO_REFRESH_TOKEN")
+            raise StationError(f"Station Netatmo : HTTP {resp.status_code} {code} — {hint}")
         body = resp.json()
         self.access = body["access_token"]
         seed_hash = hashlib.sha256(self.seed_token.encode()).hexdigest()[:16]
