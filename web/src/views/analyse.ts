@@ -5,7 +5,6 @@ import { type Hourly, anomalies, dayProfile, daysAbove, fitSeason, signaturePoin
 import { ds, onDatasetLoaded, rerender, setState, state } from '../app';
 import { calendarChart, cssVar, gridHeatmap, lineChart, scatterChart } from '../charts';
 import { loadHourly } from '../data';
-import { renderMarkdown } from '../markdown';
 import { activeRooms, catColor, esc, fmtKwh, lastDay, longDate, seg, series, table, tariffNames } from '../ui';
 import { drawSetpoint, setpointCard } from './setpoint';
 import { drawWaterHeater, hcAlerts, waterHeaterCard } from './waterheater';
@@ -31,16 +30,7 @@ export function renderAnalyse(view: HTMLElement, records: DayRecord[]) {
   const split = tariffSplit(records.filter((r) => r.day >= addDays(minusYears(last), 1)), ds!.tariffs);
   const [n1, n2] = tariffNames();
   view.innerHTML = `
-  ${
-    ds!.insights
-      ? `<section class="card insight"><div class="card-head"><h2>Analyse du mois <small class="muted">rédigée par l'IA</small></h2></div>
-      <div class="md">${renderMarkdown(ds!.insights.markdown)}</div>
-      <p class="hint muted">Générée le ${esc(ds!.insights.generated.slice(0, 10))} (${esc(ds!.insights.model)}) à partir des chiffres calculés par l'application${
-        ds!.insights.verified === false ? ' — <strong>attention : certains nombres du texte n\'ont pas pu être vérifiés</strong>' : ''
-      }. Les chiffres font foi : l'IA ne fait que les commenter.</p>
-      ${ds!.insights.facts ? `<details class="table-details"><summary>Voir exactement ce qui a été envoyé à l'IA</summary><pre class="facts-json">${esc(JSON.stringify(ds!.insights.facts, null, 2))}</pre></details>` : ''}</section>`
-      : ''
-  }
+  ${ds!.insights ? '<section class="card insight" id="insight-card" aria-busy="true"><h2>Analyse du mois</h2></section>' : ''}
   ${
     ds!.weather
       ? `<section class="card">
@@ -146,6 +136,8 @@ export function renderAnalyse(view: HTMLElement, records: DayRecord[]) {
       unit: '°C',
     });
   }
+  // S-5.7/S-5.8: AI card loaded on demand (markdown renderer, votes, usage)
+  if (ds!.insights) void import('./insight').then((m) => m.mountInsight(document.getElementById('insight-card')));
   drawStation();
   drawHourly(records);
   drawWaterHeater(hourly);

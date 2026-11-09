@@ -52,6 +52,19 @@ export interface Insights {
   markdown: string;
   verified?: boolean;
   facts?: unknown;
+  pseudonyms?: Record<string, string>; // S-5.7: "Pièce A" -> real name, kept here, never sent
+  usage?: InsightUsage; // S-5.8
+}
+
+export interface InsightUsage {
+  requests: number;
+  input_tokens: number;
+  output_tokens: number;
+  cache_read_input_tokens?: number;
+  cache_creation_input_tokens?: number;
+  cost_usd: number;
+  cost_eur: number;
+  served_by?: string[];
 }
 
 interface YearDoc {

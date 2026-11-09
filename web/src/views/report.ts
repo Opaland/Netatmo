@@ -91,7 +91,8 @@ export function renderReport(view: HTMLElement) {
       }),
     )}
     <p class="hint muted">Rapport généré le ${longDate(new Date().toISOString().slice(0, 10))} par l'application Historique énergie. Données Intuis${ds!.weather ? ', météo ' + (ds!.meta.weather_source === 'netatmo' ? 'station Netatmo' : 'Open-Meteo') : ''}${ds!.linky.size ? ', compteur Linky' : ''}.</p>
-  </section>`;
+  </section>
+  <section class="card no-print" id="questions-card" aria-busy="true"><h2>Questions types</h2></section>`;
   const m = monthlyByYear(all);
   barChart(document.getElementById('report-chart')!, {
     labels: MONTHS_SHORT,
@@ -102,6 +103,8 @@ export function renderReport(view: HTMLElement) {
     price: avgPrice(),
   });
   drawWaterfall(document.getElementById('report-waterfall')!, deltas, year);
+  // S-5.9: canned questions answered by code, loaded on demand
+  void import('./questions').then((m) => m.mountQuestions(document.getElementById('questions-card')));
 }
 
 // ------------------------------------------------------------------ events
