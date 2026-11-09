@@ -117,3 +117,47 @@ def test_fallback_to_room_endpoint_when_home_measure_is_empty(tmp_path):
     syncer.run()
     assert syncer.strategy[0] == "room"
     assert syncer.store.year(2024)["100"] == {"2024-01-01": 500.0}
+
+
+def test_water_heater_is_read_at_module_level(tmp_path):
+    """The room holding an NMW returns nothing; the module itself carries the energy."""
+    requests = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        path = request.url.path
+        if path == "/oauth2/token":
+            return httpx.Response(200, json={"access_token": "t", "expires_in": 3600})
+        if path == "/api/homesdata":
+            return httpx.Response(200, json=load("homesdata.json"))
+        if path == "/api/gethomemeasure":
+            req = json.loads(request.content)
+            requests.append(req)
+            body = load("gethomemeasure.json")
+            body["body"]["home"]["modules"] = [
+                {"id": m["id"], "measures": [{"beg_time": 1704063600, "step_time": 86400, "value": [[None, 700, 50]]}]}
+                for m in req["home"].get("modules", [])
+            ]
+            return httpx.Response(200, json=body)
+        return httpx.Response(404)
+
+    settings = Settings(username="u", password="p", client_id="c", client_secret="s", api_base="https://x")
+    client = IntuisClient(settings, http=httpx.Client(transport=httpx.MockTransport(handler)), min_interval=0)
+    store = Store(tmp_path, "pw")
+    Syncer(client, store).run(days=10)
+    assert requests[0]["home"]["modules"] == [
+        {"id": "m4", "bridge": "gw", "type": requests[0]["home"]["rooms"][0]["type"]}
+    ]
+    assert store.year(2024)["300"] == {"2024-01-01": 750.0}
+    assert store.year(2024)["100"]["2024-01-01"] == 1200.0
+
+
+def test_water_heater_outside_any_room_becomes_virtual_room():
+    payload = load("homesdata.json")
+    home = payload["body"]["homes"][0]
+    home["rooms"] = [r for r in home["rooms"] if r["id"] != "300"]
+    home["modules"][-1]["name"] = "Ballon"
+    (parsed,) = parse_homes(payload)
+    assert parsed.water_heaters == {"m4": "m4"}
+    virtual = parsed.rooms[-1]
+    assert (virtual.id, virtual.category, virtual.virtual) == ("m4", WATER_HEATER, True)
+    assert "m4" not in parsed.api_room_ids()
