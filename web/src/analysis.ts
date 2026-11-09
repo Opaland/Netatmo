@@ -137,11 +137,20 @@ export function fitSeason(points: [number, number, string][]): Fit | null {
 }
 
 // ------------------------------------------------------------------ projection & verdict
+/** First day with data in these records ('' when there is none). */
+const firstDayOf = (records: DayRecord[]) => records.reduce((a, r) => (!a || r.day < a ? r.day : a), '');
+
 /**
  * Year-end projection: actual so far + the rest of the year as it went in previous
- * years, scaled by how this year compares to them so far.
+ * years, scaled by how this year compares to them so far. Only previous years measured
+ * from 1 January count (#240): a first year started in June has no winter in its « so far »
+ * and would blow the ratio up. `firstDay` defaults to the first day of the records.
  */
-export function projectYear(records: DayRecord[], lastDay: string): { projected: number; ytd: number; basis: number } | null {
+export function projectYear(
+  records: DayRecord[],
+  lastDay: string,
+  firstDay = firstDayOf(records),
+): { projected: number; ytd: number; basis: number } | null {
   const year = Number(lastDay.slice(0, 4));
   const md = lastDay.slice(5);
   let ytd = 0;
@@ -150,7 +159,7 @@ export function projectYear(records: DayRecord[], lastDay: string): { projected:
     const y = Number(r.day.slice(0, 4));
     if (y === year) {
       if (r.day <= lastDay) ytd += r.kwh;
-    } else if (y < year) {
+    } else if (y < year && firstDay <= `${y}-01-01`) {
       const p = prev.get(y) ?? { ytd: 0, rest: 0 };
       if (r.day.slice(5) <= md) p.ytd += r.kwh;
       else p.rest += r.kwh;
@@ -175,8 +184,17 @@ export interface Verdict {
 /**
  * This period vs the same calendar period of previous years. With weather, the
  * heating part is compared at equal climate (kWh per DJU of previous years × DJU now).
+ * A reference period is used only when the data covers it entirely (#240): on the first
+ * anniversary of a collection started mid-month, the half month measured would make the
+ * « expected » far too low.
  */
-export function verdict(records: DayRecord[], from: string, to: string, weather: Weather | null): Verdict | null {
+export function verdict(
+  records: DayRecord[],
+  from: string,
+  to: string,
+  weather: Weather | null,
+  firstDay = firstDayOf(records),
+): Verdict | null {
   const sum = (f: string, t: string, cat?: string) =>
     records.reduce((s, r) => s + (r.day >= f && r.day <= t && (!cat || r.cat === cat) ? r.kwh : 0), 0);
   const actual = sum(from, to);
@@ -184,6 +202,7 @@ export function verdict(records: DayRecord[], from: string, to: string, weather:
   for (let k = 1; k <= 4; k++) {
     const f = minusYears(from, k);
     const t = minusYears(to, k);
+    if (f < firstDay) break; // older references start even earlier
     const total = sum(f, t);
     if (total <= 0) continue;
     refs.push({ total, heat: sum(f, t, 'heating'), dju: weather ? djuBetween(weather, f, t).dju : 0 });

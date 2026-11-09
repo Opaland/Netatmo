@@ -1,6 +1,7 @@
 // S-6.3: offer comparator and maximum power for one year of the annual report.
 // Pure functions (no DOM, no app state), so they are unit tested and shared by the full
 // report and the anonymised one (S-6.4). Loaded lazily with the report extras.
+import { WITH_SUBSCRIPTION } from './synthese';
 import { MONTHS_LONG } from './aggregate';
 import { type DaySplit, type OfferCost, type TempoRow, type TrveRow, compareOffers } from './analysis';
 
@@ -46,7 +47,10 @@ export function offersForYear(year: number, input: OffersInput): OffersYear | nu
 }
 
 export function offersSectionHtml(o: OffersYear | null): string {
-  const head = '<h3>Quelle offre EDF aurait coûté le moins ?</h3>';
+  // #292: the amounts say what they cover (subscription included, perimeter of the meter)
+  const head = `<h3>Quelle offre EDF aurait coûté le moins ?${
+    o ? ` <small class="muted">${WITH_SUBSCRIPTION}, ${o.scope === 'logement' ? 'tout le logement' : 'radiateurs et chauffe-eau'}</small>` : ''
+  }</h3>`;
   if (!o) return `<section class="report-section" id="report-offers">${head}<p class="hint muted">Comparateur indisponible pour cette année : tarifs réglementés ou couleurs Tempo non disponibles.</p></section>`;
   const diff = offerTotal(o.costs.hphc) - offerTotal(o.costs[o.best]);
   return `<section class="report-section" id="report-offers">${head}

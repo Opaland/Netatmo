@@ -220,15 +220,15 @@ export function yearColor(y: number) {
 export const roomName = (id: string) => (id === OTHER ? 'Autres pièces' : (ds!.meta.rooms.find((r) => r.id === id)?.name ?? id));
 
 // ------------------------------------------------------------------ shared charts
-/** Year-over-year change per room (rooms view and annual report). */
-export function drawWaterfall(el: HTMLElement, deltas: Map<string, { now: number; before: number }>, year: number) {
+/** Year-over-year change per room (rooms view and annual report); `suffix` names a partial window (#297). */
+export function drawWaterfall(el: HTMLElement, deltas: Map<string, { now: number; before: number }>, year: number, suffix = '') {
   const rooms = activeRooms().filter((r) => deltas.has(r.id));
   const steps = rooms
     .map((r) => ({ name: r.name, delta: deltas.get(r.id)!.now - deltas.get(r.id)!.before }))
     .filter((s) => Math.abs(s.delta) >= 1)
     .sort((a, b) => b.delta - a.delta);
   const start = [...deltas.values()].reduce((s, d) => s + d.before, 0);
-  waterfallChart(el, { startLabel: String(year - 1), endLabel: String(year), start, steps });
+  waterfallChart(el, { startLabel: `${year - 1}${suffix}`, endLabel: `${year}${suffix}`, start, steps });
 }
 
 /** Keep the menu open across the re-render that follows a change made inside it. */

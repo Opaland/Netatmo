@@ -40,7 +40,7 @@ import {
   table,
   tableToggle,
 } from '../ui';
-import { qualityCard, uncertainBuckets, uncertainDays } from './quality';
+import { chartMarks, qualityCard, uncertainDays, yoyGapNote } from './quality';
 import { html } from '../trusted';
 import { lazyCard } from '../lazy';
 import { tenant, tenantNote } from '../tenant';
@@ -64,7 +64,7 @@ function kpi(label: string, from: string, to: string, records: DayRecord[], cls 
   return `<article class="kpi${cls}">
     <h3>${esc(label)}</h3>
     <p class="kpi-value">${fmtKwh(now)}</p>
-    <p class="kpi-sub">${eur ? `${eur} · ` : ''}${hasBefore ? delta(now, before) : '<span class="delta neutral">pas de référence N-1</span>'}</p>
+    <p class="kpi-sub">${eur ? `${eur} · ` : ''}${hasBefore ? delta(now, before) + yoyGapNote(records, from, to) : '<span class="delta neutral">pas de référence N-1</span>'}</p>
   </article>`;
 }
 
@@ -161,8 +161,9 @@ export function renderOverview(view: HTMLElement, records: DayRecord[]) {
     data: set.groups.get(k)!.map((v) => Math.round(v * 10) / 10),
   }));
   const labels = set.keys.map((k) => bucketLabel(k, state.gran));
-  const muted = uncertainBuckets(records, set.keys, from, to);
-  barChart(document.getElementById('main-chart')!, { labels, series: ser, stacked: true, price: avgPrice(records), zoom: labels.length > 60, muted });
+  // #297: partial buckets hatched, buckets with estimated or lost days paler, both explained in the tooltip
+  const marks = chartMarks(records, set.keys, from, to);
+  barChart(document.getElementById('main-chart')!, { labels, series: ser, stacked: true, price: avgPrice(records), zoom: labels.length > 60, ...marks });
   document.getElementById('main-table')!.innerHTML = html(tableToggle(
     table(
       ['Période', ...ser.map((s) => s.name), 'Total'],
@@ -231,7 +232,7 @@ function projectionTile(records: DayRecord[], last: string, simple = false) {
   return `<article class="kpi kpi-detail">
     <h3>Fin ${year} estimée</h3>
     <p class="kpi-value">≈ ${fmtKwh(p.projected)}</p>
-    <p class="kpi-sub">${eur !== null ? `≈ ${fmtEur(eur)} · ` : ''}${prev ? delta(p.projected, prev) : ''}</p>
+    <p class="kpi-sub">${eur !== null ? `≈ ${fmtEur(eur)} · ` : ''}${prev && firstDay() <= `${Number(year) - 1}-01-01` ? delta(p.projected, prev) : ''}</p>
   </article>`;
 }
 

@@ -594,6 +594,12 @@ th {
 .tt-name {
   color: var(--text-secondary);
 }
+.tt-note {
+  color: var(--text-secondary);
+  font-size: 11px;
+  max-width: 240px;
+  white-space: normal;
+}
 .tt-total {
   border-top: 1px solid var(--border);
   margin-top: 4px;
