@@ -1,6 +1,6 @@
 import sodium from 'libsodium-wrappers';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { expiryInfo, listSecrets, putSecret, putVariable, repoFromLocation, runCollect, setToken, validate } from './settings';
+import { expiryInfo, listSecrets, noSaveAttrs, putSecret, putVariable, repoFromLocation, runCollect, setToken, validate } from './settings';
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -11,6 +11,16 @@ describe('settings', () => {
   it('derives owner/repo from the GitHub Pages address only', () => {
     expect(repoFromLocation({ hostname: 'opaland.github.io', pathname: '/Netatmo/' } as Location)).toBe('opaland/Netatmo');
     expect(repoFromLocation({ hostname: 'localhost', pathname: '/' } as Location)).toBeNull();
+  });
+
+  it('#233 : jeton et secrets marqués pour ne pas être proposés à l’enregistrement', () => {
+    const secret = noSaveAttrs(true);
+    expect(secret).toContain('type="password"');
+    expect(secret).toContain('autocomplete="one-time-code"');
+    expect(secret).not.toContain('autocomplete="off"');
+    for (const a of ['data-1p-ignore', 'data-lpignore="true"', 'data-bwignore']) expect(secret).toContain(a);
+    expect(noSaveAttrs(false)).toContain('type="text"');
+    expect(noSaveAttrs(false)).toContain('data-lpignore="true"');
   });
 
   it('catches obvious typos before sending', () => {

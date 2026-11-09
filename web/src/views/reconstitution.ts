@@ -4,6 +4,7 @@
 import { MONTHS_SHORT } from '../aggregate';
 import { ds } from '../app';
 import { barChart } from '../charts';
+import { displayId } from '../household';
 import { rebuildLost, rebuildTotals, suspectDays } from '../reconstitute';
 import { activeRooms, esc, fmtKwh, longDate, roomName, series, table } from '../ui';
 import { html } from '../trusted';
@@ -52,7 +53,7 @@ export function renderReconstitution(zone: HTMLElement) {
         .reverse()
         .map((r) => [
           longDate(r.day),
-          esc(r.rooms.map((id) => roomName(id)).join(', ')),
+          esc([...new Set(r.rooms.map((id) => roomName(displayId(ds!, id))))].join(', ')),
           fmtKwh(r.kwh),
           r.method === 'linky' ? 'Linky' : 'Signature',
           kwh(r.linky),

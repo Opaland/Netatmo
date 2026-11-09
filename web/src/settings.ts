@@ -74,6 +74,21 @@ export const GROUPS: SecretGroup[] = [
 
 export const TOKEN_HELP_URL = 'https://github.com/settings/personal-access-tokens/new';
 
+/**
+ * #233: attributes of the token / secret inputs, so that the browser and the usual password
+ * managers do not offer to save them (they are not this site's credentials). A masked field keeps
+ * type="password" (screen readers do not read it aloud) with autocomplete="one-time-code", which
+ * browsers exclude from password saving and do not fill (`autocomplete="off"` is ignored on a
+ * password field); the fields sit outside any <form> and are sent by a plain button, so no
+ * "form submitted" heuristic fires. Best effort only: the help text says to refuse if asked.
+ */
+export function noSaveAttrs(secret: boolean): string {
+  const managers = 'data-1p-ignore data-lpignore="true" data-bwignore data-form-type="other"';
+  return secret
+    ? `type="password" autocomplete="one-time-code" ${managers} spellcheck="false" autocapitalize="off"`
+    : `type="text" autocomplete="off" ${managers} spellcheck="false" autocapitalize="off"`;
+}
+
 let token: string | null = null;
 let publicKey: { key: string; key_id: string } | null = null;
 

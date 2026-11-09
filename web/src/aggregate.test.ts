@@ -11,7 +11,7 @@ import {
   toCsv,
   weekStart,
 } from './aggregate';
-import { decryptEnvelope, deriveKey } from './crypto';
+import { BadEnvelope, checkEnvelope, decryptEnvelope, deriveKey } from './crypto';
 import vector from './__fixtures__/python-vector.json';
 
 const rec = (day: string, kwh: number, room = 'a', cat: DayRecord['cat'] = 'heating'): DayRecord => ({ day, room, cat, kwh });
@@ -73,6 +73,15 @@ describe('crypto', () => {
   it('rejects a wrong passphrase', async () => {
     const key = await deriveKey('nope', { salt: vector.salt, iter: vector.iter });
     await expect(decryptEnvelope(vector, key)).rejects.toThrow('Phrase de passe incorrecte');
+  });
+  it('#236 : refuse une dérivation faible et un format inconnu, avec un message clair', async () => {
+    await expect(deriveKey('test', { salt: vector.salt, iter: 1000 })).rejects.toThrow(BadEnvelope);
+    await expect(deriveKey('test', { salt: vector.salt, iter: '600000' as unknown as number })).rejects.toThrow(/itérations/);
+    const key = await deriveKey('test', { salt: vector.salt, iter: vector.iter });
+    await expect(decryptEnvelope({ ...vector, v: 2 }, key)).rejects.toThrow(/version 2/);
+    await expect(decryptEnvelope({ ...vector, kdf: 'scrypt' }, key)).rejects.toThrow(BadEnvelope);
+    await expect(decryptEnvelope({ ...vector, iter: 1000 }, key)).rejects.toThrow(/600/);
+    expect(() => checkEnvelope(vector)).not.toThrow();
   });
 });
 

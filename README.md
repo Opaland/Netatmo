@@ -138,8 +138,11 @@ dépôt (le procédé imposé par GitHub) et les enregistre comme secrets, puis 
 
 Il faut pour cela un [jeton GitHub « fine-grained »](https://github.com/settings/personal-access-tokens/new) :
 accès au seul dépôt, permissions **Secrets : lecture et écriture**, **Variables : lecture et écriture**
-(pour le contrat partagé) et **Actions : lecture et écriture**, rien d'autre, expiration courte. Le jeton reste en mémoire le temps de la visite et n'est jamais
-enregistré. La phrase de passe des données ne se change pas ici (voir plus bas).
+(pour le contrat partagé) et **Actions : lecture et écriture**, rien d'autre, expiration courte. Le jeton reste en mémoire le temps de la visite et
+l'application ne l'enregistre jamais. Les champs du jeton et des identifiants ne sont pas dans un formulaire
+et sont marqués pour que le navigateur et les gestionnaires de mots de passe courants ne proposent pas de
+les mémoriser ; aucun navigateur ne le garantit : s'il le propose quand même, refusez.
+La phrase de passe des données ne se change pas ici (voir plus bas).
 
 ### Changer de phrase de passe
 
@@ -323,13 +326,19 @@ gardées. Analyse d'impact courte dans [docs/api-notes.md](docs/api-notes.md#don
 ### Vue foyer : chambres regroupées
 
 Les consommations, profils horaires, températures et le CO₂ par chambre disent beaucoup des
-habitudes de chacun. Par défaut, l'application regroupe donc sur tous les écrans les pièces dont le
-nom contient « chambre » (ou « bedroom ») en une seule pièce **« Chambres »** : totaux additionnés,
-températures et CO₂ moyennés, modules de la station compris ; dans l'analyse IA, leurs noms sont
-remplacés par « Chambres ». Le détail s'affiche par un geste volontaire, menu ⋮ → **Afficher le
-détail des chambres**, et seulement jusqu'au verrouillage suivant. La case « Vue foyer » du menu
-désactive le regroupement sur cet appareil seulement. C'est une protection d'affichage : toute
-personne qui connaît la phrase de passe peut voir le détail.
+habitudes de chacun. La case **« Vue foyer »** du menu ⋮ (désactivée par défaut depuis la v1.5, sur
+cet appareil seulement) regroupe sur tous les écrans les pièces dont le nom contient « chambre »,
+« bedroom », « dortoir » ou « suite parentale » en une seule pièce **« Chambres »** : totaux
+additionnés, températures et CO₂ moyennés, modules de la station compris ; dans l'analyse IA, leurs
+noms sont remplacés par « Chambres ». Le détail s'affiche alors par un geste volontaire, menu ⋮ →
+**Afficher le détail des chambres**, et seulement jusqu'au verrouillage suivant. C'est une
+protection d'affichage : toute personne qui connaît la phrase de passe peut voir le détail.
+
+Le regroupement ne change **aucun calcul** : coûts, partage heures pleines / creuses, jours perdus
+ou estimés, signature, jours inhabituels, reconstitution, pièce froide, alerte froid prolongé et
+surfaces sont calculés pièce par pièce, puis seulement additionnés pour l'affichage (un jour de
+« Chambres » est perdu ou estimé si une chambre l'est ; une journée froide est comptée si une
+chambre l'est). Les totaux sont identiques avec ou sans la vue foyer.
 
 ### Soirs « volets fermés »
 
@@ -501,12 +510,30 @@ scripts/            outils ponctuels (jours Tempo, constats de revue → issues)
 
 - Identifiants et phrase de passe : uniquement dans les **secrets GitHub**, jamais dans le dépôt.
 - Données : AES-256-GCM, clé dérivée par PBKDF2-SHA256 (600 000 itérations). Le sel est public
-  (`data/keyinfo.json`), c'est normal.
+  (`data/keyinfo.json`), c'est normal. L'application refuse un `keyinfo.json` ou un fichier chiffré
+  annonçant moins de 600 000 itérations, une autre version de format ou une autre dérivation, avec un
+  message clair (un `keyinfo.json` modifié ne peut pas affaiblir la clé en silence). Limite connue : le
+  nom du fichier n'est pas lié au chiffré (pas de données associées GCM) ; quelqu'un qui peut écrire
+  dans le dépôt pourrait intervertir deux fichiers chiffrés. Le lier demande un format v2 et un rekey
+  complet (tant que les fichiers v1 restent lisibles, un ancien fichier pourrait remplacer un nouveau) :
+  reporté à la prochaine évolution du format.
+- Exports CSV (application et `export-csv`) : une cellule texte (nom de pièce, de module) qui commence
+  par `=`, `+`, `-`, `@`, une tabulation ou un retour chariot est préfixée d'une apostrophe, pour qu'un
+  tableur ne l'exécute pas comme une formule. Les colonnes numériques (températures négatives) sont
+  écrites telles quelles.
+- Affichage dans un cadre (clickjacking) : GitHub Pages n'envoie ni `X-Frame-Options` ni CSP en en-tête,
+  et `frame-ancestors` est ignoré dans une CSP en `<meta>`. L'application vérifie donc elle-même qu'elle
+  n'est pas affichée dans la page d'un autre site : dans un cadre, elle n'affiche ni l'écran de
+  déverrouillage ni aucune donnée, seulement un lien pour l'ouvrir directement. Ce contrôle en JavaScript
+  ne remplace pas un vrai en-tête HTTP (impossible sur GitHub Pages).
 - Le site ne contacte aucun service tiers et n'envoie rien : il lit les fichiers chiffrés du dépôt.
 - Politique de sécurité du contenu (CSP) stricte, dans `web/index.html`, avec **Trusted Types** :
   le navigateur refuse toute chaîne brute affectée à `innerHTML`. Tout le HTML de l'application passe
   par une seule politique nommée (`web/src/trusted.ts`), qui refuse en plus le balisage exécutable
-  (`<script>`, gestionnaires `on…=`, `javascript:`). La politique `default` n'accepte que la chaîne vide
+  (`<script>`, `<iframe>`, gestionnaires `on…=` même après une barre oblique, URL `javascript:` même
+  écrite avec des entités). Elle analyse les balises comme le navigateur (petit analyseur, pas une
+  expression régulière) : un texte échappé contenant « javascript: » ne bloque jamais l'affichage, et
+  ce que l'analyseur ne sait pas trancher (commentaires, `<title>` contenant `<`…) est refusé. La politique `default` n'accepte que la chaîne vide
   (ECharts vide ses infobulles) et le service worker du site. Le test de bout en bout échoue à la
   moindre violation de la CSP.
 

@@ -8,13 +8,13 @@
 // - signature: heating signature of the season × outdoor temperature, times the share of
 //   the lost heating rooms; for a water heater, its median over nearby complete days.
 // Linky is a measurement, so it wins when it is there; the signature is the fallback.
-import { type Category, type DayRecord, addDays, seasonOf } from './aggregate';
+import { type Category, type DayRecord, addDays, rawRecords, seasonOf } from './aggregate';
 import { type Fit, type Weather, fitSeason } from './analysis';
 
 /** day -> rooms without a value that day (between the room's first and last stored day). */
 export function lostDays(records: DayRecord[]): Map<string, Set<string>> {
   const byRoom = new Map<string, Set<string>>();
-  for (const r of records) {
+  for (const r of rawRecords(records)) {
     if (!byRoom.has(r.room)) byRoom.set(r.room, new Set());
     byRoom.get(r.room)!.add(r.day);
   }
@@ -54,7 +54,7 @@ interface DayIndex {
 function index(records: DayRecord[]): DayIndex {
   const perDay = new Map<string, Map<string, number>>();
   const cat = new Map<string, Category>();
-  for (const r of records) {
+  for (const r of rawRecords(records)) {
     cat.set(r.room, r.cat);
     if (!perDay.has(r.day)) perDay.set(r.day, new Map());
     const m = perDay.get(r.day)!;

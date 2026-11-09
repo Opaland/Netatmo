@@ -3,8 +3,20 @@
 // - Paramètres: choose rooms and threshold, see each room's state and its pseudonym, and write
 //   the repository variable COLD_ALERT_JSON (the nightly collection opens a GitHub issue).
 // Real names stay on this device: the public issue only shows « Pièce A, B… ».
-import { activeRooms, ds, rerender } from '../app';
-import { COLD_DAYS, COLD_MAX_ROOMS, COLD_THRESHOLDS, type ColdConfig, coldJson, coldPseudonym, coldStatus, parseColdConfig } from '../cold';
+import { ds, householdStatus, rawDataset, rerender } from '../app';
+import { BEDROOMS_NAME, isBedroom } from '../household';
+import {
+  COLD_DAYS,
+  COLD_MAX_ROOMS,
+  COLD_THRESHOLDS,
+  type ColdConfig,
+  type Sensor,
+  coldJson,
+  coldPseudonym,
+  coldSensors,
+  coldStatus,
+  parseColdConfig,
+} from '../cold';
 import { hasToken, putVariable } from '../settings';
 import { esc, lastDay, longDate, table } from '../ui';
 import { html } from '../trusted';
@@ -13,31 +25,8 @@ import '../simulators.css';
 export const COLD_VARIABLE = 'COLD_ALERT_JSON';
 const LS = 'intuis-history:cold-draft';
 
-interface Sensor {
-  id: string;
-  name: string;
-  kind: 'radiateur' | 'station';
-  means: Map<string, number>; // day -> mean °C
-}
-
-/** Rooms with a daily temperature: Intuis rooms (radiator probe) and indoor station modules. */
-function sensors(): Sensor[] {
-  const d = ds!;
-  const out: Sensor[] = [];
-  for (const r of activeRooms()) {
-    const t = d.temps.get(r.id);
-    if (r.category !== 'heating' || !t?.size) continue;
-    out.push({ id: r.id, name: r.name, kind: 'radiateur', means: new Map([...t].map(([day, v]) => [day, v[0]])) });
-  }
-  for (const [id, m] of Object.entries(d.station?.modules ?? {})) {
-    if (!m.indoor) continue;
-    const daily = d.station!.daily[id] ?? {};
-    const means = new Map<string, number>();
-    for (const [day, v] of Object.entries(daily)) if (typeof v[2] === 'number') means.set(day, v[2]);
-    if (means.size) out.push({ id, name: m.name, kind: 'station', means });
-  }
-  return out;
-}
+/** #242: always the raw rooms and modules, whatever the household view shows. */
+const sensors = (): Sensor[] => coldSensors(rawDataset() ?? ds!);
 
 const shared = () => parseColdConfig((ds!.meta as { cold_alert?: unknown }).cold_alert);
 const num1 = (v: number) => v.toFixed(1).replace('.', ',');
@@ -80,7 +69,7 @@ export function mountColdBanner(zone: HTMLElement | null) {
   zone.innerHTML = html(
     cold.length
       ? `<p class="stale" role="alert"><span aria-hidden="true">❄️</span> <strong>Froid prolongé</strong> : ${cold
-          .map((s) => `${esc(s.name)} ${describe(s, c)}`)
+          .map((s) => `${esc(householdStatus().active && isBedroom(s.name) ? `${BEDROOMS_NAME} (une chambre)` : s.name)} ${describe(s, c)}`)
           .join(' ; ')}. Une issue GitHub « alerte froid » est ouverte par la collecte (sans nom ni température).</p>`
       : `<p class="hint muted">Alerte froid prolongé active : aucune des ${c.rooms.length} pièce${c.rooms.length > 1 ? 's' : ''} suivie${c.rooms.length > 1 ? 's' : ''} sous ${num1(c.threshold)} °C (moyenne d'une journée). Réglage : Paramètres.</p>`,
   );

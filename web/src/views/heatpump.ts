@@ -4,6 +4,7 @@ import type { DayRecord } from '../aggregate';
 import { offPeakShares, signaturePoints } from '../analysis';
 import { activeRooms, ds } from '../app';
 import { referenceSeason } from '../checks';
+import { displayId } from '../household';
 import { COP_CURVE, type CopMode, simulateHeatPump } from '../heatpump';
 import { esc, fmtEur, fmtKwh, lastDay, nf0, offCol, table } from '../ui';
 import { currentHcHp } from './waterheater';
@@ -54,7 +55,7 @@ function heatingPrice(): { price: number; source: string } | null {
   const p = currentHcHp();
   if (!p) return null;
   const heating = new Set(activeRooms().filter((r) => r.category === 'heating').map((r) => r.id));
-  const shares = offPeakShares(new Map([...ds!.tariffs].filter(([room]) => heating.has(room))), offCol());
+  const shares = offPeakShares(new Map([...ds!.tariffs].filter(([room]) => heating.has(displayId(ds!, room)))), offCol());
   return { price: shares.overall * p.hc + (1 - shares.overall) * p.hp, source: p.source };
 }
 
