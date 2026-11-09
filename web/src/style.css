@@ -495,11 +495,44 @@ code {
 }
 
 /* ---------------------------------------------------------------- cards and tiles */
+/* #311: tiles (components.ts tile(), every page): side by side when there is room (they wrap,
+   2 + 1, at large text), an amount never cut over two lines; on a phone, see the list below. */
 .kpis {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 9.5rem), 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr));
   gap: var(--space-3);
   margin-bottom: var(--space-4);
+}
+body:not(.is-simple) .kpis .kpi-value {
+  white-space: nowrap;
+  overflow-wrap: normal;
+}
+/* On a phone: one tile per line, label on the left, amount on the right, comparison below. */
+@media (max-width: 480px) {
+  body:not(.is-simple):not(.is-report) .kpis {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-2);
+  }
+  body:not(.is-simple):not(.is-report) .kpis .kpi {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: baseline;
+    gap: 2px var(--space-3);
+    padding: var(--space-3);
+  }
+  body:not(.is-simple):not(.is-report) .kpis .kpi > h3 {
+    grid-column: 1;
+    min-width: 0;
+  }
+  body:not(.is-simple):not(.is-report) .kpis .kpi-value {
+    grid-column: 2;
+    grid-row: 1;
+    margin: 0;
+    font-size: 1.25rem;
+  }
+  body:not(.is-simple):not(.is-report) .kpis .kpi > :not(h3, .kpi-value) {
+    grid-column: 1 / -1;
+  }
 }
 .kpi,
 .card {
@@ -1750,6 +1783,49 @@ code.hash {
 }
 .alert p {
   margin: 0;
+}
+.alert p + p,
+.alert p + details {
+  margin-top: var(--space-1);
+}
+
+/* ---------------------------------------------------------------- Accueil (#311) */
+.card-head .sub {
+  font-size: var(--font-sm);
+  color: var(--text-muted);
+}
+.card-foot {
+  margin: var(--space-3) 0 0;
+}
+.verdict .gauge {
+  margin-top: var(--space-3);
+}
+.home-tiles .kpi-sub {
+  line-height: 1.45;
+}
+.chart.home-chart {
+  height: 230px;
+}
+/* the alerts of the screen, grouped; a zone with nothing to say takes no room */
+.alerts {
+  display: grid;
+  gap: var(--space-2);
+  margin-bottom: var(--space-4);
+}
+.alerts .alert {
+  margin: 0;
+}
+.alerts > div:empty,
+.alerts:not(:has(.alert, .lazy-failed, .state)) {
+  display: none;
+}
+.alert-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-4);
+}
+#counted-card .list {
+  margin-top: var(--space-2);
 }
 /* Empty, loading, error and offline states (lazy cards use the same classes). */
 .state {

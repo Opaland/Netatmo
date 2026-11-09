@@ -200,17 +200,23 @@ function tooltip(price: number | null, showTotal: boolean, unit = 'kWh', series:
         params as { seriesName: string; seriesIndex: number; dataIndex: number; value: number | null; color: string; axisValueLabel: string }[]
       ).filter((p) => p.value !== null && p.value !== undefined && typeof p.value === 'number');
       if (!list.length) return '';
+      // #311: a series in another unit (outdoor temperature over kWh bars) is shown with its unit, out of the total
+      const own = (p: { seriesIndex: number }) => {
+        const u = series[p.seriesIndex]?.unit;
+        return u && u !== unit ? u : null;
+      };
       const rows = list
         .map(
           (p) =>
             `<div class="tt-row"><span class="tt-key" style="background:${p.color}"></span><strong>${fmt(p.value!, series[p.seriesIndex]?.unit ?? unit)}</strong><span class="tt-name">${escapeHtml(p.seriesName)}</span></div>${note(series[p.seriesIndex]?.notes?.[p.dataIndex])}`,
         )
         .join('');
-      const sum = list.reduce((s, p) => s + (p.value ?? 0), 0);
+      const counted = list.filter((p) => !own(p));
+      const sum = counted.reduce((s, p) => s + (p.value ?? 0), 0);
       const totalRow =
-        showTotal && list.length > 1
+        showTotal && counted.length > 1
           ? `<div class="tt-row tt-total"><strong>${fmtKwh(sum)}</strong><span class="tt-name">Total${price ? ` · ≈ ${nf0.format(sum * price)} €` : ''}</span></div>`
-          : price && list.length === 1
+          : price && counted.length === 1
             ? `<div class="tt-row tt-total"><span class="tt-name">≈ ${nf0.format(sum * price)} €</span></div>`
             : '';
       return `<div class="tt"><div class="tt-title">${escapeHtml(axisHour(list[0].axisValueLabel))}</div>${note(notes?.[list[0].dataIndex])}${rows}${totalRow}</div>`;
@@ -331,6 +337,10 @@ export function barChart(
     notes?: (string | null)[];
     /** A reference line (subscribed power, alert threshold), dashed, labelled on the line. */
     mark?: { value: number; label: string };
+    /** #311: a dashed line on a right axis, in its own unit (outdoor temperature over the kWh). */
+    line?: Series & { unit: string };
+    /** #311: false when the card draws its own legend (series, hatching, line). */
+    legend?: boolean;
   },
 ) {
   const surface = cssVar('--surface-card');
@@ -349,18 +359,33 @@ export function barChart(
   const n = opts.series.length;
   const unit = opts.unit ?? 'kWh';
   const chart = instance(el);
-  describe(el, opts.labels, opts.series, unit);
+  const all = opts.line ? [...opts.series, opts.line] : opts.series;
+  const line = opts.line;
+  describe(el, opts.labels, all, unit);
   const leg = legendLayout(
-    opts.series.map((s) => s.name),
+    all.map((s) => s.name),
     el,
   );
-  const ax = axes(opts.labels, el, unit, leg.height, { zero: true });
+  const ax = axes(opts.labels, el, unit, opts.legend === false ? 0 : leg.height, { zero: true, ...(line ? { ends: 48 } : {}) });
   chart.setOption(
     {
       animationDuration: 300,
       ...ax,
-      legend: leg.option,
-      tooltip: tooltip(opts.price, opts.stacked && !opts.unit, unit, opts.series, opts.notes),
+      ...(line
+        ? {
+            yAxis: [
+              ax.yAxis,
+              {
+                type: 'value' as const,
+                scale: true,
+                splitLine: { show: false },
+                axisLabel: { formatter: (v: number) => `${nf0.format(v)} ${line.unit}` },
+              },
+            ],
+          }
+        : {}),
+      legend: opts.legend === false ? { show: false } : leg.option,
+      tooltip: tooltip(opts.price, opts.stacked && !opts.unit, unit, all, opts.notes),
       dataZoom: opts.zoom ? [{ type: 'inside', minValueSpan: 6 }] : [],
       series: opts.series.map((s, i) => ({
         type: 'bar',
@@ -379,7 +404,24 @@ export function barChart(
         },
         emphasis: { focus: 'none', itemStyle: { opacity: 0.85 } },
         markLine: i === 0 && opts.mark ? refLine(opts.mark) : undefined,
-      })),
+      })).concat(
+        line
+          ? [
+              {
+                type: 'line',
+                name: line.name,
+                data: line.data,
+                yAxisIndex: 1,
+                showSymbol: true,
+                symbolSize: 4,
+                connectNulls: false,
+                lineStyle: { width: 2, type: 'dashed', color: line.color },
+                itemStyle: { color: line.color },
+                z: 3,
+              } as never,
+            ]
+          : [],
+      ),
     },
     { notMerge: true },
   );
