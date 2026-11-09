@@ -187,3 +187,42 @@ par [juridique.md](juridique.md).
    les types de la station acceptés (`pressure`, `noise`, refus de `temperature` par un anémomètre),
    les séries Linky qui répondent (production, ancien nom de type encore accepté ou non).
 4. Fermer les issues dont la donnée n'existe pas sur le compte (par exemple S-1.24 (#222) sans production).
+
+## 6. Résultats du passage réel (9 novembre 2026)
+
+Diagnostic « Inventaire » (Intuis, Linky) et collecte avec la case « inventaire » (station).
+Noms et volumes seulement.
+
+**Intuis**
+- 1 logement, 7 pièces, 13 modules : passerelle NMG ×1, radiateurs NMH ×6, relais NMR ×5,
+  chauffe-eau NMW ×1.
+- `homesdata` : **6 plannings** (`schedules[]` : `timetable` en minutes depuis lundi 0 h,
+  `zones[]` avec `rooms_temp`, `price`, `price_type`, `tariff`, `tariff_option`) et
+  3 `therm_schedules`. Réglages d'absence automatique au niveau du logement :
+  `therm_absence_autoaway`, `therm_absence_notification`. Également : `altitude`,
+  `coordinates`, `contract_power_unit`, `therm_mode`, `temperature_control_mode`.
+- `homestatus` : 5 pièces renvoyées ; côté modules, `last_seen`, `reachable`, `radiator_state`,
+  `offload`, `presence_sensor`, `firmware_revision*`. Sur la passerelle : `wifi_strength`, `uptime`,
+  `outdoor_temperature`, `therm_setpoint_day_color_type` (couleur Tempo connue de la passerelle).
+- Mesures `gethomemeasure` : seules `sum_energy_elec$1` et `$2` répondent pour l'énergie, aux pas
+  **5 min, 30 min, 1 h et 1 jour**. Les types `sum_energy_elec`, `$0`, `_heating` et `_hot_water`
+  sont vides sur la période récente. `temperature` et `sp_temperature` répondent par pièce, à tous
+  les pas.
+- Profondeur : **au moins 1 460 jours à tous les pas**. Rien à 1 825 jours.
+
+**Station Netatmo** (NAMain, 2 × NAModule4, NAModule1 ; ni anémomètre ni pluviomètre)
+- `dashboard_data` du module principal : `Pressure`, `AbsolutePressure`, `Noise`, `pressure_trend`.
+  Les modules exposent `battery_percent`, `battery_vp`, `rf_status`, `last_seen`, `firmware`.
+- `getmeasure` accepte `pressure`, `noise`, `min/max_hum`, `min/max_pressure`, `min/max_noise` et
+  `date_max_temp` / `date_min_temp`.
+
+**Linky (Conso API)**
+- Quotidien, courbe 30 min et puissance max : HTTP 200. L'historique remonte au moins à 3 ans.
+- Production : HTTP 400, pas de production (#222 fermée). Les anciens noms d'endpoints répondent
+  aussi 400.
+
+**Décisions**
+- Nouvelle issue #224 : collecter l'énergie et les températures au pas 30 min, sur 4 ans.
+- #211 (plannings) et #210 (absences) : toutes les données nécessaires sont disponibles.
+- #215, #220 confirmées (batteries, radio, pression, bruit).
+- #221 : vent via Open-Meteo uniquement.
