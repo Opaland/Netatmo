@@ -106,9 +106,17 @@ describe('household view (S-12.2)', () => {
         m2: { '2025-01-01': [17, 20, 18, 55, 900] },
         m3: { '2025-01-01': [16, 19, 18, null, 1100] },
       },
+      nightly: {
+        m0: { '2025-01-01': { n: 9, co2_max: 800, h_co2_1000: 0, h_co2_1400: 0, h_co2_1500: 0 } },
+        m2: { '2025-01-01': { n: 9, co2_max: 1400, h_co2_1000: 5, h_co2_1400: 1, h_co2_1500: 0 } },
+        m3: { '2025-01-01': { n: 8, co2_max: 1100, h_co2_1000: 2, h_co2_1400: 0, h_co2_1500: 0 } },
+      },
     });
     expect(Object.values(st.modules).map((m) => m.name)).toEqual(['Salon', 'Extérieur', 'Chambres']);
     expect(st.daily[BEDROOMS_ID]['2025-01-01']).toEqual([16, 20, 18, 55, 1000]);
     expect(st.daily.m2).toBeUndefined();
+    expect(st.nightly![BEDROOMS_ID]['2025-01-01']).toEqual({ n: 8, co2_max: 1400, h_co2_1000: 5, h_co2_1400: 1, h_co2_1500: 0 });
+    expect(st.nightly!.m2).toBeUndefined();
+    expect(st.nightly!.m0).toBeDefined();
   });
 });

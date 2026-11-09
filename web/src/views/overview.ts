@@ -41,11 +41,11 @@ import {
 } from '../ui';
 import { qualityCard, uncertainBuckets, uncertainDays } from './quality';
 
-function kpi(label: string, from: string, to: string, records: DayRecord[]) {
+function kpi(label: string, from: string, to: string, records: DayRecord[], cls = '') {
   const now = total(records, from, to);
   const before = total(records, minusYears(from), minusYears(to));
   const hasBefore = records.some((r) => r.day <= minusYears(to));
-  return `<article class="kpi">
+  return `<article class="kpi${cls}">
     <h3>${esc(label)}</h3>
     <p class="kpi-value">${fmtKwh(now)}</p>
     <p class="kpi-sub">${eurOf(records, from, to) ? `${eurOf(records, from, to)} · ` : ''}${hasBefore ? delta(now, before) : '<span class="delta neutral">pas de référence N-1</span>'}</p>
@@ -83,12 +83,15 @@ export function renderOverview(view: HTMLElement, records: DayRecord[]) {
 
   view.innerHTML = `
   ${verdictCard(records, monthStart, last)}
+  <div id="grid-zone"></div>
   <section class="kpis">
     ${kpi(`${MONTHS_LONG[Number(last.slice(5, 7)) - 1]} ${last.slice(0, 4)} (au ${Number(last.slice(8, 10))})`, monthStart, last, records)}
     ${kpi(`Depuis le 1er janvier ${last.slice(0, 4)}`, yearStart, last, records)}
-    ${kpi('12 derniers mois', addDays(minusYears(last), 1), last, records)}
+    ${kpi('12 derniers mois', addDays(minusYears(last), 1), last, records, ' kpi-detail')}
     ${projectionTile(records, last)}
+    <article class="kpi kpi-budget" id="budget-kpi" hidden></article>
   </section>
+  <div id="money-zone"></div>
   ${linkyCard()}
   ${curveCard()}
   <section class="card">
@@ -118,6 +121,8 @@ export function renderOverview(view: HTMLElement, records: DayRecord[]) {
   ${qualityCard()}`;
   drawLinky();
   drawCurve();
+  // S-2.11 / S-2.12 / S-2.13: budget, CO₂ and new tariff, loaded on demand (S-7.10)
+  import('./budget').then((m) => m.fillOverview()).catch(() => {});
 
   const set = aggregate(records, from, to, state.gran, split === 'category' ? (r) => r.cat : (r) => roomGroup(r.room));
   const order =
@@ -172,7 +177,7 @@ function projectionTile(records: DayRecord[], last: string) {
   const year = last.slice(0, 4);
   const prev = total(records, `${Number(year) - 1}-01-01`, `${Number(year) - 1}-12-31`);
   const price = avgPrice();
-  return `<article class="kpi">
+  return `<article class="kpi kpi-detail">
     <h3>Fin ${year} estimée</h3>
     <p class="kpi-value">≈ ${fmtKwh(p.projected)}</p>
     <p class="kpi-sub">${price ? `≈ ${fmtEur(p.projected * price)} · ` : ''}${prev ? delta(p.projected, prev) : ''}</p>

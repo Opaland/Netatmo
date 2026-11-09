@@ -8,8 +8,14 @@ import type { Dataset, Station } from './data';
 export const BEDROOMS_ID = '__bedrooms__';
 export const BEDROOMS_NAME = 'Chambres';
 
-/** A room or a station module whose name says it is a bedroom. */
-export const isBedroom = (name: string) => /\b(chambres?|bedrooms?|suite parentale|dortoir)\b/i.test(name.normalize('NFC'));
+/** A room or a station module whose name says it is a bedroom (same rule as comfort.ts). */
+export const isBedroom = (name: string) =>
+  /\b(chambre|bedroom|dortoir|suite parentale)/.test(
+    name
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase(),
+  );
 
 const avg = (xs: number[]) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null);
 
@@ -147,7 +153,37 @@ export function householdStation(st: Station): Station {
     g[d] = [Math.min(...l.map((v) => v[0])), Math.max(...l.map((v) => v[1])), avg(l.map((v) => v[2]))!, opt(3), opt(4)];
   }
   daily[group] = g;
-  return { ...st, modules, daily };
+  return { ...st, modules, daily, nightly: worstOf(st.nightly, keys), hours: worstOf(st.hours, keys) };
+}
+
+/**
+ * Night CO₂ hours and humid / cold hours of the bedrooms, merged per day as the worst
+ * bedroom (maximum of each count, minimum of the readings count `n`).
+ */
+function worstOf<V extends object>(o: Record<string, Record<string, V>> | undefined, keys: string[]) {
+  if (!o) return o;
+  const out: Record<string, Record<string, V>> = {};
+  const g: Record<string, V> = {};
+  for (const [k, days] of Object.entries(o)) {
+    if (!keys.includes(k)) {
+      out[k] = days;
+      continue;
+    }
+    for (const [d, v] of Object.entries(days)) {
+      const cur = g[d] as Record<string, number | null> | undefined;
+      if (!cur) {
+        g[d] = { ...v };
+        continue;
+      }
+      for (const [f, x] of Object.entries(v as Record<string, number | null>)) {
+        const y = cur[f];
+        if (x === null || x === undefined) continue;
+        cur[f] = y === null || y === undefined ? x : f === 'n' ? Math.min(x, y) : Math.max(x, y);
+      }
+    }
+  }
+  if (Object.keys(g).length) out[BEDROOMS_ID] = g;
+  return out;
 }
 
 /**
