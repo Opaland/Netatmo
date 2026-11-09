@@ -95,7 +95,7 @@ export function anonReportHtml(r: AnonReport): string {
     <h3>Mois par mois</h3>
     <div class="chart" id="anon-chart" role="img" aria-label="Consommation mensuelle comparée à l'année précédente"></div>
     <h3>Par pièce <small class="muted">pseudonymes</small></h3>
-    <div class="table-wrap"><table><thead><tr><th>Pièce</th><th class="num">${r.year} kWh</th><th class="num">${r.year - 1} kWh</th><th class="num">Évolution</th></tr></thead><tbody>${rows
+    <div class="table-wrap" tabindex="0"><table><thead><tr><th>Pièce</th><th class="num">${r.year} kWh</th><th class="num">${r.year - 1} kWh</th><th class="num">Évolution</th></tr></thead><tbody>${rows
       .map((x) => `<tr><td>${names.get(x.id)}</td><td class="num">${nf0.format(x.now)}</td><td class="num">${nf0.format(x.before)}</td><td class="num">${change(x.now, x.before)}</td></tr>`)
       .join('')}</tbody></table></div>
     ${r.extras}

@@ -36,6 +36,7 @@ export interface State {
   simple: boolean; // simple mode (S-7.1)
   showTables: boolean;
   lockAfter: number; // S-8.11: minutes without interaction before locking, 0 = never
+  pinnedRoom: string | null; // S-7.8: room shown first in simple mode
   comfortThreshold: number; // °C, hours below it count as cold (S-11.3)
   /** S-3.8: Intuis room id -> station module key ('' = deliberately not linked). Shared later by S-12.1. */
   roomModuleMap: Record<string, string>;
@@ -66,6 +67,7 @@ export const DEFAULT: State = {
   simple: false,
   showTables: false,
   lockAfter: DEFAULT_LOCK_MINUTES,
+  pinnedRoom: null,
   comfortThreshold: 19,
   roomModuleMap: {},
 };
@@ -137,6 +139,7 @@ function initDefaults() {
   const patch: Partial<State> = {};
   if (!state.compareYears.length || state.compareYears.some((y) => !years.includes(y))) patch.compareYears = years.slice(-3);
   if (!state.roomsYear || !years.includes(state.roomsYear)) patch.roomsYear = years[years.length - 1];
+  if (state.pinnedRoom && !valid.has(state.pinnedRoom)) patch.pinnedRoom = null;
   if (state.rooms) patch.rooms = state.rooms.filter((r) => valid.has(r)).length ? state.rooms.filter((r) => valid.has(r)) : null;
   if (/^\d{4}$/.test(state.period) && !years.includes(Number(state.period))) patch.period = '12m';
   const lastYear = years[years.length - 1];

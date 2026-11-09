@@ -5,6 +5,7 @@ import { type Hourly, anomalies, dayProfile, daysAbove, fitSeason, signaturePoin
 import { ds, onDatasetLoaded, rerender, setState, state } from '../app';
 import { calendarChart, cssVar, gridHeatmap, lineChart, scatterChart } from '../charts';
 import { loadHourly } from '../data';
+import { unavailable } from '../offline';
 import { activeRooms, catColor, esc, fmtKwh, lastDay, longDate, seg, series, table, tariffNames } from '../ui';
 import { SUSPECT_RATIO } from '../reconstitute';
 import { uncertainDays } from './quality';
@@ -66,7 +67,7 @@ export function renderAnalyse(view: HTMLElement, records: DayRecord[]) {
   ${
     ds!.meta.has_tariffs && split[1] + split[2] > 0
       ? `<section class="card"><h2>Heures pleines / heures creuses <small class="muted">12 derniers mois</small></h2>
-      <div class="share" aria-label="Répartition par tarif"><span style="flex:${split[1]};background:${series(0)}"></span><span style="flex:${split[2]};background:${series(2)}"></span>${split[0] + split[3] > 0 ? `<span style="flex:${split[0] + split[3]};background:${cssVar('--ghost')}"></span>` : ''}</div>
+      <div class="share" aria-hidden="true"><span style="flex:${split[1]};background:${series(0)}"></span><span style="flex:${split[2]};background:${series(2)}"></span>${split[0] + split[3] > 0 ? `<span style="flex:${split[0] + split[3]};background:${cssVar('--ghost')}"></span>` : ''}</div>
       <p class="share-legend"><span><i style="background:${series(0)}"></i>${n1} ${fmtKwh(split[1])}</span><span><i style="background:${series(2)}"></i>${n2} ${fmtKwh(split[2])}</span>${split[0] + split[3] > 0 ? `<span><i style="background:${cssVar('--ghost')}"></i>Sans détail ${fmtKwh(split[0] + split[3])}</span>` : ''}</p>
       <p class="hint muted">Détection automatique : la colonne où le chauffe-eau consomme le plus est considérée comme les heures creuses.</p></section>`
       : ''
@@ -257,7 +258,7 @@ function drawHourly(records: DayRecord[]) {
         })
         .catch(() => {
           hourlyLoading = false;
-          zone.innerHTML = html('<p class="hint muted">Données horaires indisponibles.</p>');
+          zone.innerHTML = html`<p class="hint muted">${unavailable('Données horaires')}</p>`;
         });
     }
     return;

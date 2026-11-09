@@ -74,7 +74,25 @@ function describe(el: HTMLElement, labels: string[], series: Series[], unit = 'k
   el.setAttribute('aria-label', `${base}, de ${labels[0] ?? '—'} à ${labels[labels.length - 1] ?? '—'}. ${parts.join(' ; ')}.`);
 }
 
+/** S-7.7: high contrast asked by the system (or forced colours): series also differ by pattern. */
+const highContrast = () => matchMedia('(prefers-contrast: more), (forced-colors: active)').matches;
+
+/** Distinct fill patterns (stripes, dots, cross-hatch…), one per series index; the first stays plain. */
+function decal(i: number) {
+  if (!highContrast() || i === 0) return undefined;
+  const ink = matchMedia('(prefers-color-scheme: dark)').matches ? 'rgba(255,255,255,0.55)' : 'rgba(0,0,0,0.5)';
+  const patterns = [
+    { symbol: 'rect', dashArrayX: [1, 0], dashArrayY: [2, 4], rotation: Math.PI / 4 },
+    { symbol: 'circle', symbolSize: 0.7, dashArrayX: [[4, 3]], dashArrayY: [4, 3] },
+    { symbol: 'rect', dashArrayX: [1, 0], dashArrayY: [2, 4], rotation: -Math.PI / 4 },
+    { symbol: 'rect', dashArrayX: [[2, 3]], dashArrayY: [2, 3] },
+  ];
+  return { color: ink, ...patterns[(i - 1) % patterns.length] };
+}
+
 function instance(el: HTMLElement): echarts.ECharts {
+  // S-7.6: a chart with a summary can be reached with the keyboard, which reads that summary.
+  if (el.getAttribute('role') === 'img' && !el.hasAttribute('tabindex')) el.tabIndex = 0;
   const chart = echarts.getInstanceByDom(el) ?? echarts.init(el);
   if (!observed.has(el)) {
     new ResizeObserver(() => chart.resize()).observe(el);
@@ -197,6 +215,7 @@ export function barChart(
           borderRadius: !opts.stacked || i === n - 1 ? [4, 4, 0, 0] : 0,
           borderColor: surface,
           borderWidth: opts.stacked ? 1 : 0,
+          decal: decal(i),
         },
         emphasis: { focus: 'none', itemStyle: { opacity: 0.85 } },
       })),

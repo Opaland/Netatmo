@@ -11,7 +11,7 @@ const longDate = (d: string) => `${Number(d.slice(8, 10))} ${MONTHS_LONG[Number(
 const th = (cells: string[]) => `<tr>${cells.map((c, i) => `<th${i ? ' class="num"' : ''}>${c}</th>`).join('')}</tr>`;
 const td = (cells: string[]) => `<tr>${cells.map((c, i) => `<td${i ? ' class="num"' : ''}>${c}</td>`).join('')}</tr>`;
 const tableHtml = (head: string[], rows: string[][]) =>
-  `<div class="table-wrap"><table><thead>${th(head)}</thead><tbody>${rows.map(td).join('')}</tbody></table></div>`;
+  `<div class="table-wrap" tabindex="0"><table><thead>${th(head)}</thead><tbody>${rows.map(td).join('')}</tbody></table></div>`;
 
 // ------------------------------------------------------------------ offers
 export type OfferKey = 'base' | 'hphc' | 'tempo';
