@@ -42,7 +42,7 @@ export function seg<T extends string>(name: string, value: T, options: [T, strin
 }
 
 export function table(head: string[], rows: (string | number)[][], numericFrom = 1) {
-  return `<div class="table-wrap"><table><thead><tr>${head.map((h, i) => `<th${i >= numericFrom ? ' class="num"' : ''}>${esc(h)}</th>`).join('')}</tr></thead><tbody>${rows
+  return `<div class="table-wrap" tabindex="0"><table><thead><tr>${head.map((h, i) => `<th${i >= numericFrom ? ' class="num"' : ''}>${esc(h)}</th>`).join('')}</tr></thead><tbody>${rows
     .map((r) => `<tr>${r.map((c, i) => `<td${i >= numericFrom ? ' class="num"' : ''}>${typeof c === 'number' ? nf0.format(c) : c}</td>`).join('')}</tr>`)
     .join('')}</tbody></table></div>`;
 }

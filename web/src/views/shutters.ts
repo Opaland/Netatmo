@@ -15,6 +15,7 @@ import {
   parseNotesCsv,
   saveNotes,
 } from '../shutters';
+import { html } from '../trusted';
 import { activeRooms, esc, fmtKwh, lastDay, longDate, series, table } from '../ui';
 
 const num1 = (v: number) => v.toFixed(1).replace('.', ',');
@@ -44,7 +45,7 @@ export function renderShutters(zone: HTMLElement) {
 function draw(zone: HTMLElement) {
   const t = today();
   const recent = notes.slice(-8).reverse();
-  zone.innerHTML = `<section class="card" id="shutters-card">
+  zone.innerHTML = html`<section class="card" id="shutters-card">
     <div class="card-head"><h2>Volets fermés le soir <small class="muted">journal de cet appareil</small></h2></div>
     <label class="check"><input type="checkbox" data-shutters="tonight" ${notes.includes(t) ? 'checked' : ''}> Volets fermés ce soir (${esc(longDate(t))})</label>
     <div class="controls" style="align-items:center;margin:6px 0">
@@ -75,17 +76,17 @@ function draw(zone: HTMLElement) {
 async function drawComparison() {
   const out = document.getElementById('shutters-result');
   if (!out || !ds) return;
-  if (!ds.weather) return void (out.innerHTML = '<p class="hint muted">La comparaison demande la météo (prochaine collecte).</p>');
+  if (!ds.weather) return void (out.innerHTML = html('<p class="hint muted">La comparaison demande la météo (prochaine collecte).</p>'));
   if (!(ds.meta.hourly_years ?? []).length) {
-    out.innerHTML = '<p class="hint muted">La comparaison demande les données horaires (prochaine collecte complète).</p>';
+    out.innerHTML = html('<p class="hint muted">La comparaison demande les données horaires (prochaine collecte complète).</p>');
     return;
   }
-  out.innerHTML = '<p class="hint muted">Chargement des données horaires…</p>';
+  out.innerHTML = html('<p class="hint muted">Chargement des données horaires…</p>');
   let hourly;
   try {
     hourly = await loadHourly(ds);
   } catch {
-    out.innerHTML = '<p class="hint muted">Données horaires indisponibles.</p>';
+    out.innerHTML = html('<p class="hint muted">Données horaires indisponibles.</p>');
     return;
   }
   const last = lastDay();
@@ -95,10 +96,10 @@ async function drawComparison() {
   if (!document.body.contains(out)) return;
   if (!cmp) {
     const n = all.filter((x) => x.closed && x.t < 15).length;
-    out.innerHTML = `<p class="hint muted">Comparaison avec / sans volets fermés dès ${MIN_CLOSED} soirs notés en période de chauffe avec données horaires (${n} pour l'instant) ; comptez environ 4 semaines en alternant les soirs.</p>`;
+    out.innerHTML = html`<p class="hint muted">Comparaison avec / sans volets fermés dès ${MIN_CLOSED} soirs notés en période de chauffe avec données horaires (${n} pour l'instant) ; comptez environ 4 semaines en alternant les soirs.</p>`;
     return;
   }
-  out.innerHTML = result(cmp);
+  out.innerHTML = html(result(cmp));
   const el = document.getElementById('shutters-chart');
   if (!el) return;
   const xs = [...cmp.open, ...cmp.closed].map((n) => n.t);

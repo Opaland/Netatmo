@@ -18,6 +18,8 @@ import {
   validate,
 } from '../settings';
 import { contractInfo, esc, longDate, table } from '../ui';
+import { html } from '../trusted';
+import { showBuild } from '../build';
 import { loadVotes, usefulRate } from '../insight';
 
 let settingsRepo = repoFromLocation() ?? 'Opaland/Netatmo';
@@ -61,7 +63,7 @@ export function renderSettings(view: HTMLElement) {
         .join('')}
     </fieldset>`,
   ).join('');
-  view.innerHTML = `
+  view.innerHTML = html`
   <section class="card">
     <div class="card-head"><h2>Paramètres et connexions</h2><button type="button" class="link" data-view="overview">Fermer</button></div>
     <ul class="status-list">
@@ -136,12 +138,14 @@ export function renderSettings(view: HTMLElement) {
       99,
     )}
   </section>
+  <section class="card" id="build-info" aria-live="polite"></section>
   <section class="card" id="legal-card">
     <div class="card-head"><h2>Cadre juridique</h2></div>
     <p class="hint muted">Conditions d'utilisation de chaque service (Intuis, Netatmo, Conso API…), date de lecture et risque d'arrêt ; usage domestique et vie privée du foyer.</p>
     <button type="button" class="primary small" id="legal-open">Ouvrir « Cadre juridique »</button>
   </section>
   ${settingsMsg ? `<p class="settings-msg ${settingsMsg.ok ? 'ok' : 'ko'}" role="status">${esc(settingsMsg.text)}</p>` : ''}`;
+  void showBuild(document.getElementById('build-info'));
 }
 
 /** S-12.1: the contract used on this device, and the button that shares it with the others. */
@@ -245,7 +249,7 @@ export function handleClick(btn: HTMLElement): boolean {
     // S-8.14: lazy module, only for whoever opens it
     void import('../legal').then((m) => {
       const card = document.getElementById('legal-card');
-      if (card) card.innerHTML = `<div class="card-head"><h2>Cadre juridique</h2></div>${m.legalHtml()}`;
+      if (card) card.innerHTML = html(`<div class="card-head"><h2>Cadre juridique</h2></div>${m.legalHtml()}`);
     });
     return true;
   }

@@ -20,6 +20,7 @@ import {
   table,
   yearColor,
 } from '../ui';
+import { html } from '../trusted';
 
 export function renderReport(view: HTMLElement) {
   const years = ds!.meta.years;
@@ -50,7 +51,7 @@ export function renderReport(view: HTMLElement) {
   );
   const sigSeason = ds!.weather ? signaturePoints(all, ds!.weather) : null;
   const fit = sigSeason?.get(`${year - 1}-${year}`) ? fitSeason(sigSeason.get(`${year - 1}-${year}`)!) : null;
-  view.innerHTML = `
+  view.innerHTML = html`
   <section class="card report">
     <div class="card-head no-print">
       <h2>Rapport annuel</h2>

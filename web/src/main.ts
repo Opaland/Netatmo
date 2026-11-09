@@ -5,17 +5,21 @@ import { type State, type View, activeRooms, app, ds, onDatasetLoaded, setDatase
 import { disposeAll } from './charts';
 import { WrongPassphrase } from './crypto';
 import { NoData, forgetKeys, load, recallKey } from './data';
+import { prefetchForOffline, updateNetStatus } from './offline';
 import { IdleLock, LOCK_CHOICES, idleSince } from './session';
+import { type SwipeDir, onSwipe, step } from './swipe';
 import { esc, filtered, keepMenuOpen, lastDay, longDate, roomColor, seg } from './ui';
 import * as analyse from './views/analyse';
 import * as compare from './views/compare';
 import * as household from './views/household';
 import { renderLoading, renderLock } from './views/lock';
 import * as overview from './views/overview';
+import { pinSelect, pinnedTiles } from './views/pinned';
 import * as prices from './views/prices';
 import * as report from './views/report';
 import * as rooms from './views/rooms';
 import * as settings from './views/settings';
+import { html } from './trusted';
 import './style.css';
 
 // ------------------------------------------------------------------ shell
@@ -33,25 +37,29 @@ const ICONS = {
 const icon = (name: keyof typeof ICONS) =>
   `<svg class="icon" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${ICONS[name]}</svg>`;
 
+const TABS: [View, string][] = [
+  ['overview', 'Synthèse'],
+  ['compare', 'Comparer'],
+  ['rooms', 'Pièces'],
+  ['analyse', 'Analyse'],
+  ['comfort', 'Confort'],
+];
+
+let slide: SwipeDir | null = null;
+
 function render() {
   if (!ds) return;
   disposeAll(app);
   const { meta } = ds;
-  const tabs: [View, string][] = [
-    ['overview', 'Synthèse'],
-    ['compare', 'Comparer'],
-    ['rooms', 'Pièces'],
-    ['analyse', 'Analyse'],
-    ['comfort', 'Confort'],
-  ];
+  const tabs = TABS;
   const roomsCount = state.rooms ? state.rooms.length : activeRooms().length;
-  app.innerHTML = `
-  <header class="top">
+  app.innerHTML = html`
+  <header class="top" data-swipe="${state.view === 'overview' ? 'period' : 'tab'}">
     <div class="title">
       <h1>${esc(meta.home.name)}${ds.source === 'demo' ? ' <span class="badge">démo</span>' : ''}</h1>
       <p class="muted">Données jusqu'au ${meta.last_day ? longDate(meta.last_day) : '—'}</p>
     </div>
-    <nav class="tabs" aria-label="Vues">
+    <nav class="tabs" aria-label="Vues" data-swipe="tab">
       ${tabs.map(([v, l]) => `<button type="button" data-view="${v}" aria-current="${state.view === v ? 'page' : 'false'}">${icon(v)}<span>${l}</span></button>`).join('')}
     </nav>
     <details class="menu">
@@ -62,6 +70,7 @@ function render() {
         <button type="button" data-view="settings">${icon('settings')} Paramètres et connexions</button>
         ${household.householdMenu()}
         <label class="check"><input type="checkbox" data-toggle="simple" ${state.simple ? 'checked' : ''}> Mode simple (grands caractères, l'essentiel)</label>
+        ${pinSelect()}
         <label class="lock-after">Verrouiller sans activité
           <select data-lock-after>${LOCK_CHOICES.map((m) => `<option value="${m}" ${m === state.lockAfter ? 'selected' : ''}>${m ? (m < 60 ? `après ${m} min` : `après ${m / 60} h`) : 'jamais sur cet appareil'}</option>`).join('')}</select>
         </label>
@@ -74,6 +83,7 @@ function render() {
     </details>
   </header>
   ${staleBanner()}
+  <p class="offline" id="net-status" role="status" hidden></p>
   <section class="filters" aria-label="Filtres">
     ${seg('cat', state.cat, [['all', 'Tout'], ['heating', 'Chauffage'], ['water_heater', 'Chauffe-eau']], 'Catégorie')}
     <details class="rooms-picker">
@@ -93,7 +103,7 @@ function render() {
   const view = document.getElementById('view')!;
   const records = filtered();
   if (!records.length && state.view !== 'settings' && state.view !== 'comfort') {
-    view.innerHTML = `<p class="empty">Aucune donnée pour cette sélection.</p>`;
+    view.innerHTML = html`<p class="empty">Aucune donnée pour cette sélection.</p>`;
   } else if (state.view === 'overview') overview.renderOverview(view, records);
   else if (state.view === 'compare') compare.renderCompare(view, records);
   else if (state.view === 'analyse') analyse.renderAnalyse(view, records);
@@ -101,6 +111,11 @@ function render() {
   else if (state.view === 'report') report.renderReport(view);
   else if (state.view === 'settings') settings.renderSettings(view);
   else rooms.renderRooms(view, records);
+  // S-7.8: the pinned room comes first among the key figures of the simple mode.
+  if (state.simple && state.view === 'overview') view.querySelector('.kpis')?.insertAdjacentHTML('afterbegin', html(pinnedTiles()));
+  if (slide) view.classList.add(`slide-${slide}`);
+  slide = null;
+  void updateNetStatus(ds);
   document.body.classList.toggle('is-report', state.view === 'report' || state.view === 'settings');
   document.body.classList.toggle('is-comfort', state.view === 'comfort');
   document.body.classList.toggle('is-simple', state.simple && state.view === 'overview');
@@ -111,14 +126,14 @@ setRenderer(render);
 let comfort: typeof import('./views/comfort') | null = null;
 function renderComfort(view: HTMLElement) {
   if (comfort) return comfort.renderComfort(view);
-  view.innerHTML = '<p class="empty">Chargement…</p>';
+  view.innerHTML = html('<p class="empty">Chargement…</p>');
   import('./views/comfort')
     .then((m) => {
       comfort = m;
       if (state.view === 'comfort') render();
     })
     .catch(() => {
-      view.innerHTML = '<p class="empty">Vue indisponible hors ligne : elle se chargera au prochain accès réseau.</p>';
+      view.innerHTML = html('<p class="empty">Vue indisponible hors ligne : elle se chargera au prochain accès réseau.</p>');
     });
 }
 
@@ -185,6 +200,10 @@ app.addEventListener('change', (e) => {
     idle.configure(state.lockAfter);
     return keepMenuOpen();
   }
+  if (t.dataset.pin !== undefined) {
+    setState({ pinnedRoom: t.value || null });
+    return keepMenuOpen();
+  }
   if (t.dataset.toggle === 'simple') return setState({ simple: (t as HTMLInputElement).checked, view: 'overview' });
   if (t instanceof HTMLInputElement && t.dataset.room) {
     const all = activeRooms().map((r) => r.id);
@@ -203,8 +222,60 @@ app.addEventListener('toggle', (e) => {
   if (t.classList.contains('table-details')) state.showTables = (t as HTMLDetailsElement).open;
 }, true);
 
-// Redraw charts with the right colours when the OS theme flips.
-window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => ds && render());
+// Redraw charts with the right colours (and patterns) when the OS theme or contrast flips.
+for (const q of ['(prefers-color-scheme: dark)', '(prefers-contrast: more)', '(forced-colors: active)']) {
+  window.matchMedia(q).addEventListener('change', () => ds && render());
+}
+
+// S-7.6: Escape closes an open menu or room picker and gives the focus back to its button.
+app.addEventListener('keydown', (e) => {
+  if (e.key !== 'Escape') return;
+  const open =
+    (e.target as HTMLElement).closest<HTMLDetailsElement>('details[open]') ??
+    app.querySelector<HTMLDetailsElement>('details.menu[open], details.rooms-picker[open]');
+  if (!open) return;
+  open.open = false;
+  open.querySelector<HTMLElement>('summary')?.focus();
+});
+
+// ------------------------------------------------------------------ swipe (S-7.11)
+/** Period choices of the overview, in the order of its select: recent → older → all. */
+function periods(): string[] {
+  return ['30d', '12m', ...ds!.meta.years.map(String).reverse(), 'all'];
+}
+const PERIOD_LABEL: Record<string, string> = { '30d': '30 derniers jours', '12m': '12 derniers mois', all: "tout l'historique" };
+
+/** Polite announcement for screen readers (the live region sits outside #app, never re-rendered). */
+function announce(msg: string) {
+  const el = document.getElementById('sr-status');
+  if (el) el.textContent = msg;
+}
+
+onSwipe(app, (zone, dir) => {
+  if (!ds || state.simple) return;
+  if (zone === 'period' && state.view === 'overview') {
+    // Swipe right goes back in time (older period), swipe left towards the present.
+    const next = step(periods(), state.period, dir === 'right' ? 1 : -1);
+    if (!next) return;
+    slide = dir;
+    setState({ period: next });
+    return announce(`Période : ${PERIOD_LABEL[next] ?? next}`);
+  }
+  if (zone === 'tab') {
+    const next = step(
+      TABS.map(([v]) => v),
+      state.view,
+      dir === 'left' ? 1 : -1,
+    );
+    if (!next) return;
+    slide = dir;
+    setState({ view: next });
+    announce(`Vue : ${TABS.find(([v]) => v === next)![1]}`);
+  }
+});
+
+window.addEventListener('online', () => void updateNetStatus(ds));
+window.addEventListener('offline', () => void updateNetStatus(ds));
 
 // ------------------------------------------------------------------ lock (S-8.11)
 /** Forget the decrypted data, the remembered key and the GitHub token, then show the lock screen. */
@@ -217,6 +288,7 @@ async function lockApp() {
 }
 const idle = new IdleLock(() => void lockApp());
 onDatasetLoaded(() => idle.start(state.lockAfter));
+onDatasetLoaded(() => prefetchForOffline(ds!));
 
 // ------------------------------------------------------------------ boot
 async function start() {

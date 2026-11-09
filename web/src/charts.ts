@@ -12,6 +12,7 @@ import {
 } from 'echarts/components';
 import * as echarts from 'echarts/core';
 import { CanvasRenderer } from 'echarts/renderers';
+import { node } from './trusted';
 
 echarts.use([
   BarChart,
@@ -48,6 +49,12 @@ export function escapeHtml(s: string): string {
   return s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
 }
 
+/** S-8.9: tooltips handed to ECharts as DOM built through the Trusted Types policy (no innerHTML in ECharts). */
+const tip =
+  <P>(f: (p: P) => string) =>
+  (p: P) =>
+    node(f(p));
+
 const observed = new WeakSet<HTMLElement>();
 
 /** S-7.2: a sentence a screen reader can read instead of the canvas. */
@@ -67,7 +74,25 @@ function describe(el: HTMLElement, labels: string[], series: Series[], unit = 'k
   el.setAttribute('aria-label', `${base}, de ${labels[0] ?? '—'} à ${labels[labels.length - 1] ?? '—'}. ${parts.join(' ; ')}.`);
 }
 
+/** S-7.7: high contrast asked by the system (or forced colours): series also differ by pattern. */
+const highContrast = () => matchMedia('(prefers-contrast: more), (forced-colors: active)').matches;
+
+/** Distinct fill patterns (stripes, dots, cross-hatch…), one per series index; the first stays plain. */
+function decal(i: number) {
+  if (!highContrast() || i === 0) return undefined;
+  const ink = matchMedia('(prefers-color-scheme: dark)').matches ? 'rgba(255,255,255,0.55)' : 'rgba(0,0,0,0.5)';
+  const patterns = [
+    { symbol: 'rect', dashArrayX: [1, 0], dashArrayY: [2, 4], rotation: Math.PI / 4 },
+    { symbol: 'circle', symbolSize: 0.7, dashArrayX: [[4, 3]], dashArrayY: [4, 3] },
+    { symbol: 'rect', dashArrayX: [1, 0], dashArrayY: [2, 4], rotation: -Math.PI / 4 },
+    { symbol: 'rect', dashArrayX: [[2, 3]], dashArrayY: [2, 3] },
+  ];
+  return { color: ink, ...patterns[(i - 1) % patterns.length] };
+}
+
 function instance(el: HTMLElement): echarts.ECharts {
+  // S-7.6: a chart with a summary can be reached with the keyboard, which reads that summary.
+  if (el.getAttribute('role') === 'img' && !el.hasAttribute('tabindex')) el.tabIndex = 0;
   const chart = echarts.getInstanceByDom(el) ?? echarts.init(el);
   if (!observed.has(el)) {
     new ResizeObserver(() => chart.resize()).observe(el);
@@ -89,7 +114,7 @@ function tooltip(price: number | null, showTotal: boolean, unit = 'kWh') {
     borderColor: cssVar('--border'),
     textStyle: { color: cssVar('--text-primary'), fontFamily: 'inherit', fontSize: 12 },
     axisPointer: { type: 'line' as const, lineStyle: { color: cssVar('--text-muted'), width: 1 } },
-    formatter: (params: unknown) => {
+    formatter: tip((params: unknown) => {
       const list = (params as { seriesName: string; value: number | null; color: string; axisValueLabel: string }[]).filter(
         (p) => p.value !== null && p.value !== undefined,
       );
@@ -108,7 +133,7 @@ function tooltip(price: number | null, showTotal: boolean, unit = 'kWh') {
             ? `<div class="tt-row tt-total"><span class="tt-name">${nf0.format(sum * price)} €</span></div>`
             : '';
       return `<div class="tt"><div class="tt-title">${escapeHtml(list[0].axisValueLabel)}</div>${rows}${totalRow}</div>`;
-    },
+    }),
   };
 }
 
@@ -190,6 +215,7 @@ export function barChart(
           borderRadius: !opts.stacked || i === n - 1 ? [4, 4, 0, 0] : 0,
           borderColor: surface,
           borderWidth: opts.stacked ? 1 : 0,
+          decal: decal(i),
         },
         emphasis: { focus: 'none', itemStyle: { opacity: 0.85 } },
       })),
@@ -313,7 +339,7 @@ export function comboChart(
       legend: legend(all),
       tooltip: {
         ...tooltip(null, false, opts.barUnit),
-        formatter: (params: unknown) => {
+        formatter: tip((params: unknown) => {
           const list = (params as { seriesIndex: number; seriesName: string; value: number | null; color: string; axisValueLabel: string }[]).filter(
             (p) => p.value !== null && p.value !== undefined,
           );
@@ -325,7 +351,7 @@ export function comboChart(
             )
             .join('');
           return `<div class="tt"><div class="tt-title">${escapeHtml(list[0].axisValueLabel)}</div>${rows}</div>`;
-        },
+        }),
       },
       series: [
         ...opts.bars.map((s) => ({
@@ -391,10 +417,11 @@ export function scatterChart(el: HTMLElement, opts: { series: ScatterSeries[]; x
       tooltip: {
         ...ttBase(),
         trigger: 'item',
-        formatter: (p: { seriesName: string; value: [number, number, string] }) =>
+        formatter: tip((p: { seriesName: string; value: [number, number, string] }) =>
           Array.isArray(p.value) && p.value.length === 3
             ? `<div class="tt"><div class="tt-title">${escapeHtml(p.value[2])}</div><div class="tt-row"><strong>${fmtKwh(p.value[1])}</strong><span class="tt-name">${nf1.format(p.value[0])} °C</span></div></div>`
             : escapeHtml(p.seriesName),
+        ),
       },
       xAxis: {
         type: 'value',
@@ -452,10 +479,12 @@ export function calendarChart(el: HTMLElement, opts: { year: number; data: [stri
     {
       tooltip: {
         ...ttBase(),
-        formatter: (p: { value: [string, number]; seriesIndex: number }) =>
-          p.seriesIndex === 1
-            ? `<div class="tt"><div class="tt-title">${escapeHtml(p.value[0])}</div>${escapeHtml(opts.markLabel ?? '')}</div>`
-            : `<div class="tt"><div class="tt-title">${escapeHtml(p.value[0])}</div><strong>${fmtKwh(p.value[1])}</strong></div>`,
+        formatter: tip(
+          (p: { value: [string, number]; seriesIndex: number }) =>
+            p.seriesIndex === 1
+              ? `<div class="tt"><div class="tt-title">${escapeHtml(p.value[0])}</div>${escapeHtml(opts.markLabel ?? '')}</div>`
+              : `<div class="tt"><div class="tt-title">${escapeHtml(p.value[0])}</div><strong>${fmtKwh(p.value[1])}</strong></div>`,
+        ),
       },
       visualMap: {
         seriesIndex: 0,
@@ -506,8 +535,10 @@ export function gridHeatmap(
     {
       tooltip: {
         ...ttBase(),
-        formatter: (p: { value: [number, number, number] }) =>
-          `<div class="tt"><div class="tt-title">${escapeHtml(opts.yLabels[p.value[1]])} ${escapeHtml(opts.xLabels[p.value[0]])}</div><strong>${nf1.format(p.value[2])} ${escapeHtml(opts.unit)}</strong></div>`,
+        formatter: tip(
+          (p: { value: [number, number, number] }) =>
+            `<div class="tt"><div class="tt-title">${escapeHtml(opts.yLabels[p.value[1]])} ${escapeHtml(opts.xLabels[p.value[0]])}</div><strong>${nf1.format(p.value[2])} ${escapeHtml(opts.unit)}</strong></div>`,
+        ),
       },
       grid: { left: 8, right: 8, top: 8, bottom: 44, containLabel: true },
       xAxis: { type: 'category', data: opts.xLabels, axisLabel: { color: muted, interval: 2 }, axisTick: { show: false }, axisLine: { show: false } },
@@ -611,12 +642,12 @@ export function waterfallChart(
         ...ttBase(),
         trigger: 'axis',
         axisPointer: { type: 'shadow' },
-        formatter: (ps: { dataIndex: number }[]) => {
+        formatter: tip((ps: { dataIndex: number }[]) => {
           const i = ps[0].dataIndex;
           const v = i === 0 ? opts.start : i === labels.length - 1 ? acc : opts.steps[i - 1].delta;
           const txt = i === 0 || i === labels.length - 1 ? fmtKwh(v) : `${v > 0 ? '+' : '−'}${fmtKwh(Math.abs(v))}`;
           return `<div class="tt"><div class="tt-title">${escapeHtml(labels[i])}</div><strong>${txt}</strong></div>`;
-        },
+        }),
       },
       xAxis: { type: 'category', data: labels, axisLabel: { color: muted, interval: 0, rotate: labels.length > 6 ? 35 : 0 }, axisTick: { show: false } },
       yAxis: {

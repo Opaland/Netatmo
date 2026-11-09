@@ -28,6 +28,7 @@ import {
 import { barChart, comboChart, cssVar, lineChart, seqRamp } from '../charts';
 import { type Station, loadStationHourly } from '../data';
 import { activeRooms, esc, lastDay, longDate, nf0, series, table, tableToggle } from '../ui';
+import { html } from '../trusted';
 
 let hourly: StationHourly | null = null;
 let hourlyLoading = false;
@@ -63,7 +64,7 @@ function mapping(st: Station | null) {
 export function renderComfort(view: HTMLElement) {
   const st = ds!.station;
   const map = mapping(st);
-  view.innerHTML = `
+  view.innerHTML = html`
   <section class="card">
     <h2>Confort <small class="muted">air, humidité, froid</small></h2>
     <p class="hint muted">${

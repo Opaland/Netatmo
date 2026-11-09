@@ -28,11 +28,19 @@ export default defineConfig({
       workbox: {
         globPatterns: ['**/*.{js,css,html,svg,png}'],
         // Encrypted data: try the network first (fresh nightly data), fall back to cache offline.
+        // S-7.12: requests are conditional (cache: 'no-cache' → ETag, 304 when unchanged), the
+        // hourly files are fetched in the background on Wi-Fi (src/offline.ts), and the public
+        // tariff files are kept too so that costs stay right offline.
         runtimeCaching: [
           {
             urlPattern: ({ url }) => /\/(data|demo)\/.+\.json$/.test(url.pathname),
             handler: 'NetworkFirst',
-            options: { cacheName: 'energy-data', networkTimeoutSeconds: 4 },
+            options: { cacheName: 'energy-data', networkTimeoutSeconds: 4, cacheableResponse: { statuses: [200] } },
+          },
+          {
+            urlPattern: ({ url }) => /\/tarifs\/[^/]+\.(csv|json)$/.test(url.pathname),
+            handler: 'NetworkFirst',
+            options: { cacheName: 'energy-tariffs', networkTimeoutSeconds: 4, cacheableResponse: { statuses: [200] } },
           },
         ],
       },

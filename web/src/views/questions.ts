@@ -3,6 +3,7 @@
 import { ds } from '../app';
 import { QUESTIONS, type QuestionId, answer, answerableMonths, defaultMonth, monthLabel } from '../questions';
 import { activeRooms, costAvailable, costOf, esc, lastDay } from '../ui';
+import { html } from '../trusted';
 
 let month: string | null = null;
 let question: QuestionId | null = null;
@@ -14,7 +15,7 @@ export function mountQuestions(el: HTMLElement | null) {
   if (!month || !months.includes(month)) month = defaultMonth(months, last);
   el.removeAttribute('aria-busy');
   if (!month) {
-    el.innerHTML = '<h2>Questions types</h2><p class="hint muted">Je ne peux pas répondre : aucune consommation relevée pour l’instant.</p>';
+    el.innerHTML = html('<h2>Questions types</h2><p class="hint muted">Je ne peux pas répondre : aucune consommation relevée pour l’instant.</p>');
     return;
   }
   const names = new Map(activeRooms().map((r) => [r.id, r.name]));
@@ -28,7 +29,7 @@ export function mountQuestions(el: HTMLElement | null) {
         roomName: (id) => names.get(id) ?? 'pièce inconnue',
       })
     : null;
-  el.innerHTML = `<div class="card-head"><h2>Questions types <small class="muted">réponses calculées, sans IA</small></h2>
+  el.innerHTML = html`<div class="card-head"><h2>Questions types <small class="muted">réponses calculées, sans IA</small></h2>
     <div class="controls"><label class="select"><span class="sr-only">Mois</span><select id="question-month">${months
       .map((m) => `<option value="${m}" ${m === month ? 'selected' : ''}>${esc(monthLabel(m))}</option>`)
       .join('')}</select></label></div></div>

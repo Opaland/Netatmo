@@ -4,6 +4,7 @@ import { type DayRecord, MONTHS_LONG, bucketKey } from '../aggregate';
 import { app, ds, onDatasetLoaded, state } from '../app';
 import { type Coverage, computeCoverage, gapMonths, uncertainDays } from '../checks';
 import { activeRooms, esc, lastDay, roomName, table } from '../ui';
+import { html } from '../trusted';
 
 let cached: Coverage | null = null;
 onDatasetLoaded(() => {
@@ -43,11 +44,11 @@ app.addEventListener('change', (e) => {
 export function drawReconstitution() {
   const zone = document.getElementById('recon-zone');
   if (!zone) return;
-  if (!reconOn) return void (zone.innerHTML = '');
-  zone.innerHTML = '<p class="hint muted">Reconstitution en cours…</p>';
+  if (!reconOn) return void (zone.innerHTML = html(''));
+  zone.innerHTML = html('<p class="hint muted">Reconstitution en cours…</p>');
   import('./reconstitution')
     .then((m) => zone.isConnected && m.renderReconstitution(zone))
-    .catch(() => (zone.innerHTML = '<p class="hint muted">Reconstitution indisponible.</p>'));
+    .catch(() => (zone.innerHTML = html('<p class="hint muted">Reconstitution indisponible.</p>')));
 }
 
 // The "N jours estimés" link of the period total opens the card.

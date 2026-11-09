@@ -10,6 +10,7 @@ import { barChart, disposeAll } from '../charts';
 import { periodAt } from '../offers';
 import { offersForYear, offersSectionHtml, pmaxForYear, pmaxSectionHtml } from '../report-sections';
 import { contracts, costOf, esc, lastDay, offCol, yearColor } from '../ui';
+import { html } from '../trusted';
 
 function reportWindow(year: number) {
   const last = lastDay();
@@ -40,7 +41,7 @@ export function extrasHtml(year: number): string {
 
 /** S-6.3: fill the placeholder of the full report. */
 export function renderReportExtras(el: HTMLElement | null, year: number) {
-  if (el && ds) el.innerHTML = extrasHtml(year);
+  if (el && ds) el.innerHTML = html(extrasHtml(year));
 }
 
 /** Everything the anonymised report shows, as figures and pseudonymisable ids only. */
@@ -101,14 +102,14 @@ function secrets(): string[] {
 /** S-6.4: replace the content of the report view with the anonymised report. */
 export function renderAnonymised(view: HTMLElement, year: number) {
   disposeAll(view);
-  const html = anonReportHtml(anonData(year));
-  const found = leaks(html.replace(/<[^>]+>/g, ' '), secrets());
+  const markup = anonReportHtml(anonData(year));
+  const found = leaks(markup.replace(/<[^>]+>/g, ' '), secrets());
   if (found.length) {
     // Belt and braces: the report is built from pseudonyms only, but never show a leak.
-    view.innerHTML = `<section class="card report"><p class="stale" role="alert">Rapport anonymisé non affiché : il contiendrait « ${esc(found.join(' », « '))} ». Renommez la pièce ou le logement concerné, ou signalez-le.</p><button type="button" class="link" data-view="report">Rapport complet</button></section>`;
+    view.innerHTML = html`<section class="card report"><p class="stale" role="alert">Rapport anonymisé non affiché : il contiendrait « ${esc(found.join(' », « '))} ». Renommez la pièce ou le logement concerné, ou signalez-le.</p><button type="button" class="link" data-view="report">Rapport complet</button></section>`;
     return;
   }
-  view.innerHTML = html;
+  view.innerHTML = html(markup);
   const m = monthlyByYear(ds!.records);
   barChart(view.querySelector<HTMLElement>('#anon-chart')!, {
     labels: MONTHS_SHORT,

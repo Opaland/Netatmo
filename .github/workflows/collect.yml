@@ -151,4 +151,5 @@ jobs:
       contents: read
       pages: write
       id-token: write
+      attestations: write # S-8.10: provenance attestation of the deployed site
     uses: ./.github/workflows/deploy.yml
