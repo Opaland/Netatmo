@@ -1,5 +1,7 @@
 // Pure data functions: filtering, bucketing and year-over-year helpers. No DOM here.
 
+import { textCell } from './csv';
+
 export type Category = 'heating' | 'water_heater' | 'ignore';
 
 export interface Room {
@@ -226,10 +228,9 @@ export function pctChange(now: number, before: number): number | null {
 // ------------------------------------------------------------------ CSV
 export function toCsv(records: DayRecord[], rooms: Room[]): string {
   const name = new Map(rooms.map((r) => [r.id, r.name]));
-  const esc = (s: string) => (/[;"\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s);
   const lines = ['date;piece;categorie;kwh'];
   for (const r of records) {
-    lines.push([r.day, esc(name.get(r.room) ?? r.room), CATEGORY_LABEL[r.cat], r.kwh.toFixed(3).replace('.', ',')].join(';'));
+    lines.push([r.day, textCell(name.get(r.room) ?? r.room, ';'), CATEGORY_LABEL[r.cat], r.kwh.toFixed(3).replace('.', ',')].join(';'));
   }
   return lines.join('\n') + '\n';
 }

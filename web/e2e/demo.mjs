@@ -608,6 +608,17 @@ try {
     if (sealed !== 4 + 48) errors.push(`libsodium sous Trusted Types : scellement inattendu (${sealed})`);
     await ctx.close();
   }
+  // #237: inside another page's frame, neither the unlock form nor the demo is rendered.
+  {
+    progress('anti-clickjacking');
+    const ctx = await browser.newContext();
+    const page = await ctx.newPage();
+    await page.setContent(`<!doctype html><title>cadre</title><iframe src="${base}" width="800" height="600"></iframe>`);
+    const frame = await page.waitForSelector('iframe').then((el) => el.contentFrame());
+    await frame.waitForSelector('#framed', { timeout: 15000 }).catch(() => errors.push('cadre : message « ouvrir directement » absent'));
+    if (await frame.locator('#unlock, #pass, #demo').count()) errors.push('cadre : l’écran de déverrouillage est rendu dans un iframe');
+    await ctx.close();
+  }
   await browser.close();
 } catch (err) {
   errors.push(String(err));

@@ -12,6 +12,7 @@
 import type { DayRecord, Meta } from './aggregate';
 import type { Hourly, Weather } from './analysis';
 import { leaks, pseudonyms } from './anon';
+import { textCell } from './csv';
 import type { StationHourly } from './comfort';
 import type { Station } from './data';
 import { WORK_KINDS, type WorkKind } from './works';
@@ -216,7 +217,6 @@ export function researchDocument(input: ResearchInput, opts: ResearchOptions): R
 
 /** CSV with a commented header (« # »): licence, limits, time origin, entities, works. */
 export function toResearchCsv(doc: ResearchDocument, withRows = true): string {
-  const cell = (s: string) => (/[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s);
   const head = [
     `# ${doc.format} v${doc.version} — jeu de données de recherche anonymisé, un seul logement chauffé à l'électricité`,
     `# Licence : ${doc.license} (${doc.license_name}), choisie par la personne qui a exporté ces données`,
@@ -228,7 +228,7 @@ export function toResearchCsv(doc: ResearchDocument, withRows = true): string {
     '# Documentation : docs/export-recherche.md',
   ];
   const lines = [...head, RESEARCH_COLUMNS.join(',')];
-  for (const r of withRows ? doc.rows : []) lines.push([String(r.time), String(r.step_h), cell(r.entity), r.metric, String(r.value), r.unit].join(','));
+  for (const r of withRows ? doc.rows : []) lines.push([String(r.time), String(r.step_h), textCell(r.entity, ','), r.metric, String(r.value), r.unit].join(','));
   return lines.join('\n') + '\n';
 }
 

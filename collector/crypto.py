@@ -17,6 +17,8 @@ from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 
 ITERATIONS = 600_000
+VERSION = 1
+KDF = "PBKDF2-SHA256"
 
 
 class DecryptError(ValueError):
@@ -38,10 +40,14 @@ def encrypt_json(obj: object, passphrase: str, salt: bytes, iterations: int = IT
     iv = os.urandom(12)
     plaintext = json.dumps(obj, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
     ct = AESGCM(key).encrypt(iv, plaintext, None)
-    return {"v": 1, "kdf": "PBKDF2-SHA256", "iter": iterations, "salt": _b64(salt), "iv": _b64(iv), "ct": _b64(ct)}
+    return {"v": VERSION, "kdf": KDF, "iter": iterations, "salt": _b64(salt), "iv": _b64(iv), "ct": _b64(ct)}
 
 
 def decrypt_json(envelope: dict, passphrase: str) -> object:
+    # Same checks as the PWA (web/src/crypto.ts checkEnvelope): an unknown format is refused
+    # instead of being misread. The PWA also refuses fewer than ITERATIONS iterations.
+    if envelope.get("v") != VERSION or envelope.get("kdf") != KDF:
+        raise DecryptError(f"Format de fichier chiffré inconnu (v={envelope.get('v')!r}, kdf={envelope.get('kdf')!r})")
     salt = base64.b64decode(envelope["salt"])
     key = derive_key(passphrase, salt, int(envelope["iter"]))
     try:
