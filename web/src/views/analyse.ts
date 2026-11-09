@@ -5,8 +5,9 @@ import { type Hourly, anomalies, dayProfile, daysAbove, fitSeason, signaturePoin
 import { ds, onDatasetLoaded, rerender, setState, state } from '../app';
 import { calendarChart, cssVar, gridHeatmap, lineChart, scatterChart } from '../charts';
 import { loadHourly } from '../data';
-import { renderMarkdown } from '../markdown';
 import { activeRooms, catColor, esc, fmtKwh, lastDay, longDate, seg, series, table, tariffNames } from '../ui';
+import { SUSPECT_RATIO } from '../reconstitute';
+import { uncertainDays } from './quality';
 import { drawSetpoint, setpointCard } from './setpoint';
 import { drawWaterHeater, hcAlerts, waterHeaterCard } from './waterheater';
 import { html } from '../trusted';
@@ -32,16 +33,7 @@ export function renderAnalyse(view: HTMLElement, records: DayRecord[]) {
   const split = tariffSplit(records.filter((r) => r.day >= addDays(minusYears(last), 1)), ds!.tariffs);
   const [n1, n2] = tariffNames();
   view.innerHTML = html`
-  ${
-    ds!.insights
-      ? `<section class="card insight"><div class="card-head"><h2>Analyse du mois <small class="muted">rédigée par l'IA</small></h2></div>
-      <div class="md">${renderMarkdown(ds!.insights.markdown)}</div>
-      <p class="hint muted">Générée le ${esc(ds!.insights.generated.slice(0, 10))} (${esc(ds!.insights.model)}) à partir des chiffres calculés par l'application${
-        ds!.insights.verified === false ? ' — <strong>attention : certains nombres du texte n\'ont pas pu être vérifiés</strong>' : ''
-      }. Les chiffres font foi : l'IA ne fait que les commenter.</p>
-      ${ds!.insights.facts ? `<details class="table-details"><summary>Voir exactement ce qui a été envoyé à l'IA</summary><pre class="facts-json">${esc(JSON.stringify(ds!.insights.facts, null, 2))}</pre></details>` : ''}</section>`
-      : ''
-  }
+  ${ds!.insights ? '<section class="card insight" id="insight-card" aria-busy="true"><h2>Analyse du mois</h2></section>' : ''}
   ${
     ds!.weather
       ? `<section class="card">
@@ -49,12 +41,13 @@ export function renderAnalyse(view: HTMLElement, records: DayRecord[]) {
     <p class="hint muted">Chaque point est un jour : consommation de chauffage selon la température extérieure moyenne${ds!.meta.weather_source === 'netatmo' ? ' (station Netatmo)' : ' (Open-Meteo)'}. La droite résume la saison : plus elle est <strong>pentue</strong>, plus la maison consomme par degré de froid ; là où elle touche zéro, c'est la température à partir de laquelle vous ne chauffez plus.</p>
     <div class="chart tall" id="sig-chart" role="img" aria-label="Signature énergétique"></div>
     <div id="sig-table"></div>
-  </section>`
+  </section>
+  <section class="card" id="indoor-sig" hidden></section>`
       : `<section class="card"><h2>Signature énergétique</h2><p class="hint muted">Disponible dès que la collecte a récupéré la météo (prochaine collecte).</p></section>`
   }
   ${setpointCard(records)}
   ${anomaliesCard(records)}
-  <section class="card">
+  <section class="card" id="calendar-card">
     <div class="card-head"><h2>Calendrier <small class="muted">kWh par jour</small></h2>
       <div class="controls"><label class="select"><span class="sr-only">Année</span><select data-set="analyseYear">${years
         .slice()
@@ -64,10 +57,12 @@ export function renderAnalyse(view: HTMLElement, records: DayRecord[]) {
     </div>
     <div class="chart" id="cal-chart" style="height:190px" role="img" aria-label="Calendrier de consommation"></div>
   </section>
+  <div id="absence-zone"></div>
   <section class="card">
     <div class="card-head"><h2>Profil horaire <small class="muted">kWh moyens, 90 derniers jours</small></h2></div>
     <div id="hourly-zone"><p class="hint muted">${(ds!.meta.hourly_years ?? []).length ? 'Chargement des données horaires…' : 'Les données horaires arriveront avec la prochaine collecte complète.'}</p></div>
   </section>
+  <div id="telework-zone"></div>
   ${
     ds!.meta.has_tariffs && split[1] + split[2] > 0
       ? `<section class="card"><h2>Heures pleines / heures creuses <small class="muted">12 derniers mois</small></h2>
@@ -125,11 +120,14 @@ export function renderAnalyse(view: HTMLElement, records: DayRecord[]) {
   for (const r of records) if (r.day.startsWith(String(year))) perDay.set(r.day, (perDay.get(r.day) ?? 0) + r.kwh);
   const values = [...perDay.values()];
   const sorted = values.slice().sort((a, b) => a - b);
-  calendarChart(document.getElementById('cal-chart')!, {
+  const cal = {
     year,
-    data: [...perDay.entries()].map(([d, v]) => [d, Math.round(v * 10) / 10]),
+    data: [...perDay.entries()].map(([d, v]) => [d, Math.round(v * 10) / 10] as [string, number]),
     max: sorted[Math.floor(sorted.length * 0.97)] ?? 1, // ignore the few extreme days
-  });
+  };
+  calendarChart(document.getElementById('cal-chart')!, cal);
+  // S-4.9 telework cost, S-4.10 absences (marks on the calendar), loaded on demand (S-7.10)
+  import('./habits').then((m) => m.fillAnalyse(cal)).catch(() => {});
   // temperatures
   if (tempRoom) {
     const from = addDays(minusYears(last), 1);
@@ -147,29 +145,41 @@ export function renderAnalyse(view: HTMLElement, records: DayRecord[]) {
       unit: '°C',
     });
   }
+  // S-5.7/S-5.8: AI card loaded on demand (markdown renderer, votes, usage)
+  if (ds!.insights) void import('./insight').then((m) => m.mountInsight(document.getElementById('insight-card')));
   drawStation();
   drawHourly(records);
   drawWaterHeater(hourly);
   drawSetpoint(records);
+  drawIndoorSignature(records);
 }
 
 function anomaliesCard(records: DayRecord[]) {
   if (!ds!.weather) return '';
-  const list = anomalies(records, ds!.weather).slice(0, 12);
+  // S-1.10: lost or estimated days are not "unusual", they are not measured
+  const list = anomalies(records, ds!.weather, uncertainDays(ds!.records, ds!.estimated, '0000-01-01', lastDay())).slice(0, 12);
+  const suspect = (a: (typeof list)[number]) => a.z < 0 && a.kwh < SUSPECT_RATIO * a.expected;
   const alerts = hcAlerts();
   if (!list.length) return alerts ? `<section class="card"><h2>Jours inhabituels</h2>${alerts}</section>` : '';
   return `<section class="card"><h2>Jours inhabituels <small class="muted">chauffage, écart à la signature</small></h2>
     ${alerts}
-    <p class="hint muted">Jours où le chauffage s'écarte nettement de ce qu'annonce la température extérieure (plus de 2 fois l'écart habituel et plus de 3 kWh) : fenêtre ouverte, absence, invités, réglage oublié…</p>
+    <p class="hint muted">Jours où le chauffage s'écarte nettement de ce qu'annonce la température extérieure (plus de 2 fois l'écart habituel et plus de 3 kWh) : fenêtre ouverte, absence, invités, réglage oublié… Les jours perdus chez Intuis ou estimés n'y figurent pas ; un jour très en dessous de la signature est marqué <strong>suspect</strong> (donnée peut-être incomplète, voir « Qualité des données » dans la Synthèse).</p>
     ${table(
       ['Jour', 'Consommé', 'Attendu', 'Écart'],
       list.map((a) => [
         longDate(a.day),
         fmtKwh(a.kwh),
         fmtKwh(Math.max(0, a.expected)),
-        `<span class="delta ${a.z > 0 ? 'up' : 'down'}"><span aria-hidden="true">${a.z > 0 ? '▲' : '▼'}</span> ${a.z > 0 ? '+' : '−'}${fmtKwh(Math.abs(a.kwh - a.expected))}</span>`,
+        `<span class="delta ${a.z > 0 ? 'up' : 'down'}"><span aria-hidden="true">${a.z > 0 ? '▲' : '▼'}</span> ${a.z > 0 ? '+' : '−'}${fmtKwh(Math.abs(a.kwh - a.expected))}</span>${suspect(a) ? ' <span class="badge-suspect" title="Très en dessous de la signature : donnée peut-être incomplète chez Intuis">suspect</span>' : ''}`,
       ]),
     )}</section>`;
+}
+
+/** S-3.7: indoor − outdoor signature, a lazily loaded card under the signature. */
+function drawIndoorSignature(records: DayRecord[]) {
+  const card = document.getElementById('indoor-sig');
+  if (!card || !ds!.station) return card?.remove();
+  import('./indoorsig').then((m) => card.isConnected && m.renderIndoorSignature(card, records)).catch(() => card.remove());
 }
 
 // ------------------------------------------------------------------ Netatmo weather station

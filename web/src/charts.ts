@@ -35,6 +35,8 @@ export interface Series {
   data: (number | null)[];
   /** Optional per-bar colours (identity per category on a single series). */
   colors?: string[];
+  /** Unit of this series when it differs from the chart's (combo charts). */
+  unit?: string;
 }
 
 export const cssVar = (name: string) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
@@ -64,7 +66,10 @@ function describe(el: HTMLElement, labels: string[], series: Series[], unit = 'k
     if (!vals.length) return `${s.name} : pas de donnée`;
     const [maxV, maxI] = vals.reduce((a, b) => (b[0] > a[0] ? b : a));
     const sum = vals.reduce((a, [v]) => a + v, 0);
-    return `${s.name} : total ${nf0.format(sum)} ${unit}, maximum ${nf1.format(maxV)} ${unit} (${labels[maxI]})`;
+    const u = s.unit ?? unit;
+    // °C, ppm, %: a total means nothing, give the mean instead
+    const head = /^(°C|ppm|%)$/.test(u) ? `moyenne ${nf1.format(sum / vals.length)} ${u}` : `total ${nf0.format(sum)} ${u}`;
+    return `${s.name} : ${head}, maximum ${nf1.format(maxV)} ${u} (${labels[maxI]})`;
   });
   el.setAttribute('aria-label', `${base}, de ${labels[0] ?? '—'} à ${labels[labels.length - 1] ?? '—'}. ${parts.join(' ; ')}.`);
 }
@@ -202,14 +207,18 @@ export function barChart(
 
 export function lineChart(
   el: HTMLElement,
-  opts: { labels: string[]; series: Series[]; price: number | null; emphasize?: string; unit?: string },
+  opts: { labels: string[]; series: Series[]; price: number | null; emphasize?: string; unit?: string; scale?: boolean; endLabels?: boolean },
 ) {
   const chart = instance(el);
   describe(el, opts.labels, opts.series, opts.unit);
+  const ax = axes(opts.labels);
+  const ends = opts.endLabels !== false && opts.series.length <= 4;
   chart.setOption(
     {
       animationDuration: 300,
-      ...axes(opts.labels),
+      ...ax,
+      // zoomed axis (°C around 20): keep one decimal so ticks never repeat
+      yAxis: opts.scale ? { ...ax.yAxis, scale: true, axisLabel: { ...ax.yAxis.axisLabel, formatter: (v: number) => nf1.format(v) } } : ax.yAxis,
       legend: { ...legend(opts.series), icon: 'rect', itemWidth: 14, itemHeight: 3 },
       tooltip: tooltip(opts.price, false, opts.unit),
       series: opts.series.map((s) => ({
@@ -223,13 +232,13 @@ export function lineChart(
         itemStyle: { color: s.color, borderColor: cssVar('--surface-1'), borderWidth: 2 },
         // direct label at the line end (few series only)
         endLabel: {
-          show: opts.series.length <= 4,
+          show: ends,
           formatter: '{a}',
           color: cssVar('--text-secondary'),
           fontSize: 11,
         },
       })),
-      grid: { left: 8, right: opts.series.length <= 4 ? 48 : 12, top: 36, bottom: 8, containLabel: true },
+      grid: { left: 8, right: ends ? 48 : 12, top: 36, bottom: 8, containLabel: true },
     },
     { notMerge: true },
   );
@@ -274,6 +283,91 @@ export function hbarChart(
   );
   chart.off('click');
   if (opts.onClick) chart.on('click', (p) => opts.onClick!(p.dataIndex));
+}
+
+/**
+ * Bars (left axis) and lines (right axis) on the same days: hours over a threshold and the
+ * value behind it (S-11). `dim` greys out bars of incomplete days or nights.
+ */
+export function comboChart(
+  el: HTMLElement,
+  opts: {
+    labels: string[];
+    bars: Series[];
+    lines: Series[];
+    barUnit: string;
+    lineUnit: string;
+    dim?: boolean[];
+    lineMark?: { value: number; label: string };
+    barMax?: number;
+  },
+) {
+  const chart = instance(el);
+  describe(el, opts.labels, [...opts.bars.map((s) => ({ ...s, unit: opts.barUnit })), ...opts.lines.map((s) => ({ ...s, unit: opts.lineUnit }))]);
+  const muted = cssVar('--text-muted');
+  const base = axes(opts.labels);
+  const all = [...opts.bars, ...opts.lines];
+  const fmt = (v: number, unit: string) => `${nf1.format(v)} ${unit}`;
+  chart.setOption(
+    {
+      animationDuration: 300,
+      grid: { left: 8, right: 8, top: 36, bottom: 8, containLabel: true },
+      xAxis: base.xAxis,
+      yAxis: [
+        { ...base.yAxis, max: opts.barMax, minInterval: 1, axisLabel: { color: muted, formatter: (v: number) => `${nf0.format(v)} ${opts.barUnit}` } },
+        { type: 'value', scale: true, splitLine: { show: false }, axisLabel: { color: muted, formatter: (v: number) => `${nf0.format(v)} ${opts.lineUnit}` } },
+      ],
+      legend: legend(all),
+      tooltip: {
+        ...tooltip(null, false, opts.barUnit),
+        formatter: tip((params: unknown) => {
+          const list = (params as { seriesIndex: number; seriesName: string; value: number | null; color: string; axisValueLabel: string }[]).filter(
+            (p) => p.value !== null && p.value !== undefined,
+          );
+          if (!list.length) return '';
+          const rows = list
+            .map(
+              (p) =>
+                `<div class="tt-row"><span class="tt-key" style="background:${p.color}"></span><strong>${fmt(p.value!, p.seriesIndex < opts.bars.length ? opts.barUnit : opts.lineUnit)}</strong><span class="tt-name">${escapeHtml(p.seriesName)}</span></div>`,
+            )
+            .join('');
+          return `<div class="tt"><div class="tt-title">${escapeHtml(list[0].axisValueLabel)}</div>${rows}</div>`;
+        }),
+      },
+      series: [
+        ...opts.bars.map((s) => ({
+          type: 'bar',
+          name: s.name,
+          yAxisIndex: 0,
+          data: s.data.map((v, i) => (opts.dim?.[i] && v !== null ? { value: v, itemStyle: { opacity: 0.35 } } : v)),
+          barMaxWidth: 16,
+          barGap: '10%',
+          itemStyle: { color: s.color, borderRadius: [3, 3, 0, 0] },
+        })),
+        ...opts.lines.map((s, i) => ({
+          type: 'line',
+          name: s.name,
+          yAxisIndex: 1,
+          data: s.data,
+          showSymbol: false,
+          connectNulls: false,
+          lineStyle: { width: 2, color: s.color },
+          itemStyle: { color: s.color },
+          markLine:
+            i === 0 && opts.lineMark
+              ? {
+                  silent: true,
+                  symbol: 'none',
+                  lineStyle: { color: muted, type: 'dashed', width: 1 },
+                  label: { color: muted, formatter: opts.lineMark.label, position: 'insideEndTop' },
+                  data: [{ yAxis: opts.lineMark.value }],
+                }
+              : undefined,
+        })),
+      ],
+    },
+    { notMerge: true },
+  );
 }
 
 // ------------------------------------------------------------------ extra chart forms
@@ -359,7 +453,7 @@ export function scatterChart(el: HTMLElement, opts: { series: ScatterSeries[]; x
   );
 }
 
-export function calendarChart(el: HTMLElement, opts: { year: number; data: [string, number][]; max: number }) {
+export function calendarChart(el: HTMLElement, opts: { year: number; data: [string, number][]; max: number; marks?: string[]; markLabel?: string }) {
   const chart = instance(el);
   const muted = cssVar('--text-muted');
   chart.setOption(
@@ -367,11 +461,14 @@ export function calendarChart(el: HTMLElement, opts: { year: number; data: [stri
       tooltip: {
         ...ttBase(),
         formatter: tip(
-          (p: { value: [string, number] }) =>
-            `<div class="tt"><div class="tt-title">${escapeHtml(p.value[0])}</div><strong>${fmtKwh(p.value[1])}</strong></div>`,
+          (p: { value: [string, number]; seriesIndex: number }) =>
+            p.seriesIndex === 1
+              ? `<div class="tt"><div class="tt-title">${escapeHtml(p.value[0])}</div>${escapeHtml(opts.markLabel ?? '')}</div>`
+              : `<div class="tt"><div class="tt-title">${escapeHtml(p.value[0])}</div><strong>${fmtKwh(p.value[1])}</strong></div>`,
         ),
       },
       visualMap: {
+        seriesIndex: 0,
         min: 0,
         max: Math.max(1, opts.max),
         calculable: false,
@@ -396,7 +493,13 @@ export function calendarChart(el: HTMLElement, opts: { year: number; data: [stri
         dayLabel: { firstDay: 1, nameMap: ['D', 'L', 'M', 'M', 'J', 'V', 'S'], color: muted, fontSize: 10 },
         monthLabel: { nameMap: 'FR', color: muted, fontSize: 10 },
       },
-      series: [{ type: 'heatmap', coordinateSystem: 'calendar', data: opts.data }],
+      series: [
+        { type: 'heatmap', coordinateSystem: 'calendar', data: opts.data },
+        // S-4.10: marked days (probable absences), a dot over the cell
+        ...(opts.marks?.length
+          ? [{ type: 'scatter', coordinateSystem: 'calendar', data: opts.marks.map((d) => [d, 0]), symbolSize: 5, itemStyle: { color: cssVar('--text-primary') } }]
+          : []),
+      ],
     },
     { notMerge: true },
   );

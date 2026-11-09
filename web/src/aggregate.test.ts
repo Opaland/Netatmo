@@ -143,6 +143,8 @@ describe('anomalies', () => {
     const a = anomalies(recs, weather);
     expect(a.map((x) => x.day)).toEqual([recs[30].day]);
     expect(a[0].z).toBeGreaterThan(2);
+    // S-1.10: a lost or estimated day is never listed
+    expect(anomalies(recs, weather, new Set([recs[30].day]))).toEqual([]);
   });
   it('counts days above a threshold', () => {
     expect(daysAbove({ '2025-01-01': [0, 0, 0, 60, 1200], '2025-01-02': [0, 0, 0, 50, 800] }, 4, 1000, '2025-01-01', '2025-12-31')).toBe(1);
