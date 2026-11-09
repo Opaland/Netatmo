@@ -1,5 +1,34 @@
 # Historique des versions
 
+## v1.3 — novembre 2026 : confort, coûts, robustesse, sécurité
+
+- **Contrat partagé** entre tous les appareils (variable de dépôt `CONTRACT_JSON`, validée par le
+  collecteur, rangée dans la méta chiffrée) ; verrouillage après inactivité ; clé mémorisée 30 jours.
+- **Vue Confort** : CO₂ nocturne des chambres, humidité de la cave et point de rosée, heures sous
+  19 °C (seuil réglable), sonde du radiateur comparée à la station dans la même pièce.
+- **Courbe de charge Linky** (30 min) : journée type, talon, pic de 12 mois ; **sauvegarde chiffrée**
+  téléchargeable et commande `restore-backup`.
+- **Coûts** : budget annuel et projection, empreinte CO₂ (facteur modifiable), effet d'un nouveau
+  tarif réglementé, coût d'une journée de télétravail, absences détectées.
+- **Analyses** : chauffe-eau en heures creuses, simulateur de consigne (±2 °C), signature sur l'écart
+  intérieur − extérieur, soirs « volets fermés » notés à la main.
+- **Qualité des données** : jours réels / estimés / perdus par mois, jours perdus reconstitués à part
+  (Linky ou signature), jours « suspects », exclus des jours inhabituels.
+- **IA** : faits enrichis, pièces pseudonymisées (« Pièce A… »), coût et utilité de chaque analyse,
+  questions types sans IA.
+- **Exports** : CSV/JSON long documenté (`docs/export-long.md`), rapport annuel anonymisé,
+  comparateur d'offres et pic de puissance dans le rapport.
+- **Collecteur** : détection des changements de format des API, compteur et plafond d'appels par
+  source, champs de `homestatus` listés par le diagnostic (fenêtre ouverte disponible, #162) ;
+  issue automatique « Jeton à renouveler ».
+- **Sécurité** : Trusted Types imposés par la CSP, attestation de build et empreintes SHA-256
+  publiées (`gh attestation verify`).
+- **Accessibilité et mobile** : audit axe dans la CI, contraste élevé et taille de texte système,
+  balayage pour changer de période ou d'onglet, pièce épinglée, hors-ligne préparé.
+- **Vie privée du foyer** : vue foyer qui regroupe les chambres (désactivable par appareil).
+- Cadre juridique (`docs/juridique.md`), `CONTRIBUTING.md` et devcontainer, démo complète.
+- Revue de fin de version (`docs/bmad/revues/v1.3.md`) et cadrage v1.4 avec 62 personas.
+
 ## v1.2 — novembre 2026 : contrat, comparateur, station, paramètres
 
 - Mode projet : règles BMAD (`docs/PROJET.md`), gabarits d'issues et de PR, jalons, une issue par récit.
