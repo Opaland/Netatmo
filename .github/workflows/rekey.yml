@@ -17,16 +17,19 @@ permissions:
 jobs:
   rekey:
     runs-on: ubuntu-latest
-    env:
-      DATA_PASSPHRASE: ${{ secrets.DATA_PASSPHRASE }}
-      NEW_DATA_PASSPHRASE: ${{ secrets.NEW_DATA_PASSPHRASE }}
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
-      - run: pip install .
-      - run: python -m collector rekey
+      # S-1.16 #265: locked versions with hashes, and no secret in this step's environment
+      # (a compromised package would run here). The collector runs from the checkout, not installed.
+      - run: pip install --require-hashes -r requirements-lock.txt
+      - name: Rechiffrement
+        env:
+          DATA_PASSPHRASE: ${{ secrets.DATA_PASSPHRASE }}
+          NEW_DATA_PASSPHRASE: ${{ secrets.NEW_DATA_PASSPHRASE }}
+        run: python -m collector rekey
       - name: Commit
         run: |
           git config user.name "github-actions[bot]"

@@ -25,6 +25,7 @@ from zoneinfo import ZoneInfo
 import httpx
 
 from .budget import METER
+from .errors import SourceError, endpoint_of, guarded, raise_for_status
 from .schema import FormatError, dated_records, safe_keys
 from .storage import Store
 
@@ -49,10 +50,11 @@ CURVE_MIN_SLOTS = 46  # a complete day has 48 half hours (46 on the spring DST d
 MIN_INTERVAL = 0.3
 
 
-class LinkyError(RuntimeError):
-    def __init__(self, message: str, auth: bool = False) -> None:
-        super().__init__(message)
-        self.auth = auth  # token refused: consent expired or revoked
+class LinkyError(SourceError):
+    """`auth`: token refused, consent expired or revoked. Never the URL (its query holds the
+    PRM) nor the response body (S-1.16 #263)."""
+
+    source = "Linky (Conso API)"
 
 
 class _Paced:
@@ -68,7 +70,7 @@ class _Paced:
         if wait > 0:
             time.sleep(wait)
         try:
-            with METER.call("linky"):
+            with guarded(LinkyError, endpoint_of(url)), METER.call("linky"):
                 return self.http.get(url, params=params, headers={"Authorization": f"Bearer {self.token}"})
         finally:
             self.last = time.monotonic()
@@ -140,12 +142,12 @@ def collect(
         resp = api.get(API, {"pointId": prm, "dateDebut": chunk_start.isoformat(), "dateFin": chunk_end.isoformat()})
         if resp.status_code in (401, 403):
             raise LinkyError(
-                f"Linky (Conso API) : HTTP {resp.status_code}, jeton refusé — renouvelez l'accord sur "
-                "conso.boris.sh et mettez le nouveau jeton dans ENEDIS_TOKEN",
+                endpoint=endpoint_of(API),
+                status=resp.status_code,
+                hint="renouvelez l'accord sur conso.boris.sh et mettez le nouveau jeton dans ENEDIS_TOKEN",
                 auth=True,
             )
-        if resp.status_code != 200:
-            raise LinkyError(f"Linky (Conso API) : HTTP {resp.status_code} {resp.text[:150]}")
+        raise_for_status(resp, LinkyError, endpoint_of(API))
         body = _json(resp, "consommation_quotidienne")
         found = _readings(body)
         _check_found(body, len(found), "consommation_quotidienne")
@@ -298,8 +300,7 @@ def collect_curve(
         resp = api.get(API_CURVE, {"pointId": prm, "dateDebut": start.isoformat(), "dateFin": end.isoformat()})
         if resp.status_code != 200:
             raise LinkyError(
-                f"Linky, courbe de charge : HTTP {resp.status_code} {resp.text[:150]}",
-                auth=resp.status_code in (401, 403),
+                endpoint=endpoint_of(API_CURVE), status=resp.status_code, auth=resp.status_code in (401, 403)
             )
         body = _json(resp, "courbe_de_charge_consommation")
         _check_found(body, len(_points(body)), "courbe_de_charge_consommation")

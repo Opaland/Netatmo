@@ -40,6 +40,7 @@ from datetime import date, datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
+from . import redact
 from .crypto import decrypt_json, encrypt_json
 
 # Fields kept from homestatus. Everything else (temperatures, ids of other objects, names) is
@@ -299,6 +300,7 @@ def take(client, store, out_dir: Path, presence: bool) -> Path:
         if not homes:
             raise RuntimeError("Aucune maison trouvée sur ce compte")
         home_id = homes[0]["id"]
+    redact.register(home_id)  # S-1.16: never in the public log of the hourly workflow
     payload = client.homestatus(home_id)
     snap = snapshot(payload, int(time.time()), presence=presence, calls=METER.calls.get("intuis", 0))
     return write_snapshot(out_dir, snap, store.passphrase, store.salt, store.iterations)

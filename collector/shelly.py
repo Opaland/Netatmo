@@ -36,6 +36,7 @@ import httpx
 
 from . import schema
 from .budget import METER
+from .errors import SourceError, guarded, raise_for_status
 from .schema import FormatError
 from .storage import Store
 
@@ -52,12 +53,10 @@ _HOST = re.compile(r"[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9]
 _CHANNEL = re.compile(r"(switch|pm1|em1):\d+")
 
 
-class ShellyError(RuntimeError):
+class ShellyError(SourceError):
     """Messages never quote the key, an id, a name or a value (public log)."""
 
-    def __init__(self, message: str, auth: bool = False) -> None:
-        super().__init__(message)
-        self.auth = auth
+    source = "Shelly"
 
 
 def server_url(raw: str) -> str:
@@ -172,20 +171,20 @@ class _Api:
         if wait > 0:
             time.sleep(wait)
         try:
-            with METER.call("shelly"):
+            # httpx messages carry the URL, hence the key: guarded() never prints them.
+            with guarded(ShellyError, endpoint), METER.call("shelly"):
                 resp = self.http.post(f"{self.base}{path}", **kw)
-        except httpx.HTTPError as err:  # its message may carry the URL, hence the key: never print it
-            raise ShellyError(f"Shelly : {endpoint} injoignable ({type(err).__name__})") from None
         finally:
             self.last = time.monotonic()
         if resp.status_code in (401, 403):
             raise ShellyError(
-                f"Shelly : HTTP {resp.status_code}, clé refusée — nouvelle clé dans l'application Shelly "
+                endpoint=endpoint,
+                status=resp.status_code,
+                hint="clé refusée, nouvelle clé dans l'application Shelly "
                 "(Paramètres utilisateur → Clé d'autorisation cloud), puis secret SHELLY_AUTH_KEY",
                 auth=True,
             )
-        if resp.status_code != 200:
-            raise ShellyError(f"Shelly : {endpoint}, HTTP {resp.status_code}")
+        raise_for_status(resp, ShellyError, endpoint)
         try:
             return resp.json()
         except ValueError:

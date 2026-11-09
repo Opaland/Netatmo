@@ -22,6 +22,7 @@ import httpx
 
 from . import schema
 from .budget import METER
+from .errors import SourceError, error_code, guarded, raise_for_status
 from .model import parse_measure_columns
 from .storage import Store
 
@@ -47,10 +48,11 @@ HUMID_ABOVE = 65  # %, strictly above
 COLD_BELOW = 19  # °C, strictly below (indoor modules only)
 
 
-class StationError(RuntimeError):
-    def __init__(self, message: str, auth: bool = False) -> None:
-        super().__init__(message)
-        self.auth = auth  # refresh token refused: it must be generated again
+class StationError(SourceError):
+    """`auth`: refresh token refused, it must be generated again. Never the response body
+    (S-1.16 #263: it may echo the station's MAC address)."""
+
+    source = "Station Netatmo"
 
 
 class Station:
@@ -82,7 +84,7 @@ class Station:
         return self.seed_token
 
     def login(self) -> None:
-        with METER.call("netatmo"):
+        with guarded(StationError, "/oauth2/token"), METER.call("netatmo"):
             resp = self.http.post(
                 f"{API}/oauth2/token",
                 data={
@@ -93,10 +95,7 @@ class Station:
                 },
             )
         if resp.status_code != 200:
-            try:
-                code = resp.json().get("error", "")
-            except ValueError:
-                code = ""
+            code = error_code(resp)
             hint = {
                 "invalid_client": "client_id / client_secret refusés : vérifiez NETATMO_CLIENT_ID "
                 "et NETATMO_CLIENT_SECRET",
@@ -104,7 +103,10 @@ class Station:
                 "et mettez-le dans NETATMO_REFRESH_TOKEN",
             }.get(code, "régénérez un jeton sur dev.netatmo.com et mettez-le dans NETATMO_REFRESH_TOKEN")
             raise StationError(
-                f"Station Netatmo : HTTP {resp.status_code} {code} — {hint}",
+                endpoint="/oauth2/token",
+                status=resp.status_code,
+                code=code,
+                hint=hint,
                 auth=code == "invalid_grant" or resp.status_code in (401, 403),
             )
         body = schema.check("Station Netatmo", "/oauth2/token", schema.NETATMO_TOKEN, resp.json())
@@ -118,10 +120,9 @@ class Station:
         if wait > 0:
             time.sleep(wait)
         self._last_call = time.monotonic()
-        with METER.call("netatmo"):
+        with guarded(StationError, path), METER.call("netatmo"):
             resp = self.http.get(f"{API}{path}", params=params, headers={"Authorization": f"Bearer {self.access}"})
-        if resp.status_code != 200:
-            raise StationError(f"Station Netatmo : {path} → HTTP {resp.status_code} {resp.text[:150]}")
+        raise_for_status(resp, StationError, path)
         body = resp.json()
         return schema.check("Station Netatmo", path, spec, body) if spec is not None else body
 

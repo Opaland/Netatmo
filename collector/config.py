@@ -68,6 +68,25 @@ class Settings:
             room_categories=overrides,
         )
 
+    def secret_values(self) -> list[str]:
+        """Values that must never reach a public log (S-1.16): redact.register() hides them."""
+        return [
+            self.username,
+            self.password,
+            self.client_id,
+            self.client_secret,
+            self.passphrase,
+            self.netatmo_client_id,
+            self.netatmo_client_secret,
+            self.netatmo_refresh_token,
+            self.enedis_token,
+            self.enedis_prm,
+            self.shelly_auth_key,
+            *self.room_categories,  # room ids
+            os.environ.get("NEW_DATA_PASSPHRASE", "").strip(),
+            os.environ.get("ANTHROPIC_API_KEY", "").strip(),
+        ]
+
     def require(self, *names: str) -> None:
         missing = [n for n in names if not getattr(self, n)]
         if missing:
