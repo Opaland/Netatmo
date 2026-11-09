@@ -18,6 +18,8 @@ dans les [issues GitHub](https://github.com/Opaland/Netatmo/issues) (une par ré
 | E8 | Sécurité et confidentialité | 1.2 | À faire |
 | E9 | Domotique : volets Wiser (étude), pont local | 1.2-1.3 | Étude en cours, conditionnel |
 | E10 | Diffusion | 2 | À faire |
+| E11 | Confort et santé de l'air (station Netatmo) | 1.3 | À faire |
+| E12 | Partage et famille | 1.3-2 | À faire |
 
 ## E1 · Collecte fiable et observable
 
@@ -129,3 +131,10 @@ dans les [issues GitHub](https://github.com/Opaland/Netatmo/issues) (une par ré
 | S-10.1 | En tant que possesseur d'Intuitiv, je veux un dépôt modèle et un guide, afin d'installer seul | G un compte GitHub vierge · Q je suis le guide · A données visibles en < 30 min sans aide | M | C | À faire |
 | S-10.3 | En tant que nouvel utilisateur, je veux un assistant de premier lancement dans Paramètres, afin d'installer sans lire le README | G un dépôt vierge · Q je suis l'assistant · A secrets, Pages et première collecte faits depuis l'application | L | C | À faire |
 | S-10.2 | En tant qu'utilisateur, je veux l'appli sur les stores, afin de l'installer comme les autres | G la PWA · Q je l'emballe (TWA / Capacitor) · A publication acceptée | L | W | À faire |
+
+## Backlog v1.3 (revue de cadrage, 52 personas)
+
+Les 49 récits proposés par la revue de cadrage sont décrits dans
+[`revues/v1.3-cadrage.md`](revues/v1.3-cadrage.md) et suivis en issues GitHub (une par récit, jalon v1.3 ou v2).
+S-2.9 (comparateur sur le total Linky) était déjà livré en v1.2 : le comparateur utilise le Linky dès qu'il
+est disponible.
