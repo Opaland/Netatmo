@@ -34,7 +34,8 @@ officielle de Home Assistant ne les voit pas.
   l'application**, et un type qui fonctionnait peut cesser de répondre après un changement de tarif.
   Le collecteur demande donc les trois en même temps et les additionne.
 - `sum_energy_elec` (sans suffixe) : total, selon les comptes.
-- `sum_energy_elec_heating` et `sum_energy_elec_hot_water` existent aussi (vus dans l'application).
+- `sum_energy_elec_heating` : **seul type qui répond pour les données les plus anciennes** (2022-2023 sur une installation réelle). `sum_energy_elec` sans suffixe couvre la période sans tarif (2024), les suffixes `$1`/`$2` la période avec tarifs (2025+). Le collecteur demande les trois familles et garde, par pièce et par jour, la plus grande valeur (jamais la somme).
+- `sum_energy_elec_hot_water` existe aussi (vu dans l.application).
   Le collecteur ne les utilise pas pour l'instant : le chauffe-eau est rattaché à **sa propre pièce**
   dans l'application, et c'est la pièce qui porte la catégorie.
 - Échelles : `30min`, `1hour`, `3hours`, `1day`, `1week`, `1month`. Au plus **1024 points par appel**.

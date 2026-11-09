@@ -161,3 +161,29 @@ def test_water_heater_outside_any_room_becomes_virtual_room():
     virtual = parsed.rooms[-1]
     assert (virtual.id, virtual.category, virtual.virtual) == ("m4", WATER_HEATER, True)
     assert "m4" not in parsed.api_room_ids()
+
+
+def test_measure_families_are_combined_with_max_not_sum(tmp_path):
+    """Old days answer only under _heating, recent ones under tariffs; overlaps keep the max."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        path = request.url.path
+        if path == "/oauth2/token":
+            return httpx.Response(200, json={"access_token": "t", "expires_in": 3600})
+        if path == "/api/homesdata":
+            return httpx.Response(200, json=load("homesdata.json"))
+        mtype = json.loads(request.content)["home"]["rooms"][0]["type"]
+        values = {
+            "sum_energy_elec_heating": [[100], [None]],  # 1 Jan only
+            "sum_energy_elec": [[90], [200]],  # overlaps 1 Jan, has 2 Jan
+            "sum_energy_elec$0,sum_energy_elec$1,sum_energy_elec$2": [[None, None, None], [150, 60, None]],
+        }[mtype]
+        room = {"id": "100", "measures": [{"beg_time": 1704063600, "step_time": 86400, "value": values}]}
+        return httpx.Response(200, json={"body": {"home": {"rooms": [room]}}})
+
+    settings = Settings(username="u", password="p", client_id="c", client_secret="s", api_base="https://x")
+    client = IntuisClient(settings, http=httpx.Client(transport=httpx.MockTransport(handler)), min_interval=0)
+    syncer = Syncer(client, Store(tmp_path, "pw"))
+    syncer.run(days=10)
+    assert syncer.strategy == ("home", "ALL")
+    assert syncer.store.year(2024)["100"] == {"2024-01-01": 100.0, "2024-01-02": 210.0}
