@@ -43,9 +43,14 @@ def cmd_discover(s: Settings, args: argparse.Namespace) -> None:
 
 
 def cmd_diagnose(s: Settings, args: argparse.Namespace) -> None:
-    from .diagnose import history, run
+    from .diagnose import history, history_deep, run
 
-    (history if args.history else run)(_client(s))
+    client = _client(s)
+    if args.history:
+        history(client)
+        history_deep(client)
+    else:
+        run(client)
 
 
 def cmd_sync(s: Settings, args: argparse.Namespace, backfill: bool = False) -> None:
