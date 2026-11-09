@@ -91,7 +91,11 @@ L'adresse du site s'affiche dans **Settings → Pages** (de la forme
 - **Android** : ouvrir l'adresse dans Chrome → menu ⋮ → **Installer l'application**.
 
 Entrez votre phrase de passe une fois ; « Rester connecté sur cet appareil » garde une clé
-non exportable dans le navigateur (le menu ⋮ → Verrouiller l'efface).
+non exportable dans le navigateur, **30 jours au plus** (le menu ⋮ → Verrouiller l'efface).
+Sans activité (toucher, clavier) pendant **15 minutes**, l'application se verrouille d'elle-même :
+les données déchiffrées, la clé mémorisée et le jeton GitHub sont oubliés, la phrase est redemandée.
+Le délai se règle dans le menu ⋮ (5 min, 15 min, 1 h, ou jamais sur cet appareil) ; il compte aussi
+quand l'onglet est fermé, si bien qu'un téléphone volé ne livre pas l'historique.
 
 ### Le plus simple : l'écran Paramètres
 
@@ -100,8 +104,8 @@ identifiants directement : l'application les **chiffre dans votre navigateur** a
 dépôt (le procédé imposé par GitHub) et les enregistre comme secrets, puis peut lancer la collecte.
 
 Il faut pour cela un [jeton GitHub « fine-grained »](https://github.com/settings/personal-access-tokens/new) :
-accès au seul dépôt, permissions **Secrets : lecture et écriture** et **Actions : lecture et écriture**,
-rien d'autre, expiration courte. Le jeton reste en mémoire le temps de la visite et n'est jamais
+accès au seul dépôt, permissions **Secrets : lecture et écriture**, **Variables : lecture et écriture**
+(pour le contrat partagé) et **Actions : lecture et écriture**, rien d'autre, expiration courte. Le jeton reste en mémoire le temps de la visite et n'est jamais
 enregistré. La phrase de passe des données ne se change pas ici (voir plus bas).
 
 ### Changer de phrase de passe
@@ -157,7 +161,9 @@ Netatmo renouvelle le jeton à chaque utilisation : le collecteur garde le nouve
 quand elle est connue (lue dans le jeton Conso API s'il la contient, sinon estimée à 3 ans après
 sa première utilisation, durée à vérifier). 30 jours avant, ou dès qu'un jeton Linky ou Netatmo
 est refusé, un avertissement « Renouveler le jeton … » apparaît dans le run GitHub Actions, avec
-la marche à suivre. Seule une empreinte courte du jeton est gardée (chiffrée), jamais le jeton.
+la marche à suivre, et **une issue « 🔑 Jeton à renouveler »** s'ouvre (GitHub vous l'envoie par
+e-mail) ; elle se ferme seule quand plus rien n'est à renouveler. L'écran Paramètres affiche pour
+chaque source la date d'expiration (« estimée » le cas échéant), ou « expiration inconnue ». Seule une empreinte courte du jeton est gardée (chiffrée), jamais le jeton.
 
 **Analyse du mois par l'IA (Claude)** :
 1. Créez une clé sur [console.anthropic.com](https://console.anthropic.com) (service payant ; une
@@ -171,7 +177,14 @@ pourcentages) et les noms des pièces. Ni adresse, ni coordonnées, ni identifia
 journalières. La clé reste un secret GitHub : elle n'est jamais dans le site.
 
 **Prix et contrat.** Dans le menu ⋮, décrivez votre contrat période par période (date de début, offre,
-puissance souscrite, par exemple 9 kVA puis 12 kVA). Chaque jour est compté avec le prix et
+puissance souscrite, par exemple 9 kVA puis 12 kVA). Pour que **tous les appareils du foyer**
+utilisent le même contrat, ouvrez Paramètres → **Contrat partagé** → *Partager ce contrat* : il est
+écrit dans la **variable** du dépôt `CONTRACT_JSON` (ce n'est pas un secret : dates, offre et
+puissance, par exemple `[{"from":"2022-01-01","offer":"edf-trv-hphc","kva":12},{"from":"2025-10-14","offer":"edf-trv-hphc","kva":9}]`),
+que la collecte vérifie puis recopie dans les données chiffrées ; le journal public n'indique que
+« Contrat partagé : oui (N périodes) ». Le contrat partagé s'applique alors partout (badge
+« partagé ») ; une modification faite dans le menu reste propre à l'appareil (« modifié sur cet
+appareil, non partagé ») jusqu'à ce que vous la partagiez. Chaque jour est compté avec le prix et
 l'abonnement en vigueur ce jour-là (historique officiel publié par la
 CRE en [open data](https://www.data.gouv.fr/datasets/historique-des-tarifs-reglementes-de-vente-delectricite-pour-les-consommateurs-residentiels),
 mis à jour à chaque déploiement). Pour ajouter un autre fournisseur, il suffit d'un fichier de tarifs

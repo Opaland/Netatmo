@@ -1,8 +1,23 @@
 // Settings view ("Paramètres et connexions"): sources status, GitHub secrets, manual collection.
 // The GitHub API logic lives in ../settings.ts; this module only renders and handles the forms.
-import { ds, rerender } from '../app';
-import { GROUPS, TOKEN_HELP_URL, hasToken, listSecrets, putSecret, repoFromLocation, runCollect, setToken, validate } from '../settings';
-import { esc, longDate, table } from '../ui';
+import { ds, rerender, setState } from '../app';
+import { contractJson } from '../contract';
+import { OFFERS } from '../offers';
+import {
+  GROUPS,
+  type SourceStatus,
+  TOKEN_HELP_URL,
+  expiryInfo,
+  hasToken,
+  listSecrets,
+  putSecret,
+  putVariable,
+  repoFromLocation,
+  runCollect,
+  setToken,
+  validate,
+} from '../settings';
+import { contractInfo, esc, longDate, table } from '../ui';
 
 let settingsRepo = repoFromLocation() ?? 'Opaland/Netatmo';
 let configured: Set<string> | null = null;
@@ -10,12 +25,17 @@ let settingsMsg: { ok: boolean; text: string } | null = null;
 
 export function renderSettings(view: HTMLElement) {
   const m = ds!.meta;
-  const src = ((m as { sources?: Record<string, { ok?: string; error?: string; message?: string }> }).sources ?? {}) as Record<
-    string,
-    { ok?: string; error?: string; message?: string }
-  >;
+  const src = ((m as { sources?: Record<string, SourceStatus> }).sources ?? {}) as Record<string, SourceStatus>;
+  const today = new Date().toISOString().slice(0, 10);
+  /** S-1.12: expiry of the token, or "expiration inconnue" (never a made-up date). */
+  const expiry = (s?: SourceStatus) => {
+    const e = expiryInfo(s, today);
+    if (!e) return '';
+    const when = e.date ? `expiration ${e.estimated ? 'estimée ' : ''}le ${longDate(e.date)}` : 'expiration inconnue';
+    return ` <span class="${e.renew ? 'ko-red' : 'muted'}">· ${when}${e.renew ? ' — <strong>⚠️ à renouveler</strong>' : ''}</span>`;
+  };
   const when = (iso?: string) => (iso ? `${longDate(iso.slice(0, 10))} à ${iso.slice(11, 16)} UTC` : '');
-  const status = (on: boolean, label: string, key?: string) => {
+  const status = (on: boolean, label: string, key?: string, withExpiry = true) => {
     const s = key ? src[key] : undefined;
     const failing = s?.error && (!s.ok || s.error > s.ok);
     const detail = failing
@@ -23,7 +43,7 @@ export function renderSettings(view: HTMLElement) {
       : s?.ok
         ? `<span class="muted">dernier succès le ${when(s.ok)}</span>`
         : `<span class="muted">${on ? 'actif' : 'non configuré'}</span>`;
-    return `<li><span class="${failing ? 'ko-red' : on ? 'ok' : 'ko'}" aria-hidden="true">${failing ? '⚠️' : on ? '✓' : '○'}</span> ${label} ${detail}</li>`;
+    return `<li><span class="${failing ? 'ko-red' : on ? 'ok' : 'ko'}" aria-hidden="true">${failing ? '⚠️' : on ? '✓' : '○'}</span> ${label} ${detail}${withExpiry ? expiry(s) : ''}</li>`;
   };
   const groups = GROUPS.map(
     (g) => `<fieldset class="secrets" data-group="${g.id}"><legend>${esc(g.title)}</legend>
@@ -45,9 +65,9 @@ export function renderSettings(view: HTMLElement) {
     <div class="card-head"><h2>Paramètres et connexions</h2><button type="button" class="link" data-view="overview">Fermer</button></div>
     <ul class="status-list">
       ${status(true, 'Radiateurs et chauffe-eau Intuis', 'intuis')}
-      ${status(!!m.weather_source, `Météo (${m.weather_source === 'netatmo' ? 'station Netatmo' : 'Open-Meteo'})`, m.weather_source === 'netatmo' ? 'netatmo' : 'open-meteo')}
+      ${status(!!m.weather_source, `Météo (${m.weather_source === 'netatmo' ? 'station Netatmo' : 'Open-Meteo'})`, m.weather_source === 'netatmo' ? 'netatmo' : 'open-meteo', false)}
       ${status(!!(m as { has_station?: boolean }).has_station, 'Station Netatmo, tous les modules', 'netatmo')}
-      ${status(!!m.has_linky, 'Compteur Linky', 'linky')}
+      ${status(!!m.has_linky || !!src.linky, 'Compteur Linky', 'linky')}
       ${status(!!ds!.insights, 'Analyse IA mensuelle', 'ia')}
     </ul>
     <p class="hint muted">Dernière collecte : ${m.updated ? esc(m.updated.replace('T', ' à ').slice(0, 21)) + ' (UTC)' : '—'}.</p>
@@ -58,7 +78,8 @@ export function renderSettings(view: HTMLElement) {
       : `<section class="card">
     <h2>1. Autoriser l'application à écrire vos secrets</h2>
     <p class="hint muted">Créez un <a href="${TOKEN_HELP_URL}" target="_blank" rel="noopener">jeton GitHub « fine-grained »</a> :
-      accès au seul dépôt <strong>${esc(settingsRepo)}</strong>, permissions <strong>Secrets : lecture et écriture</strong> et
+      accès au seul dépôt <strong>${esc(settingsRepo)}</strong>, permissions <strong>Secrets : lecture et écriture</strong>,
+      <strong>Variables : lecture et écriture</strong> (contrat partagé) et
       <strong>Actions : lecture et écriture</strong>, <strong>rien d'autre</strong> (surtout pas « Contents »), expiration courte (7 jours). Le jeton reste en mémoire le temps de la visite :
       il n'est jamais enregistré, ni sur l'appareil, ni ailleurs.</p>
     <form id="gh-login" class="inline-form">
@@ -75,8 +96,9 @@ export function renderSettings(view: HTMLElement) {
     ${groups}
     <button class="primary" type="submit" ${hasToken() ? '' : 'disabled'}>Chiffrer et enregistrer dans GitHub</button>
   </form>
+  ${contractSection()}
   <section class="card">
-    <h2>3. Lancer la collecte</h2>
+    <h2>4. Lancer la collecte</h2>
     <p class="hint muted">Utile après avoir ajouté une connexion. La collecte prend quelques minutes, puis le site se met à jour.</p>
     <div class="controls">
       <button type="button" class="primary small" id="run-collect" ${hasToken() ? '' : 'disabled'}>Collecter maintenant</button>
@@ -93,7 +115,8 @@ export function renderSettings(view: HTMLElement) {
         ['Identifiants et jetons', 'Secrets GitHub', 'Uniquement la collecte automatique ; illisibles même pour vous'],
         ['Code de l\'application', 'Dépôt public', 'Tout le monde (aucune donnée personnelle)'],
         ['Journaux de collecte', 'GitHub Actions (public)', 'Tout le monde : uniquement des comptes et des codes, jamais de valeur'],
-        ['Prix et contrat saisis ici', 'Votre appareil (stockage du navigateur)', 'Vous seul'],
+        ['Prix saisis ici, contrat non partagé', 'Votre appareil (stockage du navigateur)', 'Vous seul'],
+        ['Contrat partagé (dates, offre, puissance)', 'Variable GitHub CONTRACT_JSON, puis données chiffrées', 'Les administrateurs du dépôt ; chiffré dans data/'],
       ],
       99,
     )}
@@ -112,6 +135,32 @@ export function renderSettings(view: HTMLElement) {
     )}
   </section>
   ${settingsMsg ? `<p class="settings-msg ${settingsMsg.ok ? 'ok' : 'ko'}" role="status">${esc(settingsMsg.text)}</p>` : ''}`;
+}
+
+/** S-12.1: the contract used on this device, and the button that shares it with the others. */
+function contractSection() {
+  const info = contractInfo();
+  const offer = (id: string) => OFFERS.find((o) => o.id === id);
+  const rows = info.periods.map((c) => [longDate(c.from), esc(`${offer(c.offer)?.supplier ?? ''} ${offer(c.offer)?.label ?? c.offer}`), `${c.kva} kVA`]);
+  const n = info.periods.length;
+  const state =
+    info.source === 'shared'
+      ? `<p><span class="badge">partagé</span> Ce contrat (${n} période${n > 1 ? 's' : ''}) s'applique sur tous les appareils.${
+          info.differs ? ' Le contrat saisi sur cet appareil en diffère : il est ignoré (voir le menu Prix).' : ''
+        }</p>`
+      : info.shared
+        ? '<p class="notice"><strong>Modifié sur cet appareil, non partagé</strong> : les autres appareils utilisent encore le contrat partagé.</p>'
+        : `<p class="notice">${info.source === 'default' ? 'Aucun contrat saisi : 9 kVA, heures pleines / creuses par défaut.' : 'Ce contrat est enregistré sur cet appareil seulement.'} Les autres appareils ne le connaissent pas.</p>`;
+  return `<section class="card" id="contract-share">
+    <h2>3. Contrat partagé</h2>
+    <p class="hint muted">Le contrat (dates de changement, offre, puissance souscrite) sert au calcul des coûts. Partagé, il est enregistré
+      dans la <strong>variable</strong> GitHub <code>CONTRACT_JSON</code> (ce n'est pas un secret), puis recopié chiffré par la collecte :
+      tous les appareils affichent alors le même coût. Il n'apparaît jamais dans les journaux publics.</p>
+    ${state}
+    ${table(['À partir du', 'Offre', 'Puissance'], rows, 99)}
+    <button type="button" class="primary small" id="contract-share-btn" ${hasToken() && info.source !== 'shared' ? '' : 'disabled'}>Partager ce contrat</button>
+    <p class="hint muted">Modifiable dans le menu ⋮ → Prix. Le partage s'applique sur les autres appareils après la prochaine collecte.</p>
+  </section>`;
 }
 
 async function settingsAction(fn: () => Promise<string>) {
@@ -173,6 +222,16 @@ export function handleClick(btn: HTMLElement): boolean {
     forgetToken();
     settingsMsg = { ok: true, text: 'Jeton oublié.' };
     rerender();
+    return true;
+  }
+  if (btn.id === 'contract-share-btn') {
+    const periods = contractInfo().periods;
+    void settingsAction(async () => {
+      await putVariable(settingsRepo, 'CONTRACT_JSON', contractJson(periods));
+      // Keep using this device's contract until the collection copies the shared one.
+      if (contractInfo().source === 'default') setState({ contracts: periods.map((c) => ({ ...c })) });
+      return `Contrat partagé (${periods.length} période${periods.length > 1 ? 's' : ''}). Lancez la collecte pour l'appliquer sur tous les appareils.`;
+    });
     return true;
   }
   if (btn.id === 'run-collect') {

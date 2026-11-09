@@ -6,6 +6,9 @@
 // - Secret values are encrypted IN THE BROWSER with the repository public key
 //   (libsodium sealed box, the scheme GitHub requires): only GitHub can decrypt them.
 // - Values are never read back (GitHub doesn't allow it) nor displayed.
+// - S-12.1: the shared contract is not a secret: it goes into the repository VARIABLE
+//   CONTRACT_JSON (token permission « Variables : lecture et écriture »), the only variable
+//   the app may write.
 
 export interface SecretField {
   name: string;
@@ -103,7 +106,7 @@ async function gh(path: string, init: RequestInit = {}): Promise<Response> {
       resp.status === 401
         ? 'jeton invalide ou expiré'
         : resp.status === 403 || resp.status === 404
-          ? 'droits insuffisants : le jeton doit viser ce dépôt avec « Secrets : lecture et écriture » et « Actions : lecture et écriture »'
+          ? 'droits insuffisants : le jeton doit viser ce dépôt avec « Secrets », « Variables » et « Actions » en lecture et écriture'
           : `HTTP ${resp.status}`;
     throw new GitHubError(`GitHub : ${hint}`, resp.status);
   }
@@ -138,6 +141,20 @@ export async function putSecret(repo: string, name: string, value: string): Prom
   });
 }
 
+/** Repository variables the app may write (S-12.1). */
+export const VARIABLES = new Set(['CONTRACT_JSON']);
+
+/** Create or update a repository variable (not secret, so not sealed). */
+export async function putVariable(repo: string, name: string, value: string): Promise<void> {
+  if (!VARIABLES.has(name)) throw new GitHubError(`${name} ne peut pas être modifié depuis l'application`, 400);
+  try {
+    await gh(`/repos/${repo}/actions/variables/${encodeURIComponent(name)}`, { method: 'PATCH', body: JSON.stringify({ name, value }) });
+  } catch (err) {
+    if (!(err instanceof GitHubError) || err.status !== 404) throw err;
+    await gh(`/repos/${repo}/actions/variables`, { method: 'POST', body: JSON.stringify({ name, value }) });
+  }
+}
+
 export async function runCollect(repo: string, backfill: boolean): Promise<void> {
   await gh(`/repos/${repo}/actions/workflows/collect.yml/dispatches`, {
     method: 'POST',
@@ -153,4 +170,32 @@ export function validate(name: string, value: string): string | null {
   if (name === 'INTUIS_USERNAME' && !v.includes('@')) return 'Adresse e-mail attendue.';
   if (name === 'ANTHROPIC_API_KEY' && !v.startsWith('sk-ant-')) return 'Une clé Anthropic commence par « sk-ant- ».';
   return null;
+}
+
+// ------------------------------------------------------------------ S-1.12 expiry of tokens
+export interface SourceStatus {
+  ok?: string;
+  error?: string;
+  message?: string;
+  credential?: string; // short hash of the secret, never the secret
+  since?: string;
+  auth_expired?: boolean;
+  expires?: string; // YYYY-MM-DD
+  expires_estimated?: boolean;
+  note?: string;
+}
+
+export const RENEW_WARNING_DAYS = 30;
+
+/** Expiry of the source's token as shown in Settings; null when the source has no tracked token. */
+export function expiryInfo(s: SourceStatus | undefined, today: string): { date: string | null; estimated: boolean; renew: boolean; daysLeft: number | null } | null {
+  if (!s || (!s.credential && !s.expires && !s.auth_expired)) return null;
+  const date = s.expires && /^\d{4}-\d{2}-\d{2}$/.test(s.expires) ? s.expires : null;
+  const daysLeft = date ? Math.round((Date.parse(`${date}T00:00:00Z`) - Date.parse(`${today}T00:00:00Z`)) / 86_400_000) : null;
+  return {
+    date,
+    estimated: !!s.expires_estimated,
+    daysLeft,
+    renew: !!s.auth_expired || (daysLeft !== null && daysLeft <= RENEW_WARNING_DAYS),
+  };
 }

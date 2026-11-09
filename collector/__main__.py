@@ -140,6 +140,67 @@ def expiry_alerts(state: dict[str, dict], today: date) -> list[str]:
     return out
 
 
+# S-12.1: contract shared between devices, from the repository variable CONTRACT_JSON.
+# Same lists as the web app (web/src/offers.ts and the CRE tariff files).
+CONTRACT_OFFERS = ("edf-trv-hphc", "edf-trv-base")
+CONTRACT_KVAS = (3, 6, 9, 12, 15, 18, 24, 30, 36)
+CONTRACT_MAX_PERIODS = 50
+
+
+class ContractError(ValueError):
+    """Invalid CONTRACT_JSON. Messages never quote the values (public log)."""
+
+
+def parse_contract(raw: str) -> list[dict]:
+    """[{from, offer, kva}, ...] validated and normalised; raises ContractError."""
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError as err:
+        raise ContractError("JSON illisible") from err
+    if not isinstance(data, list) or not data:
+        raise ContractError("liste de périodes attendue")
+    if len(data) > CONTRACT_MAX_PERIODS:
+        raise ContractError(f"plus de {CONTRACT_MAX_PERIODS} périodes")
+    out: list[dict] = []
+    for i, p in enumerate(data, 1):
+        if not isinstance(p, dict):
+            raise ContractError(f"période {i} : objet attendu")
+        day, offer, kva = p.get("from"), p.get("offer"), p.get("kva")
+        try:
+            if not isinstance(day, str) or len(day) != 10:
+                raise ValueError
+            date.fromisoformat(day)
+        except ValueError:
+            raise ContractError(f"période {i} : date AAAA-MM-JJ attendue") from None
+        if offer not in CONTRACT_OFFERS:
+            raise ContractError(f"période {i} : offre inconnue")
+        if isinstance(kva, bool) or not isinstance(kva, int | float) or kva not in CONTRACT_KVAS:
+            raise ContractError(f"période {i} : puissance non standard")
+        if out and day <= out[-1]["from"]:
+            raise ContractError(f"période {i} : dates non triées ou en double")
+        out.append({"from": day, "offer": offer, "kva": int(kva)})
+    return out
+
+
+def shared_contract(previous: list[dict] | None) -> list[dict] | None:
+    """CONTRACT_JSON if valid; the previous contract if invalid; None when the variable is unset."""
+    raw = os.environ.get("CONTRACT_JSON", "").strip()
+    if not raw:
+        return None
+    try:
+        return parse_contract(raw)
+    except ContractError as err:
+        _warn(f"Variable CONTRACT_JSON ignorée ({err}) : le contrat partagé précédent est conservé")
+        return previous
+
+
+def write_renew_file(alerts: list[str]) -> None:
+    """S-1.12: credentials to renew, one per line, for the workflow's alert issue (never a value)."""
+    path = os.environ.get("RENEW_FILE")
+    if path:
+        Path(path).write_text("".join(f"- {a}\n" for a in alerts), encoding="utf-8")
+
+
 def _weather(s: Settings, store: Store, home, sources: Sources) -> str | None:
     """Outdoor temperatures: the Netatmo station if configured, else Open-Meteo. Never fatal."""
     first = store.first_day()
@@ -234,8 +295,13 @@ def cmd_sync(s: Settings, args: argparse.Namespace, backfill: bool = False) -> N
             sources.failed("ia", str(err))
             _warn(f"Analyse IA non rédigée : {err}")
     extra["sources"] = sources.state
-    for alert in sources.alerts():
+    contract = shared_contract(store.meta.get("contract"))
+    if contract:
+        extra["contract"] = contract
+    alerts = sources.alerts()
+    for alert in alerts:
         _warn(alert)
+    write_renew_file(alerts)
     changed = syncer.save(home, extra)
     print("Fichiers modifiés : " + (", ".join(changed) if changed else "aucun"))
     print(f"Couverture : {store.first_day()} → {store.last_day()}")
@@ -248,6 +314,11 @@ def _expiry_label(st: dict) -> str:
     if st.get("expires"):
         return st["expires"] + (" (estimée)" if st.get("expires_estimated") else "")
     return "inconnue" if "credential" in st else "—"
+
+
+def _contract_label(contract: list | None) -> str:
+    # Only a count: the contract itself is not secret but stays out of public logs.
+    return f"oui ({len(contract)} période{'s' if len(contract) > 1 else ''})" if contract else "non"
 
 
 def _job_summary(store: Store, syncer: Syncer, changed: list[str]) -> None:
@@ -270,6 +341,7 @@ def _job_summary(store: Store, syncer: Syncer, changed: list[str]) -> None:
         f"| Linky | {yes(m.get('has_linky'))} |",
         f"| Linky, courbe de charge 30 min | {yes(m.get('linky_curve_years'))} |",
         f"| Analyse IA | {yes(store.doc('insights').get('period'))} |",
+        f"| Contrat partagé | {_contract_label(m.get('contract'))} |",
         f"| Fichiers chiffrés modifiés | {len(changed)} |",
         "",
         "| Source | Dernier succès | Dernier échec | Expiration du jeton |",
@@ -296,7 +368,11 @@ def cmd_insights(s: Settings, args: argparse.Namespace) -> None:
         store.save(
             store.meta.get("home", {}),
             store.meta.get("rooms", []),
-            {k: v for k, v in store.meta.items() if k.startswith("has_") or k == "weather_source"},
+            {
+                k: v
+                for k, v in store.meta.items()
+                if k.startswith("has_") or k in ("weather_source", "sources", "contract")
+            },
         )
         print(store.doc("insights")["markdown"])
 

@@ -30,6 +30,9 @@ jobs:
       INTUIS_CLIENT_SECRET: ${{ secrets.INTUIS_CLIENT_SECRET }}
       DATA_PASSPHRASE: ${{ secrets.DATA_PASSPHRASE }}
       INTUIS_ROOM_CATEGORIES: ${{ vars.INTUIS_ROOM_CATEGORIES }}
+      # S-12.1: contract shared between devices (not secret: a repository variable written by
+      # Settings). Validated by the collector, stored in the encrypted meta, never printed.
+      CONTRACT_JSON: ${{ vars.CONTRACT_JSON }}
       # Optional: Netatmo weather station (see README)
       NETATMO_CLIENT_ID: ${{ secrets.NETATMO_CLIENT_ID }}
       NETATMO_CLIENT_SECRET: ${{ secrets.NETATMO_CLIENT_SECRET }}
@@ -59,6 +62,8 @@ jobs:
         run: pip install ".[ai]"
       - name: Collecte
         if: steps.check.outputs.configured == 'true'
+        env:
+          RENEW_FILE: ${{ runner.temp }}/renew.txt
         run: python -m collector -v ${{ inputs.backfill && 'backfill' || 'sync' }}
       - name: Commit des données chiffrées
         if: steps.check.outputs.configured == 'true'
@@ -99,6 +104,39 @@ jobs:
           for num in $(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search "\"$title\" in:title" --json number --jq '.[].number'); do
             gh issue close "$num" --repo "$GITHUB_REPOSITORY" --comment "Collecte rétablie le $(date -u +%F)."
           done
+
+      # S-1.12: one open issue while a token must be renewed (refused, or expiring within 30 days),
+      # closed when nothing is left. renew.txt holds source names and dates only, never a value.
+      - name: Alerte jetons à renouveler
+        if: success() && steps.check.outputs.configured == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RENEW_FILE: ${{ runner.temp }}/renew.txt
+        run: |
+          title="🔑 Jeton à renouveler"
+          num=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search "\"$title\" in:title" --json number --jq '.[0].number // empty')
+          if [ -s "$RENEW_FILE" ]; then
+            body="$(cat "$RENEW_FILE")"
+            if [ -z "$num" ]; then
+              gh issue create --repo "$GITHUB_REPOSITORY" --title "$title" --body "@${{ github.repository_owner }} un jeton ou un consentement doit être renouvelé :
+
+          $body
+
+          Paramètres de l'application affiche la date d'expiration de chaque source. Cette issue se fermera toute seule quand plus rien ne sera à renouveler."
+            else
+              # Comment only when the list changed, not every night.
+              last=$(gh api "repos/$GITHUB_REPOSITORY/issues/$num/comments" --jq '[.[] | select(.user.login == "github-actions[bot]")] | last | .body // empty')
+              [ -n "$last" ] || last=$(gh api "repos/$GITHUB_REPOSITORY/issues/$num" --jq .body)
+              case "$last" in
+                *"$body"*) echo "Alerte déjà ouverte (#$num), inchangée." ;;
+                *) gh issue comment "$num" --repo "$GITHUB_REPOSITORY" --body "Mise à jour du $(date -u +%F) :
+
+          $body" ;;
+              esac
+            fi
+          elif [ -n "$num" ]; then
+            gh issue close "$num" --repo "$GITHUB_REPOSITORY" --comment "Plus aucun jeton à renouveler le $(date -u +%F)."
+          fi
 
   # A push made with GITHUB_TOKEN does not trigger other workflows: deploy explicitly.
   deploy:

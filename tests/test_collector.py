@@ -777,3 +777,80 @@ def test_station_night_crosses_midnight_and_counts_thresholds(tmp_path):
     hours = store.doc("station")["hours"]["m2"]
     assert hours["2025-12-31"] == {"n": 3, "humid": 2, "cold": 2}  # 70, 66 > 65; 19.0 is not < 19
     assert hours["2026-01-01"] == {"n": 5, "humid": 0, "cold": 0}
+
+
+# ---------------------------------------------------------------- S-12.1 shared contract
+def test_contract_json_is_validated_without_quoting_values():
+    from collector.__main__ import ContractError, parse_contract
+
+    ok = (
+        '[{"from": "2022-01-01", "offer": "edf-trv-hphc", "kva": 12},'
+        ' {"from": "2025-10-14", "offer": "edf-trv-hphc", "kva": 9.0}]'
+    )
+    assert parse_contract(ok) == [
+        {"from": "2022-01-01", "offer": "edf-trv-hphc", "kva": 12},
+        {"from": "2025-10-14", "offer": "edf-trv-hphc", "kva": 9},
+    ]
+    p = lambda day, offer="edf-trv-base", kva="9": f'{{"from": "{day}", "offer": "{offer}", "kva": {kva}}}'  # noqa: E731
+    bad = {
+        "{": "illisible",
+        "[]": "liste",
+        p("2022-01-01"): "liste",
+        f"[{p('2022-13-01')}]": "date",
+        f"[{p('1/1/2022')}]": "date",
+        f"[{p('2022-01-01', 'secret-offer')}]": "offre inconnue",
+        f"[{p('2022-01-01', kva='10')}]": "puissance",
+        f"[{p('2022-01-01', kva='true')}]": "puissance",
+        f"[{p('2023-01-01')}, {p('2022-01-01')}]": "triées",
+    }
+    for raw, why in bad.items():
+        with pytest.raises(ContractError, match=why) as err:
+            parse_contract(raw)
+        assert "secret-offer" not in str(err.value) and "2022-13-01" not in str(err.value)
+
+
+def test_shared_contract_goes_into_the_encrypted_meta_and_only_a_count_in_the_summary(tmp_path, monkeypatch, capsys):
+    from collector.__main__ import _job_summary, shared_contract
+
+    store = Store(tmp_path, "pw")
+    store.merge("100", "2024-01-01", 1.0)
+    previous = [{"from": "2022-01-01", "offer": "edf-trv-hphc", "kva": 12}]
+    monkeypatch.delenv("CONTRACT_JSON", raising=False)
+    assert shared_contract(previous) is None  # variable removed: no shared contract any more
+    monkeypatch.setenv("CONTRACT_JSON", "not json")
+    assert shared_contract(previous) == previous  # invalid: keep the last good one
+    assert "not json" not in capsys.readouterr().out
+    monkeypatch.setenv(
+        "CONTRACT_JSON",
+        '[{"from": "2022-01-01", "offer": "edf-trv-hphc", "kva": 12},'
+        ' {"from": "2025-10-14", "offer": "edf-trv-hphc", "kva": 9}]',
+    )
+    contract = shared_contract(None)
+    store.save({"id": "h"}, [], {"contract": contract})
+    assert Store(tmp_path, "pw").meta["contract"][1] == {"from": "2025-10-14", "offer": "edf-trv-hphc", "kva": 9}
+    assert "2025-10-14" not in (tmp_path / "meta.enc.json").read_text()  # encrypted
+    summary = tmp_path / "summary.md"
+    monkeypatch.setenv("GITHUB_STEP_SUMMARY", str(summary))
+    _job_summary(store, Syncer(None, store), [])  # type: ignore[arg-type]
+    text = summary.read_text()
+    assert "| Contrat partagé | oui (2 périodes) |" in text
+    assert "2025-10-14" not in text and "edf-trv" not in text
+
+
+def test_renew_file_lists_only_what_must_be_renewed(tmp_path, monkeypatch):
+    from collector.__main__ import Sources, write_renew_file
+
+    path = tmp_path / "renew.txt"
+    monkeypatch.setenv("RENEW_FILE", str(path))
+    s = Sources(None)
+    s.credential("netatmo", "seed-secret")
+    s.failed("netatmo", "invalid_grant", auth=True)
+    write_renew_file(s.alerts())
+    text = path.read_text()
+    assert text.startswith("- Renouveler le jeton netatmo") and text.count("\n") == 1
+    assert "seed-secret" not in text
+    s.ok("netatmo")
+    write_renew_file(s.alerts())
+    assert path.read_text() == ""
+    monkeypatch.delenv("RENEW_FILE")
+    write_renew_file(["x"])  # no file asked: nothing written, no error

@@ -21,6 +21,7 @@ export interface Meta {
   has_temps?: boolean;
   has_linky?: boolean;
   weather_source?: string | null;
+  contract?: unknown; // S-12.1: shared contract periods, validated in contract.ts
 }
 
 export interface DayRecord {
