@@ -54,8 +54,14 @@ qui travaillent sur le dépôt.
   `docs/bmad/02-revue-50-personas.md` ; on peut en ajouter, jamais en retirer sans le noter.
 - À chaque version : un fichier `docs/bmad/revues/vX.Y.md` avec, pour chaque persona, son verdict sur
   la version livrée (👍/👎) et une proposition ; puis la synthèse « besoins × impact ».
-- Chaque proposition retenue devient une **issue** ; les autres sont notées « non retenu » avec la
-  raison.
+- **Chaque persona a son issue** (étiquette `persona` + famille, titre « Persona #N · … ») : elle porte
+  son verdict, son besoin et sa proposition. À chaque revue, on y ajoute un commentaire avec le nouveau
+  verdict ; on la ferme quand sa proposition est livrée (en citant le récit), on la rouvre s'il en fait
+  une nouvelle.
+- Chaque proposition retenue devient aussi une **issue de récit** (« S-x.y · … ») liée depuis l'issue
+  du persona ; les autres sont notées « non retenu » avec la raison.
+- Une revue de **cadrage** a lieu en début de version (`docs/bmad/revues/vX.Y-cadrage.md`) pour remplir
+  le backlog ; la revue de **fin de version** (`vX.Y.md`) juge ce qui a été livré.
 - Une étude (`docs/etudes/`) **mesure le besoin avant de construire** : si le besoin n'est pas avéré,
   on ne construit pas, et on l'écrit.
 
