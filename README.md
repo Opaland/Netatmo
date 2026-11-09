@@ -6,12 +6,18 @@ application web installable sur **Android et iPhone**.
 
 Ce que l'application mobile ne fait pas, et que celle-ci fait :
 
-- garder **tout l'historique**, sans limite de durée ;
-- **comparer les années** : mois par mois, cumul depuis le 1er janvier, saison de chauffe
-  (septembre → août), évolution à date ;
-- **filtrer par pièce** et séparer **chauffage / chauffe-eau**, ou les additionner ;
-- afficher le **coût** (prix du kWh au choix) ;
-- **exporter en CSV**.
+- garder **tout l'historique** (depuis 2022 sur l'installation de référence), sans limite de durée ;
+- **comparer les années** : mois par mois, cumul, saison de chauffe, et **à climat égal**
+  (degrés-jours) ;
+- un **verdict** du mois en euros (« conforme / plus élevé / plus économe que d'habitude ») et une
+  **projection** de fin d'année ;
+- le **coût réel** heures pleines / heures creuses avec abonnement ;
+- la **signature énergétique** du logement (kWh par jour selon la température extérieure) ;
+- un **calendrier** de consommation, des **profils horaires**, les **températures** des pièces ;
+- la **part du chauffage et du chauffe-eau** dans la consommation totale (compteur **Linky**) ;
+- **par pièce** : classement, évolution N-1 → N en cascade, détail mensuel ;
+- un **rapport annuel** imprimable (PDF) et l'**export CSV** ;
+- une **analyse du mois rédigée par l'IA** (Claude), facultative.
 
 Tout tourne sur GitHub, gratuitement, sans serveur à maintenir :
 
@@ -84,6 +90,55 @@ L'adresse du site s'affiche dans **Settings → Pages** (de la forme
 Entrez votre phrase de passe une fois ; « Rester connecté sur cet appareil » garde une clé
 non exportable dans le navigateur (le menu ⋮ → Verrouiller l'efface).
 
+### Options (facultatives)
+
+Chaque option s'active en ajoutant des secrets. Sans eux, l'application fonctionne normalement.
+
+**Météo.** Rien à faire : les températures de votre commune viennent d'[Open-Meteo](https://open-meteo.com)
+(gratuit, sans compte), à partir des coordonnées de la maison connues de l'application Intuis.
+
+**Station météo Netatmo** (température réelle chez vous, plus précise) :
+1. Sur [dev.netatmo.com](https://dev.netatmo.com) → *My apps* → *Create*, créez une application
+   (nom libre).
+2. Dans la page de l'application, section *Token generator* : cochez le scope `read_station`,
+   cliquez *Generate token*, puis copiez le **refresh token**.
+3. Ajoutez les secrets `NETATMO_CLIENT_ID`, `NETATMO_CLIENT_SECRET` et `NETATMO_REFRESH_TOKEN`.
+
+Netatmo renouvelle le jeton à chaque utilisation : le collecteur garde le nouveau, chiffré, dans
+`data/netatmo-token.enc.json`. Vous n'avez rien à refaire, sauf si vous révoquez l'accès.
+
+**Compteur Linky** (part du chauffage et du chauffe-eau dans le total du logement) :
+1. Sur [conso.boris.sh](https://conso.boris.sh), donnez votre accord sur votre compte Enedis : vous
+   obtenez un **jeton personnel**. Ce service gratuit relaie l'API d'Enedis, réservée aux entreprises.
+   C'est celui qu'utilise l'intégration Linky de Home Assistant.
+2. Ajoutez les secrets `ENEDIS_TOKEN` et `ENEDIS_PRM` (numéro de point de livraison à 14 chiffres,
+   visible sur votre facture ou dans l'espace Enedis).
+
+**Analyse du mois par l'IA (Claude)** :
+1. Créez une clé sur [console.anthropic.com](https://console.anthropic.com) (service payant ; une
+   analyse mensuelle coûte quelques centimes).
+2. Ajoutez le secret `ANTHROPIC_API_KEY`.
+
+Une fois par mois, l'application calcule elle-même tous les chiffres du mois écoulé, et Claude
+rédige le commentaire. Chaque nombre du texte est comparé aux chiffres calculés : s'il en invente un,
+le texte est réécrit. **Ce qui est envoyé à Anthropic** : des totaux mensuels (kWh, °C, degrés-jours,
+pourcentages) et les noms des pièces. Ni adresse, ni coordonnées, ni identifiants, ni données
+journalières. La clé reste un secret GitHub : elle n'est jamais dans le site.
+
+**Prix.** Dans l'application, menu ⋮ : prix du kWh (unique, ou heures pleines / heures creuses) et
+abonnement mensuel. Ces réglages restent sur votre appareil.
+
+### Alertes
+
+Si la collecte nocturne échoue (mot de passe changé, serveur indisponible…), une *issue* GitHub
+s'ouvre et GitHub vous prévient par e-mail. Elle se ferme toute seule à la prochaine collecte réussie.
+
+### Jours « estimés »
+
+Pour certaines périodes, le serveur Intuis a perdu le détail jour par jour mais garde le total du mois.
+Le collecteur répartit alors l'écart sur les jours manquants : le total du mois est juste, la
+répartition entre ces jours est une estimation. L'application signale ces jours.
+
 ### Pièce mal classée ?
 
 Le collecteur classe chaque pièce en **chauffage** ou **chauffe-eau** d'après son nom (« chauffe-eau »,
@@ -119,6 +174,8 @@ python -m collector discover
 | `python -m collector backfill` | Force la récupération de tout l'historique |
 | `python -m collector verify` | Déchiffre les données locales et affiche les totaux par année |
 | `python -m collector export-csv -o conso.csv` | Export CSV (séparateur `;`, décimales `,`, pour Excel) |
+| `python -m collector insights [--force]` | Analyse du dernier mois par Claude (`ANTHROPIC_API_KEY`) |
+| `python -m collector diagnose [--history]` | Diagnostic anonyme de l'API (modules, types de mesure, profondeur) |
 | `python -m collector demo` | Régénère les données de démonstration |
 
 Application web :
@@ -135,7 +192,8 @@ tests/              tests du collecteur (API simulée, aucun appel réseau)
 data/               données chiffrées, écrites par la collecte (créé au premier lancement)
 web/                application PWA (Vite + TypeScript + ECharts)
   public/demo/      données de démonstration chiffrées (phrase « demo »)
-docs/               notes sur l'API, étude de l'existant
+docs/               notes sur l'API, étude de l'existant, feuille de route
+  bmad/             cadrage BMAD : brief, revue 50 personas, PRD, architecture, epics, QA
 .github/workflows/  CI, collecte quotidienne, déploiement GitHub Pages
 ```
 

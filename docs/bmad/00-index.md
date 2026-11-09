@@ -31,9 +31,9 @@ Documents antérieurs, toujours valables : [README](../../README.md), [notes API
 | Élément | Statut |
 |---|---|
 | v1.0 : collecte nocturne chiffrée, comparaison d'années, PWA, CSV | Livré |
-| v1.1 : coût HP/HC, météo et DJU, signature énergétique, calendrier, cascade, verdict, projection, profils horaires, températures, rapport annuel, alerte d'échec, synthèse IA mensuelle | En cours (développement parallèle) |
+| v1.1 : coût HP/HC, météo et DJU, signature énergétique, calendrier, cascade, verdict, projection, profils horaires, températures, rapport annuel, alerte d’échec (faite), synthèse IA mensuelle, part dans le Linky | En cours (développement parallèle) |
 | Chat IA dans l'application (clé fournie par l'utilisateur) | En évaluation, voir ADR-5 |
-| Pont local (Synology / Home Assistant) | Proposé, conditionné à une mesure du besoin (ADR-6 à ADR-8) |
+| Pont local (Synology / Home Assistant) | Proposé, conditionné à une mesure du besoin (ADR-7 à ADR-9) |
 | Pilotage domotique (volets, Hue) | Hors périmètre de l'application (ADR-6) |
 
 ## Conventions

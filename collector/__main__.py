@@ -106,9 +106,30 @@ def cmd_sync(s: Settings, args: argparse.Namespace, backfill: bool = False) -> N
             _warn(str(err))
     if store.doc("linky").get("daily"):
         extra["has_linky"] = True
+    if os.environ.get("ANTHROPIC_API_KEY"):
+        from .insights import generate
+
+        try:
+            generate(store)
+        except Exception as err:  # never lose a night of data because of the optional AI step
+            _warn(f"Analyse IA non rédigée : {err}")
     changed = syncer.save(home, extra)
     print("Fichiers modifiés : " + (", ".join(changed) if changed else "aucun"))
     print(f"Couverture : {store.first_day()} → {store.last_day()}")
+
+
+def cmd_insights(s: Settings, args: argparse.Namespace) -> None:
+    from .insights import generate
+
+    s.require("passphrase")
+    store = Store(s.data_dir, s.passphrase)
+    if generate(store, force=args.force):
+        store.save(
+            store.meta.get("home", {}),
+            store.meta.get("rooms", []),
+            {k: v for k, v in store.meta.items() if k.startswith("has_") or k == "weather_source"},
+        )
+        print(store.doc("insights")["markdown"])
 
 
 def cmd_verify(s: Settings, args: argparse.Namespace) -> None:
@@ -164,6 +185,8 @@ def main(argv: list[str] | None = None) -> None:
         sp = sub.add_parser(name)
         sp.add_argument("--days", type=int, default=35, help="jours re-téléchargés à chaque sync (défaut 35)")
     sub.add_parser("verify")
+    ins = sub.add_parser("insights", help="analyse du mois rédigée par Claude (ANTHROPIC_API_KEY)")
+    ins.add_argument("--force", action="store_true")
     e = sub.add_parser("export-csv")
     e.add_argument("-o", "--output", default="-")
     dm = sub.add_parser("demo")
@@ -178,6 +201,7 @@ def main(argv: list[str] | None = None) -> None:
         "sync": cmd_sync,
         "backfill": lambda s, a: cmd_sync(s, a, backfill=True),
         "verify": cmd_verify,
+        "insights": cmd_insights,
         "export-csv": cmd_export,
         "demo": cmd_demo,
     }[args.cmd](s, args)

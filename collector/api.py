@@ -20,7 +20,7 @@ log = logging.getLogger(__name__)
 
 # The backend caps a measure request at 1024 points.
 MAX_POINTS = 1024
-SCALE_SECONDS = {"30min": 1800, "1hour": 3600, "3hours": 10800, "1day": 86400}
+SCALE_SECONDS = {"30min": 1800, "1hour": 3600, "3hours": 10800, "1day": 86400, "1week": 604800, "1month": 2678400}
 FALLBACK_API_BASE = "https://app-prod.intuis-sas.com"
 
 

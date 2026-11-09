@@ -79,4 +79,5 @@ Pas de télémétrie : les KPI d'usage sont déclaratifs, c'est un choix de vie 
 ## 7. Hors champ du brief
 
 Pilotage des radiateurs (l'application officielle et Home Assistant le font), facturation réelle du
-fournisseur, consommation Linky du foyer entier (piste future, non engagée).
+fournisseur. La consommation Linky du foyer entier est en cours d'ajout comme source optionnelle
+(`collector/enedis.py`), pour situer le chauffage dans le total, pas pour en faire le sujet principal.

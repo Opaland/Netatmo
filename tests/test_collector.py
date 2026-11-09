@@ -308,3 +308,67 @@ def test_linky_parser_accepts_unknown_shapes_and_kwh(tmp_path):
     )
     assert n > 0
     assert store.doc("linky")["daily"]["2024-01-01"] == 21500.0  # kWh payload converted to Wh
+
+
+def test_monthly_totals_fill_days_lost_by_the_backend(tmp_path):
+    """Daily values missing for part of a month, monthly total intact: spread the gap."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        path = request.url.path
+        if path == "/oauth2/token":
+            return httpx.Response(200, json={"access_token": "t", "expires_in": 3600})
+        if path == "/api/homesdata":
+            return httpx.Response(200, json=load("homesdata.json"))
+        req = json.loads(request.content)
+        if req["home"]["rooms"][0]["type"] != "sum_energy_elec":
+            return httpx.Response(200, json={"body": {"home": {"rooms": []}}})
+        if req["scale"] == "1month":
+            measures = [{"beg_time": 1706742000, "step_time": 2592000, "value": [[31000]]}]  # Feb 2024
+        elif req["scale"] == "1day":
+            # only 1-27 Feb 2024 at 1000 Wh, 28-29 lost
+            measures = [{"beg_time": 1706742000, "step_time": 86400, "value": [[1000]] * 27}]
+        else:
+            measures = []
+        rooms = [{"id": "100", "measures": measures}]
+        return httpx.Response(200, json={"body": {"home": {"rooms": rooms}}})
+
+    settings = Settings(username="u", password="p", client_id="c", client_secret="s", api_base="https://x")
+    client = IntuisClient(settings, http=httpx.Client(transport=httpx.MockTransport(handler)), min_interval=0)
+    store = Store(tmp_path, "pw")
+    Syncer(client, store).run(backfill=True)
+    feb = {d: v for d, v in store.year(2024)["100"].items() if d.startswith("2024-02")}
+    assert sum(feb.values()) == 31000.0
+    assert feb["2024-02-28"] == feb["2024-02-29"] == 2000.0
+    assert store.doc("2024")["estimated"]["100"] == {"2024-02-28": 1, "2024-02-29": 1}
+
+
+def test_insights_use_only_computed_numbers(tmp_path):
+    from datetime import date
+    from types import SimpleNamespace
+
+    from collector.insights import compute_facts, generate, unknown_numbers
+
+    store = Store(tmp_path, "pw")
+    for d in range(1, 32):
+        store.merge("100", f"2024-01-{d:02d}", 10000.0)
+        store.merge("100", f"2023-01-{d:02d}", 12000.0)
+    store.save({"id": "h"}, [{"id": "100", "name": "Salon", "category": HEATING}])
+    facts = compute_facts(store, "2024-01")
+    assert facts["chauffage_kwh"] == 310.0 and facts["chauffage_kwh_annee_precedente"] == 372.0
+    assert unknown_numbers("Salon : 310 kWh contre 372 kWh", facts) == []
+    assert unknown_numbers("soit 999 kWh", facts) == [999.0]
+
+    calls = []
+
+    def create(**kw):
+        calls.append(kw)
+        text = "### Bien\n310 kWh, 999 kWh" if len(calls) == 1 else "### Bien\nSalon : 310 kWh contre 372 kWh."
+        return SimpleNamespace(stop_reason="end_turn", content=[SimpleNamespace(type="text", text=text)])
+
+    client = SimpleNamespace(beta=SimpleNamespace(messages=SimpleNamespace(create=create)))
+    assert generate(store, today=date(2024, 2, 10), client=client)
+    assert len(calls) == 2  # invented number → one rewrite
+    assert calls[0]["model"] == "claude-opus-5-5" and calls[0]["fallbacks"] == "default"
+    doc = store.doc("insights")
+    assert doc["period"] == "2024-01" and doc["verified"]
+    assert not generate(store, today=date(2024, 2, 11), client=client)  # once per month

@@ -87,4 +87,24 @@ def generate(out_dir: Path, passphrase: str = "demo", start_year: int = 2022) ->
         for r, n, c, _w, _sp in ROOMS
     ]
     extra = {"has_tariffs": True, "has_temps": True, "has_linky": True, "weather_source": "open-meteo"}
+    store.replace(
+        "insights",
+        {
+            "period": "exemple",
+            "generated": today.isoformat(),
+            "model": "exemple (démo)",
+            "verified": True,
+            "markdown": (
+                "### Un mois plus sobre que l'an dernier, à météo comparable\n"
+                "Le chauffage a consommé un peu moins que l'an dernier à la même période, alors que le mois a "
+                "été aussi froid : l'effet vient donc des réglages, pas de la météo.\n"
+                "### Ce qui a compté\n"
+                "- **Salon** : toujours la première pièce, mais en baisse.\n"
+                "- **Chauffe-eau** : stable, il chauffe surtout la nuit en heures creuses.\n"
+                "### À essayer\n"
+                "- Baisser la consigne de la **salle de bain** hors des créneaux du matin.\n"
+                "- Vérifier la relance de 7 h dans le **bureau** le week-end."
+            ),
+        },
+    )
     return store.save({"id": "demo", "name": "Maison démo", "timezone": "Europe/Paris"}, rooms, extra)

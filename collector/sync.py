@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 import time
 from dataclasses import asdict
-from datetime import datetime
+from datetime import UTC, datetime, timedelta
 from zoneinfo import ZoneInfo
 
 from .api import SCALE_SECONDS, ApiError, IntuisClient, chunk_ranges
@@ -29,11 +29,12 @@ EARLIEST_YEAR = 2015
 # era of the installation (seen on a real account):
 #   - tariffs set in the app (2025+):  sum_energy_elec$1 / $2 (peak / off-peak), $0 base
 #   - before tariffs (2024):           sum_energy_elec
-#   - oldest data (2022-2023):         sum_energy_elec_heating
+#   - oldest data (2022-2023):         sum_energy_elec_heating (rooms)
+#                                       sum_energy_elec_hot_water (water heater module)
 # "ALL" fetches every family and keeps, per room and period, the LARGEST value: the
 # families describe the same energy, so adding them would count it twice.
 TARIFFS = "sum_energy_elec$0,sum_energy_elec$1,sum_energy_elec$2"
-TYPE_FAMILIES = (TARIFFS, "sum_energy_elec", "sum_energy_elec_heating")
+TYPE_FAMILIES = (TARIFFS, "sum_energy_elec", "sum_energy_elec_heating", "sum_energy_elec_hot_water")
 ALL = "ALL"
 MEASURE_TYPES = (TARIFFS, "sum_energy_elec", "sum_energy_elec$0")
 STRATEGIES = [("home", ALL)] + [("home", t) for t in MEASURE_TYPES] + [("room", t) for t in MEASURE_TYPES]
@@ -189,6 +190,38 @@ class Syncer:
         log.info("Horaire : %d heures non nulles", n)
         return n
 
+    def _fill_from_monthly(self, home: Home, strategy: tuple[str, str], begin: int, end: int) -> int:
+        """Some periods keep monthly totals but lost daily values (seen in 2024). When a
+        month's total exceeds the sum of its days, spread the difference over the days
+        without data, and mark them as estimated so the app can say so."""
+        try:
+            data = self._fetch_with(strategy, home, begin, end, scale="1month")
+        except ApiError as err:
+            log.warning("Totaux mensuels indisponibles : %s", err)
+            return 0
+        filled = 0
+        for rid, pts in data.items():
+            for ts, month_wh in pts:
+                month = to_local_day(ts, home.timezone)[:7]
+                year_daily = self.store.year(int(month[:4])).get(rid, {})
+                days = {d: v for d, v in year_daily.items() if d.startswith(month)}
+                have = sum(days.values())
+                gap = month_wh - have
+                if gap <= max(100.0, 0.05 * month_wh):
+                    continue
+                # Never before yesterday: today's values are still arriving.
+                limit = to_local_day(int(time.time()) - DAY, home.timezone)
+                missing = [d for d in _month_days(month) if d <= limit and not days.get(d)]
+                if not missing:
+                    continue
+                share = round(gap / len(missing), 1)
+                for d in missing:
+                    self.store.merge(rid, d, share)
+                    self.store.put(d[:4], "estimated", rid, d, 1)
+                filled += len(missing)
+                log.info("  %s : %d jours estimés à partir du total mensuel", month, len(missing))
+        return filled
+
     def _temperatures(self, home: Home, begin: int, end: int) -> int:
         """Daily room temperature and setpoint. Best effort: not every account answers."""
         try:
@@ -259,6 +292,7 @@ class Syncer:
                 empty_streak = 0
                 self._merge(home, data)
                 self._temperatures(home, begin, end)
+                self._fill_from_monthly(home, strategy, begin, end)
             else:
                 empty_streak += 1
             log.info(
@@ -268,3 +302,13 @@ class Syncer:
                 count,
             )
             end = begin
+
+
+def _month_days(month: str) -> list[str]:
+    y, m = int(month[:4]), int(month[5:7])
+    d = datetime(y, m, 1, tzinfo=UTC)
+    out = []
+    while d.month == m:
+        out.append(d.strftime("%Y-%m-%d"))
+        d += timedelta(days=1)
+    return out

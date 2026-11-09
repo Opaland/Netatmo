@@ -61,7 +61,8 @@ export function disposeAll(root: HTMLElement) {
   root.querySelectorAll<HTMLElement>('.chart').forEach((el) => echarts.getInstanceByDom(el)?.dispose());
 }
 
-function tooltip(price: number | null, showTotal: boolean) {
+function tooltip(price: number | null, showTotal: boolean, unit = 'kWh') {
+  const fmt = (v: number) => (unit === 'kWh' ? fmtKwh(v) : `${nf1.format(v)} ${unit}`);
   return {
     trigger: 'axis' as const,
     confine: true,
@@ -77,7 +78,7 @@ function tooltip(price: number | null, showTotal: boolean) {
       const rows = list
         .map(
           (p) =>
-            `<div class="tt-row"><span class="tt-key" style="background:${p.color}"></span><strong>${fmtKwh(p.value!)}</strong><span class="tt-name">${escapeHtml(p.seriesName)}</span></div>`,
+            `<div class="tt-row"><span class="tt-key" style="background:${p.color}"></span><strong>${fmt(p.value!)}</strong><span class="tt-name">${escapeHtml(p.seriesName)}</span></div>`,
         )
         .join('');
       const sum = list.reduce((s, p) => s + (p.value ?? 0), 0);
@@ -106,7 +107,7 @@ function axes(labels: string[]) {
     yAxis: {
       type: 'value' as const,
       splitLine: { lineStyle: { color: cssVar('--grid') } },
-      axisLabel: { color: muted, formatter: (v: number) => nf0.format(v) },
+      axisLabel: { color: muted, formatter: (v: number) => (v !== 0 && Math.abs(v) < 10 ? nf1 : nf0).format(v) },
     },
   };
 }
@@ -160,14 +161,17 @@ export function barChart(
   );
 }
 
-export function lineChart(el: HTMLElement, opts: { labels: string[]; series: Series[]; price: number | null; emphasize?: string }) {
+export function lineChart(
+  el: HTMLElement,
+  opts: { labels: string[]; series: Series[]; price: number | null; emphasize?: string; unit?: string },
+) {
   const chart = instance(el);
   chart.setOption(
     {
       animationDuration: 300,
       ...axes(opts.labels),
       legend: { ...legend(opts.series), icon: 'rect', itemWidth: 14, itemHeight: 3 },
-      tooltip: tooltip(opts.price, false),
+      tooltip: tooltip(opts.price, false, opts.unit),
       series: opts.series.map((s) => ({
         type: 'line',
         name: s.name,
@@ -255,7 +259,7 @@ export function scatterChart(el: HTMLElement, opts: { series: ScatterSeries[]; x
   chart.setOption(
     {
       animationDuration: 300,
-      grid: { left: 8, right: 16, top: 36, bottom: 24, containLabel: true },
+      grid: { left: 24, right: 16, top: 36, bottom: 24, containLabel: true },
       legend: legend(opts.series.map((s) => ({ name: s.name, color: s.color, data: [] }))),
       tooltip: {
         ...ttBase(),
@@ -271,13 +275,17 @@ export function scatterChart(el: HTMLElement, opts: { series: ScatterSeries[]; x
         nameLocation: 'middle',
         nameGap: 26,
         nameTextStyle: { color: muted },
+        scale: true,
+        axisLine: { onZero: false, lineStyle: { color: cssVar('--border') } },
         splitLine: { lineStyle: { color: cssVar('--grid') } },
         axisLabel: { color: muted },
       },
       yAxis: {
         type: 'value',
         name: opts.yName,
-        nameTextStyle: { color: muted, align: 'left' },
+        nameLocation: 'middle',
+        nameGap: 34,
+        nameTextStyle: { color: muted },
         splitLine: { lineStyle: { color: cssVar('--grid') } },
         axisLabel: { color: muted },
       },
@@ -417,6 +425,7 @@ export function waterfallChart(
   up.push('-');
   down.push('-');
   totals.push(Math.round(acc));
+  const lowest = Math.min(opts.start, acc, ...base.filter((v): v is number => typeof v === 'number' && v > 0));
   chart.setOption(
     {
       grid: { left: 8, right: 8, top: 28, bottom: 8, containLabel: true },
@@ -433,7 +442,13 @@ export function waterfallChart(
         },
       },
       xAxis: { type: 'category', data: labels, axisLabel: { color: muted, interval: 0, rotate: labels.length > 6 ? 35 : 0 }, axisTick: { show: false } },
-      yAxis: { type: 'value', splitLine: { lineStyle: { color: cssVar('--grid') } }, axisLabel: { color: muted, formatter: (v: number) => nf0.format(v) } },
+      yAxis: {
+        type: 'value',
+        // Zoom on the band where things change; the totals bars are clipped at the bottom.
+        min: Math.max(0, Math.floor((lowest * 0.85) / 100) * 100),
+        splitLine: { lineStyle: { color: cssVar('--grid') } },
+        axisLabel: { color: muted, formatter: (v: number) => nf0.format(v) },
+      },
       series: [
         { type: 'bar', stack: 'w', data: base, itemStyle: { color: 'transparent' }, emphasis: { disabled: true }, tooltip: { show: false } },
         { type: 'bar', stack: 'w', name: 'Total', data: totals, itemStyle: { color: cssVar('--text-secondary'), borderRadius: [4, 4, 0, 0] }, barMaxWidth: 36 },

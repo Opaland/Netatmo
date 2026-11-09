@@ -17,6 +17,7 @@ export interface Dataset {
   indoor: Map<string, number>;
   linky: Map<string, number>; // day -> kWh, whole home
   insights: Insights | null;
+  estimated: Set<string>; // "room|day" rebuilt from a monthly total
 }
 
 export interface Insights {
@@ -24,19 +25,23 @@ export interface Insights {
   model: string;
   period: string;
   markdown: string;
+  verified?: boolean;
+  facts?: unknown;
 }
 
 interface YearDoc {
   daily?: Record<string, Record<string, number>>;
   tariffs?: Record<string, Record<string, [number, number, number]>>;
   temps?: Record<string, Record<string, [number, number | null]>>;
+  estimated?: Record<string, Record<string, number>>;
 }
 
 export class NoData extends Error {}
 
 async function getJson<T>(url: string): Promise<T> {
   const resp = await fetch(url, { cache: 'no-cache' });
-  if (resp.status === 404) throw new NoData(url);
+  // 404 on GitHub Pages; dev/preview servers answer missing files with index.html.
+  if (resp.status === 404 || (resp.headers.get('content-type') ?? '').includes('text/html')) throw new NoData(url);
   if (!resp.ok) throw new Error(`${url} : HTTP ${resp.status}`);
   return (await resp.json()) as T;
 }
@@ -88,9 +93,11 @@ export async function load(source: Source, key: CryptoKey): Promise<Dataset> {
   ]);
   const tariffs: TariffMap = new Map();
   const temps: Dataset['temps'] = new Map();
+  const estimated = new Set<string>();
   for (const [, doc] of years) {
     toMap2(doc.tariffs, tariffs);
     toMap2(doc.temps, temps);
+    for (const [room, days] of Object.entries(doc.estimated ?? {})) for (const d of Object.keys(days)) estimated.add(`${room}|${d}`);
   }
   // Tariff values are stored in Wh like everything else: convert to kWh once.
   for (const days of tariffs.values()) for (const [d, v] of days) days.set(d, [v[0] / 1000, v[1] / 1000, v[2] / 1000]);
@@ -106,6 +113,7 @@ export async function load(source: Source, key: CryptoKey): Promise<Dataset> {
     indoor: new Map(Object.entries(weatherDoc?.indoor ?? {})),
     linky: new Map(Object.entries(linkyDoc?.daily ?? {}).map(([d, wh]) => [d, wh / 1000])),
     insights,
+    estimated,
   };
 }
 
