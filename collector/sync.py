@@ -168,11 +168,12 @@ class Syncer:
 
     # ------------------------------------------------------------ merging
     def _merge(self, home: Home, data: Series) -> int:
+        """Real daily values; one arriving for a day estimated from the monthly total replaces
+        the estimate and clears its flag (#269)."""
         n = 0
         for rid, pts in data.items():
             for ts, wh in pts:
-                self.store.merge(rid, to_local_day(ts, home.timezone), round(wh, 1))
-                n += 1
+                n += self.store.merge_real(rid, to_local_day(ts, home.timezone), round(wh, 1))
         return n
 
     def _hourly(self, home: Home, strategy: tuple[str, str], begin: int, end: int) -> int:
@@ -185,8 +186,13 @@ class Syncer:
         tz = ZoneInfo(home.timezone)
         n = 0
         for rid, pts in data.items():
+            # When the clocks go back, two UTC hours share the same local hour: it is energy,
+            # so they are added, never the second written over the first (#267).
+            hours: dict[str, float] = {}
             for ts, wh in pts:
                 hour = datetime.fromtimestamp(ts, tz).strftime("%Y-%m-%dT%H")
+                hours[hour] = hours.get(hour, 0.0) + wh
+            for hour, wh in hours.items():
                 self.store.put(f"{hour[:4]}.hourly", "hourly", rid, hour, round(wh, 1))
                 n += bool(wh)
         log.info("Horaire : %d heures non nulles", n)

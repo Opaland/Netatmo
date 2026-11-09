@@ -601,6 +601,8 @@ def cmd_import_ha(s: Settings, args: argparse.Namespace) -> None:
         why = str(err) if isinstance(err, ImportFormatError) else type(err).__name__
         raise SystemExit(f"Import refusé : {why}") from None
     print(f"{counts['sensors']} capteurs, {counts['days']} jours agrégés, {counts['skipped']} sans jour complet.")
+    if counts.get("partial_kept"):
+        print(f"{counts['partial_kept']} jours incomplets ignorés : la valeur déjà importée est conservée.")
     if args.dry_run or not counts["sensors"]:
         print("Rien n'est écrit.")
         return

@@ -35,7 +35,7 @@ from zoneinfo import ZoneInfo
 import httpx
 
 from . import schema
-from .budget import METER
+from .http import Paced
 from .schema import FormatError
 from .storage import Store
 
@@ -163,21 +163,14 @@ def add_reading(store: Store, key: str, ts: float, total: float, tz: str) -> int
 # ---------------------------------------------------------------- API
 class _Api:
     def __init__(self, http: httpx.Client, base: str, key: str, min_interval: float | None) -> None:
-        self.http, self.base, self.key = http, base, key
-        self.min_interval = MIN_INTERVAL if min_interval is None else min_interval
-        self.last = 0.0
+        self.base, self.key = base, key
+        self.api = Paced(http, "shelly", MIN_INTERVAL if min_interval is None else min_interval)
 
     def post(self, path: str, endpoint: str, **kw: Any) -> Any:
-        wait = self.last + self.min_interval - time.monotonic()
-        if wait > 0:
-            time.sleep(wait)
         try:
-            with METER.call("shelly"):
-                resp = self.http.post(f"{self.base}{path}", **kw)
+            resp = self.api.post(f"{self.base}{path}", **kw)
         except httpx.HTTPError as err:  # its message may carry the URL, hence the key: never print it
             raise ShellyError(f"Shelly : {endpoint} injoignable ({type(err).__name__})") from None
-        finally:
-            self.last = time.monotonic()
         if resp.status_code in (401, 403):
             raise ShellyError(
                 f"Shelly : HTTP {resp.status_code}, clé refusée — nouvelle clé dans l'application Shelly "

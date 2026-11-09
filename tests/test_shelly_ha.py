@@ -227,7 +227,7 @@ def test_import_history_json_daily_aggregates(tmp_path):
     f.write_text(json.dumps(history_json()))
     store = Store(tmp_path / "data", "pw")
     counts = import_file(store, f, TZ)
-    assert counts == {"sensors": 3, "days": 5, "skipped": 0}
+    assert counts == {"sensors": 3, "days": 5, "skipped": 0, "partial_kept": 0}
     doc = store.doc("ha")
     by_entity = {v["entity"]: k for k, v in doc["sensors"].items()}
     w = by_entity["binary_sensor.fenetre_salon"]
