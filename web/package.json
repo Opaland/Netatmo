@@ -8,7 +8,8 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "test": "vitest run",
-    "e2e": "node e2e/demo.mjs"
+    "e2e": "node e2e/demo.mjs",
+    "size": "node scripts/size-budget.mjs"
   },
   "dependencies": {
     "echarts": "^6.1.0",

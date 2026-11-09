@@ -1,0 +1,187 @@
+// Settings view ("Paramètres et connexions"): sources status, GitHub secrets, manual collection.
+// The GitHub API logic lives in ../settings.ts; this module only renders and handles the forms.
+import { ds, rerender } from '../app';
+import { GROUPS, TOKEN_HELP_URL, hasToken, listSecrets, putSecret, repoFromLocation, runCollect, setToken, validate } from '../settings';
+import { esc, longDate, table } from '../ui';
+
+let settingsRepo = repoFromLocation() ?? 'Opaland/Netatmo';
+let configured: Set<string> | null = null;
+let settingsMsg: { ok: boolean; text: string } | null = null;
+
+export function renderSettings(view: HTMLElement) {
+  const m = ds!.meta;
+  const src = ((m as { sources?: Record<string, { ok?: string; error?: string; message?: string }> }).sources ?? {}) as Record<
+    string,
+    { ok?: string; error?: string; message?: string }
+  >;
+  const when = (iso?: string) => (iso ? `${longDate(iso.slice(0, 10))} à ${iso.slice(11, 16)} UTC` : '');
+  const status = (on: boolean, label: string, key?: string) => {
+    const s = key ? src[key] : undefined;
+    const failing = s?.error && (!s.ok || s.error > s.ok);
+    const detail = failing
+      ? `<span class="ko-red">échec le ${when(s!.error)}${s!.message ? ` : ${esc(s!.message)}` : ''}</span>`
+      : s?.ok
+        ? `<span class="muted">dernier succès le ${when(s.ok)}</span>`
+        : `<span class="muted">${on ? 'actif' : 'non configuré'}</span>`;
+    return `<li><span class="${failing ? 'ko-red' : on ? 'ok' : 'ko'}" aria-hidden="true">${failing ? '⚠️' : on ? '✓' : '○'}</span> ${label} ${detail}</li>`;
+  };
+  const groups = GROUPS.map(
+    (g) => `<fieldset class="secrets" data-group="${g.id}"><legend>${esc(g.title)}</legend>
+      <p class="hint muted">${esc(g.help)}</p>
+      ${g.fields
+        .map(
+          (f) => `<label>${esc(f.label)} ${
+            configured ? (configured.has(f.name) ? '<span class="ok">✓ enregistré</span>' : '<span class="muted">non enregistré</span>') : ''
+          }
+          <input name="${f.name}" type="${f.secret ? 'password' : 'text'}" autocomplete="off" spellcheck="false" placeholder="${esc(
+            f.placeholder ?? (configured?.has(f.name) ? 'laisser vide pour garder la valeur actuelle' : ''),
+          )}" ${hasToken() ? '' : 'disabled'}></label>`,
+        )
+        .join('')}
+    </fieldset>`,
+  ).join('');
+  view.innerHTML = `
+  <section class="card">
+    <div class="card-head"><h2>Paramètres et connexions</h2><button type="button" class="link" data-view="overview">Fermer</button></div>
+    <ul class="status-list">
+      ${status(true, 'Radiateurs et chauffe-eau Intuis', 'intuis')}
+      ${status(!!m.weather_source, `Météo (${m.weather_source === 'netatmo' ? 'station Netatmo' : 'Open-Meteo'})`, m.weather_source === 'netatmo' ? 'netatmo' : 'open-meteo')}
+      ${status(!!(m as { has_station?: boolean }).has_station, 'Station Netatmo, tous les modules', 'netatmo')}
+      ${status(!!m.has_linky, 'Compteur Linky', 'linky')}
+      ${status(!!ds!.insights, 'Analyse IA mensuelle', 'ia')}
+    </ul>
+    <p class="hint muted">Dernière collecte : ${m.updated ? esc(m.updated.replace('T', ' à ').slice(0, 21)) + ' (UTC)' : '—'}.</p>
+  </section>
+  ${
+    ds!.source === 'demo'
+      ? '<section class="card"><p class="notice">Mode démonstration : les paramètres sont désactivés.</p></section>'
+      : `<section class="card">
+    <h2>1. Autoriser l'application à écrire vos secrets</h2>
+    <p class="hint muted">Créez un <a href="${TOKEN_HELP_URL}" target="_blank" rel="noopener">jeton GitHub « fine-grained »</a> :
+      accès au seul dépôt <strong>${esc(settingsRepo)}</strong>, permissions <strong>Secrets : lecture et écriture</strong> et
+      <strong>Actions : lecture et écriture</strong>, <strong>rien d'autre</strong> (surtout pas « Contents »), expiration courte (7 jours). Le jeton reste en mémoire le temps de la visite :
+      il n'est jamais enregistré, ni sur l'appareil, ni ailleurs.</p>
+    <form id="gh-login" class="inline-form">
+      <label>Dépôt<input name="repo" value="${esc(settingsRepo)}" autocomplete="off" spellcheck="false"></label>
+      <label>Jeton GitHub<input name="token" type="password" autocomplete="off" placeholder="github_pat_…" ${hasToken() ? 'value="••••••••" disabled' : ''}></label>
+      ${hasToken() ? '<button type="button" id="gh-logout" class="link">Oublier le jeton</button>' : '<button class="primary small" type="submit">Se connecter</button>'}
+    </form>
+  </section>
+  <form class="card" id="secrets-form">
+    <h2>2. Vos identifiants</h2>
+    <p class="hint muted">Chaque valeur est <strong>chiffrée dans votre navigateur</strong> avec la clé publique du dépôt avant l'envoi :
+      seul GitHub peut la déchiffrer, pour la collecte. Seuls les champs remplis sont envoyés ; GitHub ne permet pas de relire une valeur.
+      La phrase de passe des données ne se change pas ici (voir « rekey » dans le README).</p>
+    ${groups}
+    <button class="primary" type="submit" ${hasToken() ? '' : 'disabled'}>Chiffrer et enregistrer dans GitHub</button>
+  </form>
+  <section class="card">
+    <h2>3. Lancer la collecte</h2>
+    <p class="hint muted">Utile après avoir ajouté une connexion. La collecte prend quelques minutes, puis le site se met à jour.</p>
+    <div class="controls">
+      <button type="button" class="primary small" id="run-collect" ${hasToken() ? '' : 'disabled'}>Collecter maintenant</button>
+      <label class="toggle"><input type="checkbox" id="run-backfill"> Tout l'historique</label>
+    </div>
+  </section>`
+  }
+  <section class="card">
+    <h2>Ce qui est public, ce qui part chez des tiers</h2>
+    ${table(
+      ['Donnée', 'Où', 'Qui peut la lire'],
+      [
+        ['Consommation, météo, station, Linky, analyse IA', 'Dépôt GitHub public (dossier data/)', 'Personne sans votre phrase de passe : fichiers chiffrés AES-256'],
+        ['Identifiants et jetons', 'Secrets GitHub', 'Uniquement la collecte automatique ; illisibles même pour vous'],
+        ['Code de l\'application', 'Dépôt public', 'Tout le monde (aucune donnée personnelle)'],
+        ['Journaux de collecte', 'GitHub Actions (public)', 'Tout le monde : uniquement des comptes et des codes, jamais de valeur'],
+        ['Prix et contrat saisis ici', 'Votre appareil (stockage du navigateur)', 'Vous seul'],
+      ],
+      99,
+    )}
+    <h3>Services tiers contactés par la collecte</h3>
+    ${table(
+      ['Service', 'Pour quoi', 'Ce qui lui est envoyé'],
+      [
+        ['Intuis (Muller)', 'Consommation des radiateurs et du chauffe-eau', 'Vos identifiants Intuis'],
+        ['Netatmo', 'Station météo (si activée)', 'Votre jeton Netatmo'],
+        ['Conso API (conso.boris.sh) → Enedis', 'Linky (si activé)', 'Votre jeton et votre PDL'],
+        ['Open-Meteo', 'Météo de la commune', 'Coordonnées arrondies à ~1 km'],
+        ['Anthropic (Claude)', 'Analyse du mois (si activée)', 'Totaux mensuels et noms des pièces'],
+        ['CRE, api-couleur-tempo.fr', 'Tarifs et couleurs Tempo publics', 'Rien de personnel'],
+      ],
+      99,
+    )}
+  </section>
+  ${settingsMsg ? `<p class="settings-msg ${settingsMsg.ok ? 'ok' : 'ko'}" role="status">${esc(settingsMsg.text)}</p>` : ''}`;
+}
+
+async function settingsAction(fn: () => Promise<string>) {
+  settingsMsg = { ok: true, text: 'En cours…' };
+  rerender();
+  try {
+    settingsMsg = { ok: true, text: await fn() };
+  } catch (err) {
+    settingsMsg = { ok: false, text: (err as Error).message };
+  }
+  rerender();
+}
+
+/** Forget the GitHub token and what it revealed (on lock). */
+export function forgetToken() {
+  setToken(null);
+  configured = null;
+}
+
+// ------------------------------------------------------------------ events
+/** GitHub login and secrets forms. */
+export function handleSubmit(e: SubmitEvent) {
+  const form = e.target as HTMLFormElement;
+  if (form.id === 'gh-login') {
+    e.preventDefault();
+    const data = new FormData(form);
+    settingsRepo = String(data.get('repo') ?? '').trim();
+    setToken(String(data.get('token') ?? ''));
+    void settingsAction(async () => {
+      configured = await listSecrets(settingsRepo);
+      return `Connecté à ${settingsRepo} : ${configured.size} secret(s) déjà enregistré(s).`;
+    });
+  }
+  if (form.id === 'secrets-form') {
+    e.preventDefault();
+    const entries = [...new FormData(form).entries()]
+      .map(([k, v]) => [k, String(v).trim()] as const)
+      .filter(([, v]) => v);
+    const errors = entries.map(([k, v]) => validate(k, v)).filter(Boolean);
+    if (errors.length) {
+      settingsMsg = { ok: false, text: errors.join(' ') };
+      return rerender();
+    }
+    if (!entries.length) {
+      settingsMsg = { ok: false, text: 'Aucun champ rempli.' };
+      return rerender();
+    }
+    void settingsAction(async () => {
+      for (const [k, v] of entries) await putSecret(settingsRepo, k, v);
+      configured = await listSecrets(settingsRepo);
+      return `${entries.length} secret(s) chiffré(s) et enregistré(s) : ${entries.map(([k]) => k).join(', ')}.`;
+    });
+  }
+}
+
+/** Forget the token, run the collection. Returns true when the click belonged to this view. */
+export function handleClick(btn: HTMLElement): boolean {
+  if (btn.id === 'gh-logout') {
+    forgetToken();
+    settingsMsg = { ok: true, text: 'Jeton oublié.' };
+    rerender();
+    return true;
+  }
+  if (btn.id === 'run-collect') {
+    const backfill = (document.getElementById('run-backfill') as HTMLInputElement | null)?.checked ?? false;
+    void settingsAction(async () => {
+      await runCollect(settingsRepo, backfill);
+      return `Collecte lancée${backfill ? ' (tout l\'historique)' : ''}. Revenez dans quelques minutes.`;
+    });
+    return true;
+  }
+  return false;
+}
