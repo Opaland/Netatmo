@@ -5,6 +5,7 @@
 // 304 when unchanged), so an unchanged file is not downloaded again.
 import type { Dataset } from './data';
 import { html } from './trusted';
+import { track } from './ready';
 
 // #229: name scoped to the repository at build time (vite.config.ts).
 import { DATA_CACHE } from './scope';
@@ -38,12 +39,11 @@ const hourlyFiles = (ds: Dataset) => [
 export function prefetchForOffline(ds: Dataset) {
   const conn = (navigator as Navigator & { connection?: NetInfo }).connection;
   if (!canPrefetch(conn, navigator.onLine)) return;
-  const run = () => {
-    for (const url of hourlyFiles(ds)) fetch(url, { cache: 'no-cache', priority: 'low' } as RequestInit).catch(() => {});
-  };
+  const run = () =>
+    Promise.all(hourlyFiles(ds).map((url) => fetch(url, { cache: 'no-cache', priority: 'low' } as RequestInit).catch(() => {})));
   const idle = (window as Window & { requestIdleCallback?: (fn: () => void, o?: { timeout: number }) => void }).requestIdleCallback;
-  if (idle) idle(run, { timeout: 5000 });
-  else setTimeout(run, 3000);
+  // #260: the view is ready once the prefetch has settled too (the e2e tests count downloads)
+  void track(new Promise((done) => (idle ? idle(() => void run().then(done), { timeout: 5000 }) : setTimeout(() => void run().then(done), 3000))));
 }
 
 async function cached(url: string): Promise<boolean> {

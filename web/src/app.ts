@@ -10,6 +10,7 @@ import type { ContractPeriod } from './offers';
 import { DEFAULT_LOCK_MINUTES } from './session';
 import { lsKey } from './scope';
 import { DatasetDoc, DatasetHooks } from './loader';
+import { track } from './ready';
 
 export type View = 'overview' | 'compare' | 'rooms' | 'analyse' | 'comfort' | 'report' | 'settings';
 export type CatFilter = 'all' | Category;
@@ -153,7 +154,7 @@ export function onLock(fn: () => void) {
  */
 const docs: DatasetDoc<Dataset, unknown>[] = [];
 export function datasetDoc<T>(load: (d: Dataset) => Promise<T>): DatasetDoc<Dataset, T> {
-  const doc = new DatasetDoc<Dataset, T>(load);
+  const doc = new DatasetDoc<Dataset, T>((d) => track(load(d))); // #260: the view is not ready while it loads
   docs.push(doc as DatasetDoc<Dataset, unknown>);
   onDatasetLoaded(() => doc.reset());
   return doc;
