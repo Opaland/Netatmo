@@ -23,15 +23,18 @@ log = logging.getLogger(__name__)
 DAY = 86400
 EARLIEST_YEAR = 2015
 SCALE = "1day"
-# The suffix ($0 base, $1/$2 peak/off-peak) depends on the tariff set in the app, and
-# a type that worked can stop answering after a tariff change: ask for all of them
-# at once and sum. Then try simpler forms, then the per-room endpoint.
-MEASURE_TYPES = (
-    "sum_energy_elec$0,sum_energy_elec$1,sum_energy_elec$2",
-    "sum_energy_elec",
-    "sum_energy_elec$0",
-)
-STRATEGIES = [("home", t) for t in MEASURE_TYPES] + [("room", t) for t in MEASURE_TYPES]
+# The backend files the same energy under a different measure type depending on the
+# era of the installation (seen on a real account):
+#   - tariffs set in the app (2025+):  sum_energy_elec$1 / $2 (peak / off-peak), $0 base
+#   - before tariffs (2024):           sum_energy_elec
+#   - oldest data (2022-2023):         sum_energy_elec_heating
+# "ALL" fetches every family and keeps, per room and day, the LARGEST value: the
+# families describe the same energy, so adding them would count it twice.
+TARIFFS = "sum_energy_elec$0,sum_energy_elec$1,sum_energy_elec$2"
+TYPE_FAMILIES = (TARIFFS, "sum_energy_elec", "sum_energy_elec_heating")
+ALL = "ALL"
+MEASURE_TYPES = (TARIFFS, "sum_energy_elec", "sum_energy_elec$0")
+STRATEGIES = [("home", ALL)] + [("home", t) for t in MEASURE_TYPES] + [("room", t) for t in MEASURE_TYPES]
 
 Series = dict[str, list[tuple[int, float]]]
 
@@ -54,6 +57,26 @@ class Syncer:
     # ------------------------------------------------------------ fetching
     def _fetch_with(self, strategy: tuple[str, str], home: Home, begin: int, end: int) -> Series:
         endpoint, mtype = strategy
+        if mtype == ALL:
+            return self._fetch_families(endpoint, home, begin, end)
+        return self._fetch_one(endpoint, mtype, home, begin, end)
+
+    def _fetch_families(self, endpoint: str, home: Home, begin: int, end: int) -> Series:
+        best: dict[str, dict[str, tuple[int, float]]] = {}
+        for mtype in TYPE_FAMILIES:
+            data = self._fetch_one(endpoint, mtype, home, begin, end)
+            nonzero = 0
+            for rid, pts in data.items():
+                days = best.setdefault(rid, {})
+                for ts, v in pts:
+                    day = to_local_day(ts, home.timezone)
+                    if day not in days or v > days[day][1]:
+                        days[day] = (ts, v)
+                    nonzero += bool(v)
+            log.info("  %s : %d jours non nuls", mtype, nonzero)
+        return {rid: sorted(days.values()) for rid, days in best.items()}
+
+    def _fetch_one(self, endpoint: str, mtype: str, home: Home, begin: int, end: int) -> Series:
         rooms = home.api_room_ids()
         active = {r.id for r in home.rooms if r.category != IGNORE}
         heaters = {mid: sid for mid, sid in home.water_heaters.items() if sid in active}

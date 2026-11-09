@@ -70,3 +70,98 @@ def run(client: IntuisClient, days: int = 60) -> None:
             mod_index = {m["id"]: i for i, m in enumerate(modules)}
             mods_txt = " ".join(f"M{mod_index.get(mid, '?')}={n}" for mid, n in per_mod.items())
             print(f"  {t:<28} {rooms_txt}  {('modules: ' + mods_txt) if mods_txt else ''}")
+
+
+HISTORY_SCALES = ("1day", "1week", "1month")
+COMBINED = "sum_energy_elec$0,sum_energy_elec$1,sum_energy_elec$2"
+
+
+def history(client: IntuisClient) -> None:
+    """Which periods still answer, at which scale (counts of non-zero points only)."""
+    from datetime import UTC, datetime
+
+    raw = client.homesdata()
+    for h in raw.get("body", {}).get("homes", []):
+        modules = h.get("modules", [])
+        rooms = h.get("rooms", [])
+        print("Dates d'installation (année-mois) :")
+        for mi, m in enumerate(modules):
+            sd = m.get("setup_date")
+            when = datetime.fromtimestamp(int(sd), UTC).strftime("%Y-%m") if sd else "?"
+            print(f"  M{mi} {m.get('type')}: {when}")
+        print("Champs de la maison :", sorted(h.keys()))
+        bridge = next((m["id"] for m in modules if m.get("type") == "NMG"), "")
+        room_ids = [str(r["id"]) for r in rooms]
+        heaters = [m["id"] for m in modules if m.get("type") == "NMW"]
+        this_year = datetime.now(UTC).year
+        print(f"\nPoints non nuls par année (toutes pièces + chauffe-eau), type {COMBINED} puis sum_energy_elec :")
+        for mtype in (COMBINED, "sum_energy_elec"):
+            for scale in HISTORY_SCALES:
+                cells = []
+                for year in range(this_year - 5, this_year + 1):
+                    b = int(datetime(year, 1, 1, tzinfo=UTC).timestamp())
+                    e = int(datetime(year + 1, 1, 1, tzinfo=UTC).timestamp())
+                    try:
+                        payload = client.home_measure(
+                            h["id"],
+                            bridge,
+                            room_ids,
+                            measure_type=mtype,
+                            scale=scale,
+                            date_begin=b,
+                            date_end=e,
+                            module_ids=heaters or None,
+                        )
+                    except ApiError as err:
+                        cells.append(f"{year}=err({str(err)[:30]})")
+                        continue
+                    home = payload.get("body", {}).get("home", {})
+                    n = sum(_nonzero_days(x.get("measures") or []) for x in home.get("rooms", []))
+                    n += sum(_nonzero_days(x.get("measures") or []) for x in home.get("modules", []) or [])
+                    cells.append(f"{year}={n}")
+                print(f"  {mtype[:16]:<16} {scale:<7} " + " ".join(cells))
+
+
+def history_deep(client: IntuisClient) -> None:
+    """Probe where 2022-2023 data might live: per module, per room endpoint, other types."""
+    from datetime import UTC, datetime
+
+    h = client.homesdata()["body"]["homes"][0]
+    modules = h.get("modules", [])
+    bridge = next((m["id"] for m in modules if m.get("type") == "NMG"), "")
+    room_ids = [str(r["id"]) for r in h.get("rooms", [])]
+    nmh = [m["id"] for m in modules if m.get("type") in ("NMH", "NMR", "NMW")]
+    types = [
+        "sum_energy_elec",
+        "sum_energy_elec$0",
+        "sum_energy_elec$1",
+        "sum_energy_elec$2",
+        "sum_energy_elec_heating",
+        "sum_energy_price",
+        "sum_energy_buy_from_grid",
+        "sum_energy_buy_from_grid$0",
+    ]
+    for year in (2022, 2023, 2024):
+        b = int(datetime(year, 1, 1, tzinfo=UTC).timestamp())
+        e = int(datetime(year + 1, 1, 1, tzinfo=UTC).timestamp())
+        print(f"\n== {year}, échelle 1month ==")
+        for t in types:
+            try:
+                p = client.home_measure(
+                    h["id"], bridge, room_ids, measure_type=t, scale="1month", date_begin=b, date_end=e, module_ids=nmh
+                )
+                home = p.get("body", {}).get("home", {})
+                rooms_n = sum(_nonzero_days(x.get("measures") or []) for x in home.get("rooms", []))
+                mods_n = sum(_nonzero_days(x.get("measures") or []) for x in home.get("modules", []) or [])
+                txt = f"pièces={rooms_n} modules={mods_n}"
+            except ApiError as err:
+                txt = f"erreur {str(err)[:40]}"
+            try:
+                rn = 0
+                for rid in room_ids:
+                    rp = client.room_measure(h["id"], rid, measure_type=t, scale="1month", date_begin=b, date_end=e)
+                    rn += _nonzero_days(rp.get("body", []))
+                txt += f" getroommeasure={rn}"
+            except ApiError as err:
+                txt += f" getroommeasure=erreur {str(err)[:40]}"
+            print(f"  {t:<28} {txt}")

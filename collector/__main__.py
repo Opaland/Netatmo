@@ -43,9 +43,14 @@ def cmd_discover(s: Settings, args: argparse.Namespace) -> None:
 
 
 def cmd_diagnose(s: Settings, args: argparse.Namespace) -> None:
-    from .diagnose import run
+    from .diagnose import history, history_deep, run
 
-    run(_client(s))
+    client = _client(s)
+    if args.history:
+        history(client)
+        history_deep(client)
+    else:
+        run(client)
 
 
 def cmd_sync(s: Settings, args: argparse.Namespace, backfill: bool = False) -> None:
@@ -103,7 +108,8 @@ def main(argv: list[str] | None = None) -> None:
     sub = p.add_subparsers(dest="cmd", required=True)
     d = sub.add_parser("discover")
     d.add_argument("--save-raw", metavar="FICHIER")
-    sub.add_parser("diagnose", help="diagnostic anonyme (sans noms ni valeurs)")
+    dg = sub.add_parser("diagnose", help="diagnostic anonyme (sans noms ni valeurs)")
+    dg.add_argument("--history", action="store_true", help="profondeur d'historique par échelle")
     for name in ("sync", "backfill"):
         sp = sub.add_parser(name)
         sp.add_argument("--days", type=int, default=35, help="jours re-téléchargés à chaque sync (défaut 35)")
