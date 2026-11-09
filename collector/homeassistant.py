@@ -318,7 +318,12 @@ def aggregate(s: Series, tz: str) -> tuple[str, dict[str, dict]]:
 def import_file(store: Store, path: Path, tz: str) -> dict[str, int]:
     """Merge the file's daily aggregates into ha.enc.json (in memory; the caller saves).
     Returns counts only: sensors, days, skipped (sensors without a whole day)."""
-    series = parse(path.read_bytes())
+    return import_bytes(store, path.read_bytes(), tz)
+
+
+def import_bytes(store: Store, raw: bytes, tz: str) -> dict[str, int]:
+    """Same as import_file, from the content of an export (the demo builds one in memory)."""
+    series = parse(raw)
     doc = store.doc(DOC)
     known = {v.get("entity"): k for k, v in doc.get("sensors", {}).items()}
     counts = {"sensors": 0, "days": 0, "skipped": 0}

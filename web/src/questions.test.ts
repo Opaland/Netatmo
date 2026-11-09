@@ -91,4 +91,48 @@ describe('S-5.9 questions answered by code', () => {
     const a = answer('room', '2025-02', base(records, { lastDay: '2025-02-14' }));
     expect(a.lines.at(-1)).toContain('jusqu’au 14');
   });
+
+  describe('cold: why was this room cold (S-13.3)', () => {
+    const temps = new Map<string, Map<string, [number, number | null]>>();
+    const salon = new Map<string, [number, number | null]>();
+    const ch = new Map<string, [number, number | null]>();
+    for (let d = '2025-01-01'; d <= '2025-01-31'; d = addDays(d, 1)) {
+      salon.set(d, [d <= '2025-01-05' ? 17 : 20.5, 20]);
+      ch.set(d, [d <= '2025-01-02' ? 17.5 : 19.2, 18]);
+    }
+    temps.set('salon', salon);
+    temps.set('ch', ch);
+    const seen: Record<string, number> = {};
+    const cells: Record<string, { n: number; open_window_h?: number; mode_h?: Record<string, number> }> = {};
+    for (let d = '2025-01-01'; d <= '2025-01-31'; d = addDays(d, 1)) {
+      seen[d] = 0xffffff;
+      cells[d] = { n: 24, open_window_h: 0 };
+    }
+    cells['2025-01-01'] = { n: 24, open_window_h: 2 };
+    cells['2025-01-02'] = { n: 24, open_window_h: 1.5 };
+    cells['2025-01-03'] = { n: 24, open_window_h: 3 };
+    cells['2025-01-04'] = { n: 24, open_window_h: 0, mode_h: { away: 20 } };
+    const roomState = { seen, rooms: { salon: cells, ch: { '2025-01-01': { n: 24 } } } };
+    const input = base(records, { temps, roomState, groupOf: (r) => (r === 'ch' ? 'chambres' : r), roomName: (id) => ({ salon: 'Salon', chambres: 'Chambres (regroupées)' })[id]! });
+
+    it('counts the cold days and explains them, window first', () => {
+      const a = answer('cold', '2025-01', input);
+      expect(a.ok).toBe(true);
+      expect(a.lines[0]).toBe('En janvier 2025, 7 journées sous 19 °C en moyenne, toutes pièces confondues (sonde des radiateurs).');
+      expect(a.lines[1]).toBe('Salon : 5 journées, dont 3 avec une fenêtre ouverte (6,5 h au total), 1 en mode absence ou hors-gel, 1 sans explication relevée.');
+      expect(a.lines[2]).toBe('Chambres (regroupées) : 2 journées, dont 2 avec une consigne sous 19 °C.');
+      expect(a.lines[3]).toContain('une fenêtre était ouverte');
+      expect(a.lines[4]).toContain('100 % des heures du mois');
+    });
+
+    it('says why it cannot answer without the hourly snapshots', () => {
+      expect(answer('cold', '2025-01', base(records, { temps, roomState: null })).lines[0]).toContain('relevé horaire');
+      expect(answer('cold', '2024-06', base(records, { temps, roomState })).lines[0]).toContain('aucun relevé de l’état des pièces en juin 2024');
+    });
+
+    it('says so when no room was cold', () => {
+      const a = answer('cold', '2025-02', base(records, { temps, roomState: { seen: { '2025-02-03': 0xffffff }, rooms: {} } }));
+      expect(a.lines[0]).toContain('aucune pièce n’est descendue sous 19 °C');
+    });
+  });
 });

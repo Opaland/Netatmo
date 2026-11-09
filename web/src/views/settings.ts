@@ -140,11 +140,16 @@ export function renderSettings(view: HTMLElement) {
         ['Conso API (conso.boris.sh) → Enedis', 'Linky (si activé)', 'Votre jeton et votre PDL'],
         ['Shelly Cloud (*.shelly.cloud)', 'Compteurs des prises Shelly (si activé)', 'Votre clé cloud Shelly'],
         ['Open-Meteo', 'Météo de la commune', 'Coordonnées arrondies à ~1 km'],
-        ['Anthropic (Claude)', 'Analyse du mois (si activée)', 'Totaux mensuels et noms des pièces'],
+        ['Anthropic (Claude)', 'Analyse du mois (si activée)', 'Totaux mensuels, pièces sous pseudonyme (fenêtres ouvertes et boost : chambres regroupées)'],
         ['CRE, api-couleur-tempo.fr', 'Tarifs et couleurs Tempo publics', 'Rien de personnel'],
       ],
       99,
     )}
+  </section>
+  <section class="card" id="invite-card">
+    <div class="card-head"><h2>Inviter un membre du foyer</h2></div>
+    <p class="hint muted">Un QR code de l'adresse de l'appli et un mode d'emploi en 3 étapes, pour l'installer sur le téléphone d'un proche. Il ne contient ni phrase de passe ni jeton : la phrase se dit de vive voix.</p>
+    <button type="button" class="primary small" id="invite-open">Inviter</button>
   </section>
   <section class="card" id="build-info" aria-live="polite"></section>
   <section class="card" id="legal-card">
@@ -266,6 +271,18 @@ export function handleClick(btn: HTMLElement): boolean {
     void import('../legal').then((m) => {
       const card = document.getElementById('legal-card');
       if (card) card.innerHTML = html(`<div class="card-head"><h2>Cadre juridique</h2></div>${m.legalHtml()}`);
+    });
+    return true;
+  }
+  if (btn.id === 'invite-open') {
+    // S-12.3: lazy module (QR encoder), only for whoever opens it
+    void import('./invite').then((m) => {
+      const card = document.getElementById('invite-card');
+      if (!card) return;
+      card.innerHTML = html(m.inviteHtml());
+      m.bindInvite(card);
+      card.querySelector<HTMLElement>('h2')?.setAttribute('tabindex', '-1');
+      card.querySelector<HTMLElement>('h2')?.focus();
     });
     return true;
   }

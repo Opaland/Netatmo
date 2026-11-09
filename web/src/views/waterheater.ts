@@ -95,6 +95,7 @@ export function waterHeaterCard(): string {
           .map((m) => [monthLabel(m.month), fmtKwh(m.off), fmtKwh(m.peak), `${pctTxt(m.share)}${belowThreshold(m.share, thr) ? ' ⚠' : ''}`]),
       ),
     )}
+    ${ds!.meta.has_roomstate ? '<p class="hint" id="contactor-line" hidden></p>' : ''}
     <h3>Heures de chauffe <small class="muted">kWh moyens par heure, mois par mois</small></h3>
     <div id="wh-hours"><p class="hint muted">${(ds!.meta.hourly_years ?? []).length ? 'Chargement des données horaires…' : 'Les données horaires arriveront avec la prochaine collecte complète.'}</p></div>
     <p class="hint muted">Les heures creuses sont la colonne tarifaire où le chauffe-eau consomme le plus (détection automatique). Un mois sous le seuil est signalé dans « Jours inhabituels ».
@@ -106,6 +107,9 @@ export function waterHeaterCard(): string {
 export function drawWaterHeater(hourly: Hourly | null) {
   const el = document.getElementById('wh-month-chart');
   if (!el) return;
+  // S-13.6: contactor mode from the hourly snapshots (lazy module)
+  const line = document.getElementById('contactor-line');
+  if (line) import('./offload').then((m) => m.fillContactor(line)).catch(() => line.remove());
   const [from, to] = twelveMonths();
   const rooms = waterRooms();
   const hc = waterHeaterHc(ds!.tariffs, rooms, offCol(), from, to);

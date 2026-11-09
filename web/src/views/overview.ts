@@ -237,7 +237,15 @@ function linkyCard() {
     <p class="hint muted" id="linky-summary"></p>
     <div class="chart" id="linky-chart" role="img" aria-label="Chauffage, chauffe-eau et autres usages par mois"></div>
     ${ds!.pmax.size ? '<h3>Puissance maximale appelée <small class="muted">kVA, par mois</small></h3><p class="hint muted" id="pmax-summary"></p><div class="chart" id="pmax-chart" role="img" aria-label="Puissance maximale par mois et puissance souscrite"></div>' : ''}
+    ${ds!.pmax.size && ds!.meta.has_roomstate ? '<div id="offload-zone" hidden></div>' : ''}
   </section>`;
+}
+
+/** S-13.6: load shedding per room next to the Linky peak, lazily imported ./offload module. */
+function drawOffload() {
+  const el = document.getElementById('offload-zone');
+  if (!el) return;
+  import('./offload').then((m) => m.fillOffload(el)).catch(() => el.remove());
 }
 
 /** Linky 30-min load curve: placeholder filled by the lazily imported ./linky module. */
@@ -287,6 +295,7 @@ function drawLinky() {
     document.getElementById('linky-summary')!.innerHTML = html`Sur 12 mois : chauffage <strong>${nf0.format((sum(heat) / tot) * 100)} %</strong>, chauffe-eau <strong>${nf0.format((sum(water) / tot) * 100)} %</strong>, autres usages <strong>${nf0.format(Math.max(0, 1 - (sum(heat) + sum(water)) / tot) * 100)} %</strong> de ${fmtKwh(tot)} relevés par le compteur.`;
   }
   drawPmax();
+  drawOffload();
   barChart(el, {
     labels: keys.map((k) => bucketLabel(k, 'month')),
     series: [

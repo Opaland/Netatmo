@@ -3,14 +3,16 @@
 // (analysis.roomDeltas) and the degree days (analysis.djuBetween).
 import { type DayRecord, MONTHS_LONG, minusYears, pctChange } from './aggregate';
 import { type Weather, djuBetween, roomDeltas, verdict } from './analysis';
+import { type RoomState, coldReasons, coverage } from './windows';
 
-export type QuestionId = 'why' | 'normal' | 'room' | 'priciest';
+export type QuestionId = 'why' | 'normal' | 'room' | 'priciest' | 'cold';
 
 export const QUESTIONS: { id: QuestionId; label: string }[] = [
   { id: 'why', label: 'Pourquoi ce mois a-t-il coûté plus (ou moins) que l’an dernier ?' },
   { id: 'normal', label: 'Ce mois est-il normal ?' },
   { id: 'room', label: 'Quelle pièce a le plus augmenté ?' },
   { id: 'priciest', label: 'Quel a été le mois le plus cher de l’année écoulée ?' },
+  { id: 'cold', label: 'Pourquoi cette pièce était froide ?' },
 ];
 
 export interface QuestionInput {
@@ -19,6 +21,11 @@ export interface QuestionInput {
   lastDay: string; // last day with data
   cost: ((from: string, to: string) => number | null) | null; // energy cost in €, null without prices
   roomName: (id: string) => string;
+  // S-13.3, question « cold »: radiator probe temperatures, room states (undefined: not loaded yet,
+  // null: no hourly snapshot) and the grouping of the bedrooms (S-13.5)
+  temps?: Map<string, Map<string, [number, number | null]>>;
+  roomState?: RoomState | null;
+  groupOf?: (room: string) => string;
 }
 
 /** ok = false: lines[0] says why the question cannot be answered. */
@@ -86,6 +93,8 @@ export function answer(q: QuestionId, month: string, input: QuestionInput): Answ
         return room(month, first, end, input);
       case 'priciest':
         return priciest(month, input);
+      case 'cold':
+        return cold(month, first, end, input);
     }
   })();
   if (out.ok && partial && q !== 'priciest') out.lines.push(`Mois en cours : la comparaison porte sur les jours déjà relevés (jusqu’au ${Number(end.slice(8))}).`);
@@ -197,6 +206,46 @@ function priciest(month: string, { records, cost, lastDay }: QuestionInput): Ans
   if (rank > 0) lines.push(`${capital(monthLabel(month))} arrive en position ${rank + 1} sur ${rows.length}.`);
   if (!withEur) lines.push('Sans prix renseigné, je classe les mois en kWh.');
   if (rows.some((r) => r.m === lastDay.slice(0, 7) && monthEnd(r.m) > lastDay)) lines.push('Le mois en cours n’est compté que jusqu’au dernier jour relevé.');
+  return { ok: true, lines };
+}
+
+const nf1 = new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 1 });
+const days = (n: number) => `${n} journée${n > 1 ? 's' : ''}`;
+
+/** S-13.3: cold room-days of the month and what explains them (open window first). */
+function cold(month: string, first: string, end: string, { temps, roomState, groupOf, roomName }: QuestionInput): Answer {
+  if (!roomState) return cannot('il faut le relevé horaire de l’état des pièces (fenêtres ouvertes), qui n’est pas activé');
+  const cov = coverage(roomState, first, end);
+  if (!cov.days) return cannot(`aucun relevé de l’état des pièces en ${monthLabel(month)}`);
+  const reasons = [...coldReasons(temps ?? new Map(), roomState, first, end, groupOf)].sort((a, b) => b[1].cold - a[1].cold);
+  const total = reasons.reduce((s, [, r]) => s + r.cold, 0);
+  const lines: string[] = [];
+  if (!total) {
+    lines.push(`En ${monthLabel(month)}, aucune pièce n’est descendue sous 19 °C en moyenne sur une journée (sonde des radiateurs).`);
+  } else {
+    lines.push(`En ${monthLabel(month)}, ${total} journée${total > 1 ? 's' : ''} sous 19 °C en moyenne, toutes pièces confondues (sonde des radiateurs).`);
+    for (const [id, r] of reasons.slice(0, 4)) {
+      const parts = [
+        r.window ? `${r.window} avec une fenêtre ouverte (${nf1.format(r.openHours)} h au total)` : '',
+        r.away ? `${r.away} en mode absence ou hors-gel` : '',
+        r.lowSetpoint ? `${r.lowSetpoint} avec une consigne sous 19 °C` : '',
+        r.unexplained ? `${r.unexplained} sans explication relevée` : '',
+        r.noData ? `${r.noData} sans relevé` : '',
+      ].filter(Boolean);
+      lines.push(`${roomName(id)} : ${days(r.cold)}, dont ${parts.join(', ')}.`);
+    }
+    const sum = (k: 'window' | 'away' | 'lowSetpoint' | 'unexplained') => reasons.reduce((s, [, r]) => s + r[k], 0);
+    const top = (['window', 'away', 'lowSetpoint', 'unexplained'] as const).reduce((a, b) => (sum(b) > sum(a) ? b : a));
+    lines.push(
+      {
+        window: 'Le plus souvent, une fenêtre était ouverte : c’est l’aération, pas un défaut de chauffage.',
+        away: 'Le plus souvent, la maison était en mode absence : le froid était voulu.',
+        lowSetpoint: 'Le plus souvent, la consigne elle-même était sous 19 °C : c’est un réglage, pas une panne.',
+        unexplained: 'Le plus souvent, ni fenêtre ouverte, ni mode absence, ni consigne basse : vérifiez le radiateur (puissance, sonde mal placée) ou l’isolation de la pièce.',
+      }[top],
+    );
+  }
+  lines.push(`« Fenêtre ouverte » est la détection du radiateur (chute rapide de température) ; relevés reçus : ${nf0.format((cov.hours / cov.expected) * 100)} % des heures du mois.`);
   return { ok: true, lines };
 }
 

@@ -111,6 +111,11 @@ L'adresse du site s'affiche dans **Settings → Pages** (de la forme
 - **iPhone** : ouvrir l'adresse dans Safari → bouton Partager → **Sur l'écran d'accueil**.
 - **Android** : ouvrir l'adresse dans Chrome → menu ⋮ → **Installer l'application**.
 
+**Inviter un membre du foyer** : Paramètres → **Inviter** affiche un QR code de l'adresse de l'appli
+et ces étapes ; le proche le scanne, installe l'appli, et vous lui **dites la phrase de passe de vive
+voix**. Voir [Inviter un membre du foyer](#inviter-un-membre-du-foyer-s-123) pour ce que contient le
+QR code (et ce qu'il ne contient jamais).
+
 Entrez votre phrase de passe une fois ; « Rester connecté sur cet appareil » garde une clé
 non exportable dans le navigateur, **30 jours au plus** (le menu ⋮ → Verrouiller l'efface).
 Sans activité (toucher, clavier) pendant **15 minutes**, l'application se verrouille d'elle-même :
@@ -236,7 +241,10 @@ part du reste et coût par an. La carte s'affiche dès qu'il y a un Linky, même
 
 **Home Assistant** (capteurs d'ouverture, prises, sondes Zigbee) : export local puis
 `python -m collector import-ha FICHIER`, qui verse des agrégats quotidiens par capteur, chiffrés,
-dans `data/ha.enc.json`. Formats et procédure : [docs/import-ha.md](docs/import-ha.md).
+dans `data/ha.enc.json`. Formats et procédure : [docs/import-ha.md](docs/import-ha.md). La vue
+**Confort** affiche alors la carte **Capteurs Home Assistant** (ce qui a été importé, 30 derniers
+jours) et, pour chaque capteur d'ouverture rattaché à une pièce, le **taux d'accord par jour** avec la
+fenêtre ouverte détectée par le radiateur (relevé horaire ci-dessous).
 
 **Expiration des accès.** Le résumé de chaque collecte affiche la date d'expiration des jetons
 quand elle est connue (lue dans le jeton Conso API s'il la contient, sinon estimée à 3 ans après
@@ -301,6 +309,13 @@ donne l'état des pièces qu'en instantané. Pour en garder l'historique :
    (30 jours et par mois), « pourquoi cette pièce était froide ? », la signature énergétique sans
    les jours d'aération, l'énergie estimée pendant les boosts, les absences confirmées par le mode
    de consigne et les délestages face au pic Linky. Les chambres y sont regroupées par défaut.
+4. Ailleurs dans l'appli : « Pourquoi cette pièce était froide ? » dans les **Questions types**
+   (rapport), une colonne « Explication possible » (fenêtre ouverte N h, mode absence) dans les
+   **Jours inhabituels** (Analyse), les **absences confirmées par le mode de consigne** dans « Absences
+   probables » (la détection par la consommation reste le repli), le **délestage par pièce** sous la
+   puissance maximale (Synthèse), le **mode du contacteur** dans la carte chauffe-eau (Analyse). Si
+   l'analyse IA est activée, elle reçoit les heures de fenêtre ouverte et de boost **du mois**, par
+   pseudonyme, chambres regroupées en une ligne (S-5.10).
 
 La **présence** détectée par les radiateurs n'est jamais lue, sauf si vous ajoutez la variable
 `ROOM_STATE_PRESENCE` = `true` (avec l'accord du foyer) : seules des heures par jour sont alors
@@ -494,6 +509,25 @@ scripts/            outils ponctuels (jours Tempo, constats de revue → issues)
   (`<script>`, gestionnaires `on…=`, `javascript:`). La politique `default` n'accepte que la chaîne vide
   (ECharts vide ses infobulles) et le service worker du site. Le test de bout en bout échoue à la
   moindre violation de la CSP.
+
+### Inviter un membre du foyer (S-12.3)
+
+Le QR code de Paramètres → **Inviter** ne contient que **l'adresse publique** de l'appli (celle de
+GitHub Pages, sans paramètre), suivie de `#installer`, qui ouvre l'aide d'installation sur l'écran de
+déverrouillage. Pas de phrase de passe, pas de jeton, pas de clé : sans la phrase, le proche ne voit
+que l'écran de déverrouillage, comme n'importe qui.
+
+| Menace | Réponse |
+|---|---|
+| Phrase de passe dans une URL : historique du navigateur, journaux du serveur GitHub Pages, aperçu de lien d'une messagerie, sauvegarde du téléphone | Jamais dans l'URL ni le QR code. `#installer` est un fragment (jamais envoyé au serveur) et ne contient rien de secret ; il est retiré de la barre d'adresse après le déverrouillage. |
+| QR code photographié ou transféré | Il ne livre que l'adresse du site, déjà publique (dépôt public). |
+| Phrase envoyée avec le lien (SMS, courriel) | L'appli demande de la **dire de vive voix** et de ne pas l'envoyer dans le même message. |
+| Lien piégé vers un faux site qui demande la phrase | Le lien est construit à partir de l'adresse de la page ouverte (https seulement), le proche voit l'adresse sous le QR code. |
+
+Écarté : une invitation qui contiendrait la clé chiffrée par un code court (dit à l'oral). Un code
+court se casse hors ligne en quelques secondes dès que le QR code est copié ; la sécurité réelle
+reposerait sur la phrase de toute façon. La phrase dite une fois, puis « Rester connecté », est plus
+simple et plus sûre.
 
 ### Vérifier le site publié
 

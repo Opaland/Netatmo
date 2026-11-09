@@ -4,6 +4,7 @@ import { disposeAll, escapeHtml as esc } from '../charts';
 import { WrongPassphrase } from '../crypto';
 import { type Source, load, rememberKey, unlock } from '../data';
 import { html } from '../trusted';
+import { INSTALL_HASH, installSteps } from '../invite';
 
 /** `notice`: an information, not an error (S-7.9: key erased by the browser, data intact). */
 export function renderLock(message = '', hasRealData = true, notice = '') {
@@ -27,6 +28,10 @@ export function renderLock(message = '', hasRealData = true, notice = '') {
       }
       <p class="error" role="alert">${esc(message)}</p>
       <button class="link" id="demo" type="button">Essayer avec des données de démonstration</button>
+      <details class="install-help" id="install-help" ${location.hash === INSTALL_HASH ? 'open' : ''}>
+        <summary>Installer l'appli sur ce téléphone</summary>
+        ${installSteps()}
+      </details>
     </div>
   </main>`;
   const form = document.getElementById('unlock') as HTMLFormElement | null;
@@ -46,6 +51,8 @@ async function open(source: Source, pass: string, remember: boolean) {
   try {
     const key = await unlock(source, pass);
     if (remember) await rememberKey(source, key);
+    // S-12.3: the install fragment of an invitation has done its job
+    if (location.hash === INSTALL_HASH) history.replaceState(null, '', location.pathname + location.search);
     renderLoading();
     setDataset(await load(source, key));
     rerender();

@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+import json
 import math
 import random
 from datetime import date, datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
+from .homeassistant import import_bytes
 from .model import HEATING, WATER_HEATER
 from .roomstate import merge_snapshots, snapshot
 from .station import aggregate_days
@@ -153,9 +155,11 @@ ROOMSTATE_DAYS = 365
 ABSENCE = (45, 39)  # days before today
 
 
-def _room_states(store: Store, today: date) -> None:
+def _room_states(store: Store, today: date) -> dict[date, list[int]]:
     """S-13.2: the hourly homestatus snapshots of the last 365 days, as the hourly workflow
-    would have taken them (about 4 % of runs missed), aggregated by the real code."""
+    would have taken them (about 4 % of runs missed), aggregated by the real code. Returns the
+    hours the office window was really open, for the Home Assistant sensor of the demo."""
+    office: dict[date, list[int]] = {}
     rnd = random.Random(13)  # separate stream: the rest of the demo stays identical
     tz = ZoneInfo("Europe/Paris")
     heated = [r for r, _n, c, _w, _s in ROOMS if c == HEATING]
@@ -180,6 +184,8 @@ def _room_states(store: Store, today: date) -> None:
                     "r-bureau": long_open and 9 <= h <= 12 and not weekend,
                     "r-salon": h == 14 and rnd.random() < 0.05,
                 }.get(rid, False)
+                if rid == "r-bureau" and window:
+                    office.setdefault(d, []).append(h)
                 boost = not away and (
                     (rid == "r-sdb" and h == 7 and not weekend and rnd.random() < 0.5)
                     or (rid == "r-salon" and h == 20 and rnd.random() < 0.08)
@@ -203,6 +209,62 @@ def _room_states(store: Store, today: date) -> None:
             ts = int(datetime(d.year, d.month, d.day, h, 23, tzinfo=tz).timestamp())
             snaps.append(snapshot({"body": {"home": {"rooms": rooms, "modules": modules}}}, ts, calls=2))
     merge_snapshots(store, snaps, "Europe/Paris", mod_room, today=today.isoformat())
+    return office
+
+
+HA_DAYS = 120
+
+
+def _home_assistant(store: Store, today: date, office: dict[date, list[int]]) -> None:
+    """S-1.18: what `import-ha` would make of a Home Assistant export: the office window contact
+    (Zigbee) over 120 days, with the short airings the radiator cannot see, and a fridge plug
+    and a bedroom probe as long-term statistics. Imported by the real code."""
+    rnd = random.Random(18)  # separate stream
+    tz = ZoneInfo("Europe/Paris")
+    start = today - timedelta(days=HA_DAYS)
+    attrs = {"device_class": "window", "friendly_name": "Fenêtre bureau"}
+    states = [
+        {
+            "entity_id": "binary_sensor.fenetre_bureau",
+            "state": "off",
+            "last_changed": datetime(start.year, start.month, start.day, tzinfo=tz).isoformat(),
+            "attributes": attrs,
+        }
+    ]
+
+    def event(d: date, h: int, m: int, on: bool) -> None:
+        states.append(
+            {
+                "state": "on" if on else "off",
+                "last_changed": datetime(d.year, d.month, d.day, h, m, tzinfo=tz).isoformat(),
+            }
+        )
+
+    for back in range(HA_DAYS, 0, -1):
+        d = today - timedelta(days=back)
+        hours = office.get(d, [])
+        if hours:  # the radiator saw it too
+            event(d, min(hours), rnd.randint(0, 10), True)
+            event(d, max(hours), rnd.randint(40, 59), False)
+        if rnd.random() < 0.15:  # a 40-minute airing on a mild day: no drop the radiator can see
+            event(d, 13, 5, True)
+            event(d, 13, 45, False)
+    event(today, 0, 0, False)
+    import_bytes(store, json.dumps([states]).encode(), "Europe/Paris")
+    stats: dict[str, list[dict]] = {"sensor.prise_frigo_energy": [], "sensor.sonde_chambre_enfant": []}
+    total = 820.0
+    for back in range(HA_DAYS, 0, -1):
+        d = today - timedelta(days=back)
+        ms = int(datetime(d.year, d.month, d.day, tzinfo=tz).timestamp() * 1000)
+        change = round(rnd.uniform(0.9, 1.3), 3)
+        total += change
+        stats["sensor.prise_frigo_energy"].append({"start": ms, "sum": round(total, 3), "change": change})
+        mean = 19.2 + rnd.gauss(0, 0.5)
+        stats["sensor.sonde_chambre_enfant"].append(
+            {"start": ms, "mean": round(mean, 2), "min": round(mean - 1.3, 2), "max": round(mean + 1.1, 2)}
+        )
+    doc = {"units": {"sensor.prise_frigo_energy": "kWh", "sensor.sonde_chambre_enfant": "°C"}, "statistics": stats}
+    import_bytes(store, json.dumps(doc).encode(), "Europe/Paris")
 
 
 def _sources(today: date) -> dict:
@@ -286,6 +348,8 @@ def generate(out_dir: Path, passphrase: str = "demo", start_year: int = 2022) ->
                 if rid == "r-bureau" and weekend:
                     base *= 0.4
                 kwh = base * rnd.uniform(0.85, 1.15) if dju > 1.5 else 0.0
+                if ABSENCE[1] <= (today - d).days <= ABSENCE[0]:
+                    kwh *= 0.15  # mode « absence » (S-13.4): radiators kept at a low setpoint
             wh = round(max(kwh, 0) * 1000, 1)
             day_total += wh  # what the meter saw, whatever Intuis kept
             lost = is_lost(rid, d)  # random draws stay the same: the rest of the demo is unchanged
@@ -335,7 +399,8 @@ def generate(out_dir: Path, passphrase: str = "demo", start_year: int = 2022) ->
             store.put(day[:4], "estimated", rid, day, 1)
     store.update_coverage()
     _shelly(store, today)
-    _room_states(store, today)
+    office = _room_states(store, today)
+    _home_assistant(store, today, office)
     for key in ("m0", "m1", "m2", "m3"):
         aggregate_days(store, key, key != "m1", hourly_from, today)
     store.set_top("weather", "source", "open-meteo")
@@ -360,6 +425,7 @@ def generate(out_dir: Path, passphrase: str = "demo", start_year: int = 2022) ->
         "has_station": True,
         "has_shelly": True,
         "has_roomstate": True,
+        "has_ha": True,
         "weather_source": "open-meteo",
         "contract": CONTRACT,
         "sources": _sources(today),
@@ -387,6 +453,13 @@ def generate(out_dir: Path, passphrase: str = "demo", start_year: int = 2022) ->
                 "mois": "exemple",
                 "pieces": [{"piece": "Pièce A", "usage": "chauffage", "kwh": 310.0, "kwh_annee_precedente": 340.0}],
                 "station_confort": {"Capteur A": {"co2_moyen_ppm": 870, "heures_nuit_co2_sup_1000_ppm": 42}},
+                "fenetres_et_boost": {
+                    "couverture_releve_pct": 96,
+                    "pieces": [
+                        {"piece": "Chambres (regroupées)", "fenetre_ouverte_h": 41.3, "boost_h": 0.0},
+                        {"piece": "Pièce A", "fenetre_ouverte_h": 1.0, "boost_h": 2.1},
+                    ],
+                },
             },
             "pseudonyms": {"Pièce A": "Salon", "Capteur A": "Chambre enfants"},
             "usage": {

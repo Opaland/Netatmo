@@ -86,7 +86,13 @@ Le document déchiffré suit le schéma publié [`import-ha.schema.json`](import
 
 ## Limites
 
-- L'appli n'affiche pas encore ces agrégats ; le **taux d'accord** entre un capteur d'ouverture et
-  `open_window` d'Intuis dans la même pièce viendra avec le relevé de `open_window` (S-13.2).
+- L'appli affiche ces agrégats dans la vue **Confort**, carte « Capteurs Home Assistant » (fichier
+  chargé à la demande). Pour un capteur d'ouverture, choisissez la pièce équipée du radiateur (devinée
+  d'après les noms, choix gardé sur l'appareil) : la carte donne le **taux d'accord par jour** avec
+  `open_window` d'Intuis (relevé horaire, S-13.2). Un jour est « ouvert » pour une source à partir de
+  30 minutes ; les deux côtés n'existent qu'en agrégats quotidiens, la comparaison est donc par jour,
+  pas par heure. Une aération courte ou par temps doux échappe souvent au radiateur (« capteur seul »).
+- Les capteurs d'ouverture rattachés à une chambre suivent la règle des chambres (S-13.5) : détail
+  masqué tant que le détail des chambres n'est pas demandé.
 - Aucun envoi automatique depuis HA : une automatisation qui pousserait vers GitHub demanderait un
   jeton GitHub dans HA et exposerait des valeurs dans les journaux publics d'Actions.

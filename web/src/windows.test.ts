@@ -18,7 +18,14 @@ import {
   signatureEffect,
   totals,
   windowDays,
+  absenceDays,
+  bedroomGrouping,
+  coldReasons,
+  offloadByRoom,
+  openByDay,
+  peakVsOffload,
 } from './windows';
+import { BEDROOMS_ID } from './household';
 
 const ALL = 0xffffff;
 const rs: RoomState = {
@@ -117,3 +124,60 @@ describe('room states (E13)', () => {
     expect(anomaliesWithWindows(records, weather, state).every((a) => a.open >= 1)).toBe(true);
   });
 });
+
+describe('room states, v1.4 remainders (S-13.3, S-13.4, S-13.6)', () => {
+  it('sums the open-window hours of all rooms per day', () => {
+    expect(openByDay(rs).get('2025-01-15')).toBeCloseTo(4.4);
+    expect(openByDay(rs).get('2025-01-14')).toBe(0);
+  });
+
+  it('lists the days confirmed by the setpoint mode', () => {
+    expect([...absenceDays(rs)]).toEqual(['2025-01-15']);
+  });
+
+  it('groups the bedrooms unless shown, and follows the household view', () => {
+    const rooms = [
+      { id: 'salon', name: 'Salon' },
+      { id: 'ch1', name: 'Chambre 1' },
+    ];
+    expect(bedroomGrouping(rooms, false)('ch1')).toBe(BEDROOMS_ID);
+    expect(bedroomGrouping(rooms, true)('ch1')).toBe('ch1');
+    const merged = [{ id: 'salon', name: 'Salon' }, { id: BEDROOMS_ID, name: 'Chambres' }];
+    expect(bedroomGrouping(merged, true)('ch1')).toBe(BEDROOMS_ID);
+    expect(bedroomGrouping(merged, true)('salon')).toBe('salon');
+  });
+
+  it('counts load shedding per room and compares the Linky peaks', () => {
+    expect(offloadByRoom(rs, '2025-01-01', '2025-01-31').get('salon')).toEqual({ days: 1, hours: 1.1 });
+    const pmax = new Map([
+      ['2025-01-14', 6],
+      ['2025-01-15', 9],
+      ['2025-01-16', 7],
+    ]);
+    expect(peakVsOffload(rs, pmax, '2025-01-01', '2025-01-31')).toEqual({ withShed: 9, without: 6.5, nWith: 1, nWithout: 2 });
+  });
+
+  it('explains the cold days: window, absence mode, low setpoint, nothing, no snapshot', () => {
+    const temps = new Map<string, Map<string, [number, number | null]>>([
+      [
+        'salon',
+        new Map<string, [number, number | null]>([
+          ['2025-01-14', [18, 20]], // snapshot, nothing special: unexplained
+          ['2025-01-15', [17, 20]], // window 3.3 h
+          ['2025-01-20', [18, 20]], // no snapshot that day
+          ['2025-01-21', [20, 20]], // not cold
+        ]),
+      ],
+      ['ch1', new Map<string, [number, number | null]>([['2025-01-15', [18.5, 18]], ['2025-01-16', [18.5, 18]]])],
+    ]);
+    const r = coldReasons(temps, rs, '2025-01-01', '2025-01-31');
+    expect(r.get('salon')).toEqual({ cold: 3, window: 1, openHours: 3.3, away: 0, lowSetpoint: 0, unexplained: 1, noData: 1 });
+    // ch1 on the 15th: window 1.1 h comes first; on the 16th: setpoint 18 °C
+    expect(r.get('ch1')).toMatchObject({ cold: 2, window: 1, lowSetpoint: 1 });
+    // household view: the temperatures are merged under BEDROOMS_ID, the states stay raw
+    const merged = new Map([['salon', temps.get('salon')!], [BEDROOMS_ID, temps.get('ch1')!]]);
+    const g = coldReasons(merged, rs, '2025-01-01', '2025-01-31', bedroomGrouping([{ id: 'salon', name: 'Salon' }, { id: BEDROOMS_ID, name: 'Chambres' }], true));
+    expect(g.get(BEDROOMS_ID)).toMatchObject({ cold: 2, window: 1, lowSetpoint: 1 });
+  });
+});
+

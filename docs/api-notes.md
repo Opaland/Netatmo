@@ -158,7 +158,7 @@ snapshot` : jeton + **une** requête `homestatus` (l'identifiant de la maison es
 | Données | Heures par pièce et par jour de fenêtre ouverte, boost, chauffe, délestage, mode de consigne. **Présence** : non lue par défaut ; avec `ROOM_STATE_PRESENCE=true`, seulement des heures par jour. Jamais d'horodatage heure par heure dans le dépôt. |
 | Durée | Relevés horaires : 3 jours (expiration des artefacts). Agrégats quotidiens : comme le reste de l'archive, jusqu'à suppression par le propriétaire. |
 | Qui voit quoi | Dépôt public : fichiers chiffrés seulement ; artefacts chiffrés (téléchargeables par un compte GitHub connecté, illisibles sans la phrase de passe) ; journaux : des comptes, jamais une valeur ni un nom. Appli : les membres du foyer qui ont la phrase ; les chambres sont **regroupées** tant que personne ne demande leur détail (même geste que pour le CO₂ de la nuit). |
-| IA | Rien de ces agrégats n'est envoyé à l'analyse IA pour l'instant ; s'ils l'étaient, seulement en totaux mensuels pseudonymisés (S-5.10). |
+| IA | Seulement les **totaux du mois** d'heures de fenêtre ouverte et de boost, par pseudonyme (« Pièce A »), les chambres **regroupées en une ligne** « Chambres (regroupées) », et la couverture du relevé (S-5.10). Ni jour, ni heure, ni présence, ni mode de consigne. Ces nombres sont vérifiés dans le texte comme les autres. |
 | Risque résiduel | Un agrégat « fenêtre ouverte / absence par jour » révèle des habitudes : il reste chiffré comme le reste, et l'option présence est à n'activer qu'avec l'accord du foyer. |
 
 ## Schémas de référence et changements de format (S-1.13)
