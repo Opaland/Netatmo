@@ -110,7 +110,7 @@ Décidée par le propriétaire en novembre 2026, à la fin de la v1.3. Détail d
 | Version | Nature | Contenu | Livrée quand |
 |---|---|---|---|
 | **v1.4** | Fonctions | Cadrage par 62 personas ([`revues/v1.4-cadrage.md`](bmad/revues/v1.4-cadrage.md)), puis développement : fenêtres ouvertes et états des radiateurs (E13), prises Shelly, étude Home Assistant + Zigbee, processus de revue par agents (S-1.16), récits restants | Must fermés, revue de fin v1.4 écrite |
-| **v1.5** | Qualité du code | Revue de code **complète** (tout le code, pas seulement le diff) par des agents de revue, selon le processus de S-1.16 ; chaque constat devient une issue du jalon v1.5, puis est corrigé ; **aucune nouvelle fonction** | Aucun constat critique ou majeur ouvert, CI verte |
+| **v1.5** | Qualité du code | Revue de code **complète** (tout le code, pas seulement le diff) par des agents de revue, selon le processus de S-1.16 ; chaque constat devient une issue du jalon v1.5, puis est corrigé ; **aucune nouvelle vue** (seules exceptions : les suites de l'audit des données côté collecte, voir [`revues/v1.5-cadrage.md`](bmad/revues/v1.5-cadrage.md)) | Aucun constat critique ou majeur ouvert, CI verte |
 | **v1.6** | Design | Revue design et UI/UX **complète** par des agents (toutes les vues, mobile et bureau, clair, sombre, contraste élevé), corrections, puis **nouveau design system** (jetons, typographie, espacements, composants partagés) appliqué à toute l'application | axe-core sans violation, aucune couleur ni taille hors jetons, captures de référence régénérées |
 
 Pendant la v1.5 et la v1.6, les revues multi-personas continuent (cadrage et fin de version), mais leurs

@@ -495,7 +495,7 @@ web/                application PWA (Vite + TypeScript + ECharts)
   public/demo/      données de démonstration chiffrées (phrase « demo »)
 docs/               notes sur l'API, étude de l'existant, feuille de route, règles du projet (PROJET.md)
   etudes/           études « faut-il le faire ? » (volets Wiser, plateforme domotique, Home Assistant
-                    et Zigbee, module intérieur de la station)
+                    et Zigbee, module intérieur de la station, audit de tous les appareils et achats)
   design/           inventaire de l'interface (couleurs, typographie, composants), base du design system
   revues-agents/    consignes des revues de code et design par agents (à chaque version)
   bmad/             cadrage BMAD : brief, revue 50 personas, PRD, architecture, epics, QA
