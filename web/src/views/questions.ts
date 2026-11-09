@@ -1,6 +1,6 @@
 // "Questions types" card (S-5.9), loaded on demand by the report view: answers computed
 // by the code, no AI, no network.
-import { ds } from '../app';
+import { ds, rawDataset } from '../app';
 import { type Dataset, loadRoomState } from '../data';
 import { BEDROOMS_ID } from '../household';
 import { QUESTIONS, type QuestionId, answer, answerableMonths, defaultMonth, monthLabel } from '../questions';
@@ -44,9 +44,9 @@ export function mountQuestions(el: HTMLElement | null) {
         lastDay: last,
         cost: costAvailable() ? (from, to) => costOf(records, from, to) : null,
         roomName,
-        temps: ds.temps,
+        temps: (rawDataset() ?? ds).temps, // #241: raw rooms, never a household-view mean
         roomState: states?.ds === ds ? states.doc : null,
-        groupOf: bedroomGrouping(ds.meta.rooms, false),
+        groupOf: bedroomGrouping((rawDataset() ?? ds).meta.rooms, false),
       })
     : null;
   el.innerHTML = html`<div class="card-head"><h2>Questions types <small class="muted">réponses calculées, sans IA</small></h2>

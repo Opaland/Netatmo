@@ -601,6 +601,8 @@ def cmd_import_ha(s: Settings, args: argparse.Namespace) -> None:
         why = str(err) if isinstance(err, ImportFormatError) else type(err).__name__
         raise SystemExit(f"Import refusé : {why}") from None
     print(f"{counts['sensors']} capteurs, {counts['days']} jours agrégés, {counts['skipped']} sans jour complet.")
+    if counts.get("partial_kept"):
+        print(f"{counts['partial_kept']} jours incomplets ignorés : la valeur déjà importée est conservée.")
     if args.dry_run or not counts["sensors"]:
         print("Rien n'est écrit.")
         return
@@ -650,6 +652,11 @@ def cmd_verify(s: Settings, args: argparse.Namespace) -> None:
         print(f"  {y} : " + ", ".join(f"{c} {v / 1000:.0f} kWh" for c, v in sorted(per_cat.items())))
 
 
+def csv_text(value: str) -> str:
+    """Text cell neutralised against spreadsheet formulas (#235, same rule as web/src/csv.ts)."""
+    return f"'{value}" if value[:1] in ("=", "+", "-", "@", "\t", "\r") else value
+
+
 def cmd_export(s: Settings, args: argparse.Namespace) -> None:
     s.require("passphrase")
     store = Store(s.data_dir, s.passphrase)
@@ -659,7 +666,7 @@ def cmd_export(s: Settings, args: argparse.Namespace) -> None:
         for rid, days in sorted(store.year(y).items()):
             room = rooms.get(rid, {"name": rid, "category": "?"})
             for day, wh in sorted(days.items()):
-                rows.append([day, room["name"], room["category"], f"{wh / 1000:.3f}".replace(".", ",")])
+                rows.append([day, csv_text(room["name"]), room["category"], f"{wh / 1000:.3f}".replace(".", ",")])
     if args.output == "-":
         csv.writer(sys.stdout, delimiter=";").writerows(rows)
     else:

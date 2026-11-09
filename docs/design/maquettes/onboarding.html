@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Premier lancement · maquette v1.6</title>
+<link rel="stylesheet" href="ds.css">
+</head>
+<body class="">
+<div class="screen">
+<header class="top"><h1>Bienvenue</h1><a class="icon-btn" href="accueil.html" aria-label="Passer">Passer</a></header>
+<main>
+
+<style>
+.step{display:none;gap:var(--space-4)} .step:target{display:grid}
+#etape1{display:grid} :target ~ #etape1{display:none}
+.hero{font-size:var(--font-xl);font-weight:600;line-height:1.3}
+</style>
+<section class="step" id="etape2">
+  <div class="steps" aria-label="Étape 2 sur 4"><i></i><i class="on"></i><i></i><i></i></div>
+  <p class="hero">Qui utilise ce téléphone ?</p>
+  <label class="radio-card"><input type="radio" name="qui" checked><span><b>Moi, je gère le logement</b><br><span class="sub">Tout voir : pièces, historique, compteur, outils.</span></span></label>
+  <label class="radio-card"><input type="radio" name="qui"><span><b>Un proche</b><br><span class="sub">Vue simple : grands caractères, phrases courtes, une pièce.</span></span></label>
+  <label class="radio-card"><input type="radio" name="qui"><span><b>Je suis locataire</b><br><span class="sub">Sans le compteur ni le contrat du titulaire.</span></span></label>
+  <a class="btn primary block" href="#etape3">Continuer</a>
+</section>
+<section class="step" id="etape3">
+  <div class="steps" aria-label="Étape 3 sur 4"><i></i><i></i><i class="on"></i><i></i></div>
+  <p class="hero">Vos sources de données</p>
+  <ul class="list">
+    <li><div class="row"><span class="dot"></span><span><span class="t">Radiateurs et chauffe-eau</span><span class="s">Intuis · depuis 2022</span></span><span class="pill ok">actif</span><span></span></div></li>
+    <li><div class="row"><span class="dot"></span><span><span class="t">Météo</span><span class="s">station Netatmo</span></span><span class="pill ok">actif</span><span></span></div></li>
+    <li><a href="#"><span class="dot warn"></span><span><span class="t">Compteur Linky</span><span class="s">part du chauffage, puissance</span></span><span class="pill warn">à activer</span><span class="chev">›</span></a></li>
+    <li><a href="#"><span class="dot warn"></span><span><span class="t">Prises Shelly</span><span class="s">gros appareils</span></span><span class="pill warn">à activer</span><span class="chev">›</span></a></li>
+    <li><a href="#"><span class="dot warn"></span><span><span class="t">Analyse du mois par l'IA</span><span class="s">facultatif, quelques centimes par mois</span></span><span class="pill warn">à activer</span><span class="chev">›</span></a></li>
+  </ul>
+  <a class="btn primary block" href="#etape4">Continuer</a><a class="btn secondary block" href="#etape4">Plus tard</a>
+</section>
+<section class="step" id="etape4">
+  <div class="steps" aria-label="Étape 4 sur 4"><i></i><i></i><i></i><i class="on"></i></div>
+  <p class="hero">Votre contrat</p>
+  <div class="alert"><span class="ico" aria-hidden="true">✓</span><div>Contrat du foyer trouvé : <b>heures creuses, 12 kVA</b>. Les coûts seront calculés au tarif de chaque jour.</div></div>
+  <a class="btn primary block" href="accueil.html">Voir ma consommation</a>
+  <a class="btn secondary block" href="parametres-contrat.html">Modifier le contrat</a>
+</section>
+<section class="step" id="etape1">
+  <div class="steps" aria-label="Étape 1 sur 4"><i class="on"></i><i></i><i></i><i></i></div>
+  <p class="hero">Votre consommation d'énergie, pièce par pièce, année après année.</p>
+  <p>Vos données restent chiffrées : elles ne sont lisibles que sur vos appareils, avec votre phrase de passe.</p>
+  <ul style="margin:0;padding-left:1.2em;display:grid;gap:var(--space-2)"><li>Combien vous dépensez, et si c'est normal</li><li>Quelle pièce coûte le plus</li><li>Comparer les hivers à climat égal</li></ul>
+  <a class="btn primary block" href="#etape2">Commencer</a>
+</section>
+
+<button type="button" class="btn secondary theme-toggle" id="theme">Thème clair / sombre</button>
+</main>
+
+</div>
+<script>
+(function(){var r=document.documentElement,b=document.getElementById('theme');
+try{var t=localStorage.getItem('maquette-theme');if(t)r.dataset.theme=t;}catch(e){}
+b.addEventListener('click',function(){var d=r.dataset.theme==='dark'||(!r.dataset.theme&&matchMedia('(prefers-color-scheme: dark)').matches);
+r.dataset.theme=d?'light':'dark';try{localStorage.setItem('maquette-theme',r.dataset.theme);}catch(e){}});})();
+</script>
+</body>
+</html>

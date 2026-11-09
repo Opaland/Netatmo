@@ -3,8 +3,9 @@
 import { CATEGORY_LABEL, toCsv } from './aggregate';
 import { type State, type View, activeRooms, app, ds, onDatasetLoaded, setDataset, setRenderer, setState, state } from './app';
 import { disposeAll } from './charts';
-import { WrongPassphrase } from './crypto';
+import { BadEnvelope, WrongPassphrase } from './crypto';
 import { NoData, forgetKeys, load, recallKey } from './data';
+import { framedHtml, isFramed } from './frame';
 import { prefetchForOffline, updateNetStatus } from './offline';
 import { IdleLock, LOCK_CHOICES, REMEMBER_DAYS, idleSince } from './session';
 import { isIos, keyLoss, lossMessage, readMark, writeMark } from './storage';
@@ -187,7 +188,7 @@ const comfortChange = (t: HTMLInputElement | HTMLSelectElement) => comfort?.hand
 const clickHandlers = [compare.handleClick, rooms.handleClick, report.handleClick, settings.handleClick, prices.handleClick, comfortClick, household.handleClick];
 const changeHandlers = [overview.handleChange, rooms.handleChange, prices.handleChange, compare.handleChange, analyse.handleChange, report.handleChange, comfortChange, household.handleChange];
 
-app.addEventListener('submit', (e) => settings.handleSubmit(e));
+app.addEventListener('keydown', (e) => settings.handleKeydown(e));
 
 app.addEventListener('click', async (e) => {
   const t = e.target as HTMLElement;
@@ -344,6 +345,11 @@ onDatasetLoaded(() => prefetchForOffline(ds!));
 
 // ------------------------------------------------------------------ boot
 async function start() {
+  // #237: inside another page's frame, no screen at all (clickjacking), only a way out.
+  if (isFramed()) {
+    app.innerHTML = html(framedHtml(location.href));
+    return;
+  }
   try {
     let key = await recallKey('data');
     // Away longer than the inactivity delay (tab closed, phone asleep): the key is forgotten.
@@ -365,7 +371,7 @@ async function start() {
     renderLock('', resp.ok, resp.ok ? lossMessage(loss, isIos(navigator.userAgent, navigator.maxTouchPoints)) : '');
   } catch (err) {
     if (err instanceof WrongPassphrase) await forgetKeys();
-    renderLock(err instanceof NoData ? '' : '', !(err instanceof NoData));
+    renderLock(err instanceof BadEnvelope ? err.message : '', !(err instanceof NoData));
   }
 }
 

@@ -12,7 +12,9 @@ data/
   weather.enc.json        {"source": "...", "outdoor": {"YYYY-MM-DD": [min, max, mean]},
                            "indoor": {"YYYY-MM-DD": mean}}
   linky.enc.json          {"daily": {"YYYY-MM-DD": Wh}, "pmax": {"YYYY-MM-DD": kVA},
-                           "curve_scan": "YYYY-MM-DD" (last day asked for the load curve)}
+                           "curve_scan": "YYYY-MM-DD" (last day asked for the load curve),
+                           "unit": "Wh" | "kWh", "pmax_unit": "VA" | "kVA" (unit of the raw API
+                           values, decided once and kept: enedis.py)}
   2025.linky30.enc.json   {"curve":   {"YYYY-MM-DDTHH:MM": Wh}}  Linky load curve, local start of
                            each half hour (optional, loaded on demand)
   station.enc.json        Netatmo weather station: modules, daily [min, max, mean, hum, co2] and
@@ -101,6 +103,24 @@ class Store:
             self._docs[name] = obj
             self._dirty.add(name)
 
+    def flush(self, name: str) -> bool:
+        """Write one document now (encrypted) instead of waiting for `save`. Used for state that
+        must survive a failure later in the run, such as a rotated refresh token (#262)."""
+        if name not in self._docs:
+            return False
+        self._dirty.discard(name)
+        return self._write(name, _sorted(self._docs[name]))
+
+    def unflag(self, name: str, section: str, key: str, sub: str) -> None:
+        """Remove doc[section][key][sub] if present (and the emptied doc[section][key])."""
+        target = self.doc(name).get(section, {})
+        inner = target.get(key)
+        if isinstance(inner, dict) and sub in inner:
+            del inner[sub]
+            if not inner:
+                del target[key]
+            self._dirty.add(name)
+
     # ----------------------------------------------------------- energy
     def year(self, year: int) -> Daily:
         return self.doc(str(year)).setdefault("daily", {})
@@ -158,6 +178,18 @@ class Store:
 
     def merge(self, room_id: str, day: str, wh: float) -> None:
         self.put(day[:4], "daily", room_id, day, wh)
+
+    def merge_real(self, room_id: str, day: str, wh: float) -> bool:
+        """A value read from the source (not spread from a monthly total). A real non-zero value
+        replaces an estimate and clears its "estimated" flag (#269); a zero does not erase an
+        estimate (the backend fills values in late). Returns False when nothing was stored."""
+        flagged = day in self.doc(day[:4]).get("estimated", {}).get(room_id, {})
+        if flagged and not wh:
+            return False
+        self.put(day[:4], "daily", room_id, day, wh)
+        if flagged:
+            self.unflag(day[:4], "estimated", room_id, day)
+        return True
 
     def _days(self) -> list[str]:
         return [d for y in self.years() for r in self.year(y).values() for d in r]

@@ -11,7 +11,7 @@ export function householdMenu(): string {
       ? '<button type="button" data-household="hide">Regrouper à nouveau les chambres</button>'
       : '<button type="button" data-household="reveal" title="Profils horaires, CO₂ et températures de chaque chambre, jusqu\'au prochain verrouillage">Afficher le détail des chambres (jusqu\'au verrouillage)</button>'
     : '';
-  return `<label class="check"><input type="checkbox" data-toggle="household" ${s.enabled ? 'checked' : ''}> Vue foyer : chambres regroupées en « Chambres »</label>${reveal}`;
+  return `<label class="check"><input type="checkbox" data-toggle="household" ${s.enabled ? 'checked' : ''}> Vue foyer : regrouper les chambres en « Chambres » <small class="muted">(affichage seulement, les calculs restent par pièce)</small></label>${reveal}`;
 }
 
 export function handleClick(btn: HTMLElement): boolean {

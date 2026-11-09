@@ -58,6 +58,19 @@ def test_crypto_roundtrip_and_wrong_passphrase():
     assert decrypt_json(env, "secret") == {"a": 1}
     with pytest.raises(DecryptError):
         decrypt_json(env, "nope")
+    # Unknown format or KDF: refused before any derivation (#236)
+    for bad in ({**env, "v": 2}, {**env, "kdf": "scrypt"}, {k: v for k, v in env.items() if k != "v"}):
+        with pytest.raises(DecryptError, match="Format"):
+            decrypt_json(bad, "secret")
+
+
+def test_csv_text_neutralises_formulas():
+    from collector.__main__ import csv_text
+
+    for v in ("=1+1", "+33", "-x", "@a", "\tx", "\rx"):
+        assert csv_text(v) == "'" + v
+    assert csv_text("Salon = bureau") == "Salon = bureau"
+    assert csv_text("") == ""
 
 
 def test_store_is_idempotent(tmp_path):

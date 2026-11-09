@@ -210,20 +210,27 @@ function priciest(month: string, { records, cost, lastDay }: QuestionInput): Ans
 }
 
 const nf1 = new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 1 });
-const days = (n: number) => `${n} journée${n > 1 ? 's' : ''}`;
+const days = (n: number) => `${n} jour${n > 1 ? 's' : ''}`;
 
-/** S-13.3: cold room-days of the month and what explains them (open window first). */
+/**
+ * S-13.3: cold days of the month and what explains them (open window first). `temps` are the raw
+ * rooms (#241): calendar days are counted, a group of bedrooms is cold on a day when one of them is.
+ */
 function cold(month: string, first: string, end: string, { temps, roomState, groupOf, roomName }: QuestionInput): Answer {
   if (!roomState) return cannot('il faut le relevé horaire de l’état des pièces (fenêtres ouvertes), qui n’est pas activé');
   const cov = coverage(roomState, first, end);
   if (!cov.days) return cannot(`aucun relevé de l’état des pièces en ${monthLabel(month)}`);
   const reasons = [...coldReasons(temps ?? new Map(), roomState, first, end, groupOf)].sort((a, b) => b[1].cold - a[1].cold);
-  const total = reasons.reduce((s, [, r]) => s + r.cold, 0);
+  const coldDays = new Set<string>();
+  for (const t of (temps ?? new Map<string, Map<string, [number, number | null]>>()).values()) {
+    for (const [d, [mean]] of t) if (d >= first && d <= end && mean < 19) coldDays.add(d);
+  }
+  const total = coldDays.size;
   const lines: string[] = [];
   if (!total) {
     lines.push(`En ${monthLabel(month)}, aucune pièce n’est descendue sous 19 °C en moyenne sur une journée (sonde des radiateurs).`);
   } else {
-    lines.push(`En ${monthLabel(month)}, ${total} journée${total > 1 ? 's' : ''} sous 19 °C en moyenne, toutes pièces confondues (sonde des radiateurs).`);
+    lines.push(`En ${monthLabel(month)}, ${days(total)} avec au moins une pièce sous 19 °C en moyenne (sonde des radiateurs).`);
     for (const [id, r] of reasons.slice(0, 4)) {
       const parts = [
         r.window ? `${r.window} avec une fenêtre ouverte (${nf1.format(r.openHours)} h au total)` : '',

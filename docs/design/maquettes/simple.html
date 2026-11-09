@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Vue simple · maquette v1.6</title>
+<link rel="stylesheet" href="ds.css">
+</head>
+<body class="simple">
+<div class="screen">
+<header class="top"><h1>Maison démo</h1><a class="status" href="#"><span class="dot"></span>À jour</a></header>
+<main>
+
+<section class="card">
+  <div class="verdict"><span class="mark" aria-hidden="true">=</span>
+  <div><strong>Ce mois-ci, vous consommez comme d'habitude.</strong><p>Cela fait environ 3 € de moins.</p></div></div>
+</section>
+<section class="card">
+  <p class="muted">Ma chambre, aujourd'hui</p>
+  <p class="big">19,8 °C</p>
+  <p>Il fait bon. Le chauffage marche normalement.</p>
+</section>
+<section class="card">
+  <p class="muted">Novembre, jusqu'au 8</p>
+  <p class="big">32 €</p>
+  <p>C'est 16 % de moins que l'an dernier.</p>
+</section>
+<section class="card">
+  <h2>Les mots à connaître</h2>
+  <p><span class="term">kWh</span> : l'énergie consommée, comme des litres pour l'eau.</p>
+</section>
+<a class="btn secondary block" href="accueil.html">Voir plus de détails</a>
+
+<button type="button" class="btn secondary theme-toggle" id="theme">Thème clair / sombre</button>
+</main>
+<nav class="tabs three" aria-label="Onglets"><a href="simple.html" aria-current="page"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg><span>Accueil</span></a><a href="piece.html"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="8" height="8" rx="1"/><rect x="13" y="3" width="8" height="8" rx="1"/><rect x="3" y="13" width="8" height="8" rx="1"/><rect x="13" y="13" width="8" height="8" rx="1"/></svg><span>Ma pièce</span></a><a href="#"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18l3 3 6.3-6.3a4 4 0 0 0 5.4-5.4l-2.5 2.5-2.4-.6-.6-2.4z"/></svg><span>Aide</span></a></nav>
+
+</div>
+<script>
+(function(){var r=document.documentElement,b=document.getElementById('theme');
+try{var t=localStorage.getItem('maquette-theme');if(t)r.dataset.theme=t;}catch(e){}
+b.addEventListener('click',function(){var d=r.dataset.theme==='dark'||(!r.dataset.theme&&matchMedia('(prefers-color-scheme: dark)').matches);
+r.dataset.theme=d?'light':'dark';try{localStorage.setItem('maquette-theme',r.dataset.theme);}catch(e){}});})();
+</script>
+</body>
+</html>

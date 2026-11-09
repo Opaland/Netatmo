@@ -4,7 +4,7 @@
 import type { Category, Granularity } from './aggregate';
 import { NO_PRICES, type Prices } from './analysis';
 import type { Dataset } from './data';
-import { bedroomIds, householdView } from './household';
+import { bedroomIds, householdView, translateRooms } from './household';
 import { sameContract, validContract } from './contract';
 import type { ContractPeriod } from './offers';
 import { DEFAULT_LOCK_MINUTES } from './session';
@@ -41,7 +41,11 @@ export interface State {
   comfortThreshold: number; // °C, hours below it count as cold (S-11.3)
   /** S-3.8: Intuis room id -> station module key ('' = deliberately not linked). Shared later by S-12.1. */
   roomModuleMap: Record<string, string>;
-  household: boolean; // S-12.2: bedrooms merged into « Chambres » on this device
+  /**
+   * S-12.2: bedrooms merged into « Chambres » on this device. Opt-in since v1.5 (the key was
+   * `household`, on by default: renamed so that every device starts with the real per-room figures).
+   */
+  groupBedrooms: boolean;
 }
 
 export const DEFAULT: State = {
@@ -72,7 +76,7 @@ export const DEFAULT: State = {
   pinnedRoom: null,
   comfortThreshold: 19,
   roomModuleMap: {},
-  household: true,
+  groupBedrooms: false,
 };
 
 const LS_KEY = 'intuis-history:state';
@@ -82,6 +86,8 @@ export function loadState(): State {
     // v1.0 stored a single price per kWh
     if (typeof saved.price === 'number' && !saved.prices) saved.prices = { ...NO_PRICES, base: saved.price };
     delete saved.price;
+    // v1.4 persisted the household view as `household: true` by default: dropped, the view is opt-in
+    delete saved.household;
     return { ...DEFAULT, ...saved, prices: { ...NO_PRICES, ...(saved.prices ?? {}) } };
   } catch {
     return { ...DEFAULT };
@@ -132,25 +138,33 @@ export function activeRooms() {
 export function setDataset(next: Dataset | null) {
   raw = next;
   if (!next) revealed = false; // S-12.2: the detail stays visible only until the next lock
-  ds = next && state.household && !revealed ? householdView(next) : next;
+  ds = next && state.groupBedrooms && !revealed ? householdView(next) : next;
   if (next) initDefaults();
 }
 
 // ------------------------------------------------------------------ household view (S-12.2)
 /** Dataset as decrypted, before the household view merges the bedrooms. */
 let raw: Dataset | null = null;
+
+/**
+ * The decrypted dataset with every room, whatever is displayed: for what must work on raw
+ * room ids (cold alert sensors #242, cold-room question #241). Null while locked.
+ */
+export function rawDataset(): Dataset | null {
+  return raw;
+}
+
 /** « Afficher le détail des chambres » was chosen since the last unlock (never persisted). */
 let revealed = false;
 
 /** Whether the bedrooms are merged right now, and whether there is anything to merge. */
 export function householdStatus() {
-  return { active: !!raw && ds !== raw, bedrooms: raw ? bedroomIds(raw.meta.rooms).length : 0, revealed, enabled: state.household };
+  return { active: !!raw && ds !== raw, bedrooms: raw ? bedroomIds(raw.meta.rooms).length : 0, revealed, enabled: state.groupBedrooms };
 }
 
 /** Show (true) or hide again (false) the bedrooms detail, until the next lock. */
 export function revealBedrooms(show: boolean) {
   revealed = show;
-  state = { ...state, rooms: null, tempRoom: null, focusRoom: null };
   setDataset(raw);
   rerender();
 }
@@ -158,7 +172,7 @@ export function revealBedrooms(show: boolean) {
 /** Turn the household view on or off on this device (persisted). */
 export function setHousehold(on: boolean) {
   revealed = false;
-  state = { ...state, household: on, rooms: null, tempRoom: null, focusRoom: null };
+  state = { ...state, groupBedrooms: on };
   setDataset(raw);
   setState({});
 }
@@ -169,10 +183,20 @@ function initDefaults() {
   const years = ds!.meta.years;
   const valid = new Set(activeRooms().map((r) => r.id));
   const patch: Partial<State> = {};
+  const one = (id: string | null) => {
+    if (!id) return null;
+    const t = translateRooms([id], ds!, raw!.meta.rooms);
+    return t.length === 1 && valid.has(t[0]) ? t[0] : null;
+  };
   if (!state.compareYears.length || state.compareYears.some((y) => !years.includes(y))) patch.compareYears = years.slice(-3);
   if (!state.roomsYear || !years.includes(state.roomsYear)) patch.roomsYear = years[years.length - 1];
-  if (state.pinnedRoom && !valid.has(state.pinnedRoom)) patch.pinnedRoom = null;
-  if (state.rooms) patch.rooms = state.rooms.filter((r) => valid.has(r)).length ? state.rooms.filter((r) => valid.has(r)) : null;
+  if (state.pinnedRoom) patch.pinnedRoom = one(state.pinnedRoom);
+  if (state.focusRoom) patch.focusRoom = one(state.focusRoom);
+  if (state.tempRoom) patch.tempRoom = one(state.tempRoom);
+  if (state.rooms) {
+    const kept = translateRooms(state.rooms, ds!, raw!.meta.rooms).filter((r) => valid.has(r));
+    patch.rooms = kept.length ? kept : null;
+  }
   if (/^\d{4}$/.test(state.period) && !years.includes(Number(state.period))) patch.period = '12m';
   const lastYear = years[years.length - 1];
   if (!state.analyseYear || !years.includes(state.analyseYear)) patch.analyseYear = lastYear;

@@ -1,7 +1,7 @@
 // E13 (S-13.3 to S-13.6): open windows, boost, setpoint modes, heating and load shedding per room,
 // from the daily aggregates of the hourly `homestatus` snapshots (roomstate.enc.json, see
 // collector/roomstate.py). Pure functions, no DOM: unit-tested in windows.test.ts.
-import { type DayRecord, addDays } from './aggregate';
+import { type DayRecord, addDays, rawRecords } from './aggregate';
 import { type Fit, type Weather, anomalies, fitSeason, signaturePoints } from './analysis';
 import { isBedroom } from './comfort';
 import { BEDROOMS_ID } from './household';
@@ -238,7 +238,7 @@ export function anomaliesWithWindows(records: DayRecord[], weather: Weather, rs:
  */
 export function boostEnergy(records: DayRecord[], rs: RoomState): Map<string, Map<string, { hours: number; kwh: number }>> {
   const kwh = new Map<string, number>();
-  for (const r of records) kwh.set(`${r.room}|${r.day}`, (kwh.get(`${r.room}|${r.day}`) ?? 0) + r.kwh);
+  for (const r of rawRecords(records)) kwh.set(`${r.room}|${r.day}`, (kwh.get(`${r.room}|${r.day}`) ?? 0) + r.kwh);
   const out = new Map<string, Map<string, { hours: number; kwh: number }>>();
   for (const [room, cells] of Object.entries(rs.rooms ?? {})) {
     for (const [d, c] of Object.entries(cells)) {
@@ -341,10 +341,12 @@ export interface ColdReasons {
 }
 
 /**
- * "Pourquoi cette pièce était froide ?" (S-13.3, questions.ts): room-days whose mean temperature
+ * "Pourquoi cette pièce était froide ?" (S-13.3, questions.ts): days whose mean temperature
  * (radiator probe) was below `threshold`, sorted by first explanation found: window open, absence
- * mode, low setpoint, nothing. `groupOf` merges the bedrooms (S-13.5); temps may already be
- * merged by the household view, hence the fallback on the display key.
+ * mode, low setpoint, nothing. `temps` are the RAW rooms (never a household-view mean, which
+ * would hide a cold bedroom, #241). `groupOf` merges the bedrooms (S-13.5): a group counts
+ * calendar days, not room-days; a day is cold when one of its rooms is, and it is explained
+ * by the coldest room of the group that day.
  */
 export function coldReasons(
   temps: Map<string, Map<string, [number, number | null]>>,
@@ -355,19 +357,26 @@ export function coldReasons(
   threshold = 19,
   minOpen = 1,
 ): Map<string, ColdReasons> {
-  const out = new Map<string, ColdReasons>();
   const seen = rs.seen ?? {};
   const all = rs.rooms ?? {};
+  // display key -> day -> coldest room below the threshold that day
+  const coldest = new Map<string, Map<string, { room: string; mean: number; setpoint: number | null }>>();
   for (const [room, t] of temps) {
-    // the room's own states, or those of the raw rooms the household view merged into it
-    const cells = all[room] ? [all[room]] : Object.entries(all).filter(([r]) => !temps.has(r) && groupOf(r) === room).map(([, c]) => c);
     const key = groupOf(room);
     for (const [d, [mean, setpoint]] of t) {
       if (d < from || d > to || !(mean < threshold)) continue;
-      const r = out.get(key) ?? { cold: 0, window: 0, openHours: 0, away: 0, lowSetpoint: 0, unexplained: 0, noData: 0 };
-      out.set(key, r);
+      if (!coldest.has(key)) coldest.set(key, new Map());
+      const cur = coldest.get(key)!.get(d);
+      if (!cur || mean < cur.mean) coldest.get(key)!.set(d, { room, mean, setpoint });
+    }
+  }
+  const out = new Map<string, ColdReasons>();
+  for (const [key, days] of coldest) {
+    const r: ColdReasons = { cold: 0, window: 0, openHours: 0, away: 0, lowSetpoint: 0, unexplained: 0, noData: 0 };
+    out.set(key, r);
+    for (const [d, { room, setpoint }] of days) {
       r.cold++;
-      const day = cells.map((c) => c[d]).filter((c): c is StateCell => !!c);
+      const day = [all[room]?.[d]].filter((c): c is StateCell => !!c);
       const open = day.reduce((sum, c) => sum + (c.open_window_h ?? 0), 0);
       const away = Math.max(0, ...day.map((c) => ABSENCE_MODES.reduce((sum, m) => sum + (c.mode_h?.[m] ?? 0), 0)));
       if (open >= minOpen) {

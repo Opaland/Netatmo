@@ -1,0 +1,24 @@
+{
+  "about": "#234: one bedroom rule for the app (web/src/household.ts) and the AI facts (collector/insights.py). Both test suites read this file.",
+  "words": ["chambre", "bedroom", "dortoir", "suite parentale"],
+  "cases": [
+    ["Chambre parentale", true],
+    ["Chambre des enfants", true],
+    ["chambres", true],
+    ["CHAMBRE d'amis", true],
+    ["Ma chambre", true],
+    ["Chambré", true],
+    ["Bedroom 2", true],
+    ["Master bedroom", true],
+    ["Dortoir", true],
+    ["Suite parentale", true],
+    ["Suite Parentale (étage)", true],
+    ["Salon", false],
+    ["Antichambre", false],
+    ["Séjour", false],
+    ["Suite", false],
+    ["Salle de bain parentale", false],
+    ["Bureau", false],
+    ["", false]
+  ]
+}

@@ -16,15 +16,14 @@ import base64
 import contextlib
 import json
 import logging
+import math
 import re
-import statistics
-import time
 from datetime import UTC, date, datetime, timedelta
 from zoneinfo import ZoneInfo
 
 import httpx
 
-from .budget import METER
+from .http import Paced
 from .schema import FormatError, dated_records, safe_keys
 from .storage import Store
 
@@ -39,6 +38,12 @@ USER_AGENT = "intuis-history/1.0 (+https://github.com/Opaland/Netatmo)"
 DATE_KEYS = ("d", "date", "dateDebut", "date_debut", "debut", "horodatage", "start")
 VALUE_KEYS = ("v", "value", "valeur", "val", "consommation")
 STEP_KEYS = ("p", "pas", "interval_length")
+# Unit of the values: "unite" in the 2026 format ({"grandeur": [{"unite": "Wh", "points": …}]}),
+# "unit" in the former one ({"reading_type": {"unit": "Wh"}, "interval_reading": […]}).
+UNIT_KEYS = ("unite", "unit", "unité")
+# Raw unit → factor to the stored unit (Wh for the daily totals, kVA for the maximum power).
+ENERGY_UNITS = {"Wh": 1.0, "kWh": 1000.0}
+POWER_UNITS = {"VA": 0.001, "kVA": 1.0, "W": 0.001, "kW": 1.0}
 
 # Load curve: range per request undocumented, 7 days is Enedis' classic limit (à vérifier).
 CURVE_CHUNK_DAYS = 7
@@ -55,23 +60,15 @@ class LinkyError(RuntimeError):
         self.auth = auth  # token refused: consent expired or revoked
 
 
-class _Paced:
+class _Paced(Paced):
     """GET with the Conso API token, at most one call every `min_interval` seconds."""
 
     def __init__(self, http: httpx.Client, token: str, min_interval: float | None) -> None:
-        self.http, self.token = http, token
-        self.min_interval = MIN_INTERVAL if min_interval is None else min_interval
-        self.last = 0.0
+        super().__init__(http, "linky", MIN_INTERVAL if min_interval is None else min_interval)
+        self.token = token
 
-    def get(self, url: str, params: dict) -> httpx.Response:
-        wait = self.last + self.min_interval - time.monotonic()
-        if wait > 0:
-            time.sleep(wait)
-        try:
-            with METER.call("linky"):
-                return self.http.get(url, params=params, headers={"Authorization": f"Bearer {self.token}"})
-        finally:
-            self.last = time.monotonic()
+    def get(self, url: str, params: dict) -> httpx.Response:  # type: ignore[override]
+        return self.request("GET", url, params=params, headers={"Authorization": f"Bearer {self.token}"})
 
 
 def _client() -> httpx.Client:
@@ -80,19 +77,50 @@ def _client() -> httpx.Client:
 
 def _readings(obj: object) -> list[tuple[str, float]]:
     """Find (day, value) pairs anywhere in the response (its format changed in 2026)."""
-    out: list[tuple[str, float]] = []
+    return [(stamp[:10], value) for stamp, value, _step in _points(obj)]
+
+
+def _units(obj: object) -> set[str]:
+    """Every unit named in the response (lower case), wherever it is."""
+    out: set[str] = set()
     if isinstance(obj, dict):
-        dk = next((k for k in DATE_KEYS if isinstance(obj.get(k), str)), None)
-        vk = next((k for k in VALUE_KEYS if k in obj), None)
-        if dk and vk is not None:
-            with contextlib.suppress(TypeError, ValueError):
-                out.append((obj[dk][:10], float(obj[vk])))
-        for v in obj.values():
-            out += _readings(v)
+        for k, v in obj.items():
+            if k in UNIT_KEYS and isinstance(v, str):
+                out.add(v.strip().lower())
+            else:
+                out |= _units(v)
     elif isinstance(obj, list):
         for v in obj:
-            out += _readings(v)
+            out |= _units(v)
     return out
+
+
+def _unit(store: Store, field: str, bodies: list[object], rows: list[tuple[str, float]], units: dict) -> str:
+    """Unit of the raw values, decided from the response, never from their size (#266).
+
+    1. a unit named in the response (and known for this series) wins;
+    2. else the unit decided before and kept in linky[field];
+    3. else, the first time only, a format hint: Enedis gives whole Wh / VA, so a decimal
+       value means kWh / kVA; otherwise the unit of the API contract (Wh / VA).
+    The result is kept in linky[field], so a quiet week (empty home, holiday house) can never
+    change it."""
+    known = {u.lower(): u for u in units}
+    base, scaled = list(units)[:2]  # contract unit (Wh / VA), then its multiple (kWh / kVA)
+    named = {known[u] for body in bodies for u in _units(body) if u in known}
+    stored = store.doc("linky").get(field)
+    if len(named) == 1:
+        unit = next(iter(named))
+    elif stored in units:
+        unit = stored
+    elif any(math.isfinite(v) and v != int(v) for _d, v in rows):
+        unit = scaled
+    else:
+        unit = base
+    if unit != stored:
+        if stored:
+            log.warning("Linky : unité %s annoncée par la réponse (au lieu de %s)", unit, stored)
+        store.set_top("linky", field, unit)
+    return unit
 
 
 def _json(resp: httpx.Response, endpoint: str) -> object:
@@ -134,6 +162,7 @@ def collect(
     if have:
         start = max(start, date.fromisoformat(max(have)) - timedelta(days=10))
     rows: list[tuple[str, float]] = []
+    bodies: list[object] = []
     chunk_start = start
     while chunk_start < today:
         chunk_end = min(chunk_start + timedelta(days=365), today)
@@ -147,6 +176,7 @@ def collect(
         if resp.status_code != 200:
             raise LinkyError(f"Linky (Conso API) : HTTP {resp.status_code} {resp.text[:150]}")
         body = _json(resp, "consommation_quotidienne")
+        bodies.append(body)
         found = _readings(body)
         _check_found(body, len(found), "consommation_quotidienne")
         if not found:
@@ -156,8 +186,7 @@ def collect(
     _collect_pmax(store, api, prm, start, today)
     if not rows:
         return 0
-    # Values are Wh; tolerate a kWh payload (a house uses well over 500 Wh a day).
-    factor = 1000.0 if statistics.median(v for _d, v in rows) < 500 else 1.0
+    factor = ENERGY_UNITS[_unit(store, "unit", bodies, rows, ENERGY_UNITS)]
     for day, v in rows:
         store.put("linky", "daily", day, None, round(v * factor, 1))
     log.info("Linky : %d jours", len(rows))
@@ -167,6 +196,7 @@ def collect(
 def _collect_pmax(store: Store, api: _Paced, prm: str, start: date, today: date) -> None:
     """Daily maximum power drawn (kVA): tells whether the subscribed power fits. Best effort."""
     rows: list[tuple[str, float]] = []
+    bodies: list[object] = []
     chunk_start = start
     while chunk_start < today:
         chunk_end = min(chunk_start + timedelta(days=365), today)
@@ -177,6 +207,7 @@ def _collect_pmax(store: Store, api: _Paced, prm: str, start: date, today: date)
             log.warning("Linky : puissance max indisponible (HTTP %s)", resp.status_code)
             return
         body = _json(resp, "puissance_conso_max_quotidienne")
+        bodies.append(body)
         found = _readings(body)
         try:
             _check_found(body, len(found), "puissance_conso_max_quotidienne")
@@ -187,8 +218,7 @@ def _collect_pmax(store: Store, api: _Paced, prm: str, start: date, today: date)
         chunk_start = chunk_end
     if not rows:
         return
-    # Enedis gives VA; tolerate kVA.
-    factor = 0.001 if statistics.median(v for _d, v in rows) > 100 else 1.0
+    factor = POWER_UNITS[_unit(store, "pmax_unit", bodies, rows, POWER_UNITS)]
     for day, v in rows:
         store.put("linky", "pmax", day, None, round(v * factor, 2))
     log.info("Linky : puissance max sur %d jours", len(rows))

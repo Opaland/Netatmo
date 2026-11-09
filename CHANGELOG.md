@@ -1,5 +1,54 @@
 # Historique des versions
 
+## v1.4 — novembre 2026 : expliquer par pièce, nouvelles sources, simulateurs
+
+- **Fenêtres ouvertes, boost et état des radiateurs (E13)** : l'API Intuis ne garde aucun historique
+  de ces états (sonde S-13.1, #162) ; un **relevé horaire** facultatif (`releve-horaire.yml`, une
+  requête `homestatus` par heure, chiffrée, gardée 3 jours en artefact, **aucun commit horaire**) est
+  agrégé chaque nuit par pièce et par jour (fenêtre ouverte, boost, chauffe, délestage, mode, contacteur)
+  au prorata des relevés reçus, avec la couverture affichée. Carte Confort « Fenêtres ouvertes et
+  radiateurs », question « Pourquoi cette pièce était froide ? », explication possible des jours
+  inhabituels, signature sans les jours d'aération, kWh pendant le boost, absences confirmées par le
+  mode de consigne, délestage par pièce face au pic Linky, mode du contacteur du chauffe-eau.
+- **Données d'occupation minimisées** (S-13.5) : `presence` jamais lue sauf variable explicite, et
+  même alors en heures par jour seulement ; chambres regroupées ; analyse d'impact courte
+  (`docs/api-notes.md`, `docs/juridique.md`). L'IA ne reçoit que des totaux mensuels pseudonymisés de
+  fenêtres et de boost, chambres en une seule ligne (S-5.10).
+- **Prises Shelly** (Shelly Cloud, compteur cumulé réparti par jour) et carte **« Autres usages en
+  détail »** : reste Linky découpé en prises mesurées, postes saisis, talon de veille et non attribué.
+  Le journal `httpx` est coupé au niveau INFO (il affichait des paramètres d'URL).
+- **Home Assistant** : commande `import-ha` (historique REST, CSV, statistiques long terme), agrégats
+  chiffrés (`data/ha.enc.json`, schéma publié), carte « Capteurs Home Assistant » avec taux d'accord
+  entre un capteur d'ouverture et `open_window`. Étude Home Assistant + Zigbee : **no-go cet hiver**.
+- **Coûts et simulateurs** : facture recoupée avec écart expliqué ligne par ligne, recharge d'une
+  **voiture électrique** par offre (dépassements de puissance comptés sur la courbe 30 min),
+  estimation **pompe à chaleur** à partir de la signature (hypothèses affichées), **mode locataire**
+  (prix moyen, cartes Linky masquées, rapport limité au bail).
+- **Audit et travaux** : surfaces et marqueurs « travaux » (signature avant / après, kWh/m²),
+  **export recherche** anonymisé (dates décalées, pseudonymes, vérifié par le détecteur de fuites).
+- **Alerte « froid prolongé »** (variable `COLD_ALERT_JSON`, désactivée par défaut) : issue GitHub
+  avec des pseudonymes seulement, fermée au retour ; ce n'est pas un dispositif de sécurité.
+- **Famille et accessibilité** : mode simple en **langage clair** (FALC) avec glossaire au toucher,
+  **invitation par QR code** (l'adresse seule, jamais la phrase), aide d'installation iPhone / Android,
+  Safari iOS : clé effacée par le système expliquée, **WebKit dans la CI**.
+- **Station** : clés de modules stables (un module ajouté ne reprend pas l'historique d'un autre) ;
+  étude de l'emplacement du module intérieur libre.
+- **Audit des données** (`docs/audit-donnees.md`) : inventaire anonyme par source (Intuis, station,
+  Linky), passé sur le compte réel ; suites en issues (v1.5 et v1.6).
+- **Processus** : revues par agents (code et design) écrites et outillées (`docs/revues-agents/`,
+  `scripts/revue_issues.py`, workflow facultatif `revue-agents.yml`), inventaire de l'interface
+  (`docs/design/inventaire.md`), revue de fin de version (`docs/bmad/revues/v1.4.md`) et cadrage v1.5.
+
+**À faire par le propriétaire** pour profiter de la v1.4 sur le vrai compte :
+
+- variable de dépôt `ROOM_STATE_HOURLY` = `true` pour lancer le relevé horaire (sans elle, les cartes
+  fenêtres, boost et délestage restent vides) ; `ROOM_STATE_PRESENCE` seulement avec l'accord du foyer ;
+- secrets `SHELLY_AUTH_KEY` et `SHELLY_SERVER` (ou depuis Paramètres) si des prises Shelly sont posées,
+  puis comparer après deux nuits avec l'application Shelly ;
+- variable `COLD_ALERT_JSON` (seuil, durée, pièces) si l'alerte froid est voulue, et un essai avec un
+  seuil élevé pour voir l'issue s'ouvrir puis se fermer ;
+- scanner le QR code d'invitation depuis un téléphone ; vérifier les noms des modes du contacteur.
+
 ## v1.3 — novembre 2026 : confort, coûts, robustesse, sécurité
 
 - **Contrat partagé** entre tous les appareils (variable de dépôt `CONTRACT_JSON`, validée par le

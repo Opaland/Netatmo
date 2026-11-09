@@ -9,6 +9,7 @@ import {
   TOKEN_HELP_URL,
   expiryInfo,
   hasToken,
+  noSaveAttrs,
   listSecrets,
   putSecret,
   putVariable,
@@ -57,7 +58,7 @@ export function renderSettings(view: HTMLElement) {
           (f) => `<label>${esc(f.label)} ${
             configured ? (configured.has(f.name) ? '<span class="ok">✓ enregistré</span>' : '<span class="muted">non enregistré</span>') : ''
           }
-          <input name="${f.name}" type="${f.secret ? 'password' : 'text'}" autocomplete="off" spellcheck="false" placeholder="${esc(
+          <input name="${f.name}" ${noSaveAttrs(f.secret)} placeholder="${esc(
             f.placeholder ?? (configured?.has(f.name) ? 'laisser vide pour garder la valeur actuelle' : ''),
           )}" ${hasToken() ? '' : 'disabled'}></label>`,
         )
@@ -91,21 +92,22 @@ export function renderSettings(view: HTMLElement) {
       accès au seul dépôt <strong>${esc(settingsRepo)}</strong>, permissions <strong>Secrets : lecture et écriture</strong>,
       <strong>Variables : lecture et écriture</strong> (contrat partagé) et
       <strong>Actions : lecture et écriture</strong>, <strong>rien d'autre</strong> (surtout pas « Contents »), expiration courte (7 jours). Le jeton reste en mémoire le temps de la visite :
-      il n'est jamais enregistré, ni sur l'appareil, ni ailleurs.</p>
-    <form id="gh-login" class="inline-form">
-      <label>Dépôt<input name="repo" value="${esc(settingsRepo)}" autocomplete="off" spellcheck="false"></label>
-      <label>Jeton GitHub<input name="token" type="password" autocomplete="off" placeholder="github_pat_…" ${hasToken() ? 'value="••••••••" disabled' : ''}></label>
-      ${hasToken() ? '<button type="button" id="gh-logout" class="link">Oublier le jeton</button>' : '<button class="primary small" type="submit">Se connecter</button>'}
-    </form>
+      l'application ne l'enregistre jamais, ni sur l'appareil, ni ailleurs. Les champs du jeton et des identifiants sont marqués pour que
+      le navigateur ne propose pas de les mémoriser ; si votre navigateur ou votre gestionnaire de mots de passe le propose quand même, refusez.</p>
+    <div id="gh-login" class="inline-form" role="group" aria-label="Connexion à GitHub">
+      <label>Dépôt<input name="repo" value="${esc(settingsRepo)}" ${noSaveAttrs(false)}></label>
+      <label>Jeton GitHub<input name="token" ${noSaveAttrs(true)} placeholder="github_pat_…" ${hasToken() ? 'value="••••••••" disabled' : ''}></label>
+      ${hasToken() ? '<button type="button" id="gh-logout" class="link">Oublier le jeton</button>' : '<button class="primary small" type="button" id="gh-login-btn">Se connecter</button>'}
+    </div>
   </section>
-  <form class="card" id="secrets-form">
-    <h2>2. Vos identifiants</h2>
+  <section class="card" id="secrets-form" aria-labelledby="secrets-title">
+    <h2 id="secrets-title">2. Vos identifiants</h2>
     <p class="hint muted">Chaque valeur est <strong>chiffrée dans votre navigateur</strong> avec la clé publique du dépôt avant l'envoi :
       seul GitHub peut la déchiffrer, pour la collecte. Seuls les champs remplis sont envoyés ; GitHub ne permet pas de relire une valeur.
       La phrase de passe des données ne se change pas ici (voir « rekey » dans le README).</p>
     ${groups}
-    <button class="primary" type="submit" ${hasToken() ? '' : 'disabled'}>Chiffrer et enregistrer dans GitHub</button>
-  </form>
+    <button class="primary" type="button" id="secrets-save" ${hasToken() ? '' : 'disabled'}>Chiffrer et enregistrer dans GitHub</button>
+  </section>
   ${tenant().on ? tenantNote('Le contrat partagé est masqué') : contractSection()}
   <section class="card">
     <h2>4. Lancer la collecte</h2>
@@ -213,43 +215,68 @@ export function forgetToken() {
 }
 
 // ------------------------------------------------------------------ events
-/** GitHub login and secrets forms. */
-export function handleSubmit(e: SubmitEvent) {
-  const form = e.target as HTMLFormElement;
-  if (form.id === 'gh-login') {
-    e.preventDefault();
-    const data = new FormData(form);
-    settingsRepo = String(data.get('repo') ?? '').trim();
-    setToken(String(data.get('token') ?? ''));
-    void settingsAction(async () => {
-      configured = await listSecrets(settingsRepo);
-      return `Connecté à ${settingsRepo} : ${configured.size} secret(s) déjà enregistré(s).`;
-    });
+/**
+ * #233: the values of the inputs of a group (no <form>, so no FormData and no submission that
+ * would make the browser offer to save a password); the inputs are emptied right away.
+ */
+function takeValues(group: Element): [string, string][] {
+  return [...group.querySelectorAll<HTMLInputElement>('input[name]')].map((i) => {
+    const v: [string, string] = [i.name, i.disabled ? '' : i.value.trim()];
+    i.value = '';
+    return v;
+  });
+}
+
+/** GitHub login. */
+function login(group: Element) {
+  const data = Object.fromEntries(takeValues(group));
+  settingsRepo = data.repo ?? '';
+  setToken(data.token ?? '');
+  void settingsAction(async () => {
+    configured = await listSecrets(settingsRepo);
+    return `Connecté à ${settingsRepo} : ${configured.size} secret(s) déjà enregistré(s).`;
+  });
+}
+
+/** Seal and store the filled secrets. */
+function saveSecrets(group: Element) {
+  const entries = takeValues(group).filter(([, v]) => v);
+  const errors = entries.map(([k, v]) => validate(k, v)).filter(Boolean);
+  if (errors.length) {
+    settingsMsg = { ok: false, text: errors.join(' ') };
+    return rerender();
   }
-  if (form.id === 'secrets-form') {
-    e.preventDefault();
-    const entries = [...new FormData(form).entries()]
-      .map(([k, v]) => [k, String(v).trim()] as const)
-      .filter(([, v]) => v);
-    const errors = entries.map(([k, v]) => validate(k, v)).filter(Boolean);
-    if (errors.length) {
-      settingsMsg = { ok: false, text: errors.join(' ') };
-      return rerender();
-    }
-    if (!entries.length) {
-      settingsMsg = { ok: false, text: 'Aucun champ rempli.' };
-      return rerender();
-    }
-    void settingsAction(async () => {
-      for (const [k, v] of entries) await putSecret(settingsRepo, k, v);
-      configured = await listSecrets(settingsRepo);
-      return `${entries.length} secret(s) chiffré(s) et enregistré(s) : ${entries.map(([k]) => k).join(', ')}.`;
-    });
+  if (!entries.length) {
+    settingsMsg = { ok: false, text: 'Aucun champ rempli.' };
+    return rerender();
   }
+  void settingsAction(async () => {
+    for (const [k, v] of entries) await putSecret(settingsRepo, k, v);
+    configured = await listSecrets(settingsRepo);
+    return `${entries.length} secret(s) chiffré(s) et enregistré(s) : ${entries.map(([k]) => k).join(', ')}.`;
+  });
+}
+
+/** Enter in a field of the GitHub login or of the secrets acts like its button (no <form> any more). */
+export function handleKeydown(e: KeyboardEvent) {
+  const t = e.target as HTMLElement;
+  if (e.key !== 'Enter' || !(t instanceof HTMLInputElement)) return;
+  const btn = t.closest('#gh-login, #secrets-form')?.querySelector<HTMLButtonElement>('#gh-login-btn, #secrets-save');
+  if (!btn || btn.disabled) return;
+  e.preventDefault();
+  btn.click();
 }
 
 /** Forget the token, run the collection. Returns true when the click belonged to this view. */
 export function handleClick(btn: HTMLElement): boolean {
+  if (btn.id === 'gh-login-btn') {
+    login(btn.closest('#gh-login')!);
+    return true;
+  }
+  if (btn.id === 'secrets-save') {
+    saveSecrets(btn.closest('#secrets-form')!);
+    return true;
+  }
   if (btn.id === 'gh-logout') {
     forgetToken();
     settingsMsg = { ok: true, text: 'Jeton oublié.' };

@@ -1,6 +1,6 @@
 // Pure helpers for three checks: water heater in off-peak hours (S-2.10), lower setpoint
 // simulation (S-4.11) and data quality per month (S-1.10). No DOM here.
-import { type DayRecord, addDays } from './aggregate';
+import { type DayRecord, addDays, rawRecords } from './aggregate';
 import { type Fit, type Hourly, type TariffMap, type Weather, fitSeason } from './analysis';
 
 // ------------------------------------------------------------------ S-2.10 water heater HC share
@@ -167,7 +167,7 @@ export type Coverage = Map<string, Map<string, [number, number, number]>>;
  */
 export function computeCoverage(records: DayRecord[], estimated: Set<string>, lastDay: string): Coverage {
   const days = new Map<string, Set<string>>();
-  for (const r of records) {
+  for (const r of rawRecords(records)) {
     if (!days.has(r.room)) days.set(r.room, new Set());
     days.get(r.room)!.add(r.day);
   }
@@ -216,7 +216,7 @@ export function uncertainDays(records: DayRecord[], estimated: Set<string>, from
   const byRoom = new Map<string, Set<string>>();
   const first = new Map<string, string>();
   const last = new Map<string, string>();
-  for (const r of records) {
+  for (const r of rawRecords(records)) {
     if (!byRoom.has(r.room)) byRoom.set(r.room, new Set());
     byRoom.get(r.room)!.add(r.day);
     if (!first.has(r.room) || r.day < first.get(r.room)!) first.set(r.room, r.day);
