@@ -56,8 +56,8 @@ describe('breakdown', () => {
     expect(by['Lave-linge'].kwh).toBeCloseTo(((0.01 * 3 + 1 * 2) / 5) * 10);
     expect(by.Four.kwh).toBeCloseTo(10);
     // talon 200 W minus fridge 40 W and box 10 W
-    expect(by['Veille non attribuée (talon)'].watts).toBeCloseTo(150);
-    expect(by['Veille non attribuée (talon)'].kwh).toBeCloseTo(36);
+    expect(by['Veille'].watts).toBeCloseTo(150);
+    expect(by['Veille'].kwh).toBeCloseTo(36);
     const sumParts = b.parts.reduce((s, p) => s + p.kwh, 0);
     expect(sumParts).toBeCloseTo(80);
     expect(b.over).toBe(0);

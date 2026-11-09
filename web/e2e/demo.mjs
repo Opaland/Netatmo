@@ -230,20 +230,31 @@ try {
     for (const view of name === 'mobile-360' ? [] : ['accueil', 'pieces', 'historique', 'compteur', 'outils', 'parametres']) {
       await go(page, view);
       if (view === 'compteur') {
-        // Linky 30-min load curve card (lazy module + lazy documents)
+        // #301: maximum power with its load shedding per room (lazy module + room states, in « Voir les valeurs »)
         try {
-          await page.waitForSelector('#curve-day-chart canvas', { timeout: 15000 });
-          const talon = await page.locator('#curve-talon').innerText();
-          if (!/\d\s?W/.test(talon)) errors.push(`${name}/compteur: talon de veille absent (${talon})`);
-          if ((await page.locator('#curve-card canvas').count()) < 2) errors.push(`${name}/compteur: courbe de charge incomplète`);
+          await page.waitForSelector('#offload-zone:not([hidden]) table', { state: 'attached', timeout: 15000 });
+          if (!/Pic du compteur/.test(await page.locator('#offload-summary').textContent())) errors.push(`${name}/compteur: délestage sans pic du compteur`);
+          if (!/\d+ jours?/.test(await page.locator('#offload-line').innerText())) errors.push(`${name}/compteur: phrase du délestage absente`);
         } catch (err) {
-          errors.push(`${name}/compteur: carte « Courbe de charge » non rendue (${err})`);
+          errors.push(`${name}/compteur: délestage par pièce non rendu (${err})`);
         }
-        // S-4.12 / S-1.17: other usages split into Shelly plugs, declared appliances, talon
+        // Linky 30-min load curve (lazy module + lazy documents): « Journée type » and « Veille » pages
         try {
-          await page.waitForSelector('#bd-chart canvas', { timeout: 15000 });
+          await go(page, 'compteur-journee');
+          await page.waitForSelector('#curve-day-chart canvas', { timeout: 15000 });
+          if ((await page.locator('#curve-card canvas').count()) < 1) errors.push(`${name}/compteur: journée type incomplète`);
+          await go(page, 'compteur-veille');
+          const talon = await page.locator('#curve-talon').innerText();
+          if (!/\d\s?kWh par an/.test(talon)) errors.push(`${name}/compteur: veille absente (${talon})`);
+        } catch (err) {
+          errors.push(`${name}/compteur: courbe de charge non rendue (${err})`);
+        }
+        // S-4.12 / S-1.17: other usages split into Shelly plugs, declared appliances, standby
+        try {
+          await go(page, 'compteur-autres');
+          await page.waitForSelector('#bd-parts .row', { timeout: 15000 });
           const text = await page.locator('#breakdown-card').innerText();
-          for (const want of ['Réfrigérateur', 'Lave-linge', 'Veille non attribuée', 'Non attribué', 'non exploitable sans hub']) {
+          for (const want of ['Réfrigérateur', 'Lave-linge', 'Veille', 'Non attribué', 'non exploitable sans hub', 'Compté :']) {
             if (!text.includes(want)) errors.push(`${name}/compteur: décomposition sans « ${want} »`);
           }
           await page.fill('#bd-form [name=name]', 'Box internet');
@@ -257,13 +268,7 @@ try {
         } catch (err) {
           errors.push(`${name}/compteur: carte « Autres usages en détail » non rendue (${err})`);
         }
-        // S-13.6: load shedding per room next to the Linky peak (lazy module + room states)
-        try {
-          await page.waitForSelector('#offload-zone:not([hidden]) table', { timeout: 15000 });
-          if (!/Pic Linky moyen/.test(await page.locator('#offload-summary').innerText())) errors.push(`${name}/compteur: délestage sans pic Linky`);
-        } catch (err) {
-          errors.push(`${name}/compteur: délestage par pièce non rendu (${err})`);
-        }
+        await go(page, 'compteur');
       }
       if (view === 'historique') {
         // S-3.7: indoor − outdoor signature (lazy module)
@@ -736,7 +741,7 @@ try {
       }
     });
     await openDemo(page); // through the service worker: files are cached
-    await go(page, 'compteur');
+    await go(page, 'compteur-journee');
     await page.waitForSelector('#hour-grid canvas', { timeout: 20000 });
     await ctx.setOffline(true);
     progress('hors ligne : ouverture de la démo');
@@ -746,7 +751,7 @@ try {
     await page.waitForSelector('#net-status:not([hidden])', { timeout: 5000 });
     const banner = await page.textContent('#net-status');
     check(/Hors ligne/.test(banner) && /profil horaire compris/.test(banner), `hors-ligne : bandeau inattendu « ${banner} »`);
-    await go(page, 'compteur');
+    await go(page, 'compteur-journee');
     await page.waitForSelector('#hour-grid canvas', { timeout: 20000 }).catch(() => errors.push('hors-ligne : profil horaire absent'));
     await page.screenshot({ path: `${OUT}/hors-ligne-compteur.png`, fullPage: true });
     await ctx.close();
@@ -764,23 +769,26 @@ try {
     page.on('request', (r) => /\.hourly\.enc\.json$/.test(r.url()) && hourlyRequests++);
     try {
       await openDemo(page);
-      await page.evaluate(() => (location.hash = '#compteur'));
-      await page.waitForSelector('#curve-card');
+      await page.evaluate(() => (location.hash = '#compteur-journee'));
+      await page.waitForSelector('#curve-zone');
       // at once, before the load curve and the hourly data arrive (#247)
       await page.evaluate(() => (location.hash = '#parametres-affichage'));
       await page.check('[data-toggle=household]');
-      await go(page, 'compteur');
+      await go(page, 'compteur-journee');
       await page.waitForSelector('#curve-day-chart canvas', { timeout: 20000 });
-      await page.waitForSelector('#bd-chart canvas', { timeout: 20000 });
-      const talon = await page.locator('#curve-talon').innerText();
-      check(/\d\s?W/.test(talon), `cycle de vie : talon de veille absent après la bascule (${talon})`);
       await page.waitForSelector('#hour-grid canvas', { timeout: 20000 });
+      await go(page, 'compteur-veille');
+      const talon = await page.locator('#curve-talon').innerText();
+      check(/\d\s?kWh/.test(talon), `cycle de vie : veille absente après la bascule (${talon})`);
+      await go(page, 'compteur-autres');
+      await page.waitForSelector('#bd-parts .row', { timeout: 20000 });
+      await go(page, 'compteur-journee');
       await ready(page); // offline prefetch (idle callback) included
       const before = hourlyRequests;
       for (let i = 0; i < 2; i++) {
         await go(page, 'parametres-affichage');
         await page.click('[data-toggle=household]');
-        await go(page, 'compteur');
+        await go(page, 'compteur-journee');
         await page.waitForSelector('#hour-grid canvas', { timeout: 20000 });
       }
       await ready(page);
@@ -792,7 +800,7 @@ try {
       check(!(await page.locator('header.top').count()), 'cycle de vie : l’appli reste affichée après le verrouillage');
       await page.click('#demo');
       await page.waitForSelector('header.top', { timeout: 30000 });
-      await go(page, 'compteur');
+      await go(page, 'compteur-journee');
       await page.waitForSelector('#curve-day-chart canvas', { timeout: 20000 }).catch(() => errors.push('cycle de vie : courbe de charge absente après réouverture'));
       await page.waitForSelector('#hour-grid canvas', { timeout: 20000 }).catch(() => errors.push('cycle de vie : profil horaire absent après réouverture'));
       await go(page, 'confort');

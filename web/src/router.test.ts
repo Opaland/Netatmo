@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { SETTINGS, TABS, TOOLS, allowed, parentOf, parseRoute, routeKey, simpleTabs, tabOf, titleOf, visibleTabs } from './router';
+import { METER_PAGES, SETTINGS, TABS, TOOLS, allowed, parentOf, parseRoute, routeKey, simpleTabs, tabOf, titleOf, visibleTabs } from './router';
 import { fmt1 } from './glossary';
 import { dispatch, type Handlers } from './events';
 
@@ -20,6 +20,7 @@ describe('router (#308)', () => {
       'parametres',
       ...Object.keys(SETTINGS).map((s) => `parametres-${s}`),
       ...Object.keys(TOOLS).map((t) => `outils-${t}`),
+      ...Object.keys(METER_PAGES).map((m) => `compteur-${m}`),
     ];
     for (const k of keys) {
       const r = parseRoute(`#${k}`);
@@ -34,7 +35,7 @@ describe('router (#308)', () => {
   });
 
   it('unknown addresses are not routes (anchors, #installer, old names)', () => {
-    for (const k of ['#installer', '#quality', '#overview', '#outils-inconnu', '#parametres-x', '#piece-%E0%A4%A', '']) expect(parseRoute(k)).toBeNull();
+    for (const k of ['#installer', '#quality', '#overview', '#outils-inconnu', '#compteur-inconnu', '#parametres-x', '#piece-%E0%A4%A', '']) expect(parseRoute(k)).toBeNull();
   });
 
   it('a sub-page lights its tab and goes back to it', () => {
@@ -46,12 +47,15 @@ describe('router (#308)', () => {
     expect(parentOf({ page: 'parametres', section: null })).toBe('accueil');
     expect(parentOf({ page: 'historique' })).toBeNull();
     expect(tabOf({ page: 'parametres', section: null })).toBeNull();
+    expect(tabOf({ page: 'compteur-detail', sub: 'veille' })).toBe('compteur');
+    expect(parentOf({ page: 'compteur-detail', sub: 'veille' })).toBe('compteur');
   });
 
   it('titles of the sub-pages', () => {
     expect(titleOf({ page: 'piece', room: 'r1' }, (id) => (id === 'r1' ? 'Salon' : id))).toBe('Salon');
     expect(titleOf({ page: 'parametres', section: 'contrat' })).toBe('Contrat et prix');
     expect(titleOf({ page: 'outil', tool: 'facture' })).toBe('Une facture');
+    expect(titleOf({ page: 'compteur-detail', sub: 'heures-creuses' })).toBe('Heures pleines / creuses');
   });
 
   it('tenant mode: no Compteur tab, its address falls back to Outils', () => {
@@ -59,6 +63,7 @@ describe('router (#308)', () => {
     expect(visibleTabs(false)).toHaveLength(5);
     expect(allowed({ page: 'compteur' }, true)).toEqual({ page: 'outils' });
     expect(allowed({ page: 'compteur' }, false)).toEqual({ page: 'compteur' });
+    expect(allowed({ page: 'compteur-detail', sub: 'veille' }, true)).toEqual({ page: 'outils' });
   });
 
   it('simple view: three tabs, « Ma pièce » is the pinned room or the list', () => {

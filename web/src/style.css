@@ -2005,6 +2005,57 @@ code.hash {
     transition: none;
   }
 }
+
+/* ------------------------------------------------------------------ Compteur (#301, maquette compteur.html) */
+.card-period {
+  font-size: var(--font-sm);
+  color: var(--text-muted);
+}
+.meter-big {
+  margin: 0 0 var(--space-2);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 var(--space-2);
+}
+.meter-big .big {
+  font-size: var(--font-2xl);
+  font-weight: 600;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+.meter-total {
+  margin: var(--space-2) 0;
+}
+/* « Compté : … »: what a card counts, under its figures (wraps, never cut) */
+.counted {
+  margin: var(--space-3) 0 0;
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--border);
+  font-size: var(--font-sm);
+  color: var(--text-muted);
+  overflow-wrap: anywhere;
+}
+.counted-k {
+  font-weight: 600;
+  color: var(--text);
+}
+/* « Autres usages en détail »: with little room (large text), the kWh go under the name */
+#bd-parts {
+  container-type: inline-size;
+}
+@container (max-width: 17rem) {
+  #bd-parts .row {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+  #bd-parts .row .v {
+    grid-column: 2;
+    text-align: left;
+  }
+  #bd-parts .row > span:last-child:empty {
+    display: none;
+  }
+}
 /* #313: comfort pill of the Pièces list, cold days of a room. */
 .pill {
   display: inline-block;

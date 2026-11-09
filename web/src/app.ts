@@ -37,6 +37,8 @@ export interface State {
   period: string; // '12m' | 'all' | 'YYYY' (Historique, « Consommation en détail »)
   /** #311: the one period of Accueil. */
   home: 'month' | 'season' | '12m' | 'year';
+  /** #301: the one period of the Compteur tab and its detail pages. */
+  meter: 'month' | 'season' | '12m' | 'year';
   gran: Granularity;
   split: 'category' | 'room';
   compareYears: number[];
@@ -78,6 +80,7 @@ export const DEFAULT: State = {
   rooms: null,
   period: '12m',
   home: 'month',
+  meter: '12m',
   gran: 'month',
   split: 'category',
   compareYears: [],

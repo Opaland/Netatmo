@@ -17,6 +17,7 @@ import * as analyse from './views/analyse';
 import * as compare from './views/compare';
 import * as home from './views/home';
 import * as household from './views/household';
+import { renderMeter } from './views/meter';
 import * as outils from './views/outils';
 import * as overview from './views/overview';
 import { pinSelect, pinnedTiles } from './views/pinned';
@@ -134,7 +135,7 @@ function renderPiece(view: HTMLElement, route: Route) {
 }
 const pieceHandlers: Handlers = { click: (el) => piece?.handleClick(el) ?? false };
 
-// ------------------------------------------------------------------ Historique, Compteur
+// ------------------------------------------------------------------ Historique
 function renderHistorique(view: HTMLElement) {
   const records = filtered();
   stack(view, `<h2 class="page-title" id="page-title" tabindex="-1">Historique</h2>${filterChip()}`, [
@@ -147,13 +148,6 @@ function renderHistorique(view: HTMLElement) {
   ]);
 }
 
-function renderCompteur(view: HTMLElement) {
-  const records = filtered();
-  stack(view, `<h2 class="page-title" id="page-title" tabindex="-1">Compteur <small class="muted">Linky</small></h2>${filterChip()}`, [
-    (el) => overview.renderOverview(el, records, 'meter'),
-    (el) => analyse.renderAnalyse(el, records, 'compteur'),
-  ]);
-}
 
 // ------------------------------------------------------------------ Outils (#314)
 /** Sources whose last attempt succeeded (meta.sources), for the État des données row. */
@@ -337,7 +331,7 @@ function renderSettingsPage(view: HTMLElement, route: Route) {
         (el) =>
           (el.innerHTML = html(`<section class="card"><div class="card-head"><h2>Appareils saisis à la main</h2>${scopeTag('appareil')}</div>
           <p class="hint muted">${ds!.linky.size && !tenant().on ? 'Ils se saisissent sous leur décomposition, dans la carte « Autres usages en détail » du Compteur (une seule carte, pour voir aussitôt leur part).' : 'Disponible avec le compteur Linky.'}</p>
-          ${ds!.linky.size && !tenant().on ? list([{ title: 'Autres usages en détail', sub: 'Compteur : prises, appareils saisis, veille', href: '#compteur' }]) : ''}</section>`)),
+          ${ds!.linky.size && !tenant().on ? list([{ title: 'Autres usages en détail', sub: 'Compteur : prises, appareils saisis, veille', href: '#compteur-autres' }]) : ''}</section>`)),
       ]);
     case 'sources':
       return stack(view, head, [(el) => settings.renderSettings(el, 'sources')]);
@@ -411,7 +405,9 @@ export const PAGES: Record<Route['page'], Page> = {
   confort: { render: renderComfort, handlers: [comfortHandlers] },
   'chauffe-eau': { render: (v) => analyse.renderAnalyse(v, filtered(), 'chauffe-eau'), needsData: true },
   historique: { render: renderHistorique, handlers: [h(undefined, overview.handleChange), h(compare.handleClick, compare.handleChange), h(undefined, analyse.handleChange), h(undefined, rooms.handleChange)] },
-  compteur: { render: renderCompteur, handlers: [h(undefined, analyse.handleChange)] },
+  // #301: the meter tab and its detail pages (views/meter.ts), one period for all of them
+  compteur: { render: renderMeter },
+  'compteur-detail': { render: renderMeter, handlers: [h(undefined, analyse.handleChange)] },
   outils: { render: renderOutils },
   outil: { render: renderTool, handlers: [h(compare.handleClick, compare.handleChange), h(undefined, analyse.handleChange)], needsData: true },
   etat: { render: renderEtat, handlers: [qualityHandlers] },

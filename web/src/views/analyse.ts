@@ -1,7 +1,7 @@
 // Analyse: AI insight, energy signature, anomalies, calendar, hourly profile,
 // peak / off-peak split, Netatmo station and room temperatures.
 import { type DayRecord, addDays, bucketLabel, minusYears, seasonOf } from '../aggregate';
-import { anomalies, dayProfile, daysAbove, tariffSplit, weekHourGrid } from '../analysis';
+import { anomalies, dayProfile, daysAbove, weekHourGrid } from '../analysis';
 import { type CiFit, MIN_DAYS, type SeasonSignatures, seasonSignatures, signatureDays } from '../indoorsig';
 import { datasetDoc, ds, rerender, setState, state } from '../app';
 import { calendarChart, cssVar, gridHeatmap, lineChart, scatterChart } from '../charts';
@@ -10,7 +10,7 @@ import { lazyCard } from '../lazy';
 import { unavailable } from '../offline';
 import { TEMP, dayLong, dayShort, seasonLabel } from '../glossary';
 import { weeklyMeans } from '../chart-theme';
-import { activeRooms, catColor, esc, fmt1, roomName, fmtKwh, lastDay, longDate, seasonStyle, seg, series, table, tariffNames, measureColor, referenceColor } from '../ui';
+import { activeRooms, catColor, esc, fmt1, roomName, fmtKwh, lastDay, longDate, seasonStyle, seg, series, table, measureColor, referenceColor } from '../ui';
 import { hour } from '../glossary';
 import { SUSPECT_RATIO } from '../reconstitute';
 import { uncertainDays } from './quality';
@@ -90,21 +90,19 @@ export function signatureTable(sigs: SeasonSignatures[], current: number, withDe
 
 /**
  * #308: the v1.5 « Analyse » cards, spread over the new pages. Each part draws only its cards:
- * « historique » (signature, unusual days, calendar, station), « compteur » (hourly profile,
- * peak / off-peak), « chauffe-eau », a tool of Outils (« consigne », « pac », « teletravail »,
+ * « historique » (signature, unusual days, calendar, station), « compteur » (hourly profile of
+ * the radiators and the water heater, on the « Journée type » page, over `range`), « chauffe-eau », a tool of Outils (« consigne », « pac », « teletravail »,
  * « absences », « volets », « ia ») or the works card (« travaux », ⚙ Mon logement), and
  * « temps » for the temperatures of one room (its page).
  */
 export type AnalysePart = 'historique' | 'compteur' | 'chauffe-eau' | 'consigne' | 'pac' | 'teletravail' | 'absences' | 'volets' | 'ia' | 'travaux' | 'temps';
 
-export function renderAnalyse(view: HTMLElement, records: DayRecord[], part: AnalysePart = 'historique', room: string | null = null) {
+export function renderAnalyse(view: HTMLElement, records: DayRecord[], part: AnalysePart = 'historique', room: string | null = null, range?: [string, string]) {
   const years = ds!.meta.years;
   const year = state.analyseYear ?? years[years.length - 1];
   const last = lastDay();
   const tempRooms = activeRooms().filter((r) => ds!.temps.has(r.id));
   const tempRoom = part === 'temps' ? (tempRooms.find((r) => r.id === room)?.id ?? null) : null;
-  const split = tariffSplit(records.filter((r) => r.day >= addDays(minusYears(last), 1)), ds!.tariffs);
-  const [n1, n2] = tariffNames();
   const cards: [AnalysePart, () => string][] = [
     ['ia', () => (ds!.insights ? '<section class="card insight" id="insight-card" aria-busy="true"><h2>Analyse du mois</h2></section>' : '<section class="card"><p class="hint muted">Analyse du mois : à activer dans ⚙ Paramètres → Sources de données (clé Anthropic).</p></section>')],
     [
@@ -141,22 +139,12 @@ export function renderAnalyse(view: HTMLElement, records: DayRecord[], part: Ana
     ['absences', () => '<div id="absence-zone"></div>'],
     [
       'compteur',
-      () => `<section class="card">
-    <div class="card-head"><h2>Journée type <small class="muted">kWh moyens par heure, 90 derniers jours</small></h2></div>
+      () => `<section class="card" aria-labelledby="hourly-title">
+    <div class="card-head"><h2 id="hourly-title">Par jour et par heure</h2></div>
     <div id="hourly-zone"><p class="hint muted">${(ds!.meta.hourly_years ?? []).length ? 'Chargement des données horaires…' : 'Les données horaires arriveront avec la prochaine collecte complète.'}</p></div>
   </section>`,
     ],
     ['teletravail', () => '<div id="telework-zone"></div>'],
-    [
-      'compteur',
-      () =>
-        ds!.meta.has_tariffs && split[1] + split[2] > 0
-          ? `<section class="card"><h2>Heures pleines / heures creuses <small class="muted">12 derniers mois</small></h2>
-      <div class="share" aria-hidden="true"><span style="flex:${split[1]};background:${series(0)}"></span><span style="flex:${split[2]};background:${series(2)}"></span>${split[0] + split[3] > 0 ? `<span style="flex:${split[0] + split[3]};background:${cssVar('--usage-other')}"></span>` : ''}</div>
-      <p class="share-legend"><span><i style="background:${series(0)}"></i>${n1} ${fmtKwh(split[1])}</span><span><i style="background:${series(2)}"></i>${n2} ${fmtKwh(split[2])}</span>${split[0] + split[3] > 0 ? `<span><i style="background:${cssVar('--usage-other')}"></i>Sans détail ${fmtKwh(split[0] + split[3])}</span>` : ''}</p>
-      <p class="hint muted">Détection automatique : la colonne où le chauffe-eau consomme le plus est considérée comme les heures creuses.</p></section>`
-          : '',
-    ],
     ['chauffe-eau', () => waterHeaterCard() || '<section class="card"><p class="hint muted">Pas de chauffe-eau suivi, ou pas encore de relevé heures pleines / creuses.</p></section>'],
     ['historique', () => stationCard()],
     [
@@ -236,7 +224,7 @@ export function renderAnalyse(view: HTMLElement, records: DayRecord[], part: Ana
   // S-5.7/S-5.8: AI card loaded on demand (markdown renderer, votes, usage)
   if (ds!.insights && has('insight-card')) void lazyCard(() => import('./insight'), (m) => m.mountInsight(document.getElementById('insight-card')), { zone: 'insight-card', what: 'Analyse IA' });
   drawStation();
-  drawHourly(records);
+  drawHourly(records, range);
   // the water heater's hours need the hourly data: loaded for its page too
   if (has('wh-hours') && (ds!.meta.hourly_years ?? []).length) hourlyDoc.get(ds, redraw);
   drawWaterHeater(hourlyDoc.status(ds) === 'ready' ? hourlyDoc.get(ds)! : null);
@@ -352,7 +340,7 @@ function drawStation() {
 }
 
 // ------------------------------------------------------------------ hourly profile
-function drawHourly(records: DayRecord[]) {
+function drawHourly(records: DayRecord[], range?: [string, string]) {
   const zone = document.getElementById('hourly-zone');
   if (!zone || !(ds!.meta.hourly_years ?? []).length) return;
   const hourly = hourlyDoc.get(ds, redraw);
@@ -360,8 +348,10 @@ function drawHourly(records: DayRecord[]) {
     if (hourlyDoc.status(ds) === 'failed') zone.innerHTML = html`<p class="hint muted">${unavailable('Données horaires')}</p>`;
     return;
   }
-  const last = lastDay();
-  const from = addDays(last, -89);
+  // #301: the period of the Compteur tab (within the 12 months loaded), else the last 90 days
+  const last = range?.[1] ?? lastDay();
+  const yearAgo = addDays(minusYears(lastDay()), 1);
+  const from = range ? (range[0] > yearAgo ? range[0] : yearAgo) : addDays(last, -89);
   const rooms = new Set(records.map((r) => r.room));
   const r30 = (ds!.meta.room30_years ?? []).length ? (r30Doc.get(ds, (ok) => ok && redraw()) ?? null) : null;
   // S-1.26: hours rebuilt from the half hours where they exist (more complete), the hourly data elsewhere
@@ -377,7 +367,9 @@ function drawHourly(records: DayRecord[]) {
   const byHalf = !!half && halfDays >= HALF_HOUR_MIN_DAYS;
   zone.innerHTML = html`<div class="chart" id="hour-grid" style="height:280px" role="img" aria-label="Consommation moyenne par jour de semaine et par heure"></div>
     <div class="chart" id="hour-profile" style="height:240px" role="img" aria-label="Journée type${byHalf ? ' au pas de 30 minutes' : ''}"></div>
-    ${byHalf ? `<p class="hint muted">Journée type au pas de 30 minutes (${halfDays} jours mesurés pièce par pièce).</p>` : ''}`;
+    <p class="counted"><span class="counted-k">Compté :</span> les radiateurs et le chauffe-eau (pas tout le logement), kWh moyens par heure, du ${esc(longDate(from))} au ${esc(longDate(last))}${
+      byHalf ? ` ; courbe au pas de 30 minutes sur ${halfDays} jours mesurés pièce par pièce` : ''
+    }.</p>`;
   gridHeatmap(document.getElementById('hour-grid')!, {
     xLabels: hours,
     yLabels: dows,
