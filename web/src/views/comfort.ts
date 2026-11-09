@@ -1,7 +1,7 @@
 // Comfort ("Confort"), loaded on demand: night CO₂ (S-11.1), cellar humidity (S-11.2),
 // hours under a threshold per room (S-11.3) and radiator probe vs station (S-3.8).
 import { addDays, bucketLabel, minusYears } from '../aggregate';
-import { ds, onDatasetLoaded, rerender, setState, state } from '../app';
+import { ds, householdStatus, onDatasetLoaded, rerender, revealBedrooms, setState, state } from '../app';
 import {
   type NightRow,
   type StationHourly,
@@ -29,6 +29,7 @@ import { barChart, comboChart, cssVar, lineChart, seqRamp } from '../charts';
 import { type Station, loadStationHourly } from '../data';
 import { activeRooms, esc, lastDay, longDate, nf0, series, table, tableToggle } from '../ui';
 import { html } from '../trusted';
+import * as windows from './windows';
 
 let hourly: StationHourly | null = null;
 let hourlyLoading = false;
@@ -76,6 +77,7 @@ export function renderComfort(view: HTMLElement) {
   ${st ? co2Cards(st) : ''}
   ${st ? cellarCards(st) : ''}
   ${coldCard(st, map)}
+  ${windows.windowsCard(showBedrooms)}
   ${st ? probeCard(st, map) : ''}`;
   if (st) {
     drawCo2(st);
@@ -83,6 +85,7 @@ export function renderComfort(view: HTMLElement) {
     drawProbes(st, map);
   }
   drawCold(st, map);
+  windows.drawWindows(showBedrooms);
 }
 
 // ------------------------------------------------------------------ S-11.1 night CO₂
@@ -458,6 +461,9 @@ function drawProbes(st: Station, map: Map<string, string>) {
 // ------------------------------------------------------------------ events
 export function handleClick(btn: HTMLElement): boolean {
   if (btn.dataset.comfort === 'show-bedrooms') {
+    // S-12.2: the same gesture also lifts the household view (bedrooms merged elsewhere);
+    // it reloads the dataset, which resets this view: set the flag afterwards.
+    if (householdStatus().active) revealBedrooms(true);
     showBedrooms = true;
     rerender();
     return true;
@@ -470,6 +476,7 @@ export function handleClick(btn: HTMLElement): boolean {
 }
 
 export function handleChange(t: HTMLInputElement | HTMLSelectElement): boolean {
+  if (windows.handleChange(t)) return true;
   if (t.dataset.comfort === 'threshold') {
     setState({ comfortThreshold: Number(t.value) });
     return true;

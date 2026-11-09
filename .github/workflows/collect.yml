@@ -21,6 +21,8 @@ jobs:
     permissions:
       contents: write
       issues: write
+      # S-13.2: read the encrypted hourly snapshots (artifacts of « Relevé horaire »).
+      actions: read
     outputs:
       configured: ${{ steps.check.outputs.configured }}
     env:
@@ -47,6 +49,8 @@ jobs:
       ENEDIS_PRM: ${{ secrets.ENEDIS_PRM }}
       # Optional: monthly analysis written by Claude (see README)
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      # S-13.5: presence hours per day, opt-in only (see README)
+      ROOM_STATE_PRESENCE: ${{ vars.ROOM_STATE_PRESENCE }}
     steps:
       - id: check
         run: |
@@ -65,6 +69,27 @@ jobs:
           cache: pip
       - if: steps.check.outputs.configured == 'true'
         run: pip install ".[ai]"
+      # S-13.2: encrypted hourly snapshots, kept 3 days as artifacts, never committed.
+      # Already counted hours are skipped by the collector, so reading a snapshot twice is harmless.
+      - name: Relevés horaires des pièces
+        if: steps.check.outputs.configured == 'true' && vars.ROOM_STATE_HOURLY == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DEST: ${{ runner.temp }}/etat
+        run: |
+          mkdir -p "$DEST"
+          n=0
+          for id in $(gh api --paginate "repos/$GITHUB_REPOSITORY/actions/artifacts?per_page=100" \
+              --jq '.artifacts[] | select(.expired | not) | select(.name | startswith("etat-pieces-")) | .id'); do
+            if gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$id/zip" > "$RUNNER_TEMP/etat.zip" \
+              && unzip -o -q "$RUNNER_TEMP/etat.zip" -d "$DEST/$id"; then
+              n=$((n + 1))
+            else
+              echo "::warning::Un relevé horaire illisible a été ignoré"
+            fi
+          done
+          echo "$n relevés horaires téléchargés"
+          echo "ROOM_STATE_DIR=$DEST" >> "$GITHUB_ENV"
       - name: Collecte
         if: steps.check.outputs.configured == 'true'
         env:

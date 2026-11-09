@@ -46,7 +46,9 @@ export function renderAnalyse(view: HTMLElement, records: DayRecord[]) {
   <section class="card" id="indoor-sig" hidden></section>`
       : `<section class="card"><h2>Signature énergétique</h2><p class="hint muted">Disponible dès que la collecte a récupéré la météo (prochaine collecte).</p></section>`
   }
+  <div id="works-zone"></div>
   ${setpointCard(records)}
+  <div id="shutters-zone"></div>
   ${anomaliesCard(records)}
   <section class="card" id="calendar-card">
     <div class="card-head"><h2>Calendrier <small class="muted">kWh par jour</small></h2>
@@ -129,6 +131,8 @@ export function renderAnalyse(view: HTMLElement, records: DayRecord[]) {
   calendarChart(document.getElementById('cal-chart')!, cal);
   // S-4.9 telework cost, S-4.10 absences (marks on the calendar), loaded on demand (S-7.10)
   import('./habits').then((m) => m.fillAnalyse(cal)).catch(() => {});
+  // S-6.2: surfaces and works markers, signature before / after (lazy module)
+  import('./works').then((m) => m.fillWorks(records)).catch(() => {});
   // temperatures
   if (tempRoom) {
     const from = addDays(minusYears(last), 1);
@@ -153,6 +157,8 @@ export function renderAnalyse(view: HTMLElement, records: DayRecord[]) {
   drawWaterHeater(hourly);
   drawSetpoint(records);
   drawIndoorSignature(records);
+  // S-9.6: « volets fermés » journal, lazy module
+  void import('./shutters').then((m) => document.getElementById('shutters-zone') && m.renderShutters(document.getElementById('shutters-zone')!));
 }
 
 function anomaliesCard(records: DayRecord[]) {

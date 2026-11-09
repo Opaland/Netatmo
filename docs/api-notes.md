@@ -25,7 +25,7 @@ officielle de Home Assistant ne les voit pas.
 | `GET /api/homesdata` | Maison, pièces, modules (`NMG` = passerelle, `NMH` = radiateur, `NMW` = Aqua Manager / chauffe-eau) |
 | `POST /api/gethomemeasure` (JSON) | Mesures de toutes les pièces en un appel. Corps : `home.id`, `home.rooms[] = {id, bridge, type}`, `scale`, `date_begin`, `date_end`, `app_identifier=app_muller` |
 | `POST /api/getroommeasure` (formulaire) | Une pièce par appel. Repli si `gethomemeasure` renvoie des mesures vides (constaté avec certains identifiants d'application) |
-| `POST /syncapi/v1/homestatus` | État courant (températures, consignes). Pas encore utilisé pour l'historique ; `diagnose` en liste les noms de champs (voir « Fenêtre ouverte ») |
+| `POST /syncapi/v1/homestatus` | État courant des pièces et modules. Relevé chaque heure si le relevé horaire est activé (voir « Fenêtre ouverte ») ; `diagnose --status` en liste les noms de champs |
 
 ## Types de mesure
 
@@ -81,14 +81,85 @@ liste seulement les **noms** des champs des objets `rooms` et `modules` de
 `/syncapi/v1/homestatus` (triés, sans doublon, identifiants uniquement), jamais les valeurs, ids ni
 noms de pièces, et indique si `open_window` (ou `window_open`, `open_window_detected`) est présent.
 
-Rien n'est enregistré pour l'instant. Si le champ existe, l'étape suivante serait un instantané
-nocturne (l'API ne donne pas d'historique) ; sinon, le noter ici.
-
 | Vérification | Résultat |
 |---|---|
-| Champs `rooms` de `homestatus` | à compléter après un diagnostic réel |
-| Champs `modules` de `homestatus` | à compléter après un diagnostic réel |
-| `open_window` présent ? | à vérifier |
+| Champs `rooms` de `homestatus` | `open_window`, `presence`, `anticipating`, `boost_status`, `therm_setpoint_mode`, `therm_setpoint_temperature`, `therm_setpoint_end_time`, `therm_measured_temperature`… (diagnostic réel, v1.4) |
+| Champs `modules` de `homestatus` | `radiator_state`, `presence_sensor`, `offload`, `contactor_mode`… |
+| `open_window` présent ? | **oui**, en instantané seulement |
+
+### Un historique déjà servi ? (S-13.1, #172)
+
+`python -m collector diagnose --probe-history` (ou **Actions → Diagnostic**, case « Chercher un
+historique des fenêtres / boost ») essaie une vingtaine de types de mesure candidats sur les
+7 derniers jours, échelle `1hour`, avec `gethomemeasure` (toutes les pièces) et `getroommeasure`
+(première pièce) : `open_window`, `sum_open_window`, `window_open`, `boost`, `sum_boost`,
+`boost_status`, `sum_boost_duration`, `presence`, `sum_presence`, `therm_setpoint_mode`,
+`heating_power_request`, `sum_heating_power_request`, `sum_boiler_on`, `boileron`,
+`radiator_state`, `sum_radiator_state`, `offload`, `sum_offload`, `anticipating`, et `temperature`
+comme témoin (il répond). Les noms viennent des champs de `homestatus` et des types de l'API
+Netatmo Energy publique (`heating_power_request`, `sum_boiler_on`, `boileron`) ; aucun n'est
+documenté pour Intuis. La sortie ne donne, par type et par point d'accès, que « accepté, N points »
+(points non nuls) ou « refusé (HTTP 400) » : ni valeur, ni identifiant, ni texte de l'erreur
+(il peut recopier la requête). Une quarantaine d'appels.
+
+| Type | `gethomemeasure` | `getroommeasure` |
+|---|---|---|
+| (à compléter après le diagnostic réel) | | |
+
+**Décision** (à noter aussi dans #162) : si un type répond avec des points, une collecte nocturne de
+ce type remplace le relevé horaire ; sinon le relevé horaire ci-dessous est activé.
+
+### Relevé horaire de `homestatus` (S-13.2 à S-13.6)
+
+Sans historique servi par l'API, le workflow **« Relevé horaire des pièces »**
+(`.github/workflows/releve-horaire.yml`, minute 23 de chaque heure) fait `python -m collector
+snapshot` : jeton + **une** requête `homestatus` (l'identifiant de la maison est lu dans
+`data/meta.enc.json`, donc pas de `homesdata`), soit 2 appels par heure, 48 par jour, plafonnés à
+4 par relevé (`MAX_CALLS_INTUIS_HOURLY`). Il est **désactivé** tant que la variable de dépôt
+`ROOM_STATE_HOURLY` ne vaut pas `true`.
+
+- **Ce qui est gardé du relevé** : par pièce `open_window`, `boost_status`, `therm_setpoint_mode`,
+  `heating_power_request` (s'il existe) ; par module `radiator_state`, `offload`, `contactor_mode`.
+  Textes réduits à un identifiant court (sinon « autre »). Températures, noms, horaires de fin de
+  consigne : jetés. `presence` : jamais lu sans l'option `ROOM_STATE_PRESENCE=true`.
+- **Où** : le relevé est chiffré (AES-GCM, clé de `DATA_PASSPHRASE` et sel de `data/keyinfo.json`,
+  comme `data/`) puis gardé **3 jours** comme artefact Actions `etat-pieces-<run>`. Aucun commit,
+  permissions `contents: read`. Le cache Actions a été écarté : ses entrées sont immuables, ne se
+  listent pas depuis un autre workflow et sont évincées sans préavis.
+- **Agrégation** : la collecte nocturne (`actions: read`) télécharge les artefacts non expirés et
+  ajoute à `roomstate.enc.json` les **jours locaux terminés** (le jour en cours attend la nuit
+  suivante). Chaque heure locale n'est comptée qu'une fois (`seen`) : relire un artefact, deux
+  relevés dans la même heure ou un relevé arrivé en retard ne faussent rien.
+- **Prorata** : heures = relevés « oui » × heures du jour (23, 24 ou 25) ÷ relevés reçus `n`.
+  La couverture (relevés reçus sur 7 jours) est dans l'état de la source `releve-horaire` et le
+  résumé de la collecte ; les appels des relevés y figurent sous `intuis-horaire`.
+- **Interprétation** (valeurs exactes à vérifier, gardées chiffrées dans `values` pour contrôle) :
+  vrai, nombre > 0 ou texte autre que `off`, `disabled`, `idle`, `standby`, `stand_by`, `none`,
+  `0`, `false`… = « oui ». Boost = `boost_status` actif ou mode `max` / `boost`. Les modes autres
+  que `schedule` / `program` / `home` / `auto` vont dans `mode_h` (`away`, `hg`, `manual`, `off`).
+  Chauffe = `radiator_state` actif d'un module de la pièce (ou `heating_power_request` > 0).
+
+```jsonc
+// roomstate.enc.json (chiffré, chargé à la demande par la vue Confort)
+{"seen":  {"2025-01-15": 16777211},   // heures locales relevées (bit h = heure h)
+ "rooms": {"<pièce>": {"2025-01-15": {"n": 22, "open_window_h": 2.2, "boost_h": 1.1,
+                                      "heating_h": 7.6, "offload_h": 0.0,
+                                      "mode_h": {"away": 12.0},          // hors programme
+                                      "contactor_h": {"auto": 24.0},     // chauffe-eau
+                                      "presence_h": 9.8}}},              // option seulement
+ "values": {"radiator_state": ["heating", "idle"], "therm_setpoint_mode": ["away", "schedule"]}}
+```
+
+### Données d'occupation : analyse d'impact courte (S-13.5)
+
+| Question | Réponse |
+|---|---|
+| Finalité | Expliquer la consommation et le confort (aération, boost, absences, délestage). Pas de surveillance des personnes. |
+| Données | Heures par pièce et par jour de fenêtre ouverte, boost, chauffe, délestage, mode de consigne. **Présence** : non lue par défaut ; avec `ROOM_STATE_PRESENCE=true`, seulement des heures par jour. Jamais d'horodatage heure par heure dans le dépôt. |
+| Durée | Relevés horaires : 3 jours (expiration des artefacts). Agrégats quotidiens : comme le reste de l'archive, jusqu'à suppression par le propriétaire. |
+| Qui voit quoi | Dépôt public : fichiers chiffrés seulement ; artefacts chiffrés (téléchargeables par un compte GitHub connecté, illisibles sans la phrase de passe) ; journaux : des comptes, jamais une valeur ni un nom. Appli : les membres du foyer qui ont la phrase ; les chambres sont **regroupées** tant que personne ne demande leur détail (même geste que pour le CO₂ de la nuit). |
+| IA | Rien de ces agrégats n'est envoyé à l'analyse IA pour l'instant ; s'ils l'étaient, seulement en totaux mensuels pseudonymisés (S-5.10). |
+| Risque résiduel | Un agrégat « fenêtre ouverte / absence par jour » révèle des habitudes : il reste chiffré comme le reste, et l'option présence est à n'activer qu'avec l'accord du foyer. |
 
 ## Schémas de référence et changements de format (S-1.13)
 

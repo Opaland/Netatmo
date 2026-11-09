@@ -6,11 +6,13 @@ import { disposeAll } from './charts';
 import { WrongPassphrase } from './crypto';
 import { NoData, forgetKeys, load, recallKey } from './data';
 import { prefetchForOffline, updateNetStatus } from './offline';
-import { IdleLock, LOCK_CHOICES, idleSince } from './session';
+import { IdleLock, LOCK_CHOICES, REMEMBER_DAYS, idleSince } from './session';
+import { isIos, keyLoss, lossMessage, readMark, writeMark } from './storage';
 import { type SwipeDir, onSwipe, step } from './swipe';
 import { esc, filtered, keepMenuOpen, lastDay, longDate, roomColor, seg } from './ui';
 import * as analyse from './views/analyse';
 import * as compare from './views/compare';
+import * as household from './views/household';
 import { renderLoading, renderLock } from './views/lock';
 import * as overview from './views/overview';
 import { pinSelect, pinnedTiles } from './views/pinned';
@@ -68,6 +70,7 @@ function render() {
         ${prices.pricesForm()}
         <button type="button" data-view="report">${icon('report')} Rapport annuel imprimable</button>
         <button type="button" data-view="settings">${icon('settings')} Paramètres et connexions</button>
+        ${household.householdMenu()}
         <label class="check"><input type="checkbox" data-toggle="simple" ${state.simple ? 'checked' : ''}> Mode simple (grands caractères, phrases courtes)</label>
         ${pinSelect()}
         <label class="lock-after">Verrouiller sans activité
@@ -76,6 +79,7 @@ function render() {
         <button type="button" id="export">Exporter en CSV (filtres appliqués)</button>
         <button type="button" data-export-long="csv" title="Format long documenté (docs/export-long.md), tout l'historique, préparé sur cet appareil">Export long (CSV)</button>
         <button type="button" data-export-long="json" title="Même contenu en JSON, conforme au schéma docs/export-long.schema.json">Export long (JSON)</button>
+        <button type="button" data-research title="Horaire, pièces pseudonymisées, dates décalées, licence au choix (docs/export-recherche.md)">Export recherche (anonymisé)</button>
         <button type="button" id="backup" title="Tous les fichiers chiffrés en un seul, toujours chiffrés : à garder hors de GitHub">Télécharger une sauvegarde chiffrée</button>
         <button type="button" id="lock">${ds.source === 'demo' ? 'Quitter la démo' : 'Verrouiller'}</button>
       </div>
@@ -149,8 +153,8 @@ function staleBanner() {
 /** View-specific handlers: each returns true when the event was its own. */
 const comfortClick = (btn: HTMLElement) => comfort?.handleClick(btn) ?? false;
 const comfortChange = (t: HTMLInputElement | HTMLSelectElement) => comfort?.handleChange(t) ?? false;
-const clickHandlers = [compare.handleClick, rooms.handleClick, report.handleClick, settings.handleClick, prices.handleClick, comfortClick];
-const changeHandlers = [overview.handleChange, rooms.handleChange, prices.handleChange, compare.handleChange, analyse.handleChange, report.handleChange, comfortChange];
+const clickHandlers = [compare.handleClick, rooms.handleClick, report.handleClick, settings.handleClick, prices.handleClick, comfortClick, household.handleClick];
+const changeHandlers = [overview.handleChange, rooms.handleChange, prices.handleChange, compare.handleChange, analyse.handleChange, report.handleChange, comfortChange, household.handleChange];
 
 app.addEventListener('submit', (e) => settings.handleSubmit(e));
 
@@ -171,6 +175,8 @@ app.addEventListener('click', async (e) => {
   }
   if (clickHandlers.some((h) => h(btn))) return;
   // S-9.7: long export, built locally from the decrypted data (lazy module)
+  // S-6.6: anonymised research dataset (lazy dialog)
+  if (btn.dataset.research !== undefined) return void import('./views/research').then((m) => m.openResearch());
   if (btn.dataset.exportLong) return void import('./export').then((m) => ds && m.downloadLong(ds, btn.dataset.exportLong as 'csv' | 'json'));
   if (btn.id === 'export') {
     const blob = new Blob(['﻿' + toCsv(filtered(), ds.meta.rooms)], { type: 'text/csv;charset=utf-8' });
@@ -309,9 +315,13 @@ async function start() {
       setDataset(await load('data', key));
       return render();
     }
+    // S-7.9: a key remembered here but gone (erased by iOS / the browser, or expired).
+    const mark = readMark();
+    const loss = mark?.source === 'data' ? keyLoss(mark, false, Date.now(), REMEMBER_DAYS) : null;
+    if (mark) writeMark(null);
     // Check whether real data exists to adapt the lock screen.
     const resp = await fetch('data/keyinfo.json', { cache: 'no-cache' });
-    renderLock('', resp.ok);
+    renderLock('', resp.ok, resp.ok ? lossMessage(loss, isIos(navigator.userAgent, navigator.maxTouchPoints)) : '');
   } catch (err) {
     if (err instanceof WrongPassphrase) await forgetKeys();
     renderLock(err instanceof NoData ? '' : '', !(err instanceof NoData));

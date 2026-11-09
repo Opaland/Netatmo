@@ -207,6 +207,30 @@ try {
       await page.screenshot({ path: `${OUT}/${name}-${view}.png`, fullPage: true });
       await audit(page, `${name}/${view}`);
     }
+    if (name === 'bureau') {
+      try {
+        // S-9.6: « volets fermés » card (lazy module) in Analyse
+        await page.waitForSelector('#shutters-card', { timeout: 10000 });
+        // S-12.2: bedrooms merged by default, detail on demand until the next lock
+        const picker = () => page.locator('.rooms-panel').textContent();
+        if (!(await picker()).includes('Chambres') || (await picker()).includes('Chambre parentale')) errors.push('vue foyer : chambres non regroupées');
+        const openMenu = async () => (await page.locator('.menu').getAttribute('open')) === null && (await page.click('.menu summary'));
+        await page.click('[data-view=overview]');
+        await openMenu();
+        await page.click('[data-household=reveal]');
+        if (!(await picker()).includes('Chambre parentale')) errors.push('vue foyer : détail non affiché');
+        await openMenu();
+        await page.click('[data-household=hide]');
+        await openMenu();
+        // S-8.14: « Cadre juridique » from Paramètres (lazy module)
+        await page.click('.menu-panel [data-view=settings]');
+        await page.click('#legal-open');
+        await page.waitForSelector('#legal-card .legal-list', { timeout: 10000 });
+        await page.screenshot({ path: `${OUT}/${name}-juridique.png`, fullPage: true });
+      } catch (err) {
+        errors.push(`${name}: vue foyer / volets / cadre juridique (${err})`);
+      }
+    }
     // S-11 / S-3.8: comfort view (lazy chunk), bedroom detail on a deliberate gesture, other threshold
     await page.click('[data-view=comfort]');
     await page.waitForSelector('#cold-chart canvas', { timeout: 15000 });
@@ -219,6 +243,16 @@ try {
       if (!(await page.locator(`#${id} canvas`).count())) errors.push(`${name}/comfort: graphique ${id} absent`);
     }
     if (!(await page.getByText('Heures sous 18,0 °C').count())) errors.push(`${name}/comfort: seuil 18 °C non appliqué`);
+    // E13 (S-13.3): open windows per room (lazy document), signature without the window days
+    try {
+      await page.waitForSelector('#windows-chart canvas', { timeout: 15000 });
+      if (!(await page.getByText('Pourquoi cette pièce était froide ?').count())) errors.push(`${name}/comfort: question « pièce froide » absente`);
+      await page.check('[data-windows=exclude]');
+      await page.waitForSelector('#windows-signature', { timeout: 5000 });
+      if (!/jours? exclus?/.test(await page.locator('#windows-signature').innerText())) errors.push(`${name}/comfort: signature sans les jours fenêtre ouverte absente`);
+    } catch (err) {
+      errors.push(`${name}/comfort: carte « Fenêtres ouvertes » non rendue (${err})`);
+    }
     const overflow = await page.evaluate(() => {
       const t = document.querySelector('.tabs');
       return t ? t.scrollWidth > t.clientWidth + 1 : false;

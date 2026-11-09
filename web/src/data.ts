@@ -7,6 +7,7 @@ import type { Coverage } from './checks';
 import type { DayHours, Night, StationHourly } from './comfort';
 import { type Envelope, type KeyInfo, decryptEnvelope, deriveKey } from './crypto';
 import { type RememberedKey, freshKey } from './session';
+import { askPersistence, writeMark } from './storage';
 
 export type Source = 'data' | 'demo';
 
@@ -28,6 +29,7 @@ export interface Dataset {
   pmax: Map<string, number>; // day -> max power drawn (kVA), Linky
   tempo: { rows: TempoRow[]; days: Map<string, number> };
   station: Station | null;
+  roomMap?: Map<string, string>; // S-12.2: rooms merged by the household view (hourly documents follow it)
 }
 
 export interface Station {
@@ -197,9 +199,11 @@ async function fetchHourly(ds: Dataset): Promise<Hourly> {
     years.map((y) => optional<{ hourly?: Record<string, Record<string, number>> }>(ds.source, `${y}.hourly`, ds.key)),
   );
   for (const doc of docs) {
-    for (const [room, hours] of Object.entries(doc?.hourly ?? {})) {
+    for (const [raw, hours] of Object.entries(doc?.hourly ?? {})) {
+      const room = ds.roomMap?.get(raw) ?? raw;
+      const merged = room !== raw;
       const m = out.get(room) ?? new Map<string, number>();
-      for (const [h, wh] of Object.entries(hours)) m.set(h, wh / 1000);
+      for (const [h, wh] of Object.entries(hours)) m.set(h, (merged ? (m.get(h) ?? 0) : 0) + wh / 1000);
       out.set(room, m);
     }
   }
@@ -222,6 +226,11 @@ export async function loadStationHourly(ds: Dataset): Promise<StationHourly> {
     }
   }
   return out;
+}
+
+/** Daily room states from the hourly snapshots (E13, roomstate.enc.json), loaded on demand. */
+export function loadRoomState(ds: Dataset): Promise<import('./windows').RoomState | null> {
+  return optional(ds.source, 'roomstate', ds.key);
 }
 
 /** Linky 30-min load curve (S-1.11), one document per year, loaded on demand. */
@@ -260,6 +269,9 @@ export async function rememberKey(source: Source, key: CryptoKey, now = Date.now
   try {
     const entry: RememberedKey = { key, at: now };
     await tx('readwrite', (s) => s.put(entry, source));
+    // S-7.9: remember that a key was kept (date only) and ask the browser not to evict it.
+    writeMark({ source, at: now });
+    void askPersistence();
   } catch {
     /* private browsing: just don't remember */
   }
@@ -278,6 +290,7 @@ export async function recallKey(source: Source, now = Date.now()): Promise<Crypt
 }
 
 export async function forgetKeys(): Promise<void> {
+  writeMark(null); // forgotten on purpose: no "erased by the browser" message next time
   try {
     await tx('readwrite', (s) => s.clear());
   } catch {

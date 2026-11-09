@@ -9,6 +9,7 @@
     "preview": "vite preview",
     "test": "vitest run",
     "e2e": "node e2e/demo.mjs",
+    "e2e:features": "node e2e/features.mjs",
     "size": "node scripts/size-budget.mjs"
   },
   "dependencies": {
