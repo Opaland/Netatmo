@@ -14,6 +14,7 @@ import * as compare from './views/compare';
 import { renderLoading, renderLock } from './views/lock';
 import * as overview from './views/overview';
 import { pinSelect, pinnedTiles } from './views/pinned';
+import { toggleTerm } from './plain';
 import * as prices from './views/prices';
 import * as report from './views/report';
 import * as rooms from './views/rooms';
@@ -67,7 +68,7 @@ function render() {
         ${prices.pricesForm()}
         <button type="button" data-view="report">${icon('report')} Rapport annuel imprimable</button>
         <button type="button" data-view="settings">${icon('settings')} Paramètres et connexions</button>
-        <label class="check"><input type="checkbox" data-toggle="simple" ${state.simple ? 'checked' : ''}> Mode simple (grands caractères, l'essentiel)</label>
+        <label class="check"><input type="checkbox" data-toggle="simple" ${state.simple ? 'checked' : ''}> Mode simple (grands caractères, phrases courtes)</label>
         ${pinSelect()}
         <label class="lock-after">Verrouiller sans activité
           <select data-lock-after>${LOCK_CHOICES.map((m) => `<option value="${m}" ${m === state.lockAfter ? 'selected' : ''}>${m ? (m < 60 ? `après ${m} min` : `après ${m / 60} h`) : 'jamais sur cet appareil'}</option>`).join('')}</select>
@@ -161,6 +162,12 @@ app.addEventListener('click', async (e) => {
   if (btn.dataset.set) return setState({ [btn.dataset.set]: btn.dataset.value } as Partial<State>);
   if (btn.dataset.rooms) {
     return setState({ rooms: btn.dataset.rooms === 'all' ? null : [] });
+  }
+  // S-7.13: a glossary term of the simple mode shows its definition (and reads it aloud).
+  if (btn.dataset.term) {
+    const def = toggleTerm(btn);
+    if (def) announce(def);
+    return;
   }
   if (clickHandlers.some((h) => h(btn))) return;
   // S-9.7: long export, built locally from the decrypted data (lazy module)

@@ -3,7 +3,8 @@
 // overview.ts; every figure carries its method.
 import { addDays, dayOfYear, minusYears, total } from '../aggregate';
 import { energyCostTrve, offPeakShares, projectYear } from '../analysis';
-import { ds, rerender } from '../app';
+import { ds, rerender, state } from '../app';
+import { budgetSentences } from '../plain';
 import { periodAt } from '../offers';
 import {
   CO2_DEFAULT,
@@ -55,7 +56,14 @@ export function fillOverview() {
   put('grid-zone', gridCard());
   const b = yearBudget();
   const tile = document.getElementById('budget-kpi');
-  if (tile && b) {
+  if (tile && b && state.simple) {
+    // S-7.13: plain language in the simple mode
+    const p = budgetSentences(b.over, b.gap, b.budget);
+    tile.hidden = false;
+    tile.innerHTML = html`<h3>Budget ${b.year} : ${b.over ? 'dépassement prévu' : 'marge prévue'}</h3>
+      <p class="kpi-value">${p.value}</p>
+      <p class="kpi-sub">${p.sub}</p>`;
+  } else if (tile && b) {
     tile.hidden = false;
     tile.innerHTML = html`<h3>Budget ${b.year}</h3>
       <p class="kpi-value">${signedEur(b.gap)}</p>

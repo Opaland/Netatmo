@@ -350,9 +350,13 @@ data/               données chiffrées, écrites par la collecte (créé au pre
 web/                application PWA (Vite + TypeScript + ECharts)
   public/demo/      données de démonstration chiffrées (phrase « demo »)
 docs/               notes sur l'API, étude de l'existant, feuille de route, règles du projet (PROJET.md)
-  etudes/           études « faut-il le faire ? » (volets Wiser, plateforme domotique)
+  etudes/           études « faut-il le faire ? » (volets Wiser, plateforme domotique, Home Assistant
+                    et Zigbee, module intérieur de la station)
+  design/           inventaire de l'interface (couleurs, typographie, composants), base du design system
+  revues-agents/    consignes des revues de code et design par agents (à chaque version)
   bmad/             cadrage BMAD : brief, revue 50 personas, PRD, architecture, epics, QA
-.github/workflows/  CI, collecte quotidienne, déploiement GitHub Pages
+.github/workflows/  CI, collecte quotidienne, déploiement GitHub Pages, revue par agents (à la demande)
+scripts/            outils ponctuels (jours Tempo, constats de revue → issues)
 ```
 
 ## Sécurité
@@ -400,6 +404,7 @@ le déploiement (onglet Actions, conservé un jour) : décompresser le zip puis
 ## Gestion du projet
 
 Le projet suit la méthode BMAD : voir [`docs/PROJET.md`](docs/PROJET.md) (cycle issue → branche → PR →
-CI → fusion, étiquettes, jalons, revue 50 personas à chaque version, définition de « fini »). Le travail
+CI → fusion, étiquettes, jalons, revue multi-personas et revues de code et design par agents à chaque
+version, définition de « fini »). Le travail
 à venir est dans les [issues](https://github.com/Opaland/Netatmo/issues), rangées par jalon ; l'historique
 des versions dans [`CHANGELOG.md`](CHANGELOG.md).

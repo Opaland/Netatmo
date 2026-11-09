@@ -990,6 +990,43 @@ body.is-simple .kpi-value {
   border-color: var(--accent);
 }
 
+/* S-7.13: glossary terms of the simple mode (touch to read the definition) */
+.term {
+  border: 0;
+  background: none;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  text-decoration: underline dotted;
+  text-underline-offset: 0.2em;
+  cursor: help;
+}
+.term[aria-expanded='true'] {
+  text-decoration-style: solid;
+}
+.term-def {
+  font-style: italic;
+}
+.glossary {
+  margin: 0 0 12px;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-1);
+}
+.glossary ul {
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 10px;
+}
+.glossary .term {
+  min-height: 44px;
+  text-align: left;
+  font-weight: 600;
+}
+
 /* ---------------------------------------------------------------- swipe (S-7.11) */
 .top,
 .tabs {
