@@ -550,7 +550,7 @@ try {
     if (name === 'mobile-clair') {
       // S-7.11: swipe on the header changes the period (Accueil), on the tab bar the tab.
       await go(page, 'accueil');
-      const period = () => page.$eval('select[data-set=period]', (s) => s.value);
+      const period = () => page.$eval('.periodbar [aria-checked=true]', (b) => b.dataset.value);
       const before = await period();
       await swipe(page, '.top .title', 120);
       const older = await period();

@@ -181,17 +181,23 @@ function tooltip(price: number | null, showTotal: boolean, unit = 'kWh', series:
         params as { seriesName: string; seriesIndex: number; dataIndex: number; value: number | null; color: string; axisValueLabel: string }[]
       ).filter((p) => p.value !== null && p.value !== undefined);
       if (!list.length) return '';
+      // #311: a series in another unit (outdoor temperature over kWh bars) is shown with its unit, out of the total
+      const own = (p: { seriesIndex: number }) => {
+        const u = series[p.seriesIndex]?.unit;
+        return u && u !== unit ? u : null;
+      };
       const rows = list
         .map(
           (p) =>
-            `<div class="tt-row"><span class="tt-key" style="background:${p.color}"></span><strong>${fmt(p.value!)}</strong><span class="tt-name">${escapeHtml(p.seriesName)}</span></div>${note(series[p.seriesIndex]?.notes?.[p.dataIndex])}`,
+            `<div class="tt-row"><span class="tt-key" style="background:${p.color}"></span><strong>${own(p) ? `${nf1.format(p.value!)} ${own(p)}` : fmt(p.value!)}</strong><span class="tt-name">${escapeHtml(p.seriesName)}</span></div>${note(series[p.seriesIndex]?.notes?.[p.dataIndex])}`,
         )
         .join('');
-      const sum = list.reduce((s, p) => s + (p.value ?? 0), 0);
+      const counted = list.filter((p) => !own(p));
+      const sum = counted.reduce((s, p) => s + (p.value ?? 0), 0);
       const totalRow =
-        showTotal && list.length > 1
+        showTotal && counted.length > 1
           ? `<div class="tt-row tt-total"><strong>${fmtKwh(sum)}</strong><span class="tt-name">Total${price ? ` · ≈ ${nf0.format(sum * price)} €` : ''}</span></div>`
-          : price && list.length === 1
+          : price && counted.length === 1
             ? `<div class="tt-row tt-total"><span class="tt-name">≈ ${nf0.format(sum * price)} €</span></div>`
             : '';
       return `<div class="tt"><div class="tt-title">${escapeHtml(list[0].axisValueLabel)}</div>${note(notes?.[list[0].dataIndex])}${rows}${totalRow}</div>`;
@@ -243,6 +249,10 @@ export function barChart(
     partial?: boolean[];
     /** #297: per bucket, a caveat under the tooltip title. */
     notes?: (string | null)[];
+    /** #311: a dashed line on a right axis, in its own unit (outdoor temperature over the kWh). */
+    line?: Series & { unit: string };
+    /** #311: false when the card draws its own legend (series, hatching, line). */
+    legend?: boolean;
   },
 ) {
   const surface = cssVar('--surface-card');
@@ -260,13 +270,30 @@ export function barChart(
       : s.data;
   const n = opts.series.length;
   const chart = instance(el);
-  describe(el, opts.labels, opts.series, opts.unit);
+  const all = opts.line ? [...opts.series, opts.line] : opts.series;
+  describe(el, opts.labels, all, opts.unit);
+  const ax = axes(opts.labels, el);
+  const line = opts.line;
   chart.setOption(
     {
       animationDuration: 300,
-      ...axes(opts.labels, el),
-      legend: legend(opts.series),
-      tooltip: tooltip(opts.price, opts.stacked && !opts.unit, opts.unit, opts.series, opts.notes),
+      ...ax,
+      ...(opts.legend === false ? { grid: { ...ax.grid, top: 12 } } : {}),
+      ...(line
+        ? {
+            yAxis: [
+              ax.yAxis,
+              {
+                type: 'value' as const,
+                scale: true,
+                splitLine: { show: false },
+                axisLabel: { formatter: (v: number) => `${nf0.format(v)} ${line.unit}` },
+              },
+            ],
+          }
+        : {}),
+      legend: opts.legend === false ? { show: false } : legend(all),
+      tooltip: tooltip(opts.price, opts.stacked && !opts.unit, opts.unit, all, opts.notes),
       dataZoom: opts.zoom ? [{ type: 'inside', minValueSpan: 6 }] : [],
       series: opts.series.map((s, i) => ({
         type: 'bar',
@@ -284,7 +311,24 @@ export function barChart(
           decal: decal(i),
         },
         emphasis: { focus: 'none', itemStyle: { opacity: 0.85 } },
-      })),
+      })).concat(
+        line
+          ? [
+              {
+                type: 'line',
+                name: line.name,
+                data: line.data,
+                yAxisIndex: 1,
+                showSymbol: true,
+                symbolSize: 4,
+                connectNulls: false,
+                lineStyle: { width: 2, type: 'dashed', color: line.color },
+                itemStyle: { color: line.color },
+                z: 3,
+              } as never,
+            ]
+          : [],
+      ),
     },
     { notMerge: true },
   );

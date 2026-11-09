@@ -1744,6 +1744,61 @@ code.hash {
 .alert p {
   margin: 0;
 }
+.alert p + p,
+.alert p + details {
+  margin-top: var(--space-1);
+}
+
+/* ---------------------------------------------------------------- Accueil (#311) */
+.card-head .sub {
+  font-size: var(--font-sm);
+  color: var(--text-muted);
+}
+.card-foot {
+  margin: var(--space-3) 0 0;
+}
+.verdict .gauge {
+  margin-top: var(--space-3);
+}
+/* three tiles side by side down to a phone (the maquette's row), wrapping at large text */
+.home-tiles {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 6.5rem), 1fr));
+  gap: var(--space-2);
+}
+.home-tiles .kpi {
+  padding: var(--space-3);
+}
+.home-tiles .kpi-value {
+  font-size: 1.15rem;
+}
+.home-tiles .kpi-sub {
+  font-size: var(--font-xs);
+  line-height: 1.45;
+}
+.chart.home-chart {
+  height: 230px;
+}
+/* the alerts of the screen, grouped; a zone with nothing to say takes no room */
+.alerts {
+  display: grid;
+  gap: var(--space-2);
+  margin-bottom: var(--space-4);
+}
+.alerts .alert {
+  margin: 0;
+}
+.alerts > div:empty,
+.alerts:not(:has(.alert, .lazy-failed, .state)) {
+  display: none;
+}
+.alert-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-4);
+}
+#counted-card .list {
+  margin-top: var(--space-2);
+}
 /* Empty, loading, error and offline states (lazy cards use the same classes). */
 .state {
   display: grid;
