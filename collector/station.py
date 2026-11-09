@@ -152,6 +152,27 @@ class Station:
             )
         return out
 
+    def module_keys(self, modules: list[dict]) -> list[str]:
+        """Stable storage key ("m0", "m1"…) per module, kept in the encrypted station document
+        under "ids" (module id → key). The first time, keys follow the current API order, which
+        is how they were assigned before; a module added later gets the next free key, so it
+        never takes over the history of another one, whatever its place in the API list."""
+        station = self.store.doc("station")
+        ids: dict[str, str] = dict(station.get("ids") or {})
+        uid = lambda m: m["module"] or m["id"]  # noqa: E731
+        if not ids:
+            ids = {uid(m): f"m{i}" for i, m in enumerate(modules)}
+        used = set(ids.values())
+        n = 0
+        for m in modules:
+            if uid(m) not in ids:
+                while f"m{n}" in used:
+                    n += 1
+                ids[uid(m)] = f"m{n}"
+                used.add(f"m{n}")
+        self.store.set_top("station", "ids", ids)
+        return [ids[uid(m)] for m in modules]
+
     def _daily(self, device: str, module: str | None, types: str, begin: int, end: int) -> list[tuple[int, list]]:
         out = []
         start = begin
@@ -186,8 +207,7 @@ class Station:
         outdoor_days = 0
         names = {}
         modules = self.modules()
-        for i, m in enumerate(modules):
-            key = f"m{i}"
+        for key, m in zip(self.module_keys(modules), modules, strict=True):
             indoor = m["type"] in ("NAMain", "NAModule4")
             names[key] = {"name": m["name"], "type": m["type"], "indoor": indoor}
             types = "min_temp,max_temp,temperature,humidity" + (",co2" if indoor else "")
@@ -255,11 +275,10 @@ class Station:
         modules = modules if modules is not None else self.modules()
         now = int(now if now is not None else time.time())
         n = 0
-        for i, m in enumerate(modules):
+        for key, m in zip(self.module_keys(modules), modules, strict=True):
             types = HOURLY_TYPES.get(m["type"])
             if not types:  # wind, rain: no temperature
                 continue
-            key = f"m{i}"
             indoor = "co2" in types
             last = self._last_hour(key, zone)
             begin = now - HOURLY_DAYS_BACKFILL * DAY
