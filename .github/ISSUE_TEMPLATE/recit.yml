@@ -1,0 +1,33 @@
+name: Récit utilisateur
+description: Une fonctionnalité, décrite du point de vue d'un utilisateur (méthode BMAD)
+labels: ["récit"]
+body:
+  - type: textarea
+    id: recit
+    attributes:
+      label: Récit
+      placeholder: En tant que …, je veux …, afin de …
+    validations:
+      required: true
+  - type: textarea
+    id: criteres
+    attributes:
+      label: Critères d'acceptation (Given / When / Then)
+      placeholder: "- Given … When … Then …"
+    validations:
+      required: true
+  - type: dropdown
+    id: taille
+    attributes:
+      label: Taille
+      options: ["S (≤ ½ jour)", "M (1-2 jours)", "L (> 2 jours)"]
+  - type: dropdown
+    id: priorite
+    attributes:
+      label: Priorité (MoSCoW)
+      options: ["Must", "Should", "Could"]
+  - type: input
+    id: personas
+    attributes:
+      label: Personas concernés
+      placeholder: "ex. 3, 12, 47 (voir docs/bmad/02-revue-50-personas.md)"

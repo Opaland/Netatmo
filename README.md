@@ -197,7 +197,7 @@ tests/              tests du collecteur (API simulée, aucun appel réseau)
 data/               données chiffrées, écrites par la collecte (créé au premier lancement)
 web/                application PWA (Vite + TypeScript + ECharts)
   public/demo/      données de démonstration chiffrées (phrase « demo »)
-docs/               notes sur l'API, étude de l'existant, feuille de route
+docs/               notes sur l'API, étude de l'existant, feuille de route, règles du projet (PROJET.md)
   bmad/             cadrage BMAD : brief, revue 50 personas, PRD, architecture, epics, QA
 .github/workflows/  CI, collecte quotidienne, déploiement GitHub Pages
 ```
@@ -208,3 +208,10 @@ docs/               notes sur l'API, étude de l'existant, feuille de route
 - Données : AES-256-GCM, clé dérivée par PBKDF2-SHA256 (600 000 itérations). Le sel est public
   (`data/keyinfo.json`), c'est normal.
 - Le site ne contacte aucun service tiers et n'envoie rien : il lit les fichiers chiffrés du dépôt.
+
+## Gestion du projet
+
+Le projet suit la méthode BMAD : voir [`docs/PROJET.md`](docs/PROJET.md) (cycle issue → branche → PR →
+CI → fusion, étiquettes, jalons, revue 50 personas à chaque version, définition de « fini »). Le travail
+à venir est dans les [issues](https://github.com/Opaland/Netatmo/issues), rangées par jalon ; l'historique
+des versions dans [`CHANGELOG.md`](CHANGELOG.md).
