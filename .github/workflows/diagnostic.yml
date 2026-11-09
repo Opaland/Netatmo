@@ -17,6 +17,10 @@ on:
         description: "Inventaire des données Intuis et Linky : champs, types, échelles, profondeur (S-1.19)"
         type: boolean
         default: false
+      qualite:
+        description: "Bilan qualité des données (archive chiffrée : nombres par mois, sans valeurs ni noms, S-1.32)"
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -33,6 +37,8 @@ jobs:
       # (a compromised package would run here). The collector runs from the checkout, not installed.
       - run: pip install --require-hashes -r requirements-lock.txt
       - name: Diagnostic
+        # Skipped when only « Bilan qualité » is checked (it needs no Intuis call).
+        if: ${{ !inputs.qualite || inputs.history || inputs.probe_history || inputs.inventory }}
         env:
           INTUIS_USERNAME: ${{ secrets.INTUIS_USERNAME }}
           INTUIS_PASSWORD: ${{ secrets.INTUIS_PASSWORD }}
@@ -44,3 +50,10 @@ jobs:
           ENEDIS_TOKEN: ${{ inputs.inventory && secrets.ENEDIS_TOKEN || '' }}
           ENEDIS_PRM: ${{ inputs.inventory && secrets.ENEDIS_PRM || '' }}
         run: python -m collector diagnose ${{ inputs.history && '--history' || '' }} ${{ inputs.probe_history && '--probe-history' || '' }} ${{ inputs.inventory && '--inventory' || '' }}
+      # S-1.32 (#336): reads data/ from the checkout, no API call. DATA_PASSPHRASE only in this step and
+      # only when the box is checked; the command prints counts only (redact.register hides the value).
+      - name: Bilan qualité des données
+        if: ${{ inputs.qualite }}
+        env:
+          DATA_PASSPHRASE: ${{ inputs.qualite && secrets.DATA_PASSPHRASE || '' }}
+        run: python -m collector diagnose --qualite

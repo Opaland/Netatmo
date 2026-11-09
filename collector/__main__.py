@@ -59,6 +59,9 @@ def cmd_discover(s: Settings, args: argparse.Namespace) -> None:
 def cmd_diagnose(s: Settings, args: argparse.Namespace) -> None:
     from .diagnose import history, history_deep, inventory, probe_history, run
 
+    if args.qualite:  # S-1.32 #336: counts read from the encrypted archive, no API call
+        cmd_quality(s)
+        return
     if args.inventory:  # S-1.19: every configured source, Intuis optional
         has_intuis = all((s.username, s.password, s.client_id, s.client_secret))
         inventory(s, IntuisClient(s) if has_intuis else None)
@@ -71,6 +74,21 @@ def cmd_diagnose(s: Settings, args: argparse.Namespace) -> None:
         history_deep(client)
     else:
         run(client, status_only=args.status)
+
+
+def cmd_quality(s: Settings) -> None:
+    """Data-quality report of data/ (counts only, safe for a public log)."""
+    from .crypto import DecryptError
+    from .quality import report
+
+    s.require("passphrase")
+    if not (s.data_dir / "keyinfo.json").is_file():
+        raise SystemExit("Bilan qualité : aucune archive chiffrée (keyinfo.json absent).")
+    try:
+        lines = report(Store(s.data_dir, s.passphrase))
+    except DecryptError as err:
+        raise SystemExit("Bilan qualité : déchiffrement impossible (DATA_PASSPHRASE ?).") from err
+    print("\n".join(lines))
 
 
 def _flag(name: str) -> bool:
@@ -813,6 +831,11 @@ def main(argv: list[str] | None = None) -> None:
         "--inventory",
         action="store_true",
         help="inventaire des champs, types de mesure, échelles et profondeur par source (S-1.19)",
+    )
+    dg.add_argument(
+        "--qualite",
+        action="store_true",
+        help="bilan qualité de l'archive chiffrée, par mois : nombres seulement (S-1.32, DATA_PASSPHRASE)",
     )
     sn = sub.add_parser("snapshot", help="relevé horaire chiffré de l'état des pièces (S-13.2)")
     sn.add_argument("--out", required=True, metavar="DOSSIER")

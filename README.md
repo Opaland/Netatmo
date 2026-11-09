@@ -491,6 +491,7 @@ python -m collector discover
 | `python -m collector diagnose [--history]` | Diagnostic anonyme de l'API (modules, types de mesure, profondeur, noms des champs de `homestatus`) |
 | `python -m collector diagnose --status` | Seulement les noms des champs des pièces et modules de `homestatus` (fenêtre ouverte ?) |
 | `python -m collector diagnose --probe-history` | Types de mesure candidats pour un historique des fenêtres / du boost : accepté ou refusé, nombre de points (S-13.1) |
+| `python -m collector diagnose --qualite` | Bilan qualité de l'archive chiffrée (`DATA_PASSPHRASE`), par année et par mois : jours réels / estimés / manquants / suspects (chauffage en pièces-jours, chauffe-eau), Linky jour, couverture des demi-heures (Linky, pièces) et du relevé horaire, jours de station par module, recoupement Linky / Intuis, plus long trou de l'année. Nombres seulement, aucune valeur ni nom (S-1.32). Workflow **Diagnostic**, case « Bilan qualité des données » |
 | `python -m collector snapshot --out DOSSIER` | Un relevé chiffré de l'état des pièces (utilisé par le workflow « Relevé horaire ») |
 | `python -m collector restore-backup FICHIER [--dry-run]` | Restaure dans `data/` une sauvegarde chiffrée téléchargée depuis l'appli |
 | `python -m collector demo` | Régénère les données de démonstration |
