@@ -12,6 +12,7 @@
     "e2e:features": "node e2e/features.mjs",
     "e2e:composants": "node e2e/composants.mjs",
     "e2e:compteur": "node e2e/compteur.mjs",
+    "e2e:piece": "node e2e/piece.mjs",
     "size": "node scripts/size-budget.mjs"
   },
   "dependencies": {

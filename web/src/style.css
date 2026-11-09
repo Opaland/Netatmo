@@ -585,8 +585,57 @@ body:not(.is-simple) .kpis .kpi-value {
   margin-bottom: var(--space-4);
   border-radius: var(--radius-lg);
 }
-.card.sim {
+.card.sim,
+.sim-page .card {
   border-style: dashed;
+}
+.sim-note {
+  margin: 0 0 var(--space-3);
+  font-size: var(--font-sm);
+  color: var(--text-muted);
+}
+/* #318 / #336: État des données, year by year and source by source */
+.year-verdict {
+  padding: var(--space-3) 0;
+  border-top: 1px solid var(--border);
+}
+.year-verdict h3 {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-2);
+  margin: 0 0 var(--space-1);
+}
+.year-verdict ul,
+.source-quality .gaps {
+  margin: var(--space-2) 0 0;
+  padding-left: var(--space-4);
+}
+.year-verdict li,
+.source-quality .gaps li {
+  margin-bottom: var(--space-2);
+  overflow-wrap: anywhere;
+}
+.year-verdict.good .tag.level {
+  background: var(--state-good-soft);
+  color: var(--state-good);
+}
+.year-verdict.fair .tag.level {
+  background: var(--state-warn-soft);
+  color: var(--state-warn);
+}
+.year-verdict.poor .tag.level {
+  background: var(--state-bad-soft);
+  color: var(--state-bad);
+}
+.source-quality {
+  margin-top: var(--space-4);
+}
+.source-quality h3 {
+  margin: 0 0 var(--space-2);
+}
+.source-quality .gaps p {
+  margin: 0;
 }
 .card.off {
   background: var(--surface-sunken);
@@ -1926,7 +1975,8 @@ code.hash {
   bottom: 0;
 }
 .sched .hc {
-  background: repeating-linear-gradient(135deg, var(--accent-soft) 0 6px, transparent 6px 12px);
+  /* #313: --accent-text stripes, ≥ 3:1 on the lane in light and dark (accent-soft was too faint) */
+  background: repeating-linear-gradient(135deg, var(--accent-text) 0 2px, transparent 2px 6px);
 }
 .sched .comfort {
   inset-block: 6px !important;
@@ -2004,5 +2054,51 @@ code.hash {
   }
   #bd-parts .row > span:last-child:empty {
     display: none;
+  }
+}
+/* #313: comfort pill of the Pièces list, cold days of a room. */
+.pill {
+  display: inline-block;
+  padding: 0 var(--space-2);
+  border-radius: var(--radius-full);
+  font-size: var(--font-xs);
+  font-weight: 600;
+  line-height: 1.6;
+  white-space: nowrap;
+}
+.pill.ok {
+  background: var(--state-good-soft);
+  color: var(--state-good);
+}
+.pill.warn {
+  background: var(--state-warn-soft);
+  color: var(--state-warn);
+}
+.row .v .s {
+  font-weight: 400;
+}
+.cold-days {
+  margin: 0;
+  padding-left: 1.2em;
+  display: grid;
+  gap: var(--space-2);
+}
+/* the facts of a room page: label over value, never squeezed at 360 px or with text at 200 % */
+#piece-now .now dl {
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 10rem), 1fr));
+  gap: var(--space-3);
+}
+#piece-now .now dl > div {
+  min-width: 0;
+}
+#piece-now .now dd {
+  overflow-wrap: anywhere;
+}
+.now ~ .section-title {
+  margin-top: var(--space-4);
+}
+@media (forced-colors: active) {
+  .pill {
+    border: 1px solid CanvasText;
   }
 }
