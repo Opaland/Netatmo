@@ -18,6 +18,7 @@ import {
   table,
   yearColor,
 } from '../ui';
+import { html } from '../trusted';
 
 export function renderRooms(view: HTMLElement, records: DayRecord[]) {
   const years = ds!.meta.years;
@@ -35,7 +36,7 @@ export function renderRooms(view: HTMLElement, records: DayRecord[]) {
   const thr = state.comfortThreshold;
   const thrLabel = `${thr.toString().replace('.', ',')} °C`;
 
-  view.innerHTML = `
+  view.innerHTML = html`
   <section class="card">
     <div class="card-head">
       <h2>Par pièce <small class="muted">kWh</small></h2>

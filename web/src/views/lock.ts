@@ -3,10 +3,11 @@ import { app, rerender, setDataset } from '../app';
 import { disposeAll, escapeHtml as esc } from '../charts';
 import { WrongPassphrase } from '../crypto';
 import { type Source, load, rememberKey, unlock } from '../data';
+import { html } from '../trusted';
 
 export function renderLock(message = '', hasRealData = true) {
   disposeAll(app);
-  app.innerHTML = `
+  app.innerHTML = html`
   <main class="lock">
     <div class="lock-card">
       <img src="icons/icon.svg" alt="" width="64" height="64">
@@ -53,7 +54,7 @@ async function open(source: Source, pass: string, remember: boolean) {
 
 export function renderLoading() {
   disposeAll(app);
-  app.innerHTML = `<div class="skeleton" aria-busy="true" aria-live="polite">
+  app.innerHTML = html`<div class="skeleton" aria-busy="true" aria-live="polite">
     <span class="sr-only">Chargement et déchiffrement des données…</span>
     <div class="sk sk-title"></div><div class="sk sk-card"></div>
     <div class="kpis"><div class="sk sk-kpi"></div><div class="sk sk-kpi"></div><div class="sk sk-kpi"></div></div>

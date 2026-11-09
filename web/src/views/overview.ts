@@ -40,6 +40,7 @@ import {
   tableToggle,
 } from '../ui';
 import { qualityCard, uncertainBuckets, uncertainDays } from './quality';
+import { html } from '../trusted';
 
 function kpi(label: string, from: string, to: string, records: DayRecord[], cls = '') {
   const now = total(records, from, to);
@@ -81,7 +82,7 @@ export function renderOverview(view: HTMLElement, records: DayRecord[]) {
     .filter((c) => byCat.get(c))
     .map((c) => ({ c, v: byCat.get(c)!, p: (byCat.get(c)! / periodTotal) * 100 }));
 
-  view.innerHTML = `
+  view.innerHTML = html`
   ${verdictCard(records, monthStart, last)}
   <div id="grid-zone"></div>
   <section class="kpis">
@@ -137,14 +138,14 @@ export function renderOverview(view: HTMLElement, records: DayRecord[]) {
   const labels = set.keys.map((k) => bucketLabel(k, state.gran));
   const muted = uncertainBuckets(records, set.keys, from, to);
   barChart(document.getElementById('main-chart')!, { labels, series: ser, stacked: true, price: avgPrice(), zoom: labels.length > 60, muted });
-  document.getElementById('main-table')!.innerHTML = tableToggle(
+  document.getElementById('main-table')!.innerHTML = html(tableToggle(
     table(
       ['Période', ...ser.map((s) => s.name), 'Total'],
       labels
         .map((l, i) => [esc(l), ...ser.map((s) => s.data[i] ?? 0), ser.reduce((a, s) => a + (s.data[i] ?? 0), 0)])
         .reverse(),
     ),
-  );
+  ));
 }
 
 function estimatedNote(records: DayRecord[], from: string, to: string) {
@@ -227,8 +228,7 @@ function drawLinky() {
   const sum = (m: Map<string, number>) => keys.reduce((s, k) => s + (m.get(k) ?? 0), 0);
   const tot = sum(home);
   if (tot > 0) {
-    document.getElementById('linky-summary')!.innerHTML =
-      `Sur 12 mois : chauffage <strong>${nf0.format((sum(heat) / tot) * 100)} %</strong>, chauffe-eau <strong>${nf0.format((sum(water) / tot) * 100)} %</strong>, autres usages <strong>${nf0.format(Math.max(0, 1 - (sum(heat) + sum(water)) / tot) * 100)} %</strong> de ${fmtKwh(tot)} relevés par le compteur.`;
+    document.getElementById('linky-summary')!.innerHTML = html`Sur 12 mois : chauffage <strong>${nf0.format((sum(heat) / tot) * 100)} %</strong>, chauffe-eau <strong>${nf0.format((sum(water) / tot) * 100)} %</strong>, autres usages <strong>${nf0.format(Math.max(0, 1 - (sum(heat) + sum(water)) / tot) * 100)} %</strong> de ${fmtKwh(tot)} relevés par le compteur.`;
   }
   drawPmax();
   barChart(el, {
@@ -267,7 +267,7 @@ function drawPmax() {
   const kva = periodAt(contracts(), lastDay())?.kva;
   if (peak && kva) {
     const margin = kva - peak.max;
-    document.getElementById('pmax-summary')!.innerHTML = `Sur 12 mois, pic de <strong>${peak.max.toFixed(1).replace('.', ',')} kVA</strong> le ${longDate(peak.day)}, pour ${kva} kVA souscrits. ${
+    document.getElementById('pmax-summary')!.innerHTML = html`Sur 12 mois, pic de <strong>${peak.max.toFixed(1).replace('.', ',')} kVA</strong> le ${longDate(peak.day)}, pour ${kva} kVA souscrits. ${
       margin > 3.5
         ? 'Marge confortable : une puissance inférieure pourrait suffire (abonnement moins cher), à confirmer sur un hiver très froid.'
         : margin < 0.5

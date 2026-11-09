@@ -6,6 +6,7 @@ import { ds } from '../app';
 import { referenceSeason, roomShares, simulateSetpoint } from '../checks';
 import { activeRooms, esc, fmtEur, fmtKwh, lastDay, nf0, offCol, table } from '../ui';
 import { currentHcHp } from './waterheater';
+import { html } from '../trusted';
 
 let dT = -1; // °C, negative = lower setpoint (kept while the app is open)
 
@@ -46,18 +47,18 @@ export function drawSetpoint(records: DayRecord[]) {
   const show = () => {
     document.getElementById('sp-value')!.textContent = `${signed(dT)} °C`;
     if (dT === 0) {
-      zone.innerHTML = '<p class="hint muted">Déplacez le curseur pour simuler une consigne plus basse (à gauche) ou plus haute (à droite).</p>';
+      zone.innerHTML = html('<p class="hint muted">Déplacez le curseur pour simuler une consigne plus basse (à gauche) ou plus haute (à droite).</p>');
       return;
     }
     const sim = simulateSetpoint(ds!.weather!, ref.from, ref.to, ref.fit, dT, ref.season);
     if (!sim) {
-      zone.innerHTML = '<p class="hint muted">Signature insuffisante pour simuler.</p>';
+      zone.innerHTML = html('<p class="hint muted">Signature insuffisante pour simuler.</p>');
       return;
     }
     const gain = sim.savedKwh >= 0;
     const eur = price !== null ? Math.abs(sim.savedKwh) * price : null;
     const gap = Math.abs(sim.pct) - Math.abs(sim.ademePct);
-    zone.innerHTML = `<div class="verdict verdict-${gain ? 'low' : 'high'}">
+    zone.innerHTML = html`<div class="verdict verdict-${gain ? 'low' : 'high'}">
       <span class="verdict-icon" aria-hidden="true">${gain ? '▼' : '▲'}</span>
       <div><p class="verdict-title">${gain ? 'Économie' : 'Surcoût'} estimé${gain ? 'e' : ''} : ${fmtKwh(Math.abs(sim.savedKwh))} (${nf0.format(Math.abs(sim.pct))} %)${eur !== null ? ` · ${fmtEur(eur)}` : ''} sur la saison</p>
       <p class="verdict-sub">Saison ${esc(sim.season.replace('-', '–'))} : pente ${num1(sim.slope)} kWh/°C, plus de chauffage au-dessus de ${num1(sim.balance)} °C, qui passerait à ${num1(sim.balance + dT)} °C. Chauffage modélisé ${fmtKwh(sim.modelKwh)} → ${fmtKwh(sim.newKwh)}${price !== null ? `, à ${num1(price * 100)} c€/kWh (prix actuels)` : ''}.</p></div>

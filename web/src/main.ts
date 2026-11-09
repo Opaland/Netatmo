@@ -15,6 +15,7 @@ import * as prices from './views/prices';
 import * as report from './views/report';
 import * as rooms from './views/rooms';
 import * as settings from './views/settings';
+import { html } from './trusted';
 import './style.css';
 
 // ------------------------------------------------------------------ shell
@@ -44,7 +45,7 @@ function render() {
     ['comfort', 'Confort'],
   ];
   const roomsCount = state.rooms ? state.rooms.length : activeRooms().length;
-  app.innerHTML = `
+  app.innerHTML = html`
   <header class="top">
     <div class="title">
       <h1>${esc(meta.home.name)}${ds.source === 'demo' ? ' <span class="badge">démo</span>' : ''}</h1>
@@ -91,7 +92,7 @@ function render() {
   const view = document.getElementById('view')!;
   const records = filtered();
   if (!records.length && state.view !== 'settings' && state.view !== 'comfort') {
-    view.innerHTML = `<p class="empty">Aucune donnée pour cette sélection.</p>`;
+    view.innerHTML = html`<p class="empty">Aucune donnée pour cette sélection.</p>`;
   } else if (state.view === 'overview') overview.renderOverview(view, records);
   else if (state.view === 'compare') compare.renderCompare(view, records);
   else if (state.view === 'analyse') analyse.renderAnalyse(view, records);
@@ -109,14 +110,14 @@ setRenderer(render);
 let comfort: typeof import('./views/comfort') | null = null;
 function renderComfort(view: HTMLElement) {
   if (comfort) return comfort.renderComfort(view);
-  view.innerHTML = '<p class="empty">Chargement…</p>';
+  view.innerHTML = html('<p class="empty">Chargement…</p>');
   import('./views/comfort')
     .then((m) => {
       comfort = m;
       if (state.view === 'comfort') render();
     })
     .catch(() => {
-      view.innerHTML = '<p class="empty">Vue indisponible hors ligne : elle se chargera au prochain accès réseau.</p>';
+      view.innerHTML = html('<p class="empty">Vue indisponible hors ligne : elle se chargera au prochain accès réseau.</p>');
     });
 }
 
