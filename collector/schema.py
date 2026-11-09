@@ -173,3 +173,7 @@ OPEN_METEO_DAILY = {
         "temperature_2m_mean": [(int, float, type(None))],
     }
 }
+
+# Shelly Cloud (S-1.17): legacy form API envelope, and the v2 list of device states.
+SHELLY_V1 = {"isok": bool, "data": Optional(AnyOf(dict, list, type(None))), "errors": Optional(AnyOf(dict, list))}
+SHELLY_V2_STATE = [{"id": str, "online": Optional((int, bool)), "status": Optional(dict), "settings": Optional(dict)}]

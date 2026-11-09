@@ -114,7 +114,7 @@ describe('encrypted backup bundle (S-1.15)', () => {
   it('lists every encrypted document but the Netatmo token', () => {
     const names = backupNames(meta);
     expect(names).toEqual(
-      expect.arrayContaining(['meta.enc.json', '2025.enc.json', '2026.hourly.enc.json', '2026.station_h.enc.json', '2026.linky30.enc.json', 'linky.enc.json']),
+      expect.arrayContaining(['meta.enc.json', '2025.enc.json', '2026.hourly.enc.json', '2026.station_h.enc.json', '2026.linky30.enc.json', 'linky.enc.json', 'shelly.enc.json', 'ha.enc.json']),
     );
     expect(names.some((n) => n.includes('netatmo-token'))).toBe(false);
   });
