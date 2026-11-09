@@ -273,7 +273,7 @@ function nowCard(
       })}${legend([
         { label: `Confort ${fmt1(sched.comfort)} °C`, color: '--usage-heating' },
         { label: `Économie ${fmt1(sched.eco)} °C`, color: '--usage-other' },
-        ...(off.length ? [{ label: 'Heures creuses', color: '--accent', kind: 'hatch' as const }] : []),
+        ...(off.length ? [{ label: 'Heures creuses', color: '--accent-text', kind: 'hatch' as const }] : []),
       ])}<p class="hint muted">Lu dans les températures demandées de la journée, demi-heure par demi-heure.</p>`;
     }
   } else {
@@ -348,12 +348,15 @@ function tilesRow(
         tile({
           label: 'Temps à la consigne',
           value: `${nf0.format(at.share * 100)} %`,
-          sub: esc(`part des heures où la pièce était à la température demandée (à 0,5 °C près) · ${PERIOD['30d'].toLowerCase()}`),
+          sub: esc(PERIOD['30d']),
           id: 'piece-at-setpoint',
         }),
       );
   }
-  return `<section class="kpis" aria-label="Chiffres clés">${tiles.join('')}</section>`;
+  const note = tiles.some((t) => t.includes('piece-at-setpoint'))
+    ? `<p class="hint muted" id="piece-at-setpoint-def">Temps à la consigne : part des heures où la pièce était à la température demandée aux radiateurs, à 0,5 °C près (hors hors-gel).</p>`
+    : '';
+  return `<section class="kpis" aria-label="Chiffres clés">${tiles.join('')}</section>${note}`;
 }
 
 // ------------------------------------------------------------------ temperature chart

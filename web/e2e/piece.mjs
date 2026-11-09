@@ -105,7 +105,7 @@ try {
     check((await page.locator('#piece-now .sched').count()) === 1, `${name} : planning du jour absent`);
     check(/jusqu’à \d+ h/.test(text), `${name} : mode sans « jusqu'à »`);
     check(/vs \d{4} à date/.test(await page.locator('#piece-cost').innerText()), `${name} : coût sans comparaison nommée`);
-    check(/Temps à la consigne/.test(text) && /température demandée/.test(await page.locator('#piece-at-setpoint').innerText()), `${name} : « temps à la consigne » sans définition`);
+    check(/Temps à la consigne/.test(text) && /température demandée/.test(await page.locator('#piece-at-setpoint-def').innerText()), `${name} : « temps à la consigne » sans définition`);
     check(!/tps/i.test(text), `${name} : libellé « tps » encore présent`);
     check(/Pourquoi il a fait froid/.test(text), `${name} : « Pourquoi il a fait froid » absent`);
     check((await page.locator('#piece-radiator .row').count()) >= 3, `${name} : carte Radiateur incomplète`);
