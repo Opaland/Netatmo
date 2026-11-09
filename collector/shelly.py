@@ -13,8 +13,16 @@ A counter that went down (reset on reboot / power loss) counts the new value onl
 days of an interval longer than LONG_GAP_HOURS (plug offline, missed collection) are marked
 "estimated". Beyond MAX_GAP_DAYS the interval is dropped (too vague) and counting restarts.
 
+S-1.30 (#279): clamp meters. Shelly EM Gen3 / Pro EM keep their energy in `em1data:N.total_act_energy`
+(Wh), the Pro 3EM in `emdata:N.total_act` (the returned energy `*_ret_*` is ignored). A device with
+several measuring channels gives ONE SERIES PER CHANNEL ("p2c0", "p2c1", named « Device · canal N »)
+instead of their sum, which would mean nothing (water heater + main supply). A one-channel device
+keeps its key pN, so existing plugs keep their history.
+
 Document `shelly.enc.json` (plugs are keyed p0, p1… so device ids never leave `plugs`):
-  {"plugs":     {"p0": {"id": "...", "name": "Réfrigérateur", "model": "...", "gen": "G2", "usable": true}},
+  {"plugs":     {"p0": {"id": "...", "name": "Réfrigérateur", "model": "...", "gen": "G2", "usable": true},
+                 "p2": {..., "channels": 2},                       a multi-channel device
+                 "p2c0": {"id": "...", "parent": "p2", "channel": "em1data:0", "name": "Pinces · canal 1", ...}},
    "last":      {"p0": {"ts": 1731130000, "total": 123456.7}},   reading kept for the next run
    "daily":     {"p0": {"YYYY-MM-DD": Wh}},
    "estimated": {"p0": {"YYYY-MM-DD": 1}},
@@ -51,6 +59,9 @@ MAX_GAP_DAYS = 45
 USER_AGENT = "intuis-history/1.0 (+https://github.com/Opaland/Netatmo)"
 _HOST = re.compile(r"[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)*\.shelly\.cloud")
 _CHANNEL = re.compile(r"(switch|pm1|em1):\d+")
+_EM_DATA = re.compile(r"(em1data|emdata):\d+")
+# Energy consumed (Wh) in the clamp-meter components; "*_ret_*" (returned to the grid) is ignored.
+_EM_TOTAL = {"em1data": "total_act_energy", "emdata": "total_act"}
 
 
 class ShellyError(SourceError):
@@ -72,27 +83,46 @@ def _num(v: Any) -> float | None:
     return float(v) if isinstance(v, int | float) and not isinstance(v, bool) else None
 
 
-def reading(status: dict) -> tuple[float | None, bool]:
-    """(cumulative energy in Wh or None, measures power at all) from a device status."""
-    total: float | None = None
+def channels(status: dict) -> tuple[dict[str, float], bool]:
+    """({channel: cumulative energy in Wh}, measures power at all) from a device status. Channels
+    are the components that carry an energy counter: "switch:0", "em1data:1", "emdata:0",
+    "meters:0" (Gen1, watt-minutes), "emeters:1" (Gen1 EM, Wh)."""
+    out: dict[str, float] = {}
     power = False
     for key, comp in status.items():
-        if not (isinstance(comp, dict) and _CHANNEL.fullmatch(str(key))):
+        if not isinstance(comp, dict):
             continue
-        power = power or "apower" in comp or "act_power" in comp
-        ae = comp.get("aenergy")
-        wh = _num(ae.get("total")) if isinstance(ae, dict) else None
-        if wh is not None:
-            total = (total or 0.0) + wh
+        if _CHANNEL.fullmatch(str(key)):
+            power = power or "apower" in comp or "act_power" in comp
+            ae = comp.get("aenergy")
+            wh = _num(ae.get("total")) if isinstance(ae, dict) else None
+            if wh is not None:
+                out[str(key)] = wh
+        elif _EM_DATA.fullmatch(str(key)):
+            wh = _num(comp.get(_EM_TOTAL[str(key).split(":")[0]]))
+            if wh is not None:
+                out[str(key)] = wh
     for key, factor in (("meters", 1 / 60), ("emeters", 1.0)):  # Gen1: meters in watt-minutes
-        for m in status.get(key) or []:
+        for i, m in enumerate(status.get(key) or []):
             if not isinstance(m, dict):
                 continue
             power = power or "power" in m
             v = _num(m.get("total"))
             if v is not None:
-                total = (total or 0.0) + v * factor
-    return total, power or total is not None
+                out[f"{key}:{i}"] = v * factor
+    return dict(sorted(out.items(), key=lambda kv: _channel_order(kv[0]))), power or bool(out)
+
+
+def _channel_order(name: str) -> tuple[str, int]:
+    kind, _, n = name.partition(":")
+    return kind, int(n) if n.isdigit() else 0
+
+
+def reading(status: dict) -> tuple[float | None, bool]:
+    """(cumulative energy in Wh or None, measures power at all): the sum of the channels, kept for
+    one-channel devices and the diagnostic."""
+    found, power = channels(status)
+    return (sum(found.values()) if found else None), power
 
 
 def device_time(status: dict) -> int | None:
@@ -212,6 +242,15 @@ def _inventory(api: _Api) -> dict[str, dict]:
     return {str(i): {} for i in statuses}
 
 
+def _next_key(doc: dict) -> str:
+    """Next free device key pN (channel keys "pNcM" are not devices)."""
+    used = {k for k in doc.get("plugs", {}) if re.fullmatch(r"p\d+", k)}
+    n = 0
+    while f"p{n}" in used:
+        n += 1
+    return f"p{n}"
+
+
 def collect(
     store: Store,
     auth_key: str,
@@ -225,8 +264,8 @@ def collect(
     api = _Api(http or httpx.Client(timeout=30.0, headers={"User-Agent": USER_AGENT}), base, auth_key, min_interval)
     inventory = _inventory(api)
     doc = store.doc(DOC)
-    known = {p.get("id"): k for k, p in doc.get("plugs", {}).items()}
-    counts = {"plugs": 0, "readings": 0, "offline": 0, "unusable": 0}
+    known = {p.get("id"): k for k, p in doc.get("plugs", {}).items() if "parent" not in p}
+    counts = {"plugs": 0, "readings": 0, "offline": 0, "unusable": 0, "channels": 0}
     ids = sorted(inventory)
     for i in range(0, len(ids), BATCH):
         states = schema.check(
@@ -242,11 +281,11 @@ def collect(
         )
         for st in states:
             status = st.get("status") or {}
-            total, measures = reading(status)
+            found, measures = channels(status)
             if not measures:
                 continue  # not a plug or meter (sensor, button…)
             did = st["id"]
-            key = known.get(did) or f"p{len(doc.get('plugs', {}))}"
+            key = known.get(did) or _next_key(doc)
             known[did] = key
             meta = inventory.get(did, {})
             name = meta.get("name") if isinstance(meta.get("name"), str) and meta["name"].strip() else None
@@ -255,25 +294,49 @@ def collect(
                 "name": (name or _settings_name(st.get("settings")) or f"Prise {key[1:]}").strip()[:60],
                 "model": str(meta.get("type") or st.get("code") or "")[:40],
                 "gen": str(st.get("gen") or meta.get("gen") or "")[:8],
-                "usable": total is not None,
+                "usable": bool(found),
             }
-            store.put(DOC, "plugs", key, None, plug)
+            if len(found) > 1:
+                plug["channels"] = len(found)
+            store.put(DOC, "plugs", key, None, {**(doc.get("plugs", {}).get(key) or {}), **plug})
             counts["plugs"] += 1
-            if total is None:
+            if not found:
                 counts["unusable"] += 1  # instantaneous power only: nothing to archive without a hub
                 continue
             if st.get("online") in (0, False):
                 counts["offline"] += 1
                 continue
             ts = device_time(status) or time.time()
-            add_reading(store, key, ts, total, tz)
+            if len(found) == 1:
+                add_reading(store, key, ts, next(iter(found.values())), tz)
+            else:
+                counts["channels"] += len(found)
+                for i, (channel, wh) in enumerate(found.items()):
+                    ckey = f"{key}c{i}"
+                    store.put(
+                        DOC,
+                        "plugs",
+                        ckey,
+                        None,
+                        {
+                            "id": did,
+                            "parent": key,
+                            "channel": channel,
+                            "name": f"{plug['name'][:48]} · canal {i + 1}",
+                            "model": plug["model"],
+                            "gen": plug["gen"],
+                            "usable": True,
+                        },
+                    )
+                    add_reading(store, ckey, ts, wh, tz)
             counts["readings"] += 1
     log.info(
-        "Shelly : %d prises, %d relevés, %d hors ligne, %d sans compteur",
+        "Shelly : %d prises, %d relevés, %d hors ligne, %d sans compteur, %d canaux de pinces",
         counts["plugs"],
         counts["readings"],
         counts["offline"],
         counts["unusable"],
+        counts["channels"],
     )
     return counts
 

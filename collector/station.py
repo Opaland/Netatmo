@@ -7,7 +7,10 @@ rewritten by hand.
 
 Stored: daily series per module in station.enc.json, hourly readings per year in
 YYYY.station_h.enc.json, and daily aggregates (CO₂ of the night, hours humid / cold) in
-station.enc.json. Formats: docs/api-notes.md, section « Station météo Netatmo ».
+station.enc.json. S-1.21 (#215): one health reading per module and per night,
+station["health"][key][day] = [battery %, radio or Wi-Fi signal, answering 0/1], from the
+getstationsdata response already read (no extra call); firmware changes go to devices.enc.json.
+Formats: docs/api-notes.md, section « Station météo Netatmo ».
 """
 
 from __future__ import annotations
@@ -47,6 +50,9 @@ NIGHT_START, NIGHT_END = 22, 7  # night of D = D 22:00 → D+1 07:00 (end exclud
 CO2_THRESHOLDS = (1000, 1400, 1500)  # ppm, strictly above
 HUMID_ABOVE = 65  # %, strictly above
 COLD_BELOW = 19  # °C, strictly below (indoor modules only)
+# S-1.21: low battery and silent module thresholds (documented in docs/api-notes.md).
+LOW_BATTERY = 15  # %, strictly below
+SILENT_HOURS = 6  # last_seen older than this: the module no longer reports
 
 
 class StationError(SourceError):
@@ -72,6 +78,7 @@ class Station:
         self.seed_token = seed_token
         self.http = http or httpx.Client(timeout=30.0)
         self.access = ""
+        self.health: dict[str, int] = {}
         # Gentle with the public API (50 requests / 10 s, 500 / h per user).
         self.api = Paced(self.http, "netatmo", min_interval, StationError)
 
@@ -144,6 +151,7 @@ class Station:
                 "module": None,
                 "name": main.get("module_name") or "Station",
                 "type": main.get("type", "NAMain"),
+                "health": health(main, main=True),
             }
         ]
         for m in main.get("modules", []):
@@ -153,6 +161,7 @@ class Station:
                     "module": m["_id"],
                     "name": m.get("module_name") or m.get("type"),
                     "type": m.get("type"),
+                    "health": health(m, main=False),
                 }
             )
         return out
@@ -237,6 +246,7 @@ class Station:
                 elif m["type"] == "NAMain":
                     self.store.put("weather", "indoor", day, None, r(mean))
         self.store.set_top("station", "modules", names)
+        self.health = store_health(self.store, modules, self.module_keys(modules), tz)
         self.collect_hourly(tz, modules)
         if outdoor_days:
             self.store.set_top("weather", "source", "netatmo")
@@ -303,6 +313,57 @@ class Station:
             aggregate_days(self.store, key, indoor, first, datetime.fromtimestamp(now, zone).date())
         log.info("Station Netatmo : %d relevés horaires", n)
         return n
+
+
+def _num(v: object) -> float | None:
+    return float(v) if isinstance(v, int | float) and not isinstance(v, bool) else None
+
+
+def health(m: dict, main: bool) -> dict:
+    """Battery, signal, link and firmware of one module of getstationsdata (S-1.21). The main
+    module is on mains power and Wi-Fi: no battery, `wifi_status` as signal."""
+    out: dict = {
+        "battery": None if main else _num(m.get("battery_percent")),
+        "signal": _num(m.get("wifi_status" if main else "rf_status")),
+        "reachable": m.get("reachable"),
+        "last_seen": _num(m.get("last_status_store" if main else "last_seen") or m.get("last_seen")),
+        "firmware": m.get("firmware"),
+    }
+    return out
+
+
+def store_health(
+    store: Store, modules: list[dict], keys: list[str], tz: str, now: float | None = None
+) -> dict[str, int]:
+    """One [battery %, signal, answering] per module for today; firmware changes. Counts only."""
+    from .devices import note_firmware
+
+    now = float(now if now is not None else time.time())
+    day = datetime.fromtimestamp(now, ZoneInfo(tz)).date().isoformat()
+    counts = {"low_battery": 0, "silent": 0, "firmware": 0}
+    for key, m in zip(keys, modules, strict=True):
+        h = m.get("health") or {}
+        seen = h.get("last_seen")
+        silent = h.get("reachable") is False or (seen is not None and now - seen > SILENT_HOURS * 3600)
+        battery = None if h.get("battery") is None else round(h["battery"])
+        signal = None if h.get("signal") is None else round(h["signal"])
+        if battery is None and signal is None and h.get("reachable") is None and seen is None:
+            continue
+        store.put("station", "health", key, day, [battery, signal, 0 if silent else 1])
+        counts["low_battery"] += battery is not None and battery < LOW_BATTERY
+        counts["silent"] += silent
+        counts["firmware"] += note_firmware(store, key, h.get("firmware"), day, kind=m.get("type"))
+    return counts
+
+
+def health_note(counts: dict[str, int]) -> str | None:
+    """Sources note and job summary (counts only, never a module name)."""
+    parts = []
+    if counts.get("low_battery"):
+        parts.append(f"pile faible : {counts['low_battery']} module(s)")
+    if counts.get("silent"):
+        parts.append(f"{counts['silent']} module(s) muet(s) depuis plus de {SILENT_HOURS} h")
+    return " ; ".join(parts) or None
 
 
 def local_hours(points: list, zone: ZoneInfo, indoor: bool) -> dict[str, list]:

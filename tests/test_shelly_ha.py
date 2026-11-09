@@ -100,7 +100,7 @@ def test_daily_energy_from_counter_differences_with_reset_and_gap(tmp_path):
     store = Store(tmp_path, "pw")
     # 1st night: baseline only. Fridge Wh, Gen1 plug in watt-minutes.
     counts = run(store, {"ts": ts("2025-01-10"), DEV_FRIDGE: 10_000.0, DEV_GEN1: 60_000.0})
-    assert counts == {"plugs": 3, "readings": 2, "offline": 0, "unusable": 1}
+    assert counts == {"plugs": 3, "readings": 2, "offline": 0, "unusable": 1, "channels": 0}
     doc = store.doc("shelly")
     assert {p["name"] for p in doc["plugs"].values()} == {"Réfrigérateur", "Lave-linge", "Box"}
     assert not doc.get("daily")
