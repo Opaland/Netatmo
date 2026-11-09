@@ -3,6 +3,7 @@
 // anywhere. Format documented in docs/export-long.md, JSON Schema in docs/export-long.schema.json.
 // Loaded with import() from the menu, so it does not weigh on the entry chunk.
 import type { Dataset } from './data';
+import { textCell, untextCell } from './csv';
 
 export const LONG_FORMAT = 'intuis-history-long';
 /** Bump on any incompatible change (column, metric or unit renamed), and update the schema. */
@@ -92,11 +93,10 @@ export function longDocument(ds: LongInput, generated = new Date()): LongDocumen
   };
 }
 
-/** RFC 4180: comma separator, decimal point, quotes only when needed, UTF-8 without BOM. */
+/** RFC 4180: comma separator, text cells neutralised against formulas (#235), decimal point, quotes only when needed, UTF-8 without BOM. */
 export function toLongCsv(rows: LongRow[]): string {
-  const cell = (s: string) => (/[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s);
   const lines = [LONG_COLUMNS.join(',')];
-  for (const r of rows) lines.push([r.date, r.source, cell(r.entity), r.metric, String(r.value), r.unit].join(','));
+  for (const r of rows) lines.push([r.date, r.source, textCell(r.entity, ','), r.metric, String(r.value), r.unit].join(','));
   return lines.join('\n') + '\n';
 }
 
@@ -123,7 +123,7 @@ export function parseLongCsv(text: string): LongRow[] {
   return body.map(([date, source, entity, metric, value, unit]) => ({
     date,
     source: source as LongSource,
-    entity,
+    entity: untextCell(entity),
     metric,
     value: Number(value),
     unit: unit as LongUnit,
