@@ -1,0 +1,12 @@
+# secrets locaux
+.env
+*.raw.json
+# python
+__pycache__/
+*.egg-info/
+.venv/
+.pytest_cache/
+.ruff_cache/
+# web
+web/node_modules/
+web/dist/
