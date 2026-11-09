@@ -30,7 +30,6 @@ import {
   verdictHeadline,
 } from '../home';
 import { lazyCard } from '../lazy';
-import { comparedToLastYear, costSentence, glossarySection, kpiTitle, plainNum, term, verdictSentences, verdictTitle } from '../plain';
 import { routeKey } from '../router';
 import { projectedCost } from '../synthese';
 import { html } from '../trusted';
@@ -57,7 +56,6 @@ function yoy(records: DayRecord[], from: string, to: string): number | null {
 }
 
 export function renderHome(view: HTMLElement, records: DayRecord[]) {
-  if (state.simple) return renderSimple(view, records);
   const last = lastDay();
   const r = homeRange(homePeriod(state.home), last);
   const all = activeRooms().length;
@@ -304,55 +302,3 @@ function drawChart(records: DayRecord[], r: HomeRange) {
     line: hasTemp ? { name: TEMP.outdoor, color: cssVar('--text'), data: d.temp, unit: '°C' } : undefined,
   });
 }
-
-// ------------------------------------------------------------------ simple view (S-7.13)
-function plainKpi(title: string, from: string, to: string, records: DayRecord[], cls = '') {
-  const now = total(records, from, to);
-  const before = total(records, minusYears(from), minusYears(to));
-  const hasBefore = records.some((r) => r.day <= minusYears(to));
-  return `<article class="kpi${cls}">
-    <h3>${esc(title)}</h3>
-    <p class="kpi-value">${plainNum(now)} kWh</p>
-    <p class="kpi-sub">${costSentence(costOf(records, from, to))} ${comparedToLastYear(now, hasBefore ? before : null)}</p>
-  </article>`;
-}
-
-function renderSimple(view: HTMLElement, records: DayRecord[]) {
-  const last = lastDay();
-  const monthStart = `${last.slice(0, 8)}01`;
-  const v = verdict(records, monthStart, last, ds!.weather);
-  let verdictHtml = '';
-  if (v) {
-    const price = avgPrice(records); // #291: price of the selection, not of the whole home
-    const [first, ...rest] = verdictSentences({ ...v, eur: price ? (v.actual - v.expected) * price : null }, monthStart, '{kwh}');
-    const sentences = [esc(first).replace('{kwh}', term('kwh')), ...rest.map((s) => esc(s))];
-    verdictHtml = `<section class="verdict verdict-${v.level}" aria-live="polite">
-    <span class="verdict-icon" aria-hidden="true">${{ low: '▼', normal: '=', high: '▲' }[v.level]}</span>
-    <div><p class="verdict-title">${esc(verdictTitle(v.level))}</p><p class="verdict-sub">${sentences.join(' ')}</p></div>
-  </section>`;
-  }
-  const p = projectYear(records, last);
-  const year = last.slice(0, 4);
-  const prev = total(records, `${Number(year) - 1}-01-01`, `${Number(year) - 1}-12-31`);
-  const eur = p ? projectedCost(costOf(records, `${year}-01-01`, last), p.ytd, p.projected, avgPrice(records)) : null;
-  view.innerHTML = html`
-  <h2 class="sr-only" id="page-title" tabindex="-1">Accueil</h2>
-  ${verdictHtml}
-  <section class="kpis">
-    ${plainKpi(kpiTitle('month', last), monthStart, last, records)}
-    ${plainKpi(kpiTitle('year', last), `${year}-01-01`, last, records)}
-    ${plainKpi(kpiTitle('12m', last), addDays(minusYears(last), 1), last, records, ' kpi-detail')}
-    ${
-      p
-        ? `<article class="kpi kpi-detail"><h3>${esc(kpiTitle('projection', last))}</h3><p class="kpi-value">Environ ${plainNum(p.projected)} kWh</p>
-    <p class="kpi-sub">${costSentence(eur)} ${comparedToLastYear(p.projected, prev || null)}</p></article>`
-        : ''
-    }
-    <article class="kpi kpi-budget" id="budget-kpi" hidden></article>
-  </section>
-  ${glossarySection()}
-  ${ds!.insights ? '<section class="card insight" id="insight-card" aria-busy="true"><h2>Analyse du mois</h2></section>' : ''}`;
-  void lazyCard(() => import('./budget'), (m) => m.fillHome(), { zone: 'budget-kpi', what: 'Budget' });
-  if (ds!.insights) void lazyCard(() => import('./insight'), (m) => m.mountInsight(document.getElementById('insight-card'), true), { zone: 'insight-card', what: 'Analyse IA' });
-}
-

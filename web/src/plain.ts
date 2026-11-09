@@ -105,23 +105,12 @@ export function comparedToLastYear(now: number, before: number | null): string {
   return `C'est ${nf0.format(Math.abs(p))} % ${p > 0 ? 'de plus' : 'de moins'} que l'an dernier.`;
 }
 
-export const costSentence = (eur: number | null) => (eur === null ? '' : `Cela coûte environ ${plainEur(eur)}.`);
-
 export function kpiTitle(kind: 'month' | 'year' | '12m' | 'projection', last: string): string {
   const year = last.slice(0, 4);
   if (kind === 'month') return `${monthOf(last)} ${year}, jusqu'au ${dayOf(last)}`;
   if (kind === 'year') return `Depuis le 1er janvier ${year}`;
   if (kind === '12m') return 'Sur les 12 derniers mois';
   return `Estimation pour toute l'année ${year}`;
-}
-
-export function budgetSentences(over: boolean, gap: number, budget: number): { value: string; sub: string } {
-  return {
-    value: plainEur(Math.abs(gap)),
-    sub: over
-      ? `Ce sera au-dessus de votre budget de ${plainEur(budget)}.`
-      : `Il vous restera cette marge sur votre budget de ${plainEur(budget)}.`,
-  };
 }
 
 /** Pinned room (S-7.8): mean temperature, rounded to the degree, and cold days. */

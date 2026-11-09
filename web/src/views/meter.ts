@@ -184,7 +184,7 @@ function drawPower(r: HomeRange) {
       if (n === null || !line.isConnected) return;
       line.innerHTML = html(
         n
-          ? `Des radiateurs ont été coupés <strong>${n} jour${n > 1 ? 's' : ''}</strong> pour rester sous ce seuil, c'est le ${term('delestage')} : détail par pièce dans « Voir les valeurs ».`
+          ? `<strong>${n} jour${n > 1 ? 's' : ''} avec au moins un ${term('delestage')}</strong> : un radiateur ou plus coupé un moment pour rester sous ce seuil. Détail par pièce dans « Voir les valeurs ».`
           : `Aucun radiateur coupé pour rester sous ce seuil (${term('delestage')}) sur la période.`,
       );
       line.hidden = false;

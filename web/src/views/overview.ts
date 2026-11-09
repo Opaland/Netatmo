@@ -15,7 +15,7 @@ import { ds, setState, state } from '../app';
 import { type Series, barChart } from '../charts';
 import { OTHER, activeRooms, avgPrice, catColor, delta, esc, eurOf, firstDay, fmtKwh, lastDay, longDate, nf0, roomColor, roomGroup, roomName, seg, table, tableToggle } from '../ui';
 import { NO_REFERENCE, PERIOD, vsLabel } from '../glossary';
-import { chartMarks, qualityCard, uncertainDays, yoyGapNote } from './quality';
+import { chartMarks, uncertainDays, yoyGapNote } from './quality';
 import { html } from '../trusted';
 import { lazyCard } from '../lazy';
 import { ENERGY_ONLY, costScope } from '../synthese';
@@ -32,6 +32,19 @@ function kpi(label: string, from: string, to: string, records: DayRecord[], cls 
   </article>`;
 }
 
+/** The periods of « Consommation en détail », shortest first (its menu, and the swipe of main.ts). */
+export function historyPeriods(): [string, string][] {
+  return [
+    ['30d', '30 jours'],
+    ['12m', '12 mois'],
+    ...ds!.meta.years
+      .slice()
+      .reverse()
+      .map((y) => [String(y), String(y)] as [string, string]),
+    ['all', 'Tout'],
+  ];
+}
+
 function periodRange(): [string, string] {
   const last = lastDay();
   if (state.period === 'all') return [firstDay(), last];
@@ -43,10 +56,10 @@ function periodRange(): [string, string] {
 /**
  * #308 / #311: the v1.5 « Synthèse » cards, spread over the new pages: « explore » (Historique:
  * « Consommation en détail », any period, usage, granularity, by usage or by room, the values),
- * « twelve » (the 12-month tile, Historique), « invoice » (Outils → Une facture) and « quality »
- * (État des données). Accueil (verdict, tiles, budget, alerts…) is views/home.ts.
+ * « twelve » (the 12-month tile, Historique) and « invoice » (Outils → Une facture). Accueil
+ * (verdict, tiles, budget, alerts…) is views/home.ts; the quality card, État des données (pages.ts).
  */
-export type OverviewPart = 'explore' | 'twelve' | 'invoice' | 'quality';
+export type OverviewPart = 'explore' | 'twelve' | 'invoice';
 
 export function renderOverview(view: HTMLElement, records: DayRecord[], part: OverviewPart = 'explore') {
   const last = lastDay();
@@ -54,9 +67,7 @@ export function renderOverview(view: HTMLElement, records: DayRecord[], part: Ov
     const body =
       part === 'twelve'
         ? `<section class="kpis kpis-one">${kpi(PERIOD['12m'], addDays(minusYears(last), 1), last, records)}</section>`
-        : part === 'invoice'
-          ? '<div id="invoice-zone"></div>'
-          : qualityCard(true) || '<section class="card"><p class="hint">Tous les mois sont complets : aucun jour estimé ni perdu.</p></section>';
+        : '<div id="invoice-zone"></div>';
     view.innerHTML = html(body);
     // S-2.3: reconcile with an invoice (lazy module)
     if (part === 'invoice') void lazyCard(() => import('./invoice'), (m) => m.fillInvoice(), { zone: 'invoice-zone', what: 'Facture' });
@@ -66,15 +77,7 @@ export function renderOverview(view: HTMLElement, records: DayRecord[], part: Ov
   const split = state.split;
   const byCat = totalsBy(records, from, to, (r) => r.cat);
   const periodTotal = [...byCat.values()].reduce((a, b) => a + b, 0);
-  const periodOptions: [string, string][] = [
-    ['30d', '30 jours'],
-    ['12m', '12 mois'],
-    ...ds!.meta.years
-      .slice()
-      .reverse()
-      .map((y) => [String(y), String(y)] as [string, string]),
-    ['all', 'Tout'],
-  ];
+  const periodOptions = historyPeriods();
   const shares = (['heating', 'water_heater'] as Category[])
     .filter((c) => byCat.get(c))
     .map((c) => ({ c, v: byCat.get(c)!, p: (byCat.get(c)! / periodTotal) * 100 }));

@@ -58,9 +58,28 @@ describe('breakdown', () => {
     // talon 200 W minus fridge 40 W and box 10 W
     expect(by['Veille'].watts).toBeCloseTo(150);
     expect(by['Veille'].kwh).toBeCloseTo(36);
+    expect(b.talonWatts).toBe(200);
+    expect(b.talonInParts).toBeCloseTo(50);
     const sumParts = b.parts.reduce((s, p) => s + p.kwh, 0);
     expect(sumParts).toBeCloseTo(80);
     expect(b.over).toBe(0);
+  });
+  it('#348: permanent parts above the standby leave a zero « Veille » row, and say how much they hold', () => {
+    const b = breakdown({
+      days,
+      linky: constant(20),
+      heating: constant(8),
+      water: constant(4),
+      // a circuit of the board measured round the clock, steadier than the night base load
+      plugs: [{ key: 'p4c0', name: 'Tableau · canal 1', daily: constant(4.8) }], // 200 W
+      declared: [],
+      talonWatts: 150,
+    });
+    const veille = b.parts.find((p) => p.kind === 'talon')!;
+    expect(veille.watts).toBe(0);
+    expect(b.talonWatts).toBe(150); // the figure of the Veille page, unchanged
+    expect(b.talonInParts).toBe(150); // never more than the standby itself
+    expect(b.talonWatts! - b.talonInParts).toBe(veille.watts);
   });
   it('flags parts exceeding the rest and never shows a negative remainder', () => {
     const b = breakdown({

@@ -1,10 +1,9 @@
 // Accueil and ⚙ Objectifs, loaded on demand (S-7.10): annual budget (S-2.12), CO₂ footprint (S-2.13)
 // and the effect of a new regulated tariff (S-2.11). Filled into placeholders left by
-// overview.ts; every figure carries its method.
+// views/home.ts; every figure carries its method.
 import { addDays, dayOfYear, minusYears, total } from '../aggregate';
 import { energyCostTrve, offPeakShares, projectYear } from '../analysis';
-import { ds, rerender, state } from '../app';
-import { budgetSentences } from '../plain';
+import { ds, rerender } from '../app';
 import { periodAt } from '../offers';
 import {
   CO2_DEFAULT,
@@ -57,16 +56,6 @@ function yearBudget() {
 export function fillHome() {
   put('grid-zone', gridCard());
   const b = yearBudget();
-  const tile = document.getElementById('budget-kpi');
-  if (tile && b && state.simple) {
-    // S-7.13: plain language in the simple mode
-    const p = budgetSentences(b.over, b.gap, b.budget);
-    tile.hidden = false;
-    tile.innerHTML = html`<h3>Budget ${b.year} : ${b.over ? 'dépassement prévu' : 'marge prévue'}</h3>
-      <p class="kpi-value">${p.value}</p>
-      <p class="kpi-sub">${p.sub}</p>`;
-  } else tile?.remove();
-  if (state.simple) return;
   // « Fin d'année estimée »: its gap to the budget, or where to set one
   const line = document.getElementById('budget-line');
   if (line) {

@@ -46,7 +46,9 @@ export interface Breakdown {
   water: number;
   rest: number;
   parts: Part[];
-  talonWatts: number | null; // gross standby base load from the curve
+  talonWatts: number | null; // gross standby base load from the curve (the figure of the Veille page)
+  /** #348: watts of that standby already inside the permanent parts (≤ talonWatts), so not counted twice. */
+  talonInParts: number;
   over: number; // kWh by which plugs + declared + talon exceed the rest (0 when consistent)
 }
 
@@ -116,15 +118,21 @@ export function breakdown(opts: {
     const kwh = (d.watts * h * n) / 1000;
     parts.push({ name: d.name, kind: 'declared', kwh, watts: (kwh * 1000) / hours, permanent: h >= 24 });
   }
+  let talonInParts = 0;
   if (opts.talonWatts !== null && n) {
+    // #348: the « Veille » part is what the night base load leaves once the permanent parts
+    // (a fridge, a circuit of the board measured round the clock, a box at 24 h/day) are taken
+    // out: they already run at night. The gross figure (Veille page) and the share already in
+    // the parts are kept, so that the card can say why the two differ.
     const always = parts.filter((p) => p.permanent).reduce((s, p) => s + p.watts, 0);
-    const watts = Math.max(0, opts.talonWatts - always);
+    talonInParts = Math.min(opts.talonWatts, always);
+    const watts = opts.talonWatts - talonInParts;
     parts.push({ name: 'Veille', kind: 'talon', watts, kwh: (watts * hours) / 1000, permanent: true });
   }
   const explained = parts.reduce((s, p) => s + p.kwh, 0);
   const left = rest - explained;
   if (n) parts.push({ name: 'Non attribué', kind: 'unexplained', kwh: Math.max(0, left), watts: (Math.max(0, left) * 1000) / hours, permanent: false });
-  return { days: opts.days, linky, heating, water, rest, parts, talonWatts: opts.talonWatts, over: Math.max(0, -left) };
+  return { days: opts.days, linky, heating, water, rest, parts, talonWatts: opts.talonWatts, talonInParts, over: Math.max(0, -left) };
 }
 
 /** kWh per year of a constant power. */
