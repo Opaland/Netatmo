@@ -90,6 +90,7 @@ export function renderOverview(view: HTMLElement, records: DayRecord[]) {
     ${projectionTile(records, last)}
   </section>
   ${linkyCard()}
+  ${curveCard()}
   <section class="card">
     <div class="card-head">
       <h2>Consommation <small class="muted">kWh</small></h2>
@@ -116,6 +117,7 @@ export function renderOverview(view: HTMLElement, records: DayRecord[]) {
   </section>
   ${qualityCard()}`;
   drawLinky();
+  drawCurve();
 
   const set = aggregate(records, from, to, state.gran, split === 'category' ? (r) => r.cat : (r) => roomGroup(r.room));
   const order =
@@ -185,6 +187,18 @@ function linkyCard() {
     <div class="chart" id="linky-chart" role="img" aria-label="Chauffage, chauffe-eau et autres usages par mois"></div>
     ${ds!.pmax.size ? '<h3>Puissance maximale appelée <small class="muted">kVA, par mois</small></h3><p class="hint muted" id="pmax-summary"></p><div class="chart" id="pmax-chart" role="img" aria-label="Puissance maximale par mois et puissance souscrite"></div>' : ''}
   </section>`;
+}
+
+/** Linky 30-min load curve: placeholder filled by the lazily imported ./linky module. */
+function curveCard() {
+  const years = (ds!.meta as { linky_curve_years?: number[] }).linky_curve_years;
+  return years?.length ? '<section class="card" id="curve-card" hidden></section>' : '';
+}
+
+function drawCurve() {
+  const card = document.getElementById('curve-card');
+  if (!card) return;
+  import('./linky').then((m) => card.isConnected && m.renderCurveCard(card)).catch(() => card.remove());
 }
 
 function drawLinky() {

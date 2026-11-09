@@ -6,6 +6,7 @@ backfill    Force la récupération de tout l'historique disponible
 verify      Déchiffre les données locales et affiche un résumé
 export-csv  Exporte les données déchiffrées en CSV
 demo        Génère des données de démonstration chiffrées (phrase « demo »)
+restore-backup FICHIER  Restaure dans data/ une sauvegarde chiffrée téléchargée depuis l'appli
 """
 
 from __future__ import annotations
@@ -430,6 +431,23 @@ def cmd_export(s: Settings, args: argparse.Namespace) -> None:
             csv.writer(fh, delimiter=";").writerows(rows)
 
 
+def cmd_restore_backup(s: Settings, args: argparse.Namespace) -> None:
+    from .backup import BackupError, read_bundle, restore
+
+    s.require("passphrase")
+    try:
+        created = read_bundle(Path(args.file)).get("created", "?")
+        names = restore(Path(args.file), s.data_dir, s.passphrase, dry_run=args.dry_run)
+    except BackupError as err:
+        raise SystemExit(f"Restauration refusée : {err}") from err
+    verb = "seraient écrits" if args.dry_run else "écrits"
+    print(f"Sauvegarde du {created} : {len(names)} fichiers vérifiés avec DATA_PASSPHRASE, {verb} dans {s.data_dir}/")
+    for name in names:
+        print(f"  {name}")
+    if not args.dry_run:
+        print("Contrôle : python -m collector verify (mêmes totaux que dans l'appli).")
+
+
 def cmd_demo(s: Settings, args: argparse.Namespace) -> None:
     from .demo import generate
 
@@ -460,6 +478,9 @@ def main(argv: list[str] | None = None) -> None:
     ins.add_argument("--force", action="store_true")
     e = sub.add_parser("export-csv")
     e.add_argument("-o", "--output", default="-")
+    rb = sub.add_parser("restore-backup", help="restaurer une sauvegarde chiffrée téléchargée depuis l'appli")
+    rb.add_argument("file", metavar="FICHIER")
+    rb.add_argument("--dry-run", action="store_true", help="vérifier sans rien écrire")
     dm = sub.add_parser("demo")
     dm.add_argument("-o", "--output", default="web/public/demo")
     dm.add_argument("--passphrase", default="demo")
@@ -477,6 +498,7 @@ def main(argv: list[str] | None = None) -> None:
         "insights": cmd_insights,
         "export-csv": cmd_export,
         "demo": cmd_demo,
+        "restore-backup": cmd_restore_backup,
     }[args.cmd](s, args)
 
 

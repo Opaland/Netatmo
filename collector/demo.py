@@ -25,6 +25,15 @@ ROOMS = [
 HEAT_SHAPE = [3, 3, 3, 3, 3, 4, 9, 10, 7, 5, 4, 4, 4, 4, 4, 4, 5, 7, 9, 9, 8, 6, 4, 3]
 WATER_SHAPE = [14, 16, 16, 15, 12, 6, 0, 0, 0, 0, 0, 0, 2, 3, 0, 0, 0, 0, 0, 0, 0, 0, 6, 10]
 # Kids' bedroom CO₂ (ppm above the day level), door closed from 21 h, window opened at 7 h.
+# Linky load curve, other usages (W above the ~250 W standby), per half hour: breakfast,
+# lunch (mostly at weekends), cooking and evening lights/TV.
+_EVENING_WEEKDAY = [300, 450, 1400, 1300, 700, 500, 450, 400, 300, 150, 100, 80]
+_EVENING_WEEKEND = [500, 900, 1500, 1300, 800, 600, 500, 400, 300, 200, 150, 120]
+OTHER_WEEKDAY = [60, 60] + [0] * 10 + [150, 500, 700, 600, 250, 80] + [60] * 6 + [700, 350, 80] + [60] * 9
+OTHER_WEEKDAY += _EVENING_WEEKDAY
+OTHER_WEEKEND = [120, 120] + [0] * 12 + [200, 400, 600, 500, 350, 300, 300, 350] + [400, 900, 1300, 1100, 400]
+OTHER_WEEKEND += [300] * 9 + _EVENING_WEEKEND
+CURVE_DAYS = 60
 KIDS_CO2 = [700, 780, 840, 890, 930, 960, 980, 900, 250, 80, 0, 0, 0, 0, 0, 0, 50, 80, 100, 120, 150, 300, 450, 600]
 
 
@@ -53,6 +62,23 @@ def _station_hours(store: Store, rnd: random.Random, d: date, tmean: float, tmin
             store.put(f"{d.year}.station_h", "hourly", key, hour, value)
 
 
+def _curve_day(store: Store, rnd: random.Random, d: date, hours_wh: list[float], other: float, weekend: bool) -> float:
+    """30-min Linky curve of one day (S-1.11): radiators and water heater as recorded by the
+    hourly data, plus a ~250 W standby and the other usages shaped over the day so that the
+    day adds up to `other` Wh. Returns the day total (Wh), used as the Linky daily value."""
+    shape = OTHER_WEEKEND if weekend else OTHER_WEEKDAY
+    standby = [250 + rnd.gauss(0, 12) for _ in range(48)]  # fridge cycling, box, VMC
+    rest = max(0.0, other - sum(standby) / 2)
+    scale = rest / (sum(shape) / 2)
+    total = 0.0
+    for i in range(48):
+        watts = standby[i] + shape[i] * scale * rnd.uniform(0.8, 1.2)
+        wh = round(watts / 2 + hours_wh[i // 2] / 2, 1)
+        store.put(f"{d.year}.linky30", "curve", f"{d.isoformat()}T{i // 2:02d}:{30 * (i % 2):02d}", None, wh)
+        total += wh
+    return round(total, 1)
+
+
 def generate(out_dir: Path, passphrase: str = "demo", start_year: int = 2022) -> list[str]:
     rnd = random.Random(42)
     rnd_hours = random.Random(11)  # separate stream: the rest of the demo stays identical
@@ -60,6 +86,8 @@ def generate(out_dir: Path, passphrase: str = "demo", start_year: int = 2022) ->
     today = datetime.now(ZoneInfo("Europe/Paris")).date()
     d = date(start_year, 1, 1)
     hourly_from = today - timedelta(days=365)
+    curve_from = today - timedelta(days=CURVE_DAYS)
+    rnd_curve = random.Random(30)  # separate stream as well
     tariffs_from = date(2025, 1, 1)
     # The house gets a little better each year (réglages, isolation).
     efficiency = {y: 1.0 - 0.05 * (y - start_year) for y in range(start_year, today.year + 1)}
@@ -97,6 +125,7 @@ def generate(out_dir: Path, passphrase: str = "demo", start_year: int = 2022) ->
         dju = max(0.0, 18 - tmean)
         weekend = d.weekday() >= 5
         day_total = 0.0
+        hours_wh = [0.0] * 24  # heating + water heater per hour, for the load curve
         for rid, _name, cat, weight, setpoint in ROOMS:
             if cat == WATER_HEATER:
                 kwh = 3.4 + 0.09 * dju + (0.6 if weekend else 0) + rnd.gauss(0, 0.3)
@@ -126,10 +155,17 @@ def generate(out_dir: Path, passphrase: str = "demo", start_year: int = 2022) ->
                 for h, w in enumerate(shape):
                     if w:
                         key = f"{d.isoformat()}T{h:02d}"
-                        store.put(f"{d.year}.hourly", "hourly", rid, key, round(wh * w / s * rnd.uniform(0.8, 1.2), 1))
+                        v = round(wh * w / s * rnd.uniform(0.8, 1.2), 1)
+                        store.put(f"{d.year}.hourly", "hourly", rid, key, v)
+                        hours_wh[h] += v
         if d >= date(start_year + 1, 1, 1):  # Linky history shorter than the radiators'
-            other = 6500 + (1800 if weekend else 0) + 900 * math.cos((doy - 15) / 365 * 2 * math.pi) + rnd.gauss(0, 900)
-            store.put("linky", "daily", d.isoformat(), None, round(day_total + max(other, 2500), 1))
+            other = 9500 + (1800 if weekend else 0) + 900 * math.cos((doy - 15) / 365 * 2 * math.pi) + rnd.gauss(0, 900)
+            other = max(other, 7000)
+            if d >= curve_from:
+                total = _curve_day(store, rnd_curve, d, hours_wh, other, weekend)
+                store.put("linky", "daily", d.isoformat(), None, total)
+            else:
+                store.put("linky", "daily", d.isoformat(), None, round(day_total + other, 1))
             store.put("linky", "pmax", d.isoformat(), None, round(min(11.8, 3.2 + 0.28 * dju + rnd.uniform(0, 2.5)), 2))
         d += timedelta(days=1)
     for key in ("m0", "m1", "m2", "m3"):
