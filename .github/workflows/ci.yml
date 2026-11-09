@@ -58,6 +58,7 @@ jobs:
       - run: npm run e2e
       - run: npm run e2e:features # v1.4: facture, travaux, export recherche, clé effacée
       - run: npm run e2e:composants # v1.6 #310 : page de démonstration des composants (axe, 200 %, 44 px)
+      - run: npm run e2e:proche # v1.6 #312, #316 : premier lancement et vue Proche
       - run: npm run e2e:piece # v1.6 #313 : liste Pièces et page Pièce (axe, 200 %, vue foyer)
       - uses: actions/upload-artifact@v4
         if: always()

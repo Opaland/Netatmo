@@ -6,7 +6,6 @@ import { activeRooms, ds, householdStatus, state } from './app';
 import { alert, list, seg as segment, switchField } from './components';
 import type { Handlers } from './events';
 import { dayShort, fmt1 } from './glossary';
-import { glossarySection } from './plain';
 import { type Route, SETTINGS, type SettingsPage, type Tool, routeKey } from './router';
 import { LOCK_CHOICES } from './session';
 import { tenant } from './tenant';
@@ -28,6 +27,8 @@ import * as report from './views/report';
 import * as rooms from './views/rooms';
 import * as settings from './views/settings';
 import { sharedOriginWarning } from './views/settings';
+import { renderAide, simpleExit } from './views/proche';
+import { onboardingHandlers, renderOnboarding } from './views/onboarding';
 
 export interface Page {
   render(view: HTMLElement, route: Route): void;
@@ -358,6 +359,9 @@ function renderSettingsPage(view: HTMLElement, route: Route) {
         ${switchField('Vue simple (grands caractères, phrases courtes)', state.simple, { 'data-toggle': 'simple' })}
         ${pinSelect()}
         <p class="hint muted">La vue simple a trois onglets (Accueil, Ma pièce, Aide) ; « Voir plus de détails » la quitte.</p></section>
+      <section class="card"><div class="card-head"><h2>Présentation</h2>${scopeTag('appareil')}</div>
+        <p class="hint muted">Les quatre écrans du premier lancement : qui utilise ce téléphone, sources, contrat. Rien n'est redemandé, pas même la phrase de passe.</p>
+        <a class="btn secondary" href="#bienvenue" id="onboarding-again">Revoir la présentation</a></section>
       <section class="card"><div class="card-head"><h2>Vue foyer</h2>${scopeTag('appareil')}</div>
         ${household.householdMenu() || '<p class="hint muted">Aucune pièce nommée comme une chambre.</p>'}</section>
       <section class="card"><div class="card-head"><h2>Taille du texte</h2></div>
@@ -384,21 +388,6 @@ function renderSettingsPage(view: HTMLElement, route: Route) {
     default:
       return stack(view, head, [(el) => settings.renderSettings(el, 'apropos')]);
   }
-}
-
-// ------------------------------------------------------------------ Aide (vue simple, #316 later)
-function renderAide(view: HTMLElement) {
-  view.innerHTML = html`${glossarySection()}
-  <section class="card"><h2>Voir toute l'appli</h2>
-    <p>La vue simple montre l'essentiel. Pour tous les détails :</p>
-    ${simpleExit()}</section>`;
-}
-
-/** « Voir plus de détails »: leaving the simple view asks for a confirmation, in the page (#316). */
-export function simpleExit(): string {
-  return `<div class="simple-exit"><button type="button" class="btn secondary block" data-simple-exit="ask">Voir plus de détails</button>
-    <div class="simple-confirm" hidden role="group" aria-label="Quitter la vue simple ?"><p>Quitter la vue simple ? L'appli montrera tous les onglets et les graphiques.</p>
-    <button type="button" class="btn primary" data-simple-exit="yes">Oui, voir tout</button> <button type="button" class="btn secondary" data-simple-exit="no">Rester en vue simple</button></div></div>`;
 }
 
 // ------------------------------------------------------------------ Accueil
@@ -428,5 +417,6 @@ export const PAGES: Record<Route['page'], Page> = {
   etat: { render: renderEtat, handlers: [qualityHandlers] },
   rapport: { render: (v) => report.renderReport(v), handlers: [h(report.handleClick, report.handleChange)] },
   aide: { render: renderAide },
+  bienvenue: { render: renderOnboarding, handlers: onboardingHandlers },
   parametres: { render: renderSettingsPage, handlers: settingsHandlers },
 };
