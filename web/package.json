@@ -14,6 +14,7 @@
     "e2e:compteur": "node e2e/compteur.mjs",
     "e2e:proche": "node e2e/proche.mjs",
     "e2e:piece": "node e2e/piece.mjs",
+    "e2e:plannings": "node e2e/plannings.mjs",
     "size": "node scripts/size-budget.mjs"
   },
   "dependencies": {

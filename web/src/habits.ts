@@ -227,8 +227,10 @@ export function mergeAbsences(detected: AbsencePeriod[], edits: AbsenceEdits): (
 export interface AbsenceEdits {
   dismissed: string[]; // first day of a detected period that was not an absence
   added: Period[];
+  /** S-13.7: first day of the periods whose start was moved back by the detection delay of the absence mode. */
+  earlier?: string[];
 }
-export const NO_EDITS: AbsenceEdits = { dismissed: [], added: [] };
+export const NO_EDITS: AbsenceEdits = { dismissed: [], added: [], earlier: [] };
 
 /**
  * Standing consumption of the water heater: 10th percentile of its daily kWh outside

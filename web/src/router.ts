@@ -21,6 +21,7 @@ export const TOOLS = {
   consigne: 'Demander 1 °C de moins aux radiateurs',
   teletravail: 'Une journée de télétravail',
   facture: 'Une facture',
+  plannings: 'Mes plannings et les heures creuses',
   absences: 'Absences',
   volets: 'Volets fermés le soir',
   analyse: 'Analyse du mois',
