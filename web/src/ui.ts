@@ -227,11 +227,11 @@ export function yearColor(y: number) {
 }
 /**
  * #300 / #303: one style per heating season (Sept → Aug), shared by Historique and the
- * signature: the latest complete season in full colour and thick, the one before lighter, older
- * ones grey; the season still running dashed (maquette « Historique »).
+ * signature: the latest complete season in deep iris and thick, the one before in warm grey,
+ * older ones paler; the season still running dashed, in the colour of the newest.
  */
 export function seasonStyle(start: number, current: number): { color: string; dashed: boolean; width: number } {
-  if (start >= current) return { color: cssVar('--year-2'), dashed: true, width: 2 };
+  if (start >= current) return { color: cssVar('--year-0'), dashed: true, width: 2 };
   const age = current - 1 - start;
   return { color: cssVar(`--year-${age === 0 ? 0 : age === 1 ? 1 : 3}`), dashed: false, width: age === 0 ? 3 : 2 };
 }

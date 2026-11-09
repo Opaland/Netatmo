@@ -133,7 +133,14 @@ export function renderCompare(view: HTMLElement, records: DayRecord[], part: 'hi
         : ''
     }
     ${mode === 'season' ? seasonTiles(records, pickedSeasons, curSeason, !!corrected) : ''}
+    <div class="chart tall" id="cmp-chart" role="img" aria-label="${
+      mode === 'season' ? 'Hivers, kWh par mois de septembre à août' : mode === 'cumul' ? 'Années, kWh cumulés depuis le 1er janvier' : 'Cette année et l’an dernier, kWh par mois'
+    }"></div>
+    <div id="cmp-legend"></div>
     ${
+      mode === 'monthly'
+        ? ''
+        : `<details class="table-details" id="cmp-choose"${chipsOpen ? ' open' : ''}><summary>${mode === 'season' ? 'Choisir les hivers' : 'Choisir les années'}</summary>${
       mode === 'season'
         ? `<div class="chips" role="group" aria-label="Hivers affichés">${seasons
             .map(
@@ -149,11 +156,8 @@ export function renderCompare(view: HTMLElement, records: DayRecord[], part: 'hi
               )
               .join('')}</div>`
           : ''
+    }</details>`
     }
-    <div class="chart tall" id="cmp-chart" role="img" aria-label="${
-      mode === 'season' ? 'Hivers, kWh par mois de septembre à août' : mode === 'cumul' ? 'Années, kWh cumulés depuis le 1er janvier' : 'Cette année et l’an dernier, kWh par mois'
-    }"></div>
-    <div id="cmp-legend"></div>
     <div id="cmp-table"></div>
     <details class="table-details"><summary>Comment c'est calculé</summary><p class="hint muted">${
       mode === 'season'
@@ -222,7 +226,7 @@ export function renderCompare(view: HTMLElement, records: DayRecord[], part: 'hi
       const raw = m.get(y) ?? [];
       return {
         name: String(y),
-        color: y === lastYear ? cssVar('--year-0') : cssVar('--year-2'),
+        color: y === lastYear ? cssVar('--year-0') : cssVar('--year-1'),
         data: raw.map((v) => (v === null ? null : Math.round(v))),
         raw,
         notes: marks.map((k) => k.note),
@@ -296,10 +300,14 @@ export function renderCompare(view: HTMLElement, records: DayRecord[], part: 'hi
   ));
 }
 
+/** The winter / year chips stay unfolded once used (a chip redraws the card). */
+let chipsOpen = false;
+
 /**
- * Maquette « Historique »: the two last complete winters side by side (kWh, € hors abonnement)
- * and their change, at equal climate when asked: the older winter's heating is brought to the
- * degree-days of the newer one (the water heater is not corrected).
+ * Maquette « Historique »: the two last complete winters side by side and their change. At
+ * equal climate, the older winter is shown as it would have been with the cold of the newer one
+ * (its heating × degree-days ratio; the water heater is not corrected), so that the tiles and the
+ * sentence give the same change; the raw kWh are written under it.
  */
 function seasonTiles(records: DayRecord[], picked: number[], current: number, climate: boolean): string {
   const done = picked.filter((y) => y < current).slice(-2);
@@ -310,29 +318,40 @@ function seasonTiles(records: DayRecord[], picked: number[], current: number, cl
   const [ta, tb] = [sum(a), sum(b)];
   if (!ta || !tb) return '';
   const raw = pctChange(ta, tb);
-  let eq: number | null = null;
+  let tbEq: number | null = null;
   let colder = '';
   if (climate && ds!.weather) {
     const da = djuBetween(ds!.weather, ...span(a)).dju;
     const db = djuBetween(ds!.weather, ...span(b)).dju;
     if (da > 50 && db > 50) {
       const hb = sum(b, true);
-      eq = pctChange(ta, (hb * da) / db + (tb - hb));
-      colder = db > da * 1.02 ? `l'hiver ${seasonLabel(b)} était plus froid` : da > db * 1.02 ? `l'hiver ${seasonLabel(a)} était plus froid` : 'les deux hivers ont eu à peu près le même froid';
+      tbEq = (hb * da) / db + (tb - hb);
+      colder =
+        db > da * 1.02
+          ? `L'hiver ${seasonLabel(b)} était plus froid.`
+          : da > db * 1.02
+            ? `L'hiver ${seasonLabel(a)} était plus froid.`
+            : 'Les deux hivers ont eu à peu près le même froid.';
     }
   }
-  const cost = (y: number) => costOf(records, ...span(y));
-  const t = (y: number, v: number) => {
-    const c = cost(y);
-    return tile({ label: seasonLabel(y), value: fmtKwh(v), sub: c !== null ? `${esc(fmtEur(c))} <small class="muted">hors abonnement</small>` : undefined });
+  const eq = tbEq !== null ? pctChange(ta, tbEq) : null;
+  const money = (y: number) => {
+    const c = costOf(records, ...span(y));
+    return c !== null ? `${esc(fmtEur(c))} <small class="muted">hors abonnement</small>` : undefined;
   };
+  const tiles =
+    tbEq !== null
+      ? tile({ label: seasonLabel(a), value: fmtKwh(ta), sub: `<small class="muted">mesuré, hiver de référence</small>` }) +
+        tile({ label: seasonLabel(b), value: fmtKwh(tbEq), sub: `<small class="muted">à climat égal (mesuré : ${esc(fmtKwh(tb))})</small>` })
+      : tile({ label: seasonLabel(a), value: fmtKwh(ta), sub: money(a) }) + tile({ label: seasonLabel(b), value: fmtKwh(tb), sub: money(b) });
+  const vs = `vs l'hiver ${seasonLabel(b)}`;
   const sentence =
     eq !== null && raw !== null
-      ? `<b>${signedPct(eq)} à climat égal</b> (${signedPct(raw)} brut) : ${colder}.`
+      ? `<b>${signedPct(eq)} ${esc(vs)}, à climat égal</b> (${signedPct(raw)} mesuré). ${colder}`
       : raw !== null
-        ? `<b>${signedPct(raw)}</b> d'un hiver à l'autre (brut).`
+        ? `<b>${signedPct(raw)} ${esc(vs)}</b>.`
         : '';
-  return `<div class="kpis kpis-pair">${t(a, ta)}${t(b, tb)}</div><p>${sentence} <span class="muted">${esc(`Hiver ${seasonLabel(a)} vs hiver ${seasonLabel(b)}`)}</span></p>`;
+  return `<div class="kpis kpis-pair">${tiles}</div><p>${sentence}</p>`;
 }
 
 // ------------------------------------------------------------------ EDF offer comparator
@@ -438,6 +457,7 @@ function drawComparator() {
 // ------------------------------------------------------------------ events
 /** Year chips. Returns true when the click belonged to this view. */
 export function handleClick(btn: HTMLElement): boolean {
+  if (btn.dataset.season || btn.dataset.year) chipsOpen = true;
   if (btn.dataset.season) {
     // #298: season chips, the current season included
     const y = Number(btn.dataset.season);
