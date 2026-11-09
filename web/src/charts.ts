@@ -1,33 +1,25 @@
 // ECharts wrapper: modular import (smaller bundle) + theme read from CSS tokens.
 
-import { BarChart, HeatmapChart, LineChart, ScatterChart } from 'echarts/charts';
-import {
-  CalendarComponent,
-  DataZoomComponent,
-  GridComponent,
-  LegendComponent,
-  MarkLineComponent,
-  TooltipComponent,
-  VisualMapComponent,
-} from 'echarts/components';
-import * as echarts from 'echarts/core';
-import { CanvasRenderer } from 'echarts/renderers';
+import type { ECharts, EChartsCoreOption, SetOptionOpts } from 'echarts/core';
 import { node } from './trusted';
 
-echarts.use([
-  BarChart,
-  LineChart,
-  ScatterChart,
-  HeatmapChart,
-  GridComponent,
-  TooltipComponent,
-  LegendComponent,
-  DataZoomComponent,
-  CalendarComponent,
-  VisualMapComponent,
-  MarkLineComponent,
-  CanvasRenderer,
-]);
+// #227: ECharts lives in its own chunk (./echarts-lib), loaded on the first chart drawn — or
+// earlier, when the browser is idle — so the entry chunk stays light for the lock screen.
+type Lib = typeof import('./echarts-lib');
+let lib: Lib | null = null;
+let loading: Promise<Lib> | null = null;
+export function loadCharts(): Promise<Lib> {
+  return (loading ??= import('./echarts-lib').then((m) => (lib = m)));
+}
+if (typeof window !== 'undefined' && typeof document !== 'undefined') {
+  const idle = (window as { requestIdleCallback?: (f: () => void) => number }).requestIdleCallback;
+  const warm = () =>
+    void loadCharts().catch(() => {
+      loading = null;
+    });
+  if (idle) idle(warm);
+  else setTimeout(warm, 1500);
+}
 
 export interface Series {
   name: string;
@@ -90,10 +82,15 @@ function decal(i: number) {
   return { color: ink, ...patterns[(i - 1) % patterns.length] };
 }
 
-function instance(el: HTMLElement): echarts.ECharts {
-  // S-7.6: a chart with a summary can be reached with the keyboard, which reads that summary.
-  if (el.getAttribute('role') === 'img' && !el.hasAttribute('tabindex')) el.tabIndex = 0;
-  const chart = echarts.getInstanceByDom(el) ?? echarts.init(el);
+/** What the chart builders need from an ECharts instance; calls wait for the chunk if needed. */
+export interface ChartHandle {
+  setOption(option: EChartsCoreOption, opts?: SetOptionOpts): void;
+  on(event: 'click', handler: (p: { dataIndex: number }) => void): void;
+  off(event: 'click'): void;
+}
+
+function real(el: HTMLElement, l: Lib): ECharts {
+  const chart = l.getInstanceByDom(el) ?? l.init(el);
   if (!observed.has(el)) {
     new ResizeObserver(() => chart.resize()).observe(el);
     observed.add(el);
@@ -101,8 +98,40 @@ function instance(el: HTMLElement): echarts.ECharts {
   return chart;
 }
 
+/** Runs f on the element's chart now if ECharts is there, else in call order once it has loaded. */
+function run(el: HTMLElement, f: (c: ECharts) => void) {
+  if (lib) return f(real(el, lib));
+  loadCharts().then(
+    (l) => {
+      // the view was replaced meanwhile: nothing to draw
+      if (el.isConnected) f(real(el, l));
+    },
+    (e: unknown) => {
+      loading = null;
+      console.error('Graphiques indisponibles', e);
+    },
+  );
+}
+
+/** The chart of an element (created on first use), e.g. to add marks after a builder. */
+export function chartOf(el: HTMLElement): ChartHandle {
+  return {
+    setOption: (o, opts) => run(el, (c) => c.setOption(o, opts)),
+    on: (ev, h) => run(el, (c) => c.on(ev, (p) => h(p as { dataIndex: number }))),
+    off: (ev) => run(el, (c) => c.off(ev)),
+  };
+}
+
+function instance(el: HTMLElement): ChartHandle {
+  // S-7.6: a chart with a summary can be reached with the keyboard, which reads that summary.
+  if (el.getAttribute('role') === 'img' && !el.hasAttribute('tabindex')) el.tabIndex = 0;
+  return chartOf(el);
+}
+
 export function disposeAll(root: HTMLElement) {
-  root.querySelectorAll<HTMLElement>('.chart').forEach((el) => echarts.getInstanceByDom(el)?.dispose());
+  const l = lib;
+  if (!l) return;
+  root.querySelectorAll<HTMLElement>('.chart').forEach((el) => l.getInstanceByDom(el)?.dispose());
 }
 
 function tooltip(price: number | null, showTotal: boolean, unit = 'kWh') {

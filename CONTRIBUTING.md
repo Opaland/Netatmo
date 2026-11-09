@@ -34,14 +34,17 @@ cd web && npm ci && npm run dev     # puis « Essayer avec des données de démo
 | racine | `pytest -q` | tests du collecteur (API simulée, **aucun appel réseau**) |
 | `web/` | `npx tsc --noEmit` | types TypeScript |
 | `web/` | `npm test` | tests Vitest |
-| `web/` | `npm run build && npm run size` | build, puis budget de taille du chunk d'entrée |
+| `web/` | `npm run build && npm run size` | build, puis budget de taille du premier écran (entrée + chunks préchargés) |
 | `web/` | `npm run e2e` | parcours de la démo dans Chromium (après `npm run build`), captures dans `web/e2e/screenshots/` |
 
 `npm run e2e` lance `vite preview` sur le port 4179 ; s'il est pris, choisissez-en un autre :
 `E2E_PORT=4200 npm run e2e`.
 
-Le **budget de taille** (`web/scripts/size-budget.mjs`) est presque atteint : un nouvel écran ou une
-nouvelle carte se charge à la demande (`import()` différé), comme `views/linky.ts` ou `legal.ts`.
+Le **budget de taille** (`web/scripts/size-budget.mjs`, 281 kB gzip) compte le chunk d'entrée **et**
+tous les chunks que `index.html` précharge (`modulepreload`) ; il échoue au-delà de 80 % du budget
+(#227). ECharts est dans son propre chunk, chargé au premier graphique (`charts.ts` → `echarts-lib.ts`) :
+n'importez jamais `echarts` ailleurs. Un nouvel écran ou une nouvelle carte se charge à la demande
+(`import()` différé), comme `views/linky.ts` ou `legal.ts`.
 
 Les données de démonstration se régénèrent avec `python -m collector demo` (phrase de passe « demo »).
 
