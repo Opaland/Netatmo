@@ -130,6 +130,12 @@ Tous les modules sont archivés (module principal, modules intérieurs additionn
 température min / max / moyenne, humidité et CO₂ par jour. Le module extérieur remplace Open-Meteo
 pour les degrés-jours.
 
+Les relevés **horaires** (température, humidité, CO₂ des modules intérieurs) sont aussi gardés,
+un fichier par année (`data/AAAA.station_h.enc.json`) : un an au premier passage, puis les derniers
+jours à chaque collecte. Le collecteur en tire, par module et par jour, le CO₂ de la nuit (22 h → 7 h :
+maximum, heures au-dessus de 1 000 / 1 400 / 1 500 ppm), les heures d'humidité au-dessus de 65 % et
+les heures sous 19 °C. Formats détaillés dans [docs/api-notes.md](docs/api-notes.md#station-météo-netatmo-api-publique).
+
 Netatmo renouvelle le jeton à chaque utilisation : le collecteur garde le nouveau, chiffré, dans
 `data/netatmo-token.enc.json`. Vous n'avez rien à refaire, sauf si vous révoquez l'accès.
 

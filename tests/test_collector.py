@@ -275,6 +275,8 @@ def test_station_rotates_refresh_token_and_reads_every_module(tmp_path):
         if path == "/api/getmeasure":
             module = request.url.params.get("module_id")
             assert ("co2" in request.url.params["type"]) == (module != "out")
+            if request.url.params["scale"] == "1hour":
+                return httpx.Response(200, json={"body": []})
             values = {
                 "out": [-2.0, 6.0, None, 85],
                 "kids": [18.0, 20.0, 19.1, 55, 900],
@@ -285,8 +287,8 @@ def test_station_rotates_refresh_token_and_reads_every_module(tmp_path):
 
     store = Store(tmp_path, "pw")
     http = httpx.Client(transport=httpx.MockTransport(handler))
-    Station(store, "id", "secret", "seed", http=http).collect("Europe/Paris", "2024-01-01")
-    Station(store, "id", "secret", "seed", http=http).collect("Europe/Paris", "2024-01-01")
+    Station(store, "id", "secret", "seed", http=http, min_interval=0).collect("Europe/Paris", "2024-01-01")
+    Station(store, "id", "secret", "seed", http=http, min_interval=0).collect("Europe/Paris", "2024-01-01")
     assert tokens == ["seed", "r1"]  # second run uses the rotated token
     weather = store.doc("weather")
     assert weather["source"] == "netatmo"
@@ -506,6 +508,82 @@ def _curve_handler(calls: list, empty: bool = False):
     return handler
 
 
+# ------------------------------------------------------------------ station: hourly readings (S-11)
+PARIS = "Europe/Paris"
+
+
+def _ts(local: str) -> int:
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+
+    return int(datetime.fromisoformat(local).replace(tzinfo=ZoneInfo(PARIS)).timestamp())
+
+
+def test_station_hourly_points_land_on_local_hours_across_dst():
+    from zoneinfo import ZoneInfo
+
+    from collector.station import local_hours
+
+    zone = ZoneInfo(PARIS)
+    # 2025-03-30: 01:00 UTC is 03:00 CEST, there is no 02 h local.
+    spring = [(1743292800 + i * 3600, [10.0 + i, 50.0, 600.0]) for i in range(3)]  # 00:00 → 02:00 UTC
+    hours = local_hours(spring, zone, indoor=True)
+    assert sorted(hours) == ["2025-03-30T01", "2025-03-30T03", "2025-03-30T04"]
+    assert hours["2025-03-30T03"] == [11.0, 50, 600]
+    # 2025-10-26: 00:00 and 01:00 UTC are both 02 h local → averaged; timestamps mid-hour stay in it.
+    autumn = [(1761436800 + 1800, [10.0, 60.0, 1000.0]), (1761440400 + 1800, [12.0, 70.0, 1200.0])]
+    assert local_hours(autumn, zone, indoor=True) == {"2025-10-26T02": [11.0, 65, 1100]}
+    # Outdoor module: never a CO₂ value, even if a column comes back.
+    assert local_hours([(1761436800, [3.04, 88.4, 400.0])], zone, indoor=False) == {"2025-10-26T02": [3.0, 88, None]}
+
+
+def _hourly_station(calls):
+    """Mock: one main module (living room), kids' bedroom, outdoor. Hourly values depend on
+    the local hour: the kids' CO₂ is 1600 ppm from 23 h to 2 h, 1200 at 22 h and 6 h, 600
+    otherwise; the living room is 18 °C from 0 h to 5 h; outdoor is humid."""
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+
+    zone = ZoneInfo(PARIS)
+
+    def value(module, ts):
+        h = datetime.fromtimestamp(ts, zone).hour
+        if module == "out":
+            return [5.0, 90.0]
+        if module == "kids":
+            co2 = 1600 if h in (23, 0, 1, 2) else 1200 if h in (22, 6) else 600
+            return [19.5, 55.0, co2]
+        return [18.0 if h < 6 else 20.0, 66.0 if h == 12 else 50.0, 700]
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        path = request.url.path
+        if path == "/oauth2/token":
+            return httpx.Response(200, json={"access_token": "a", "refresh_token": "r"})
+        if path == "/api/getstationsdata":
+            modules = [
+                {"_id": "out", "type": "NAModule1", "module_name": "Extérieur"},
+                {"_id": "kids", "type": "NAModule4", "module_name": "Chambre enfants"},
+                {"_id": "wind", "type": "NAModule2", "module_name": "Vent"},
+            ]
+            device = {"_id": "main", "type": "NAMain", "module_name": "Salon", "modules": modules}
+            return httpx.Response(200, json={"body": {"devices": [device]}})
+        if path == "/api/getmeasure":
+            p = request.url.params
+            module = p.get("module_id") or "main"
+            if p["scale"] != "1hour":
+                return httpx.Response(200, json={"body": {}})
+            assert module != "wind"
+            assert ("co2" in p["type"]) == (module != "out")
+            begin, end = int(p["date_begin"]), int(p["date_end"])
+            calls.append((module, begin, end))
+            t0 = begin - begin % 3600
+            values = [value(module, t) for t in range(t0, end, 3600)]
+            return httpx.Response(200, json={"body": [{"beg_time": t0, "step_time": 3600, "value": values}]})
+        return httpx.Response(404)
+
+    return handler
+
+
 def test_load_curve_backfills_by_7_days_then_only_missing_days(tmp_path):
     from datetime import date
 
@@ -619,3 +697,83 @@ def test_netatmo_invalid_grant_marks_the_token_expired(tmp_path):
     assert "NETATMO_REFRESH_TOKEN" in s.alerts()[0]
     s.ok("netatmo")
     assert s.alerts() == [] and s.state["netatmo"]["since"]
+
+
+def test_station_hourly_backfills_a_year_in_chunks_then_three_days(tmp_path):
+    from collector.station import DAY, HOURLY_CHUNK_DAYS, Station
+
+    calls = []
+    store = Store(tmp_path, "pw")
+    station = Station(
+        store,
+        "id",
+        "secret",
+        "seed",
+        http=httpx.Client(transport=httpx.MockTransport(_hourly_station(calls))),
+        min_interval=0,
+    )
+    station.login()
+    now = _ts("2026-01-15T12:00")
+    station.collect_hourly(PARIS, now=now)
+    for module in ("main", "kids", "out"):
+        ranges = [(b, e) for m, b, e in calls if m == module]
+        assert len(ranges) == 10  # 365 days / 40
+        assert ranges[0][0] == now - 365 * DAY and ranges[-1][1] == now
+        assert all(e - b <= HOURLY_CHUNK_DAYS * DAY for b, e in ranges)
+        assert all(ranges[i][1] == ranges[i + 1][0] for i in range(len(ranges) - 1))
+        assert all((e - b) // 3600 <= 1024 for b, e in ranges)
+    # Stored per year and local hour; the outdoor module has no CO₂ (m0 main, m1 out, m2 kids).
+    assert store.doc("2025.station_h")["hourly"]["m2"]["2025-12-01T23"] == [19.5, 55, 1600]
+    assert store.doc("2026.station_h")["hourly"]["m1"]["2026-01-10T03"] == [5.0, 90, None]
+    assert "m3" not in store.doc("2026.station_h")["hourly"]  # wind gauge: no hourly readings
+    assert store.station_hourly_years() == [2025, 2026]
+
+    # Next night: only the last 3 days.
+    calls.clear()
+    station.collect_hourly(PARIS, now=now + DAY)
+    assert sorted(m for m, _b, _e in calls) == ["kids", "main", "out"]
+    assert all(b == now - 2 * DAY and e == now + DAY for _m, b, e in calls)
+
+    # Daily aggregates in the station document.
+    doc = store.doc("station")
+    night = doc["nightly"]["m2"]["2025-12-01"]  # 1 Dec 22:00 → 2 Dec 07:00
+    assert night == {"n": 9, "co2_max": 1600, "h_co2_1000": 6, "h_co2_1400": 4, "h_co2_1500": 4}
+    assert "m1" not in doc["nightly"]  # outdoor: no CO₂
+    assert doc["hours"]["m0"]["2025-12-01"] == {"n": 24, "humid": 1, "cold": 6}
+    assert doc["hours"]["m1"]["2025-12-01"] == {"n": 24, "humid": 24}  # outdoor: no « cold »
+
+    # Saved: meta lists the years, yearly energy years are not polluted by "YYYY.station_h".
+    store.save({"id": "h", "name": "n", "timezone": PARIS}, [])
+    assert (tmp_path / "2025.station_h.enc.json").exists()
+    assert store.meta["station_hourly_years"] == [2025, 2026]
+    assert store.meta["years"] == []
+
+
+def test_station_night_crosses_midnight_and_counts_thresholds(tmp_path):
+    from datetime import date
+
+    from collector.station import aggregate_days
+
+    store = Store(tmp_path, "pw")
+    # Night of 31 Dec 2025: 22 h and 23 h of the 31st, 0 h to 6 h of 1 Jan 2026 (other year
+    # document); 7 h and 21 h fall outside.
+    readings = {
+        "2025-12-31T21": [18.0, 70, 2500],
+        "2025-12-31T22": [18.5, 66, 1000],  # not above 1000
+        "2025-12-31T23": [19.0, 60, 1001],
+        "2026-01-01T00": [19.2, 60, 1400],
+        "2026-01-01T01": [19.2, 60, 1401],
+        "2026-01-01T03": [19.2, 60, 1501],
+        "2026-01-01T06": [19.2, 60, None],
+        "2026-01-01T07": [19.2, 60, 3000],
+    }
+    for hour, v in readings.items():
+        store.put(f"{hour[:4]}.station_h", "hourly", "m2", hour, v)
+    aggregate_days(store, "m2", True, date(2025, 12, 30), date(2026, 1, 1))
+    nightly = store.doc("station")["nightly"]["m2"]
+    assert nightly["2025-12-31"] == {"n": 5, "co2_max": 1501, "h_co2_1000": 4, "h_co2_1400": 2, "h_co2_1500": 1}
+    assert "2025-12-30" not in nightly  # no reading that night
+    assert "2026-01-01" not in nightly  # 7 h (3000 ppm) is morning, not night
+    hours = store.doc("station")["hours"]["m2"]
+    assert hours["2025-12-31"] == {"n": 3, "humid": 2, "cold": 2}  # 70, 66 > 65; 19.0 is not < 19
+    assert hours["2026-01-01"] == {"n": 5, "humid": 0, "cold": 0}
