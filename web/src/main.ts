@@ -15,9 +15,10 @@ import { framedHtml, isFramed } from './frame';
 import { prefetchForOffline, unavailable, updateNetStatus } from './offline';
 import { PAGES, dataStatus } from './pages';
 import { type Route, allowed, parentOf, parseRoute, routeKey, simpleTabs, tabOf, titleOf, visibleTabs } from './router';
-import { IdleLock, REMEMBER_DAYS, idleSince } from './session';
+import { IdleLock, REMEMBER_DAYS, clearLockNotice, idleSince, lockNotice, markIdleLock } from './session';
 import { isIos, keyLoss, lossMessage, readMark, writeMark } from './storage';
 import { type SwipeDir, onSwipe, step } from './swipe';
+import { HOME_PERIODS, homePeriod } from './home';
 import { tenant } from './tenant';
 import { downloadBlob, esc, filtered, lastDay, roomName } from './ui';
 import { renderLoading, renderLock, showApp } from './views/lock';
@@ -356,11 +357,9 @@ app.addEventListener('keydown', (e) => {
 });
 
 // ------------------------------------------------------------------ swipe (S-7.11)
-/** Period choices of Accueil, in the order of its select: recent → older → all. */
-function periods(): string[] {
-  return ['30d', '12m', ...ds!.meta.years.map(String).reverse(), 'all'];
-}
-const PERIOD_LABEL: Record<string, string> = { '30d': '30 derniers jours', '12m': '12 derniers mois', all: "tout l'historique" };
+/** #311: the period of Accueil, in the order of its control (Mois · Saison · 12 mois · Année). */
+const periods = () => HOME_PERIODS.map(([k]) => k);
+const PERIOD_LABEL = Object.fromEntries(HOME_PERIODS) as Record<string, string>;
 
 /** Polite announcement for screen readers (the live region sits outside #app, never re-rendered). */
 function announce(msg: string) {
@@ -372,11 +371,11 @@ onSwipe(app, (zone, dir) => {
   if (!ds || state.simple) return;
   const route = currentRoute();
   if (zone === 'period' && route.page === 'accueil') {
-    // Swipe right goes back in time (older period), swipe left towards the present.
-    const next = step(periods(), state.period, dir === 'right' ? 1 : -1);
+    // Swipe right: the next, longer period; swipe left: back to the shorter one.
+    const next = step(periods(), homePeriod(state.home), dir === 'right' ? 1 : -1);
     if (!next) return;
     slide = dir;
-    setState({ period: next });
+    setState({ home: next });
     return announce(`Période : ${PERIOD_LABEL[next] ?? next}`);
   }
   if (zone === 'tab') {
@@ -399,15 +398,17 @@ window.addEventListener('offline', () => void updateNetStatus(ds));
 
 // ------------------------------------------------------------------ lock (S-8.11)
 /** Forget the decrypted data, the remembered key and the GitHub token, then show the lock screen. */
-async function lockApp() {
+async function lockApp(idleFor = 0) {
   idle.stop();
+  if (idleFor) markIdleLock(idleFor); // #334: the lock screen says why
+  else clearLockNotice(); // locked on purpose: no stale explanation
   settings.forgetToken();
   if (ds?.source !== 'demo') await forgetKeys();
   setDataset(null);
   shownRoute = null;
   await start();
 }
-const idle = new IdleLock(() => void lockApp());
+const idle = new IdleLock(() => void lockApp(state.lockAfter));
 // #255: once per decrypted dataset, not when the household view is toggled.
 onDatasetOpened(() => idle.start(state.lockAfter));
 onDatasetOpened(() => prefetchForOffline(ds!));
@@ -436,6 +437,7 @@ async function start() {
     let key = await recallKey('data');
     // Away longer than the inactivity delay (tab closed, phone asleep): the key is forgotten.
     if (key && idleSince(state.lockAfter)) {
+      markIdleLock(state.lockAfter);
       await forgetKeys();
       key = null;
     }
@@ -465,7 +467,8 @@ async function showLockScreen() {
     // Offline, never cached: the form stays (the passphrase may work once online), with a word.
     return renderLock(navigator.onLine ? '' : unavailable('Données'), true);
   }
-  renderLock('', resp.ok, resp.ok ? lossMessage(loss, isIos(navigator.userAgent, navigator.maxTouchPoints)) : '');
+  const why = lockNotice() || lossMessage(loss, isIos(navigator.userAgent, navigator.maxTouchPoints)); // #334
+  renderLock('', resp.ok, resp.ok ? why : '');
 }
 
 /** #250: why the remembered key did not open the data, in words. */

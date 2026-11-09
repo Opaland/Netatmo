@@ -4,9 +4,9 @@
 import { MONTHS_SHORT, addDays, minusYears } from '../aggregate';
 import type { Hourly } from '../analysis';
 import { ds, rerender } from '../app';
-import { barChart, cssVar, gridHeatmap } from '../charts';
+import { chartCaption, cssVar, gridHeatmap, lineChart } from '../charts';
 import { belowThreshold, hcVerdict, hourByMonth, peakExtraCost, waterHeaterHc } from '../checks';
-import { activeRooms, esc, fmtEur, fmtKwh, hcHpAt, lastDay, nf0, offCol, series, table, tableToggle } from '../ui';
+import { activeRooms, esc, fmtEur, fmtKwh, hcHpAt, lastDay, nf0, offCol, table, tableToggle } from '../ui';
 import { hour } from '../glossary';
 import { html } from '../trusted';
 import { lsKey } from '../scope';
@@ -108,20 +108,21 @@ export function drawWaterHeater(hourly: Hourly | null) {
   const rooms = waterRooms();
   const hc = waterHeaterHc(ds!.tariffs, rooms, offCol(), from, to);
   const thr = threshold();
-  barChart(el, {
+  // #306: a line against the alert threshold, on 50 – 100 % and in the water-heater blue
+  // (13 bars all at 90 % said nothing); a month under the threshold gets a red point.
+  const shares = hc.months.map((m) => (m.share === null ? null : Math.round(m.share * 100)));
+  const low = Math.min(50, ...shares.filter((v): v is number => v !== null).map((v) => Math.floor(v / 10) * 10));
+  lineChart(el, {
     labels: hc.months.map((m) => monthLabel(m.month)),
-    series: [
-      {
-        name: 'Part en heures creuses',
-        color: series(2),
-        data: hc.months.map((m) => (m.share === null ? null : Math.round(m.share * 100))),
-        colors: hc.months.map((m) => (belowThreshold(m.share, thr) ? cssVar('--state-bad') : series(2))),
-      },
-    ],
-    stacked: false,
+    series: [{ name: 'Part en heures creuses', color: cssVar('--usage-water'), data: shares }],
     price: null,
     unit: '%',
+    min: low,
+    max: 100,
+    mark: { value: Math.round(thr * 100), label: `seuil d'alerte ${Math.round(thr * 100)} %` },
   });
+  const under = hc.months.filter((m) => belowThreshold(m.share, thr)).map((m) => monthLabel(m.month));
+  chartCaption(el, under.length ? `Sous le seuil : ${under.join(', ')}.` : `Tous les mois au-dessus du seuil de ${Math.round(thr * 100)} %.`);
   document.getElementById('wh-threshold')?.addEventListener('change', (e) => {
     const v = Number((e.target as HTMLInputElement).value);
     if (!(v >= 50 && v <= 100)) return;

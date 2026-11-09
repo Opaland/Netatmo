@@ -1,14 +1,16 @@
 // Analyse: AI insight, energy signature, anomalies, calendar, hourly profile,
 // peak / off-peak split, Netatmo station and room temperatures.
-import { type DayRecord, addDays, bucketLabel, minusYears } from '../aggregate';
-import { anomalies, dayProfile, daysAbove, fitSeason, signaturePoints, tariffSplit, weekHourGrid } from '../analysis';
+import { type DayRecord, addDays, bucketLabel, minusYears, seasonOf } from '../aggregate';
+import { anomalies, dayProfile, daysAbove, tariffSplit, weekHourGrid } from '../analysis';
+import { type CiFit, MIN_DAYS, type SeasonSignatures, seasonSignatures, signatureDays } from '../indoorsig';
 import { datasetDoc, ds, rerender, setState, state } from '../app';
 import { calendarChart, cssVar, gridHeatmap, lineChart, scatterChart } from '../charts';
 import { loadHourly, loadRoom30, loadRoomState } from '../data';
 import { lazyCard } from '../lazy';
 import { unavailable } from '../offline';
-import { TEMP } from '../glossary';
-import { activeRooms, catColor, esc, fmt1, roomName, fmtKwh, lastDay, longDate, seg, series, table, tariffNames, measureColor, referenceColor } from '../ui';
+import { TEMP, dayLong, dayShort, seasonLabel } from '../glossary';
+import { weeklyMeans } from '../chart-theme';
+import { activeRooms, catColor, esc, fmt1, roomName, fmtKwh, lastDay, longDate, seasonStyle, seg, series, table, tariffNames, measureColor, referenceColor } from '../ui';
 import { hour } from '../glossary';
 import { SUSPECT_RATIO } from '../reconstitute';
 import { uncertainDays } from './quality';
@@ -52,10 +54,38 @@ function explanation(day: string): string {
   return parts.join(', ') || '—';
 }
 
-function seasonColor(season: string, seasons: string[]) {
-  // most recent season = slot 1, then 2, 3… (identity follows the season)
-  const i = seasons.length - 1 - seasons.indexOf(season);
-  return series(i);
+/** #303: a season with fewer heating days is not compared with the others as if it were complete. */
+export const PROVISIONAL_DAYS = 60;
+/** « 2025–2026 », « 2026–2027 (provisoire, 31 jours) ». */
+export function seasonName(season: string, days: number, current: number): string {
+  const y = Number(season.slice(0, 4));
+  return `${seasonLabel(y)}${days < PROVISIONAL_DAYS ? ` (provisoire, ${days} jours)` : y >= current ? ' (en cours)' : ''}`;
+}
+const n2 = (v: number) => v.toFixed(2).replace('.', ',').replace('-', '−');
+const ci = (v: number, c: [number, number], f: (x: number) => string) => `${f(v)} <small class="muted">[${f(c[0])} ; ${f(c[1])}]</small>`;
+/**
+ * #303: the one table of the signature (outdoor, and the indoor − outdoor difference when the
+ * station gives it), same days and same fit for both: the latest season first, a short one marked.
+ */
+export function signatureTable(sigs: SeasonSignatures[], current: number, withDelta: boolean): string {
+  if (!sigs.length) return '';
+  const fit = (f: CiFit | null, sign: 1 | -1, n: number) =>
+    f
+      ? [ci(sign * f.slope, sign === 1 ? f.slopeCi : [-f.slopeCi[1], -f.slopeCi[0]], n2), f.threshold !== null && f.thresholdCi ? `${ci(f.threshold, f.thresholdCi, fmt1)} °C` : '—']
+      : [`<span class="muted">trop peu de jours (${n}, ${MIN_DAYS} requis)</span>`, '—'];
+  return `${table(
+    [
+      'Saison',
+      'Jours de chauffe',
+      'Pente (kWh par °C en moins)',
+      'Plus de chauffe au-dessus de',
+      ...(withDelta ? ["Pente sur l'écart (kWh par °C d'écart)", "Chauffe au-delà d'un écart de"] : []),
+    ],
+    sigs
+      .slice()
+      .reverse()
+      .map((s) => [esc(seasonName(s.season, s.days, current)), s.days, ...fit(s.outdoor, -1, s.days), ...(withDelta ? fit(s.delta, 1, s.deltaDays) : [])]),
+  )}<p class="hint muted">Entre crochets, l'intervalle de confiance à 95 %. Jours de chauffe sous 15 °C dehors ; jours perdus ou estimés exclus. Une saison de moins de ${PROVISIONAL_DAYS} jours est provisoire (droite en pointillé).</p>`;
 }
 
 /**
@@ -133,7 +163,7 @@ export function renderAnalyse(view: HTMLElement, records: DayRecord[], part: Ana
       'temps',
       () =>
         tempRoom
-          ? `<section class="card"><div class="card-head"><h2>Températures de la pièce <small class="muted">${esc(roomName(tempRoom))}, °C, moyenne par jour, 12 derniers mois</small></h2></div>
+          ? `<section class="card"><div class="card-head"><h2>Températures de la pièce <small class="muted">${esc(roomName(tempRoom))}, °C, moyenne par semaine, 12 derniers mois</small></h2></div>
       <p class="hint muted">Mesurée par la sonde du radiateur ; la ${TEMP.setpoint} est celle du planning Intuis, en moyenne sur la journée.</p>
       <div class="chart" id="temp-chart" role="img" aria-label="${esc(roomName(tempRoom))} : température mesurée, ${TEMP.setpoint} et température extérieure, par jour"></div></section>`
           : '',
@@ -142,37 +172,32 @@ export function renderAnalyse(view: HTMLElement, records: DayRecord[], part: Ana
   view.innerHTML = html(cards.filter(([p]) => p === part).map(([, c]) => c()).join(''));
   const has = (id: string) => !!document.getElementById(id);
 
-  // signature
+  // signature (#303: the same days as the indoor signature, lost or estimated days and days
+  // without heating left out; a season still too short is dashed and called « provisoire »)
   if (ds!.weather && has('sig-chart')) {
-    const sig = signaturePoints(records, ds!.weather);
-    const seasons = [...sig.keys()].sort().slice(-3);
-    const rows: (string | number)[][] = [];
+    const exclude = uncertainDays(ds!.records, ds!.estimated, '0000-01-01', last);
+    const days = signatureDays(records, ds!.weather, ds!.station ?? null, null, exclude);
+    const sigs = seasonSignatures(days).slice(-3);
+    const cur = Number(seasonOf(last).slice(0, 4));
     scatterChart(document.getElementById('sig-chart')!, {
       xName: 'Température extérieure moyenne (°C)',
       yName: 'kWh / jour',
-      series: seasons.map((s) => {
-        const pts = sig.get(s)!;
-        const fit = fitSeason(pts);
-        if (fit) {
-          rows.push([
-            esc(s.replace('-', '–')),
-            `${(-fit.slope).toFixed(2).replace('.', ',')} kWh/°C`,
-            fit.balance !== null ? `${fmt1(fit.balance)} °C` : '—',
-            fit.r2.toFixed(2).replace('.', ','),
-          ]);
-        }
+      series: sigs.map((sg) => {
+        const y = Number(sg.season.slice(0, 4));
+        const style = seasonStyle(y, cur);
+        const pts = days.get(sg.season)!.map((p) => [Math.round(p.tOut * 10) / 10, Math.round(p.kwh * 10) / 10, dayLong(p.day)] as [number, number, string]);
         const xs = pts.map((p) => p[0]);
+        const f = sg.outdoor;
         return {
-          name: s.replace('-', '–'),
-          color: seasonColor(s, seasons),
+          name: seasonName(sg.season, sg.days, cur),
+          color: style.color,
+          provisional: style.dashed || sg.days < PROVISIONAL_DAYS,
           points: pts,
-          fit: fit ? { slope: fit.slope, intercept: fit.intercept, from: Math.min(...xs), to: Math.min(15, fit.balance ?? 15) } : null,
+          fit: f ? { slope: f.slope, intercept: f.intercept, from: Math.min(...xs), to: Math.min(15, f.threshold ?? 15) } : null,
         };
       }),
     });
-    document.getElementById('sig-table')!.innerHTML = html(
-      rows.length ? table(['Saison', 'Pente (kWh par °C en moins)', 'Plus de chauffe au-dessus de', 'Fiabilité (R²)'], rows.reverse()) : '',
-    );
+    document.getElementById('sig-table')!.innerHTML = html(signatureTable(sigs, cur, false));
   }
   // calendar
   const perDay = new Map<string, number>();
@@ -267,7 +292,7 @@ function stationCard() {
   const st = ds!.station;
   if (!st) return '';
   return `<section class="card">
-    <div class="card-head"><h2>Station météo Netatmo <small class="muted">moyenne par jour, 12 derniers mois</small></h2>
+    <div class="card-head"><h2>Station météo Netatmo <small class="muted">moyenne par semaine, 12 derniers mois</small></h2>
       <div class="controls">${seg('stationMetric', state.stationMetric, [['temp', 'Température'], ['hum', 'Humidité'], ['co2', 'CO₂']], 'Mesure')}</div>
     </div>
     ${state.stationMetric === 'co2' ? '<p class="hint muted">CO₂ : au-delà de 1 000 ppm, l\'air est confiné (aérer) ; 1 500 ppm et plus, aération insuffisante. Mesuré par les modules intérieurs seulement.</p>' : ''}
@@ -288,11 +313,17 @@ function drawStation() {
   const keys = Object.keys(st.modules).filter((k) => state.stationMetric !== 'co2' || st.modules[k].indoor);
   // identity follows the module (its order in the station), never its rank
   const color = (k: string) => (st.modules[k].type === 'NAModule1' ? cssVar('--text-muted') : series(2 + Object.keys(st.modules).indexOf(k)));
+  // #306: 365 noisy daily values per module → one mean per week (« sem. du 3 nov. »)
+  const week = weeklyMeans(
+    days,
+    keys.map((k) => days.map((d) => st.daily[k]?.[d]?.[col] ?? null)),
+  );
   lineChart(el, {
-    labels: days.map((d) => bucketLabel(d, 'day')),
-    series: keys.map((k) => ({ name: st.modules[k].name, color: color(k), data: days.map((d) => st.daily[k]?.[d]?.[col] ?? null) })),
+    labels: week.labels.map((d) => `sem. du ${dayShort(d, true)}`),
+    series: keys.map((k, i) => ({ name: st.modules[k].name, color: color(k), data: week.data[i] })),
     price: null,
     unit,
+    mark: state.stationMetric === 'co2' ? { value: 1000, label: '1 000 ppm' } : state.stationMetric === 'hum' ? { value: 65, label: '65 %' } : undefined,
   });
   // winter averages (Nov–Mar) per module, last two seasons
   const seasonAvg = (k: string, season: number) => {
