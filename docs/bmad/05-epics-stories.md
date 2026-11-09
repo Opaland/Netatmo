@@ -1,22 +1,22 @@
 # 05 · Épopées et récits utilisateur (PO / Scrum Master)
 
 Taille : **S** ≤ ½ jour · **M** 1-2 jours · **L** > 2 jours. Priorité MoSCoW : **M**ust, **S**hould,
-**C**ould, **W**on't (pour l'instant). Statut : **Fait** · **En cours** (v1.1, développement parallèle)
-· **À faire**. Critères au format Given / When / Then, abrégés **G / Q / A** (Given, Quand, Alors).
+**C**ould, **W**on't (pour l'instant). Statut : **Fait** · **En cours** · **À faire**. Le suivi vivant est
+dans les [issues GitHub](https://github.com/Opaland/Netatmo/issues) (une par récit, voir `docs/PROJET.md`). Critères au format Given / When / Then, abrégés **G / Q / A** (Given, Quand, Alors).
 
 ## Vue d'ensemble
 
 | Épopée | Objectif | Version | Statut global |
 |---|---|---|---|
 | E1 | Collecte fiable et observable | 1.0-1.2 | Fait / À faire |
-| E2 | Coût réel en euros | 1.1 | En cours |
-| E3 | Météo, DJU et signature énergétique | 1.1 | En cours |
-| E4 | Visualisations « comprendre » | 1.1 | En cours |
-| E5 | Synthèse IA | 1.1-2 | En cours / conditionnel |
-| E6 | Rapport annuel | 1.1-1.3 | En cours |
+| E2 | Coût réel en euros | 1.1 | Fait (tarif réglementé EDF, open data CRE) |
+| E3 | Météo, DJU, signature, station Netatmo complète | 1.1-1.2 | Fait / En cours |
+| E4 | Visualisations « comprendre » | 1.1 | Fait |
+| E5 | Synthèse IA | 1.1-2 | Fait / conditionnel |
+| E6 | Rapport annuel | 1.1-1.3 | Fait / À faire |
 | E7 | Accessibilité, performance, UX famille | 1.2 | À faire |
 | E8 | Sécurité et confidentialité | 1.2 | À faire |
-| E9 | Pont local en lecture seule (domotique) | 1.3 | À faire, conditionnel |
+| E9 | Domotique : volets Wiser (étude), pont local | 1.2-1.3 | Étude en cours, conditionnel |
 | E10 | Diffusion | 2 | À faire |
 
 ## E1 · Collecte fiable et observable
@@ -34,39 +34,40 @@ Taille : **S** ≤ ½ jour · **M** 1-2 jours · **L** > 2 jours. Priorité MoSC
 
 | ID | Récit | Critères d'acceptation | T | P | Statut |
 |---|---|---|---|---|---|
-| S-2.1 | En tant que propriétaire, je veux conserver `$1` et `$2` séparément, afin de calculer HP et HC | G une réponse avec `$1`/`$2` · Q la collecte tourne · A `tariffs[room][jour] = [Wh $0, Wh $1, Wh $2]` | M | M | En cours |
-| S-2.2 | En tant que gestionnaire du budget, je veux saisir prix HP, HC, base et abonnement avec une date d'effet, afin d'avoir un coût juste sur plusieurs années | G deux grilles de prix datées · Q j'affiche 2024 et 2025 · A chaque jour utilise la grille en vigueur ; l'abonnement est réparti au prorata | M | M | En cours |
+| S-2.1 | En tant que propriétaire, je veux conserver `$1` et `$2` séparément, afin de calculer HP et HC | G une réponse avec `$1`/`$2` · Q la collecte tourne · A `tariffs[room][jour] = [Wh $0, Wh $1, Wh $2]` | M | M | Fait (v1.1) |
+| S-2.2 | En tant que gestionnaire du budget, je veux le prix HP/HC et l'abonnement en vigueur chaque jour (tarif réglementé EDF, open data CRE, ou prix saisis), afin d'avoir un coût juste sur plusieurs années | G deux grilles de prix datées · Q j'affiche 2024 et 2025 · A chaque jour utilise la grille en vigueur ; l'abonnement est réparti au prorata | M | M | Fait (v1.1) |
 | S-2.3 | En tant que gestionnaire du budget, je veux recouper le coût avec une facture, afin d'avoir confiance | G une facture réelle · Q je compare la période · A l'écart est expliqué (périmètre : chauffage + eau chaude seulement) | S | S | À faire |
 
 ## E3 · Météo, DJU et signature énergétique
 
 | ID | Récit | Critères d'acceptation | T | P | Statut |
 |---|---|---|---|---|---|
-| S-3.1 | En tant que propriétaire, je veux la température extérieure quotidienne d'Open-Meteo, afin de calculer des DJU sans clé | G les coordonnées de la maison · Q la collecte tourne · A `weather.outdoor[jour] = [min, max, moy]`, les derniers jours complétés par la prévision | M | M | En cours |
-| S-3.2 | En tant que météorologue amateur, je veux utiliser ma station Netatmo, afin d'avoir mes propres mesures | G les secrets Netatmo · Q la collecte tourne · A `source` = station, le jeton tourné est sauvegardé chiffré ; sans secret, repli Open-Meteo | M | S | En cours |
-| S-3.3 | En tant qu'analyste, je veux les DJU (base 18 °C modifiable) et les kWh/DJU par saison, afin de comparer à climat égal | G deux saisons · Q j'ouvre la comparaison · A kWh/DJU affichés par saison et par pièce | S | M | En cours |
-| S-3.4 | En tant que propriétaire, je veux la signature énergétique avec régression, afin de voir l'effet d'un réglage | G ≥ 30 jours de chauffe · Q j'ouvre la vue · A nuage coloré par saison, droite, pente et seuil de non-chauffage affichés | S | M | En cours |
+| S-3.1 | En tant que propriétaire, je veux la température extérieure quotidienne d'Open-Meteo, afin de calculer des DJU sans clé | G les coordonnées de la maison · Q la collecte tourne · A `weather.outdoor[jour] = [min, max, moy]`, les derniers jours complétés par la prévision | M | M | Fait (v1.1) |
+| S-3.2 | En tant que météorologue amateur, je veux utiliser ma station Netatmo, afin d'avoir mes propres mesures | G les secrets Netatmo · Q la collecte tourne · A `source` = station, le jeton tourné est sauvegardé chiffré ; sans secret, repli Open-Meteo | M | S | Fait (v1.1) |
+| S-3.3 | En tant qu'analyste, je veux les DJU (base 18 °C modifiable) et les kWh/DJU par saison, afin de comparer à climat égal | G deux saisons · Q j'ouvre la comparaison · A kWh/DJU affichés par saison et par pièce | S | M | Fait (v1.1) |
+| S-3.5 | En tant que propriétaire de la station Netatmo, je veux l'historique de tous ses modules (salon, chambre des enfants, cave, extérieur : température, humidité, CO₂), afin de relier confort intérieur, météo et consommation | G les secrets Netatmo · Q la collecte tourne · A `station.enc.json` contient min / max / moyenne par module et par jour ; l'application affiche les courbes par module | M | S | En cours |
+| S-3.4 | En tant que propriétaire, je veux la signature énergétique avec régression, afin de voir l'effet d'un réglage | G ≥ 30 jours de chauffe · Q j'ouvre la vue · A nuage coloré par saison, droite, pente et seuil de non-chauffage affichés | S | M | Fait (v1.1) |
 
 ## E4 · Visualisations « comprendre »
 
 | ID | Récit | Critères d'acceptation | T | P | Statut |
 |---|---|---|---|---|---|
-| S-4.1 | En tant que membre du foyer, je veux une carte verdict en €, afin de savoir si le mois est normal | G ≥ 1 année passée · Q j'ouvre l'appli · A « Normal / Élevé / Bas » en texte + icône + couleur, écart en € vs moyenne des années passées | S | M | En cours |
-| S-4.2 | En tant que propriétaire, je veux une cascade N-1 → N par pièce, afin de savoir qui explique l'écart | G deux années · Q j'ouvre la cascade · A la somme des barres = écart total, en kWh et en € | S | M | En cours |
-| S-4.3 | En tant que propriétaire, je veux un calendrier thermique, afin de repérer froid et absences | G plusieurs années · Q j'ouvre la vue · A une ligne par année, une case par jour, valeur au toucher | S | S | En cours |
-| S-4.4 | En tant que gestionnaire du budget, je veux une projection de fin d'année, afin d'anticiper | G l'année en cours · Q j'ouvre l'accueil · A projection en € avec méthode indiquée (rythme actuel × profil des années passées) | S | M | En cours |
-| S-4.5 | En tant que télétravailleur, je veux un profil jour × heure, afin de voir le coût des journées à la maison | G des données `1hour` · Q j'ouvre les profils · A carte 7 × 24 chargée à la demande depuis `YYYY.hourly` | M | S | En cours |
-| S-4.6 | En tant que membre frileux, je veux température mesurée et consigne par pièce, afin de juger le confort | G des `temps` · Q je choisis une pièce · A les deux courbes sur la conso ; consigne absente = trou, pas zéro | M | S | En cours |
-| S-4.7 | En tant que propriétaire, je veux voir la part chauffage + eau chaude dans le Linky, afin de situer le reste du foyer | G `linky.enc.json` · Q j'ouvre la vue · A part en % par mois ; sans document, la vue est masquée | M | C | En cours |
+| S-4.1 | En tant que membre du foyer, je veux une carte verdict en €, afin de savoir si le mois est normal | G ≥ 1 année passée · Q j'ouvre l'appli · A « Normal / Élevé / Bas » en texte + icône + couleur, écart en € vs moyenne des années passées | S | M | Fait (v1.1) |
+| S-4.2 | En tant que propriétaire, je veux une cascade N-1 → N par pièce, afin de savoir qui explique l'écart | G deux années · Q j'ouvre la cascade · A la somme des barres = écart total, en kWh et en € | S | M | Fait (v1.1) |
+| S-4.3 | En tant que propriétaire, je veux un calendrier thermique, afin de repérer froid et absences | G plusieurs années · Q j'ouvre la vue · A une ligne par année, une case par jour, valeur au toucher | S | S | Fait (v1.1) |
+| S-4.4 | En tant que gestionnaire du budget, je veux une projection de fin d'année, afin d'anticiper | G l'année en cours · Q j'ouvre l'accueil · A projection en € avec méthode indiquée (rythme actuel × profil des années passées) | S | M | Fait (v1.1) |
+| S-4.5 | En tant que télétravailleur, je veux un profil jour × heure, afin de voir le coût des journées à la maison | G des données `1hour` · Q j'ouvre les profils · A carte 7 × 24 chargée à la demande depuis `YYYY.hourly` | M | S | Fait (v1.1) |
+| S-4.6 | En tant que membre frileux, je veux température mesurée et consigne par pièce, afin de juger le confort | G des `temps` · Q je choisis une pièce · A les deux courbes sur la conso ; consigne absente = trou, pas zéro | M | S | Fait (v1.1) |
+| S-4.7 | En tant que propriétaire, je veux voir la part chauffage + eau chaude dans le Linky, afin de situer le reste du foyer | G `linky.enc.json` · Q j'ouvre la vue · A part en % par mois ; sans document, la vue est masquée | M | C | Fait (v1.1) |
 | S-4.8 | En tant que propriétaire, je veux des alertes d'anomalie déterministes, afin de repérer une dérive | G un jour hors signature > 2σ · Q la collecte tourne · A le jour est marqué dans le calendrier, avec son écart | M | S | À faire |
 
 ## E5 · Synthèse IA
 
 | ID | Récit | Critères d'acceptation | T | P | Statut |
 |---|---|---|---|---|---|
-| S-5.1 | En tant que membre du foyer, je veux une synthèse mensuelle rédigée, afin de comprendre sans lire les graphiques | G `ANTHROPIC_API_KEY` présent · Q le mois se termine · A `insights.enc.json` contient le texte, le modèle et la période ; sans secret, rien n'échoue | M | S | En cours |
-| S-5.2 | En tant qu'ingénieur LLM, je veux que chaque nombre cité soit vérifié contre les faits calculés, afin d'éviter les hallucinations | G une réponse citant un nombre absent des faits · Q la vérification tourne · A une régénération, puis publication sans texte IA avec avertissement | S | M | À faire |
-| S-5.3 | En tant que DPO, je veux voir exactement ce qui a été envoyé, afin de contrôler la minimisation | G une synthèse · Q je touche « Données envoyées » · A le JSON d'entrée s'affiche ; il ne contient ni coordonnées, ni identifiants, ni horaire | S | M | À faire |
+| S-5.1 | En tant que membre du foyer, je veux une synthèse mensuelle rédigée, afin de comprendre sans lire les graphiques | G `ANTHROPIC_API_KEY` présent · Q le mois se termine · A `insights.enc.json` contient le texte, le modèle et la période ; sans secret, rien n'échoue | M | S | Fait (v1.1) |
+| S-5.2 | En tant qu'ingénieur LLM, je veux que chaque nombre cité soit vérifié contre les faits calculés, afin d'éviter les hallucinations | G une réponse citant un nombre absent des faits · Q la vérification tourne · A une régénération, puis publication sans texte IA avec avertissement | S | M | Fait (v1.1) |
+| S-5.3 | En tant que DPO, je veux voir exactement ce qui a été envoyé, afin de contrôler la minimisation | G une synthèse · Q je touche « Données envoyées » · A le JSON d'entrée s'affiche ; il ne contient ni coordonnées, ni identifiants, ni horaire | S | M | Fait (v1.1) |
 | S-5.4 | En tant qu'utilisateur curieux, je veux poser des questions avec ma propre clé, afin d'explorer librement | G la synthèse lue ≥ 2 mois sur 3 (ADR-5) · Q j'active le chat · A clé en mémoire seulement, contexte affiché, désactivé par défaut | L | C | À faire (conditionnel) |
 | S-5.5 | En tant que sceptique, je veux que l'IA ne détecte ni ne prévoie, afin de garder des chiffres testables | — | — | W | Décidé |
 
@@ -74,7 +75,7 @@ Taille : **S** ≤ ½ jour · **M** 1-2 jours · **L** > 2 jours. Priorité MoSC
 
 | ID | Récit | Critères d'acceptation | T | P | Statut |
 |---|---|---|---|---|---|
-| S-6.1 | En tant que propriétaire, je veux un rapport annuel imprimable, afin de garder une trace et le partager | G une année complète · Q j'imprime (A4) · A bilan, faits marquants, comparatif N-1, sans contrôles d'interface, lisible en noir et blanc | M | S | En cours |
+| S-6.1 | En tant que propriétaire, je veux un rapport annuel imprimable, afin de garder une trace et le partager | G une année complète · Q j'imprime (A4) · A bilan, faits marquants, comparatif N-1, sans contrôles d'interface, lisible en noir et blanc | M | S | Fait (v1.1) |
 | S-6.2 | En tant qu'auditeur, je veux saisir surfaces et marqueurs « travaux », afin de comparer avant / après | G un marqueur daté · Q j'ouvre la signature · A deux droites (avant / après) et kWh/m² | M | C | À faire |
 
 ## E7 · Accessibilité, performance, UX famille
@@ -102,6 +103,8 @@ Taille : **S** ≤ ½ jour · **M** 1-2 jours · **L** > 2 jours. Priorité MoSC
 | S-9.0 | En tant que propriétaire, je veux mesurer l'effet des volets avant de construire, afin de ne pas coder pour rien | G 4 semaines d'hiver avec heures de fermeture notées · Q je compare la conso nocturne à la signature · A décision go / no-go écrite dans l'ADR-7 | S | S | À faire |
 | S-9.1 | En tant que propriétaire du NAS, je veux un conteneur pont qui pousse `local-YYYY.enc.json`, afin d'archiver volets et capteurs | G le go de S-9.0 · Q le pont tourne 24 h · A un fichier chiffré, agrégats quotidiens seulement, poussé avant 04:00 UTC, sans port entrant | L | C | À faire |
 | S-9.2 | En tant que propriétaire, je veux voir l'effet des volets dans la signature, afin de décider de mes habitudes | G ≥ 30 jours de données locales · Q j'ouvre l'analyse · A effet estimé avec incertitude, ou « effet non significatif » | M | C | À faire |
+| S-9.4 | En tant que propriétaire, je veux savoir s'il est utile de piloter les volets Wiser selon la température ou la consommation, afin de ne construire que si c'est rentable | G l'étude `docs/etudes/volets-wiser.md` · Q elle est lue · A décision go / no-go argumentée et chiffrée | S | S | En cours |
+| S-9.5 | En tant que propriétaire, je veux connaître la part de consommation des volets, afin de savoir si elle compte | G l'étude · Q elle est lue · A ordre de grandeur en kWh/an comparé au chauffage | S | C | En cours |
 | S-9.3 | En tant que passionné, je veux piloter volets et Hue depuis l'appli | — | — | W | Décidé (ADR-6) |
 
 ## E10 · Diffusion

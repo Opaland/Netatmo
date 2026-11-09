@@ -1,0 +1,18 @@
+name: Étude (mesurer le besoin)
+description: Faut-il construire cette idée ? On mesure d'abord, on décide ensuite.
+labels: ["étude"]
+body:
+  - type: textarea
+    id: idee
+    attributes:
+      label: Idée
+    validations:
+      required: true
+  - type: textarea
+    id: question
+    attributes:
+      label: Question à trancher et mesure proposée
+  - type: textarea
+    id: critere
+    attributes:
+      label: Critère de décision (go / no-go)

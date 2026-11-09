@@ -1,0 +1,19 @@
+name: Bug
+description: Quelque chose ne marche pas comme prévu
+labels: ["bug"]
+body:
+  - type: textarea
+    id: constat
+    attributes:
+      label: Ce qui se passe
+      description: Ne collez jamais de données personnelles, d'identifiants ou de valeurs de consommation.
+    validations:
+      required: true
+  - type: textarea
+    id: attendu
+    attributes:
+      label: Ce qui était attendu
+  - type: input
+    id: lien
+    attributes:
+      label: Lien vers le run GitHub Actions (si collecte)
