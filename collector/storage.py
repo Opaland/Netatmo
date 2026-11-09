@@ -12,6 +12,7 @@ data/
   weather.enc.json        {"source": "...", "outdoor": {"YYYY-MM-DD": [min, max, mean]},
                            "indoor": {"YYYY-MM-DD": mean}}
   linky.enc.json          {"daily": {"YYYY-MM-DD": Wh}, "pmax": {"YYYY-MM-DD": kVA},
+                           "pmax_at": {"YYYY-MM-DD": "HH:MM"}, "index": {series: {"YYYY-MM-DD": Wh}},
                            "curve_scan": "YYYY-MM-DD" (last day asked for the load curve),
                            "unit": "Wh" | "kWh", "pmax_unit": "VA" | "kVA" (unit of the raw API
                            values, decided once and kept: enedis.py)}
@@ -26,6 +27,8 @@ data/
   netatmo-token.enc.json  rotating refresh token of the Netatmo weather station (optional)
   shelly.enc.json         Shelly plugs: daily Wh per plug from cumulative counters (collector/shelly.py)
   ha.enc.json             Home Assistant daily aggregates per sensor, imported by hand (homeassistant.py)
+  devices.enc.json        v1.5: health of the devices (modules answering, firmware changes, gateway
+                          restarts and Wi-Fi, Tempo colour of the gateway): collector/devices.py
 """
 
 from __future__ import annotations

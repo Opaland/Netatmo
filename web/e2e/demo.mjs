@@ -428,6 +428,14 @@ try {
     } catch (err) {
       errors.push(`${name}/settings: cartes locataire ou alerte froid non rendues (${err})`);
     }
+    // v1.5: state of the devices (station battery, gateway, Intuis contract, Shelly clamps)
+    try {
+      await page.waitForSelector('#devices-card [data-shelly-role]', { timeout: 15000 });
+      const text = await page.locator('#devices-card').innerText();
+      for (const want of [/Pile faible/, /Intuis indique/, /Redémarrée 1 fois/, /Heure du pic/]) if (!want.test(text)) errors.push(`${name}/settings: état des appareils sans ${want}`);
+    } catch (err) {
+      errors.push(`${name}/settings: carte « État des appareils » non rendue (${err})`);
+    }
     await audit(page, `${name}/settings`);
     await page.screenshot({ path: `${OUT}/${name}-settings.png`, fullPage: true }); // S-7.14: inventaire
     // S-12.3: invite a member of the household: a QR code of the address, never the passphrase

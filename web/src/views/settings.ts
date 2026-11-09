@@ -24,6 +24,7 @@ import { lazyAction, lazyCard } from '../lazy';
 import { showBuild } from '../build';
 import { loadVotes, usefulRate } from '../insight';
 import { tenant, tenantNote } from '../tenant';
+import { intuisContractLine } from './devices-quality';
 
 let settingsRepo = repoFromLocation() ?? 'Opaland/Netatmo';
 let configured: Set<string> | null = null;
@@ -72,11 +73,12 @@ export function renderSettings(view: HTMLElement) {
     <ul class="status-list">
       ${status(true, 'Radiateurs et chauffe-eau Intuis', 'intuis')}
       ${status(!!m.weather_source, `Météo (${m.weather_source === 'netatmo' ? 'station Netatmo' : 'Open-Meteo'})`, m.weather_source === 'netatmo' ? 'netatmo' : 'open-meteo', false)}
-      ${status(!!(m as { has_station?: boolean }).has_station, 'Station Netatmo, tous les modules', 'netatmo')}
+      ${status(!!(m as { has_station?: boolean }).has_station, 'Station Netatmo, tous les modules', 'netatmo')}${noteLine(src.netatmo)}
       ${status(!!m.has_linky || !!src.linky, 'Compteur Linky', 'linky')}
       ${status(!!(m as { has_shelly?: boolean }).has_shelly || !!src.shelly, 'Prises Shelly', 'shelly')}${noteLine(src.shelly)}
       ${src['home-assistant'] ? status(true, 'Home Assistant (import manuel)', 'home-assistant', false) : ''}
       ${status(!!ds!.insights, 'Analyse IA mensuelle', 'ia')}
+      ${src.appareils ? status(true, `État des appareils Intuis${src.appareils.note ? ` (${esc(src.appareils.note)})` : ''}`, 'appareils', false) : ''}
       ${status(!!m.has_roomstate, `Relevé horaire de l'état des pièces${src['releve-horaire']?.note ? ` (${esc(src['releve-horaire'].note)})` : ''}`, 'releve-horaire', false)}
     </ul>
     ${iaRateLine()}
@@ -84,6 +86,7 @@ export function renderSettings(view: HTMLElement) {
   </section>
   <section class="card" id="tenant-card" hidden></section>
   <section class="card" id="cold-card" hidden></section>
+  <section class="card" id="devices-card" hidden></section>
   ${
     ds!.source === 'demo'
       ? '<section class="card"><p class="notice">Mode démonstration : les paramètres sont désactivés.</p></section>'
@@ -171,6 +174,7 @@ export function renderSettings(view: HTMLElement) {
   void showBuild(document.getElementById('build-info'));
   // S-12.6 tenant mode, S-12.5 prolonged cold alert: lazy modules
   void lazyCard(() => import('./tenant-card'), (x) => x.mountTenant(document.getElementById('tenant-card')), { zone: 'tenant-card', what: 'Mode locataire' });
+  void lazyCard(() => import('./devices-card'), (x) => x.mountDevices(document.getElementById('devices-card')), { zone: 'devices-card', what: 'État des appareils' });
   void lazyCard(() => import('./coldalert'), (x) => x.mountColdSettings(document.getElementById('cold-card'), () => settingsRepo), { zone: 'cold-card', what: 'Alerte froid prolongé' });
 }
 
@@ -200,6 +204,7 @@ function contractSection() {
       tous les appareils affichent alors le même coût. Il n'apparaît jamais dans les journaux publics.</p>
     ${state}
     ${table(['À partir du', 'Offre', 'Puissance'], rows, 99)}
+    ${intuisContractLine()}
     <button type="button" class="primary small" id="contract-share-btn" ${hasToken() && info.source !== 'shared' ? '' : 'disabled'}>Partager ce contrat</button>
     <p class="hint muted">Modifiable dans le menu ⋮ → Prix. Le partage s'applique sur les autres appareils après la prochaine collecte.</p>
   </section>`;

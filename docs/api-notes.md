@@ -330,6 +330,70 @@ Règles utiles à l'affichage :
 - Les jours sont recalculés à chaque collecte sur la fenêtre téléchargée (plus la veille, pour la
   nuit à cheval) : une nuit incomplète le matin est complétée le lendemain.
 
+### Piles et signal (S-1.21, #215)
+
+Lus dans la réponse de `getstationsdata` déjà reçue chaque nuit (aucun appel en plus) :
+`station.enc.json` gagne `"health": {"m1": {"YYYY-MM-DD": [batterie %, signal, répond 0/1]}}`, une
+valeur par nuit. Batterie : `battery_percent` (modules radio ; `null` pour le module principal, sur
+secteur). Signal : `rf_status` (modules radio, 90 = faible, 60 = excellent) ou `wifi_status` (module
+principal, 86 = faible, 56 = bon) : plus bas = meilleur. « Répond » : 0 si `reachable` est faux ou si
+`last_seen` (`last_status_store` pour le module principal) date de plus de **6 h**.
+Seuil « pile faible » : **< 15 %**. Le journal public et l'état des sources disent « pile faible :
+N module(s) », jamais le nom. Les versions `firmware` vont dans `devices.enc.json` (ci-dessous).
+
+## État des appareils Intuis (v1.5 : #214, #216, #276, #278)
+
+La collecte nocturne lit **une fois** `homestatus` (1 appel Intuis) après le relevé horaire ; le
+relevé horaire (S-13.2) garde en plus, par liste blanche : `reachable`, `connection_status`
+(modules), `anticipating`, `lowering` (pièces) et, pour la passerelle `NMG` (sans son id),
+`uptime`, `wifi_strength`, `therm_setpoint_day_color_type`.
+
+- `roomstate.enc.json` gagne par pièce et par jour `offline_h` (un module de la pièce injoignable),
+  `anticipating_h`, `lowering_h` (même calcul au prorata que les autres heures).
+- **Module injoignable** : `reachable` faux, `connection_status` parmi `disconnected`, `offline`,
+  `unreachable`… (valeurs **à confirmer**), ou `last_seen` de plus de 6 h. Journal : « N module(s)
+  injoignable(s) » ; issue facultative (variable `DEVICE_ALERT=true`) : types et dates seulement.
+- **Redémarrage de la passerelle** (coupure de courant probable) : l'heure de démarrage déduite
+  (relevé − `uptime`) avance de plus de **15 min** entre deux relevés. La première observation
+  enregistre le dernier démarrage connu (antérieur au suivi). Wi-Fi : `[min, moyenne, max, n]` par jour
+  (échelle de la passerelle, à confirmer).
+- **Couleur Tempo de la passerelle** : rangée par jour Tempo (6 h → 6 h). L'appli la compare à
+  api-couleur-tempo.fr (vue Qualité) et ne comble un jour absent que si les deux sources concordent
+  sur au moins 90 % d'au moins 7 jours (la correspondance des valeurs reste **à confirmer**).
+- **Contrat vu par Intuis** (`homesdata`, sans appel en plus) : `tariff`, `tariff_option`,
+  `price_type` des zones du planning sélectionné, `contract_power_unit` (et une puissance si un champ
+  numérique la donne), dans la méta chiffrée `intuis_contract`. Paramètres → Contrat l'affiche et
+  avertit s'il diffère du contrat partagé.
+
+`devices.enc.json` (petit, chargé au démarrage) :
+
+```jsonc
+{
+  "ids":      {"<id API du module>": "i0"},                   // jamais journalisé
+  "modules":  {"i0": {"type": "NMH", "room": "<id pièce>", "setup": "YYYY-MM-DD", "fw": "105"},
+               "m1": {"type": "NAModule1", "fw": "50"}},      // modules de la station : clés de station.enc.json
+  "reach":    {"i0": {"YYYY-MM-DD": 1}},                      // 1 répond, 0 injoignable (lecture nocturne)
+  "firmware": {"i0": [["YYYY-MM-DD", "104", "105"]]},         // changements seulement, date de la collecte
+  "gateway":  {"last": {"t": 1731130000, "boot": 1730000000},
+               "boots": ["YYYY-MM-DDTHH:MM"],                 // démarrages, heure locale
+               "wifi": {"YYYY-MM-DD": [min, moyenne, max, n]}},
+  "tempo":    {"YYYY-MM-DD": "blue"}                          // couleur connue de la passerelle
+}
+```
+
+## Linky : heure du pic et index par cadran (#219, #277)
+
+- `linky.enc.json` gagne `pmax_at` : `{"YYYY-MM-DD": "HH:MM"}` (heure locale du maximum), quand
+  l'horodatage de `puissance_conso_max_quotidienne` porte une heure (format **à confirmer** : le
+  diagnostic « inventaire » compte les points datés à l'heure). `pmax` est inchangé.
+- `index_consommation` (API Enedis v2 via Conso API) : un appel par nuit (les 10 derniers jours ;
+  12 mois au premier passage). Format non documenté : chaque relevé daté est rangé sous les libellés
+  rencontrés (calendrier, classe temporelle), par exemple `distributeur.hph`, ou `total`.
+  `linky.index = {série: {"YYYY-MM-DD": Wh}}`, `index_status` = dernier statut HTTP (400 : série non
+  servie, sans erreur de collecte). La vue Qualité compare chaque jour la somme des écarts d'index
+  d'un calendrier à la consommation quotidienne (écart signalé au-delà de 2 %), un index daté D
+  étant lu au début de D.
+
 ## Prises Shelly (Shelly Cloud Control API, S-1.17)
 
 Source facultative (`collector/shelly.py`). Secrets : `SHELLY_AUTH_KEY` (clé) et `SHELLY_SERVER`
@@ -356,6 +420,14 @@ Vérifié le 9 novembre 2026 sur la [documentation officielle](https://shelly-ap
   pour un réfrigérateur, approché pour un lave-linge). Compteur en baisse (redémarrage, coupure) :
   seule la nouvelle valeur compte, jours marqués estimés. Intervalle de plus de 30 h (prise hors
   ligne, collecte manquée) : jours marqués estimés ; au-delà de 45 jours, l'intervalle est ignoré.
+- **Compteurs à pinces** (S-1.30, #279) : Shelly EM Gen3 / Pro EM rangent l'énergie dans
+  `em1data:N.total_act_energy` (Wh, [doc EM1Data](https://shelly-api-docs.shelly.cloud/gen2/ComponentsAndServices/EM1Data)),
+  le Pro 3EM dans `emdata:N.total_act` ; l'énergie renvoyée au réseau (`*_ret_*`) est ignorée. Un
+  appareil à **plusieurs canaux** donne **une série par canal** (`p2c0`, `p2c1`, nommées « Appareil ·
+  canal N ») au lieu de leur somme ; un appareil à un canal garde sa clé `pN` (les prises existantes
+  gardent leur historique). Paramètres → État des appareils permet de renommer un canal et de le
+  marquer « arrivée générale » (contrôle) ou « chauffe-eau » (déjà compté par Intuis) : ces deux rôles
+  restent hors de la décomposition des autres usages. Noms et rôles restent sur l'appareil.
 - **Prise sans compteur** (puissance instantanée seulement) : gardée avec `usable: false` et signalée
   « non exploitable sans hub » dans l'état des sources. Les appareils sans mesure (capteurs) sont ignorés.
 - Erreurs : HTTP 401/403 ou `isok: false` avec une erreur de clé → jeton refusé (issue « 🔑 Jeton à
@@ -366,7 +438,9 @@ Document `data/shelly.enc.json` (chiffré, chargé au démarrage de l'appli, pet
 
 ```jsonc
 {
-  "plugs":     {"p0": {"id": "<id Shelly>", "name": "Réfrigérateur", "model": "SNPL-00112EU", "gen": "G2", "usable": true}},
+  "plugs":     {"p0": {"id": "<id Shelly>", "name": "Réfrigérateur", "model": "SNPL-00112EU", "gen": "G2", "usable": true},
+                "p2": {"id": "<id>", "name": "Tableau", "channels": 2, ...},       // compteur à pinces
+                "p2c0": {"id": "<id>", "parent": "p2", "channel": "em1data:0", "name": "Tableau · canal 1", ...}},
   "last":      {"p0": {"ts": 1731130000, "total": 123456.7}},  // dernier relevé (s, Wh)
   "daily":     {"p0": {"YYYY-MM-DD": 1012.4}},                // Wh par jour local
   "estimated": {"p0": {"YYYY-MM-DD": 1}},

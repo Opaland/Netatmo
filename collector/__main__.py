@@ -127,6 +127,54 @@ def _room_states(s: Settings, store: Store, syncer: Syncer, sources: Sources) ->
     return [f"| Relevé horaire des pièces | {note} |"]
 
 
+def _devices(store: Store, syncer: Syncer, sources: Sources) -> tuple[list[str], list[str]]:
+    """v1.5 (#214, #216, #276, #278): one homestatus read → daily status of the Intuis modules,
+    firmware changes, gateway restarts and Wi-Fi, Tempo colour of the gateway. Never fatal.
+    Returns rows for the job summary and lines for the optional alert issue (counts, module
+    types and dates only)."""
+    from .api import ApiError
+    from .devices import boots_since, collect_status
+    from .roomstate import module_rooms
+
+    home = syncer.last_home
+    if home is None or "intuis" in METER.capped:
+        return [], []
+    try:
+        payload = syncer.client.homestatus(home.id)
+        counts = collect_status(
+            store,
+            syncer.last_homesdata,
+            payload,
+            home.timezone,
+            module_rooms(syncer.last_homesdata, home.water_heaters),
+        )
+    except (ApiError, FormatError, CallCapReached, httpx.HTTPError) as err:
+        sources.error("appareils", err)
+        _warn(f"État des appareils Intuis non relevé : {redact.safe_message(err)}")
+        return [], []
+    except Exception as err:  # never lose the night's energy data because of this optional step
+        sources.failed("appareils", f"erreur {type(err).__name__}")
+        _warn(f"État des appareils Intuis non relevé ({type(err).__name__})")
+        return [], []
+    boots = boots_since(store, 7, datetime.now(UTC).timestamp(), home.timezone)
+    note = (
+        f"{counts['modules']} modules, {counts['unreachable']} module(s) injoignable(s), "
+        f"{counts['firmware']} mise(s) à jour de firmware détectée(s), passerelle redémarrée {boots} fois (7 j)"
+    )
+    sources.ok("appareils", note)
+    print(f"Appareils Intuis : {note}")
+    if counts["unreachable"]:
+        _warn(f"{counts['unreachable']} module(s) Intuis injoignable(s)")
+    return [f"| Appareils Intuis | {note} |"], counts["alerts"]
+
+
+def write_device_file(lines: list[str]) -> None:
+    """Optional alert issue (#214, #215): module types, counts and dates, never a name or an id."""
+    path = os.environ.get("DEVICE_FILE")
+    if path:
+        Path(path).write_text("".join(f"- {line}\n" for line in lines), encoding="utf-8")
+
+
 def _warn(msg: str) -> None:
     # "::warning::" shows up as an annotation on the GitHub Actions run (public log: redacted).
     msg = redact.redact(msg)
@@ -295,7 +343,9 @@ def _weather(s: Settings, store: Store, home, sources: Sources, keep: dict | Non
             if keep is not None:
                 keep["station"] = station
             station.collect(home.timezone, first)
-            sources.ok("netatmo")
+            from .station import health_note
+
+            sources.ok("netatmo", health_note(station.health))
             return "netatmo"
         except (StationError, httpx.HTTPError, FormatError, CallCapReached) as err:
             sources.error("netatmo", err)
@@ -332,6 +382,7 @@ def _linky(s: Settings, store: Store, tz: str, sources: Sources) -> None:
     sources.expiry("linky", expires, issued, LINKY_CONSENT_DAYS)
     if sources.state["linky"].get("auth_expired") or "linky" in METER.capped:
         return  # same token (or no call left): the curve would fail too
+    _linky_index(s, store, tz, first)
     try:
         n = collect_curve(store, s.enedis_token, s.enedis_prm, first, tz)
         has_curve = any(store.doc(f"{y}.linky30").get("curve") for y in store.linky_curve_years())
@@ -345,6 +396,17 @@ def _linky(s: Settings, store: Store, tz: str, sources: Sources) -> None:
         # Usually no consent for the load curve: the daily totals are unaffected.
         sources.failed("linky-30min", redact.safe_message(err), err=err)
         _warn(f"{redact.safe_message(err)} — la consommation quotidienne Linky n'est pas affectée")
+
+
+def _linky_index(s: Settings, store: Store, tz: str, first: str) -> None:
+    """S-1.28 (#277): meter index per rate period. Best effort: never marks Linky as failing."""
+    from .enedis import LinkyError, collect_index
+
+    try:
+        n = collect_index(store, s.enedis_token, s.enedis_prm, first, tz)
+        print(f"Linky : {n} index par cadran")
+    except (LinkyError, httpx.HTTPError, FormatError, CallCapReached) as err:
+        _warn(f"Index Linky par cadran non relevés : {redact.safe_message(err)}")
 
 
 def _shelly(s: Settings, store: Store, tz: str, sources: Sources) -> None:
@@ -393,6 +455,15 @@ def cmd_sync(s: Settings, args: argparse.Namespace, backfill: bool = False) -> N
     if s.shelly_auth_key and s.shelly_server:
         _shelly(s, store, home.timezone, sources)
     rs_rows = _room_states(s, store, syncer, sources)
+    dev_rows, dev_alerts = _devices(store, syncer, sources)
+    rs_rows += dev_rows
+    station_note = sources.state.get("netatmo", {}).get("note") if s.netatmo_refresh_token else None
+    if station_note and "pile" in station_note:
+        dev_alerts.append(f"Station Netatmo : {station_note}")
+    write_device_file(dev_alerts)
+    intuis_contract = _intuis_contract(syncer)
+    if intuis_contract:
+        extra["intuis_contract"] = intuis_contract
     if store.doc("roomstate").get("rooms"):
         extra["has_roomstate"] = True
     if store.doc("linky").get("daily"):
@@ -438,6 +509,16 @@ def cmd_sync(s: Settings, args: argparse.Namespace, backfill: bool = False) -> N
     _job_summary(store, syncer, changed, rs_rows)
     if _flag("STATION_INVENTORY"):
         _station_inventory(kept.get("station"))
+
+
+def _intuis_contract(syncer: Syncer) -> dict | None:
+    """#278: tariff option and power known by the Intuis app (encrypted meta, never printed)."""
+    from .devices import intuis_contract
+
+    try:
+        return intuis_contract(syncer.last_homesdata)
+    except Exception:  # optional: an unexpected shape never stops the collection
+        return None
 
 
 def _station_inventory(station) -> None:
@@ -583,7 +664,7 @@ def _job_summary(store: Store, syncer: Syncer, changed: list[str], extra_rows: l
 
 
 # Meta keys that a command other than sync keeps as they are.
-KEPT_META = ("weather_source", "sources", "contract", "cold_alert", "backfill_pending")
+KEPT_META = ("weather_source", "sources", "contract", "cold_alert", "backfill_pending", "intuis_contract")
 
 
 def cmd_insights(s: Settings, args: argparse.Namespace) -> None:

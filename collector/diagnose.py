@@ -432,6 +432,8 @@ INV_LINKY_ENDPOINTS = (
     "consommation_quotidienne",
     "courbe_de_charge_consommation",
     "puissance_conso_max_quotidienne",
+    "index_consommation",
+    "index_production",
     "production_quotidienne",
     "courbe_de_charge_production",
     "daily_consumption",
@@ -749,14 +751,20 @@ def inventory_linky(token: str, prm: str, http=None, today=None, min_interval: f
     today = today or datetime.now(UTC).date()
     result: dict = {}
 
-    def ask(endpoint: str, begin, end) -> tuple[int | None, int]:
+    bodies: dict[str, object] = {}
+
+    def ask(endpoint: str, begin, end, extra: dict | None = None, keep: str | None = None) -> tuple[int | None, int]:
+        params = {"pointId": prm, "dateDebut": begin.isoformat(), "dateFin": end.isoformat(), **(extra or {})}
         try:
-            r = api.get(
-                LINKY_BASE + endpoint, {"pointId": prm, "dateDebut": begin.isoformat(), "dateFin": end.isoformat()}
-            )
+            r = api.get(LINKY_BASE + endpoint, params)
         except httpx.HTTPError:
             return None, 0
-        return r.status_code, len(_points(_json_or_none(r))) if r.status_code == 200 else 0
+        if r.status_code != 200:
+            return r.status_code, 0
+        body = _json_or_none(r)
+        if keep:
+            bodies[keep] = body
+        return r.status_code, len(_points(body))
 
     def txt(status: int | None, n: int) -> str:
         return "erreur réseau" if status is None else f"HTTP {status}" + (f", {n} points" if status == 200 else "")
@@ -764,12 +772,52 @@ def inventory_linky(token: str, prm: str, http=None, today=None, min_interval: f
     print("\n==== Linky (Conso API) ====")
     print("Séries sur les 7 derniers jours (statut HTTP, nombre de points datés, aucune valeur) :")
     for ep in INV_LINKY_ENDPOINTS:
-        result[ep] = ask(ep, today - timedelta(days=7), today)
+        result[ep] = ask(ep, today - timedelta(days=7), today, keep=ep)
         print(f"  {ep:<34} {txt(*result[ep])}")
+    # #277: index per rate period: names of the series (calendars, rate periods) and step only.
+    index = bodies.get("index_consommation")
+    if index is not None:
+        from .enedis import parse_index
+
+        series = parse_index(index)
+        result["index_series"] = sorted(series)
+        print_shape("index_consommation", index, forbidden=_strings(index) - set(_label_values(index)))
+        print(f"  cadrans / classes temporelles : {', '.join(sorted(series)) or '(aucun)'}")
+        steps = sorted({str(st) for _d, _v, st in _points(index) if st and safe_keys([str(st)])})
+        print(f"  pas : {', '.join(steps) or 'non indiqué'}")
+    # #219 / #277: maximum power with grandeurPhysique=TOUT (field names only).
+    ep = INV_LINKY_ENDPOINTS[2]
+    result["pmax_tout"] = ask(ep, today - timedelta(days=7), today, {"grandeurPhysique": "TOUT"}, keep="pmax_tout")
+    print(f"  {ep} (grandeurPhysique=TOUT) {txt(*result['pmax_tout'])}")
+    if bodies.get("pmax_tout") is not None:
+        print_shape("puissance max, grandeurPhysique=TOUT", bodies["pmax_tout"])
+    pmax = bodies.get(ep)
+    if pmax is not None:
+        stamps = [d for d, _v, _s in _points(pmax)]
+        timed = sum(1 for d in stamps if len(d) > 10)
+        print(f"  horodatage du pic : {timed} sur {len(stamps)} points portent une heure (aucune valeur affichée)")
     old_end = today - timedelta(days=3 * 365 - 7)
     result["depth_3y"] = ask(INV_LINKY_ENDPOINTS[0], old_end - timedelta(days=7), old_end)
     print(f"  profondeur : {INV_LINKY_ENDPOINTS[0]} il y a 3 ans → {txt(*result['depth_3y'])}")
     return result
+
+
+def _label_values(obj: object) -> list[str]:
+    """Text values of the label keys of an index answer (calendar and rate period codes, never
+    a number: the PRM starts with a digit), so that their field names may be printed."""
+    from .enedis import LABEL_KEYS
+
+    out: list[str] = []
+    if isinstance(obj, dict):
+        for k, v in obj.items():
+            if k in LABEL_KEYS and isinstance(v, str) and safe_keys([v]):
+                out.append(v)
+            else:
+                out += _label_values(v)
+    elif isinstance(obj, list):
+        for v in obj:
+            out += _label_values(v)
+    return out
 
 
 def inventory(settings, intuis: IntuisClient | None = None) -> None:

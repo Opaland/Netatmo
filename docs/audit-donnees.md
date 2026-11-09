@@ -65,9 +65,9 @@ Aucun historique n'est servi pour ces états (S-13.1) : seul le relevé horaire 
 | `offload` | `offload_h` | `windows.ts` `offloadDays`, `offloadByRoom` (Synthèse, sous la puissance maximale, croisé avec le pic Linky) | — | — | faible |
 | `contactor_mode` (chauffe-eau) | `contactor_h` | `windows.ts` `contactor` (carte chauffe-eau de l'Analyse et carte Confort), `checks.ts` | — | — | faible |
 | `presence` | `presence_h`, **seulement** avec `ROOM_STATE_PRESENCE` (S-13.5) | `windows.ts` | — | — | élevé |
-| `anticipating`, `lowering` | **non** | — | heures de pré-chauffe et d'abaissement par pièce : la relance démarre-t-elle en heures creuses ? (alimente #211) | S | faible |
-| `reachable`, `connection_status`, `last_seen` | **non** | — | **radiateur ou chauffe-eau hors ligne** : alerte (une pièce à 0 kWh n'est pas forcément économe) | S | faible |
-| `firmware_revision`, `hardware_version` | **non** | — | note « mise à jour du firmware le … » pour expliquer une rupture de consommation | S | faible |
+| `anticipating`, `lowering` | `anticipating_h`, `lowering_h` (v1.5, #218) | Paramètres → État des appareils | heures de pré-chauffe et d'abaissement par pièce : la relance démarre-t-elle en heures creuses ? (alimente #211) | S | faible |
+| `reachable`, `connection_status`, `last_seen` | `offline_h` (relevé horaire) et `devices.enc.json` `reach` (lecture nocturne), v1.5 #214 | Paramètres → État des appareils, vue Qualité, issue facultative | **radiateur ou chauffe-eau hors ligne** : alerte (une pièce à 0 kWh n'est pas forcément économe) | S | faible |
+| `firmware_revision`, `hardware_version` | `firmware_revision` : changements datés dans `devices.enc.json` (v1.5, #216) | vue Qualité | note « mise à jour du firmware le … » pour expliquer une rupture de consommation | S | faible |
 | `therm_measured_temperature`, `therm_setpoint_temperature` | non (la température et la consigne viennent des mesures, § 2.3) | — | doublon des mesures | — | moyen |
 | `therm_setpoint_end_time` | non | — | durée des boosts et dérogations (complète #175) | S | faible |
 | `outdoor_temperature` (passerelle) | non | — | doublon d'Open-Meteo / station | — | faible |

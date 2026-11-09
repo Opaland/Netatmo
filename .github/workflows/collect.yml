@@ -129,6 +129,8 @@ jobs:
           ROOM_STATE_PRESENCE: ${{ vars.ROOM_STATE_PRESENCE }}
           RENEW_FILE: ${{ runner.temp }}/renew.txt
           COLD_FILE: ${{ runner.temp }}/cold.txt
+          # v1.5 (#214, #215): modules not answering, low station battery (types and dates only).
+          DEVICE_FILE: ${{ runner.temp }}/devices.txt
           # S-1.19: station inventory with the access token of this collection (names and counts only).
           STATION_INVENTORY: ${{ inputs.inventaire && 'true' || '' }}
         run: python -m collector -v ${{ inputs.backfill && 'backfill' || 'sync' }}
@@ -236,6 +238,39 @@ jobs:
             fi
           elif [ -n "$num" ]; then
             gh issue close "$num" --repo "$GITHUB_REPOSITORY" --comment "Plus aucune pièce suivie sous le seuil le $(date -u +%F)."
+          fi
+
+      # v1.5 (#214, #215): optional (repository variable DEVICE_ALERT=true). One open issue while a
+      # radiator, relay, water heater or gateway does not answer, or a station battery is low;
+      # closed when none is. devices.txt holds module types, counts and dates only.
+      - name: Alerte appareil injoignable
+        if: success() && steps.check.outputs.configured == 'true' && vars.DEVICE_ALERT == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DEVICE_FILE: ${{ runner.temp }}/devices.txt
+        run: |
+          title="📡 Appareil injoignable ou pile faible"
+          num=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search "\"$title\" in:title" --json number --jq '.[0].number // empty')
+          if [ -s "$DEVICE_FILE" ]; then
+            body="$(cat "$DEVICE_FILE")"
+            if [ -z "$num" ]; then
+              gh issue create --repo "$GITHUB_REPOSITORY" --title "$title" --body "@${{ github.repository_owner }} un appareil ne répond plus ou une pile faiblit :
+
+          $body
+
+          L'application (Paramètres → État des appareils) indique la pièce et le module concernés. Cette issue se fermera toute seule quand tout répondra de nouveau."
+            else
+              last=$(gh api "repos/$GITHUB_REPOSITORY/issues/$num/comments" --jq '[.[] | select(.user.login == "github-actions[bot]")] | last | .body // empty')
+              [ -n "$last" ] || last=$(gh api "repos/$GITHUB_REPOSITORY/issues/$num" --jq .body)
+              case "$last" in
+                *"$body"*) echo "Alerte appareil déjà ouverte (#$num), inchangée." ;;
+                *) gh issue comment "$num" --repo "$GITHUB_REPOSITORY" --body "Mise à jour du $(date -u +%F) :
+
+          $body" ;;
+              esac
+            fi
+          elif [ -n "$num" ]; then
+            gh issue close "$num" --repo "$GITHUB_REPOSITORY" --comment "Tous les appareils répondent le $(date -u +%F)."
           fi
 
   # A push made with GITHUB_TOKEN does not trigger other workflows: deploy explicitly.
