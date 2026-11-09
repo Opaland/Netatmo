@@ -1,4 +1,4 @@
-// Menu ⋮ → « Export recherche » (S-6.6), loaded on demand: a dialog to choose the licence,
+// Outils → Exporter mes données → « Export recherche » (S-6.6), loaded on demand: a dialog to choose the licence,
 // the date shift, a coarse location and the format, then the file is built on this device,
 // checked by the S-6.4 detector, and handed to the user. Nothing is sent anywhere.
 import { ds } from '../app';
@@ -15,6 +15,7 @@ import {
   toResearchCsv,
 } from '../research';
 import { html } from '../trusted';
+import { downloadBlob } from '../download';
 import { esc } from '../ui';
 
 function form(): string {
@@ -60,7 +61,7 @@ export function openResearch() {
   dlg.innerHTML = html(form());
   const status = dlg.querySelector<HTMLElement>('#research-status')!;
   const go = dlg.querySelector<HTMLButtonElement>('#research-go')!;
-  go.onclick = async () => {
+  go.addEventListener('click', async () => {
     const license = dlg!.querySelector<HTMLSelectElement>('#research-license')!.value as License | '';
     if (!license) {
       status.textContent = 'Choisissez la licence sous laquelle ces données peuvent être diffusées.';
@@ -76,19 +77,15 @@ export function openResearch() {
       const text = await build(license, shift, zone, kind, (s) => (status.textContent = s));
       if (!text) return;
       const blob = new Blob([text.body], { type: kind === 'csv' ? 'text/csv;charset=utf-8' : 'application/json' });
-      const a = document.createElement('a');
-      a.href = URL.createObjectURL(blob);
-      a.download = researchFileName(kind);
-      a.click();
-      setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+      downloadBlob(blob, researchFileName(kind));
       status.textContent = `Fichier prêt : ${text.rows.toLocaleString('fr-FR')} lignes, vérifié sans nom ni identifiant${shift ? ' ni date réelle' : ''}.${text.note}`;
     } catch (err) {
       status.textContent = `Export impossible : ${err instanceof Error ? err.message : err}`;
     } finally {
       go.disabled = false;
     }
-  };
-  dlg.addEventListener('close', () => document.querySelector<HTMLElement>('.menu summary')?.focus(), { once: true });
+  });
+  dlg.addEventListener('close', () => document.querySelector<HTMLElement>('[data-research]')?.focus(), { once: true });
   dlg.showModal();
 }
 

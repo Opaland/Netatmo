@@ -1,9 +1,10 @@
-// Prices and contract form, shown in the header menu.
+// Prices and contract form (#309: ⚙ Paramètres → Contrat et prix, « ce téléphone » unless shared).
 import { type Prices, inferKvaChange } from '../analysis';
 import { type State, ds, setState, state } from '../app';
 import { OFFERS, periodAt } from '../offers';
-import { contractInfo, contracts, esc, keepMenuOpen, lastDay, longDate, nf0, priceAt, priceMode, tariffNames } from '../ui';
+import { contractInfo, contracts, esc, lastDay, longDate, nf0, priceAt, priceMode, tariffNames } from '../ui';
 import { tenant, tenantPricesForm } from '../tenant';
+import { dayLong } from '../glossary';
 
 export function pricesForm() {
   const p = state.prices;
@@ -44,14 +45,27 @@ export function pricesForm() {
     ${ds!.meta.has_tariffs ? input('t1', `${n1} (€/kWh)`, 'ex. 0,27') + input('t2', `${n2} (€/kWh)`, 'ex. 0,20') : ''}
     ${input('sub', 'Abonnement (€/mois)', 'ex. 15,65')}`
       : '';
-  return `<fieldset class="prices"><legend>Prix</legend>${trve}${manual}</fieldset>`;
+  return `<fieldset class="prices"><legend>Mon contrat et mes prix</legend>${trve}${manual}</fieldset>`;
 }
+
+/** #309: one line for the settings list: « EDF Heures creuses · 9 kVA depuis le 1er oct. 2023 ». */
+export function contractSummary(): string {
+  if (priceMode() === 'manual') return 'mes propres prix';
+  const list = contracts();
+  const c = list[list.length - 1];
+  if (!c) return '';
+  const o = OFFERS.find((x) => x.id === c.offer);
+  return `${o ? `${o.supplier} ${o.label}` : c.offer} · ${c.kva} kVA depuis le ${dayLong(c.from)}${contractInfo().source === 'shared' ? ' (partagé)' : ''}`;
+}
+
+/** The contract in force is the shared one (« foyer »). */
+export const sharedNow = () => contractInfo().source === 'shared';
 
 /** S-12.1: where the contract comes from, and how to share it or go back to the shared one. */
 function sharing() {
   const info = contractInfo();
   const demo = ds!.source === 'demo';
-  const share = demo ? '' : '<button type="button" class="link" data-view="settings">Partager</button>';
+  const share = demo ? '' : '<button type="button" class="link" data-share-contract>Partager</button>';
   if (info.source === 'shared') {
     return `<p class="hint"><span class="badge">partagé</span> <span class="muted">Contrat commun à tous les appareils (enregistré par la collecte).</span></p>${
       info.differs
@@ -62,10 +76,10 @@ function sharing() {
     }`;
   }
   if (info.shared) {
-    return `<div class="notice"><p><strong>Modifié sur cet appareil, non partagé</strong> : les autres appareils gardent le contrat partagé.</p>
-      ${share} <button type="button" class="link" id="contract-revert">Revenir au contrat partagé</button></div>`;
+    return `<div class="notice"><p><strong>Modifié sur cet appareil</strong> · ${share || 'non partagé'} : les autres appareils gardent le contrat partagé.</p>
+      <button type="button" class="link" id="contract-revert">Revenir au contrat partagé</button></div>`;
   }
-  return demo ? '' : `<p class="hint muted">Enregistré sur cet appareil seulement. ${share.replace('>Partager<', '>Le partager avec les autres appareils<')}</p>`;
+  return demo ? '' : `<p class="hint muted">Enregistré sur cet appareil seulement · ${share}</p>`;
 }
 
 /** S-2.8: propose the subscribed-power change the Linky max power reveals. */
@@ -88,12 +102,10 @@ function kvaHint() {
 export function handleClick(btn: HTMLElement): boolean {
   if (btn.id === 'contract-revert' || btn.id === 'contract-forget-local') {
     setState({ contracts: [], contractLocalEdit: false });
-    keepMenuOpen();
     return true;
   }
   if (btn.id === 'contract-use-local') {
     setState({ contractLocalEdit: true });
-    keepMenuOpen();
     return true;
   }
   if (btn.id === 'kva-apply') {
@@ -101,7 +113,6 @@ export function handleClick(btn: HTMLElement): boolean {
     const prev = periodAt(list, btn.dataset.day!)!;
     list.push({ from: btn.dataset.day!, offer: prev.offer, kva: Number(btn.dataset.kva) });
     setState({ contracts: list.sort((a, b) => (a.from < b.from ? -1 : 1)), contractLocalEdit: contractInfo().shared });
-    keepMenuOpen();
     return true;
   }
   if (btn.id === 'contract-add' || btn.dataset.contractDel !== undefined) {
@@ -109,7 +120,6 @@ export function handleClick(btn: HTMLElement): boolean {
     if (btn.id === 'contract-add') list.push({ ...list[list.length - 1], from: lastDay() });
     else list.splice(Number(btn.dataset.contractDel), 1);
     setState({ contracts: list, contractLocalEdit: contractInfo().shared });
-    keepMenuOpen();
     return true;
   }
   return false;
@@ -120,7 +130,6 @@ export function handleChange(t: HTMLInputElement | HTMLSelectElement): boolean {
   if (t.dataset.price) {
     const v = parseFloat(t.value.replace(',', '.'));
     setState({ prices: { ...state.prices, [t.dataset.price]: Number.isFinite(v) && v > 0 ? v : null } });
-    keepMenuOpen();
     return true;
   }
   if (t.dataset.pmode) {
@@ -129,7 +138,6 @@ export function handleChange(t: HTMLInputElement | HTMLSelectElement): boolean {
     // Leaving the official tariffs while a shared contract applies is a change made here only.
     if (info.source === 'shared' && next === 'manual') setState({ priceMode: next, contracts: info.periods.map((c) => ({ ...c })), contractLocalEdit: true });
     else setState({ priceMode: next });
-    keepMenuOpen();
     return true;
   }
   if (t.dataset.contract !== undefined) {
@@ -139,7 +147,6 @@ export function handleChange(t: HTMLInputElement | HTMLSelectElement): boolean {
     else if (t.dataset.field === 'offer') c.offer = t.value;
     else if (t.value) c.from = t.value;
     setState({ contracts: list.sort((a, b) => (a.from < b.from ? -1 : 1)), contractLocalEdit: contractInfo().shared });
-    keepMenuOpen();
     return true;
   }
   return false;

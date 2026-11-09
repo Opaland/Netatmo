@@ -1,4 +1,4 @@
-// Overview ("Synthèse"): verdict, KPIs, Linky share and the main consumption chart.
+// Overview (v1.5 « Synthèse »): Accueil, the Linky cards of Compteur, invoice and data quality (#308).
 import {
   CATEGORY_LABEL,
   type Category,
@@ -15,7 +15,7 @@ import { projectYear, verdict } from '../analysis';
 import { ds, setState, state } from '../app';
 import { type Series, barChart, cssVar, lineChart } from '../charts';
 import { periodAt } from '../offers';
-import { OTHER, activeRooms, avgPrice, catColor, contracts, delta, esc, costOf, eurOf, firstDay, fmtEur, fmtKwh, lastDay, longDate, nf0, pct, roomColor, roomGroup, roomName, seg, table, tableToggle, measureColor, referenceColor } from '../ui';
+import { OTHER, activeRooms, avgPrice, catColor, contracts, delta, esc, fmt1, costOf, eurOf, firstDay, fmtEur, fmtKwh, lastDay, longDate, nf0, pct, roomColor, roomGroup, roomName, seg, table, tableToggle, measureColor, referenceColor } from '../ui';
 import { NO_REFERENCE, PERIOD, vsLabel } from '../glossary';
 import { chartMarks, qualityCard, uncertainDays, yoyGapNote } from './quality';
 import { html } from '../trusted';
@@ -53,8 +53,35 @@ function periodRange(): [string, string] {
   return [`${state.period}-01-01`, `${state.period}-12-31` < last ? `${state.period}-12-31` : last];
 }
 
-export function renderOverview(view: HTMLElement, records: DayRecord[]) {
+/**
+ * #308: the v1.5 « Synthèse » cards, spread over the new pages: « home » (Accueil: verdict,
+ * key figures, alerts, Consommation, summary of the AI analysis), « meter » (Compteur: Linky
+ * share, maximum power and load shedding, load curve, other usages), « twelve » (the 12-month
+ * tile, Historique), « invoice » (Outils → Une facture) and « quality » (État des données).
+ */
+export type OverviewPart = 'home' | 'meter' | 'twelve' | 'invoice' | 'quality';
+
+export function renderOverview(view: HTMLElement, records: DayRecord[], part: OverviewPart = 'home') {
   const last = lastDay();
+  if (part !== 'home') {
+    const body =
+      part === 'meter'
+        ? `${linkyCard()}${curveCard()}${breakdownCard()}`
+        : part === 'twelve'
+          ? `<section class="kpis kpis-one">${kpi(PERIOD['12m'], addDays(minusYears(last), 1), last, records)}</section>`
+          : part === 'invoice'
+            ? '<div id="invoice-zone"></div>'
+            : qualityCard(true) || '<section class="card"><p class="hint">Tous les mois sont complets : aucun jour estimé ni perdu.</p></section>';
+    view.innerHTML = html(body);
+    if (part === 'meter') {
+      drawLinky();
+      drawCurve();
+    }
+    if (part === 'meter') drawBreakdown();
+    // S-2.3: reconcile with an invoice (lazy module)
+    if (part === 'invoice') void lazyCard(() => import('./invoice'), (m) => m.fillInvoice(), { zone: 'invoice-zone', what: 'Facture' });
+    return;
+  }
   const monthStart = `${last.slice(0, 8)}01`;
   const yearStart = `${last.slice(0, 4)}-01-01`;
   const [from, to] = periodRange();
@@ -78,30 +105,28 @@ export function renderOverview(view: HTMLElement, records: DayRecord[]) {
   const periodEur = eurOf(records, from, to);
   const plain = (k: Parameters<typeof kpiTitle>[0]) => (simple ? kpiTitle(k, last) : null);
   view.innerHTML = html`
+  <h2 class="sr-only" id="page-title" tabindex="-1">Accueil</h2>
   ${simple ? plainVerdictCard(records, monthStart, last) : verdictCard(records, monthStart, last)}
   <div id="grid-zone"></div>
+  <div id="cold-alert-zone"></div>
   <section class="kpis">
     ${kpi(`${MONTHS_LONG[Number(last.slice(5, 7)) - 1]} ${last.slice(0, 4)} (au ${Number(last.slice(8, 10))})`, monthStart, last, records, '', plain('month'))}
     ${kpi(PERIOD.ytd, yearStart, last, records, '', plain('year'))}
-    ${kpi(PERIOD['12m'], addDays(minusYears(last), 1), last, records, ' kpi-detail', plain('12m'))}
+    ${simple ? kpi(PERIOD['12m'], addDays(minusYears(last), 1), last, records, ' kpi-detail', plain('12m')) : ''}
     ${projectionTile(records, last, simple)}
     <article class="kpi kpi-budget" id="budget-kpi" hidden></article>
   </section>
   ${periodEur ? `<p class="hint muted cost-scope">${esc(costScope(state.cat))}</p>` : ''}
   ${simple ? glossarySection() : ''}
-  <div id="money-zone"></div>
-  ${linkyCard()}
-  <div id="invoice-zone"></div>
-  ${curveCard()}
-  ${breakdownCard()}
-  <section class="card">
+  <section class="card" id="consumption-card">
     <div class="card-head">
       <h2>Consommation <small class="muted">kWh</small></h2>
       <div class="controls">
         <label class="select"><span class="sr-only">Période</span><select data-set="period">${periodOptions
           .map(([v, l]) => `<option value="${v}" ${state.period === v ? 'selected' : ''}>${l}</option>`)
           .join('')}</select></label>
-        ${seg('gran', state.gran, [['day', 'Jour'], ['week', 'Sem.'], ['month', 'Mois'], ['year', 'An']], 'Granularité')}
+        ${seg('cat', state.cat, [['all', 'Tout'], ['heating', 'Chauffage'], ['water_heater', 'Chauffe-eau']], 'Usage')}
+        ${seg('gran', state.gran, [['day', 'Jour'], ['week', 'Semaine'], ['month', 'Mois'], ['year', 'An']], 'Granularité')}
         ${seg('split', split, [['category', 'Par usage'], ['room', 'Par pièce']], 'Détail')}
       </div>
     </div>
@@ -118,14 +143,13 @@ export function renderOverview(view: HTMLElement, records: DayRecord[]) {
     <div class="chart" id="main-chart" role="img" aria-label="Consommation par période"></div>
     <div id="main-table"></div>
   </section>
-  ${qualityCard()}`;
-  drawLinky();
-  drawCurve();
-  drawBreakdown();
-  // S-2.11 / S-2.12 / S-2.13: budget, CO₂ and new tariff, loaded on demand (S-7.10)
-  void lazyCard(() => import('./budget'), (m) => m.fillOverview(), { zone: 'grid-zone', what: 'Budget et CO₂' });
-  // S-2.3: reconcile with an invoice (lazy module)
-  void lazyCard(() => import('./invoice'), (m) => m.fillInvoice(), { zone: 'invoice-zone', what: 'Facture' });
+  ${ds!.insights ? '<section class="card insight" id="insight-card" aria-busy="true"><h2>Analyse du mois</h2></section>' : ''}`;
+  // S-2.11 / S-2.12: new tariff and budget tile, loaded on demand (S-7.10); the budget is set in ⚙ Objectifs
+  void lazyCard(() => import('./budget'), (m) => m.fillOverview(), { zone: 'grid-zone', what: 'Budget et nouveau tarif' });
+  // S-12.5: prolonged cold alert of the rooms followed, grouped with the other alerts (lazy module)
+  void lazyCard(() => import('./coldalert'), (m) => m.mountColdBanner(document.getElementById('cold-alert-zone')), { zone: 'cold-alert-zone', what: 'Alerte froid prolongé' });
+  // S-5.7: the AI analysis in short; the whole text, its archive and what was sent in Outils
+  if (ds!.insights) void lazyCard(() => import('./insight'), (m) => m.mountInsight(document.getElementById('insight-card'), true), { zone: 'insight-card', what: 'Analyse IA' });
 
   const set = aggregate(records, from, to, state.gran, split === 'category' ? (r) => r.cat : (r) => roomGroup(r.room));
   const order =
@@ -153,7 +177,7 @@ export function renderOverview(view: HTMLElement, records: DayRecord[]) {
 
 function estimatedNote(records: DayRecord[], from: string, to: string) {
   const n = uncertainDays(records, ds!.estimated, from, to).size;
-  return n ? ` <a class="muted" href="#quality" title="Jours estimés à partir du total mensuel ou perdus chez Intuis : voir « Qualité des données ».">· ${n} jour${n > 1 ? 's' : ''} estimé${n > 1 ? 's' : ''} ou manquant${n > 1 ? 's' : ''}</a>` : '';
+  return n ? ` <a class="muted" href="#etat" title="Jours estimés à partir du total mensuel ou perdus chez Intuis : voir « État des données ».">· ${n} jour${n > 1 ? 's' : ''} estimé${n > 1 ? 's' : ''} ou manquant${n > 1 ? 's' : ''}</a>` : '';
 }
 
 // ------------------------------------------------------------------ overview cards
@@ -302,7 +326,7 @@ function drawPmax() {
   const kva = periodAt(contracts(), lastDay())?.kva;
   if (peak && kva) {
     const margin = kva - peak.max;
-    document.getElementById('pmax-summary')!.innerHTML = html`Sur 12 mois, pic de <strong>${peak.max.toFixed(1).replace('.', ',')} kVA</strong> le ${longDate(peak.day)}, pour ${kva} kVA souscrits. ${
+    document.getElementById('pmax-summary')!.innerHTML = html`Sur 12 mois, pic de <strong>${fmt1(peak.max)} kVA</strong> le ${longDate(peak.day)}, pour ${kva} kVA souscrits. ${
       margin > 3.5
         ? 'Marge confortable : une puissance inférieure pourrait suffire (abonnement moins cher), à confirmer sur un hiver très froid.'
         : margin < 0.5

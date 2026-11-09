@@ -7,14 +7,15 @@ import { calendarChart, cssVar, gridHeatmap, lineChart, scatterChart } from '../
 import { loadHourly, loadRoom30, loadRoomState } from '../data';
 import { lazyCard } from '../lazy';
 import { unavailable } from '../offline';
-import { activeRooms, catColor, esc, fmtKwh, lastDay, longDate, seg, series, table, tariffNames, measureColor, referenceColor } from '../ui';
+import { TEMP } from '../glossary';
+import { activeRooms, catColor, esc, fmt1, roomName, fmtKwh, lastDay, longDate, seg, series, table, tariffNames, measureColor, referenceColor } from '../ui';
 import { hour } from '../glossary';
 import { SUSPECT_RATIO } from '../reconstitute';
 import { uncertainDays } from './quality';
 import { drawSetpoint, setpointCard } from './setpoint';
 import { drawWaterHeater, hcAlerts, waterHeaterCard } from './waterheater';
 import { html } from '../trusted';
-import { tenant } from '../tenant'; // S-12.6: works are the owner's business
+import { tenant, tenantNote } from '../tenant'; // S-12.6: works are the owner's business
 
 // #247: documents loaded on demand for the dataset shown; a late result of another dataset is dropped.
 // #251: 12 months (water heater), 90 days (profile)
@@ -24,7 +25,7 @@ const explainDoc = datasetDoc(async (d) => {
   const [rs, w] = await Promise.all([loadRoomState(d), import('../windows')]);
   return rs ? { open: w.openByDay(rs), away: w.absenceDays(rs) } : { open: new Map<string, number>(), away: new Set<string>() };
 });
-const redraw = () => state.view === 'analyse' && rerender();
+const redraw = () => rerender();
 
 // S-1.26: per-room half hours of the profile's 90 days, preferred when present (#247: dataset shown only)
 const r30Doc = datasetDoc(async (d) => {
@@ -46,7 +47,7 @@ function explanation(day: string): string {
   if (!explain) return '…';
   const parts: string[] = [];
   const open = explain.open.get(day) ?? 0;
-  if (open >= 1) parts.push(`fenêtre ouverte ${open.toFixed(1).replace('.', ',')} h`);
+  if (open >= 1) parts.push(`fenêtre ouverte ${fmt1(open)} h`);
   if (explain.away.has(day)) parts.push('mode absence');
   return parts.join(', ') || '—';
 }
@@ -57,33 +58,46 @@ function seasonColor(season: string, seasons: string[]) {
   return series(i);
 }
 
-export function renderAnalyse(view: HTMLElement, records: DayRecord[]) {
+/**
+ * #308: the v1.5 « Analyse » cards, spread over the new pages. Each part draws only its cards:
+ * « historique » (signature, unusual days, calendar, station), « compteur » (hourly profile,
+ * peak / off-peak), « chauffe-eau », a tool of Outils (« consigne », « pac », « teletravail »,
+ * « absences », « volets », « ia ») or the works card (« travaux », ⚙ Mon logement), and
+ * « temps » for the temperatures of one room (its page).
+ */
+export type AnalysePart = 'historique' | 'compteur' | 'chauffe-eau' | 'consigne' | 'pac' | 'teletravail' | 'absences' | 'volets' | 'ia' | 'travaux' | 'temps';
+
+export function renderAnalyse(view: HTMLElement, records: DayRecord[], part: AnalysePart = 'historique', room: string | null = null) {
   const years = ds!.meta.years;
   const year = state.analyseYear ?? years[years.length - 1];
   const last = lastDay();
   const tempRooms = activeRooms().filter((r) => ds!.temps.has(r.id));
-  const tempRoom = tempRooms.find((r) => r.id === state.tempRoom)?.id ?? tempRooms[0]?.id ?? null;
+  const tempRoom = part === 'temps' ? (tempRooms.find((r) => r.id === room)?.id ?? null) : null;
   const split = tariffSplit(records.filter((r) => r.day >= addDays(minusYears(last), 1)), ds!.tariffs);
   const [n1, n2] = tariffNames();
-  view.innerHTML = html`
-  ${ds!.insights ? '<section class="card insight" id="insight-card" aria-busy="true"><h2>Analyse du mois</h2></section>' : ''}
-  ${
-    ds!.weather
-      ? `<section class="card">
-    <div class="card-head"><h2>Signature énergétique <small class="muted">chauffage</small></h2></div>
+  const cards: [AnalysePart, () => string][] = [
+    ['ia', () => (ds!.insights ? '<section class="card insight" id="insight-card" aria-busy="true"><h2>Analyse du mois</h2></section>' : '<section class="card"><p class="hint muted">Analyse du mois : à activer dans ⚙ Paramètres → Sources de données (clé Anthropic).</p></section>')],
+    [
+      'historique',
+      () =>
+        ds!.weather
+          ? `<section class="card">
+    <div class="card-head"><h2>Signature du logement <small class="muted">chauffage</small></h2></div>
     <p class="hint muted">Chaque point est un jour : consommation de chauffage selon la température extérieure moyenne${ds!.meta.weather_source === 'netatmo' ? ' (station Netatmo)' : ' (Open-Meteo)'}. La droite résume la saison : plus elle est <strong>pentue</strong>, plus la maison consomme par degré de froid ; là où elle touche zéro, c'est la température à partir de laquelle vous ne chauffez plus.</p>
     <div class="chart tall" id="sig-chart" role="img" aria-label="Signature énergétique"></div>
     <div id="sig-table"></div>
   </section>
   <section class="card" id="indoor-sig" hidden></section>`
-      : `<section class="card"><h2>Signature énergétique</h2><p class="hint muted">Disponible dès que la collecte a récupéré la météo (prochaine collecte).</p></section>`
-  }
-  ${tenant().on ? '' : '<div id="works-zone"></div>'}
-  ${setpointCard(records)}
-  ${ds!.weather ? '<section class="card" id="hp-card" hidden></section>' : ''}
-  <div id="shutters-zone"></div>
-  ${anomaliesCard(records)}
-  <section class="card" id="calendar-card">
+          : `<section class="card"><h2>Signature du logement</h2><p class="hint muted">Disponible dès que la collecte a récupéré la météo (prochaine collecte).</p></section>`,
+    ],
+    ['travaux', () => (tenant().on ? tenantNote('Les travaux sont l’affaire du propriétaire : la saisie est masquée') : '<div id="works-zone"></div>')],
+    ['consigne', () => setpointCard(records) || '<section class="card"><p class="hint muted">Simulation disponible avec la météo et une saison de chauffe.</p></section>'],
+    ['pac', () => (ds!.weather ? '<section class="card" id="hp-card" hidden></section>' : '<section class="card"><p class="hint muted">Simulation disponible avec la météo.</p></section>')],
+    ['volets', () => '<div id="shutters-zone"></div>'],
+    ['historique', () => anomaliesCard(records)],
+    [
+      'historique',
+      () => `<section class="card" id="calendar-card">
     <div class="card-head"><h2>Calendrier <small class="muted">kWh par jour</small></h2>
       <div class="controls"><label class="select"><span class="sr-only">Année</span><select data-set="analyseYear">${years
         .slice()
@@ -92,35 +106,44 @@ export function renderAnalyse(view: HTMLElement, records: DayRecord[]) {
         .join('')}</select></label></div>
     </div>
     <div class="chart" id="cal-chart" style="height:190px" role="img" aria-label="Calendrier de consommation"></div>
-  </section>
-  <div id="absence-zone"></div>
-  <section class="card">
-    <div class="card-head"><h2>Profil horaire <small class="muted">kWh moyens, 90 derniers jours</small></h2></div>
+  </section>`,
+    ],
+    ['absences', () => '<div id="absence-zone"></div>'],
+    [
+      'compteur',
+      () => `<section class="card">
+    <div class="card-head"><h2>Journée type <small class="muted">kWh moyens par heure, 90 derniers jours</small></h2></div>
     <div id="hourly-zone"><p class="hint muted">${(ds!.meta.hourly_years ?? []).length ? 'Chargement des données horaires…' : 'Les données horaires arriveront avec la prochaine collecte complète.'}</p></div>
-  </section>
-  <div id="telework-zone"></div>
-  ${
-    ds!.meta.has_tariffs && split[1] + split[2] > 0
-      ? `<section class="card"><h2>Heures pleines / heures creuses <small class="muted">12 derniers mois</small></h2>
+  </section>`,
+    ],
+    ['teletravail', () => '<div id="telework-zone"></div>'],
+    [
+      'compteur',
+      () =>
+        ds!.meta.has_tariffs && split[1] + split[2] > 0
+          ? `<section class="card"><h2>Heures pleines / heures creuses <small class="muted">12 derniers mois</small></h2>
       <div class="share" aria-hidden="true"><span style="flex:${split[1]};background:${series(0)}"></span><span style="flex:${split[2]};background:${series(2)}"></span>${split[0] + split[3] > 0 ? `<span style="flex:${split[0] + split[3]};background:${cssVar('--usage-other')}"></span>` : ''}</div>
       <p class="share-legend"><span><i style="background:${series(0)}"></i>${n1} ${fmtKwh(split[1])}</span><span><i style="background:${series(2)}"></i>${n2} ${fmtKwh(split[2])}</span>${split[0] + split[3] > 0 ? `<span><i style="background:${cssVar('--usage-other')}"></i>Sans détail ${fmtKwh(split[0] + split[3])}</span>` : ''}</p>
       <p class="hint muted">Détection automatique : la colonne où le chauffe-eau consomme le plus est considérée comme les heures creuses.</p></section>`
-      : ''
-  }
-  ${waterHeaterCard()}
-  ${stationCard()}
-  ${
-    tempRoom
-      ? `<section class="card"><div class="card-head"><h2>Températures <small class="muted">°C, moyenne par jour</small></h2>
-      <div class="controls"><label class="select"><span class="sr-only">Pièce</span><select data-set="tempRoom">${tempRooms
-        .map((r) => `<option value="${esc(r.id)}" ${r.id === tempRoom ? 'selected' : ''}>${esc(r.name)}</option>`)
-        .join('')}</select></label></div></div>
-      <div class="chart" id="temp-chart" role="img" aria-label="Températures de la pièce"></div></section>`
-      : ''
-  }`;
+          : '',
+    ],
+    ['chauffe-eau', () => waterHeaterCard() || '<section class="card"><p class="hint muted">Pas de chauffe-eau suivi, ou pas encore de relevé heures pleines / creuses.</p></section>'],
+    ['historique', () => stationCard()],
+    [
+      'temps',
+      () =>
+        tempRoom
+          ? `<section class="card"><div class="card-head"><h2>Températures de la pièce <small class="muted">${esc(roomName(tempRoom))}, °C, moyenne par jour, 12 derniers mois</small></h2></div>
+      <p class="hint muted">Mesurée par la sonde du radiateur ; la ${TEMP.setpoint} est celle du planning Intuis, en moyenne sur la journée.</p>
+      <div class="chart" id="temp-chart" role="img" aria-label="${esc(roomName(tempRoom))} : température mesurée, ${TEMP.setpoint} et température extérieure, par jour"></div></section>`
+          : '',
+    ],
+  ];
+  view.innerHTML = html(cards.filter(([p]) => p === part).map(([, c]) => c()).join(''));
+  const has = (id: string) => !!document.getElementById(id);
 
   // signature
-  if (ds!.weather) {
+  if (ds!.weather && has('sig-chart')) {
     const sig = signaturePoints(records, ds!.weather);
     const seasons = [...sig.keys()].sort().slice(-3);
     const rows: (string | number)[][] = [];
@@ -134,7 +157,7 @@ export function renderAnalyse(view: HTMLElement, records: DayRecord[]) {
           rows.push([
             esc(s.replace('-', '–')),
             `${(-fit.slope).toFixed(2).replace('.', ',')} kWh/°C`,
-            fit.balance !== null ? `${fit.balance.toFixed(1).replace('.', ',')} °C` : '—',
+            fit.balance !== null ? `${fmt1(fit.balance)} °C` : '—',
             fit.r2.toFixed(2).replace('.', ','),
           ]);
         }
@@ -161,13 +184,15 @@ export function renderAnalyse(view: HTMLElement, records: DayRecord[]) {
     data: [...perDay.entries()].map(([d, v]) => [d, Math.round(v * 10) / 10] as [string, number]),
     max: sorted[Math.floor(sorted.length * 0.97)] ?? 1, // ignore the few extreme days
   };
-  calendarChart(document.getElementById('cal-chart')!, cal);
+  if (has('cal-chart')) calendarChart(document.getElementById('cal-chart')!, cal);
   // S-4.9 telework cost, S-4.10 absences (marks on the calendar), loaded on demand (S-7.10)
-  void lazyCard(() => import('./habits'), (m) => m.fillAnalyse(cal), { zone: 'absence-zone', what: 'Absences et télétravail' });
+  if (has('cal-chart') || has('absence-zone') || has('telework-zone')) {
+    void lazyCard(() => import('./habits'), (m) => m.fillAnalyse(cal), { zone: has('absence-zone') ? 'absence-zone' : 'telework-zone', what: 'Absences et télétravail' });
+  }
   // S-6.2: surfaces and works markers, signature before / after (lazy module)
-  if (document.getElementById('works-zone')) void lazyCard(() => import('./works'), (m) => m.fillWorks(records), { zone: 'works-zone', what: 'Travaux et surfaces' });
-  // temperatures
-  if (tempRoom) {
+  if (has('works-zone')) void lazyCard(() => import('./works'), (m) => m.fillWorks(records), { zone: 'works-zone', what: 'Travaux et surfaces' });
+  // temperatures of one room (its page)
+  if (tempRoom && has('temp-chart')) {
     const from = addDays(minusYears(last), 1);
     const days: string[] = [];
     for (let d = from; d <= last; d = addDays(d, 1)) days.push(d);
@@ -175,28 +200,32 @@ export function renderAnalyse(view: HTMLElement, records: DayRecord[]) {
     lineChart(document.getElementById('temp-chart')!, {
       labels: days.map((d) => bucketLabel(d, 'day')),
       series: [
-        { name: 'Mesurée', color: measureColor(), data: days.map((d) => t.get(d)?.[0] ?? null) },
-        { name: 'Consigne', color: cssVar('--accent'), data: days.map((d) => t.get(d)?.[1] ?? null) },
-        ...(ds!.weather ? [{ name: 'Extérieure', color: referenceColor(), data: days.map((d) => ds!.weather!.get(d)?.[2] ?? null) }] : []),
+        { name: TEMP.measured, color: measureColor(), data: days.map((d) => t.get(d)?.[0] ?? null) },
+        { name: TEMP.setpointShort, color: cssVar('--accent'), data: days.map((d) => t.get(d)?.[1] ?? null) },
+        ...(ds!.weather ? [{ name: TEMP.outdoor, color: referenceColor(), data: days.map((d) => ds!.weather!.get(d)?.[2] ?? null) }] : []),
       ],
       price: null,
       unit: '°C',
     });
   }
   // S-5.7/S-5.8: AI card loaded on demand (markdown renderer, votes, usage)
-  if (ds!.insights) void lazyCard(() => import('./insight'), (m) => m.mountInsight(document.getElementById('insight-card')), { zone: 'insight-card', what: 'Analyse IA' });
+  if (ds!.insights && has('insight-card')) void lazyCard(() => import('./insight'), (m) => m.mountInsight(document.getElementById('insight-card')), { zone: 'insight-card', what: 'Analyse IA' });
   drawStation();
   drawHourly(records);
+  // the water heater's hours need the hourly data: loaded for its page too
+  if (has('wh-hours') && (ds!.meta.hourly_years ?? []).length) hourlyDoc.get(ds, redraw);
   drawWaterHeater(hourlyDoc.status(ds) === 'ready' ? hourlyDoc.get(ds)! : null);
   drawSetpoint(records);
   // S-2.15: heat pump estimate, lazy module
-  if (document.getElementById('hp-card')) void lazyCard(() => import('./heatpump'), (m) => m.mountHeatPump(document.getElementById('hp-card'), records), { zone: 'hp-card', what: 'Pompe à chaleur' });
+  if (has('hp-card')) void lazyCard(() => import('./heatpump'), (m) => m.mountHeatPump(document.getElementById('hp-card'), records), { zone: 'hp-card', what: 'Pompe à chaleur' });
   drawIndoorSignature(records);
   // S-9.6: « volets fermés » journal, lazy module
-  void lazyCard(() => import('./shutters'), (m) => {
-    const zone = document.getElementById('shutters-zone');
-    if (zone) m.renderShutters(zone);
-  }, { zone: 'shutters-zone', what: 'Volets fermés' });
+  if (has('shutters-zone')) {
+    void lazyCard(() => import('./shutters'), (m) => {
+      const zone = document.getElementById('shutters-zone');
+      if (zone) m.renderShutters(zone);
+    }, { zone: 'shutters-zone', what: 'Volets fermés' });
+  }
 }
 
 function anomaliesCard(records: DayRecord[]) {
@@ -210,7 +239,7 @@ function anomaliesCard(records: DayRecord[]) {
   if (withStates) loadExplanations();
   return `<section class="card" id="unusual-card"><h2>Jours inhabituels <small class="muted">chauffage, écart à la signature</small></h2>
     ${alerts}
-    <p class="hint muted">Jours où le chauffage s'écarte nettement de ce qu'annonce la température extérieure (plus de 2 fois l'écart habituel et plus de 3 kWh) : fenêtre ouverte, absence, invités, réglage oublié… Les jours perdus chez Intuis ou estimés n'y figurent pas ; un jour très en dessous de la signature est marqué <strong>suspect</strong> (donnée peut-être incomplète, voir « Qualité des données » dans la Synthèse).</p>
+    <p class="hint muted">Jours où le chauffage s'écarte nettement de ce qu'annonce la température extérieure (plus de 2 fois l'écart habituel et plus de 3 kWh) : fenêtre ouverte, absence, invités, réglage oublié… Les jours perdus chez Intuis ou estimés n'y figurent pas ; un jour très en dessous de la signature est marqué <strong>suspect</strong> (donnée peut-être incomplète, voir « État des données » dans Outils).</p>
     ${withStates ? '<p class="hint muted">« Explication possible » : heures de fenêtre ouverte de toutes les pièces ce jour-là, ou mode absence relevé (relevé horaire de l’état des pièces). Une fenêtre ouverte coupe le radiateur de la pièce, qui relance ensuite : le jour peut se retrouver au-dessus ou en dessous de l’attendu.</p>' : ''}
     ${table(
       ['Jour', 'Consommé', 'Attendu', 'Écart', ...(withStates ? ['Explication possible'] : [])],

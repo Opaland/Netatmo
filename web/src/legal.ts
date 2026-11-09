@@ -115,6 +115,6 @@ export function legalHtml(today = new Date().toISOString().slice(0, 10)): string
         <p style="margin:4px 0">${esc(s.terms)} <a href="${esc(s.url)}" target="_blank" rel="noopener">Source</a></p>
         <p class="hint" style="margin:2px 0">Lu le ${fmt(s.read)}${stale(s.read, today) ? ' <strong class="ko-red">à relire</strong>' : ''} · risque d'arrêt <strong${s.risk === 'élevé' ? ' class="ko-red"' : ''}>${s.risk}</strong></p></li>`,
     ).join('')}</ul>
-    <p class="hint muted">Si l'accès Intuis est coupé, l'historique déjà collecté reste dans le dépôt et dans vos sauvegardes chiffrées (menu ⋮). Accord Enedis révocable depuis l'espace Enedis, « partage des données avec des tiers ».
+    <p class="hint muted">Si l'accès Intuis est coupé, l'historique déjà collecté reste dans le dépôt et dans vos sauvegardes chiffrées (Outils → Exporter mes données, ou ⚙ Sécurité). Accord Enedis révocable depuis l'espace Enedis, « partage des données avec des tiers ».
       Détails, RGPD, licences : <a href="${docUrl}" target="_blank" rel="noopener">docs/juridique.md</a> (revue du ${fmt(LEGAL_REVIEW)}).</p>`;
 }

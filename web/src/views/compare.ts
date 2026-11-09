@@ -43,7 +43,26 @@ import { switchField } from '../components';
 import { lazyCard } from '../lazy';
 import { tenant, tenantNote } from '../tenant';
 
-export function renderCompare(view: HTMLElement, records: DayRecord[]) {
+/**
+ * #308: « history » (Historique: years or seasons compared, annual totals), « offers » (Outils →
+ * Quelle offre ?) or « ev » (Outils → Une voiture électrique).
+ */
+export function renderCompare(view: HTMLElement, records: DayRecord[], part: 'history' | 'offers' | 'ev' = 'history') {
+  if (part === 'offers') {
+    view.innerHTML = html(comparatorCard() || '<section class="card"><p class="hint muted">Comparateur disponible avec les tarifs réglementés et les jours Tempo (prochaine collecte).</p></section>');
+    drawComparator();
+    return;
+  }
+  if (part === 'ev') {
+    if (tenant().on) {
+      view.innerHTML = html(tenantNote('La simulation de recharge est masquée'));
+      return;
+    }
+    view.innerHTML = html(ds!.offers.size && ds!.tempo.rows.length ? '' : '<section class="card"><p class="hint muted">Simulation disponible avec les tarifs réglementés et les jours Tempo (prochaine collecte).</p></section>');
+    // S-2.14: electric-vehicle charging simulator, lazy module
+    void lazyCard(() => import('./ev'), (m) => m.mountEv(view), { zone: view, what: 'Voiture électrique' });
+    return;
+  }
   const years = ds!.meta.years;
   const last = lastDay();
   const lastYear = Number(last.slice(0, 4));
@@ -152,10 +171,6 @@ export function renderCompare(view: HTMLElement, records: DayRecord[]) {
     <p class="hint muted">L'évolution de l'année en cours est calculée à date : du 1er janvier au ${Number(last.slice(8, 10))} ${MONTHS_LONG[Number(last.slice(5, 7)) - 1]} des deux années. Quand l'année précédente a commencé en cours d'année (début de la collecte), l'évolution porte sur la même période des deux années. Les jours estimés ou perdus de chaque année sont signalés : ils faussent l'évolution.</p>
   </section>`;
 
-  view.insertAdjacentHTML('beforeend', html(comparatorCard()));
-  drawComparator();
-  // S-2.14: electric-vehicle charging simulator, lazy module
-  void lazyCard(() => import('./ev'), (m) => m.mountEv(view), { zone: null, what: 'Voiture électrique' });
   const el = document.getElementById('cmp-chart')!;
   let ser: Series[] = [];
   let labels: string[] = [];
@@ -337,7 +352,7 @@ function drawComparator() {
   barChart(el, { labels: rows.map((p) => `${p.y}${p.r.hphc.days < 360 ? ` (${p.r.hphc.days} j)` : ''}`), series: ser, stacked: false, price: null, unit: '€' });
   document.getElementById('offers-table')!.innerHTML = html(tableToggle(
     table(
-      ['Année', 'Base', 'HP / HC', 'Tempo'],
+      ['Année', 'Base', 'Heures pleines / creuses', 'Tempo'],
       rows.map((p) => [String(p.y), fmtEur(cost(p.r, 'base')), fmtEur(cost(p.r, 'hphc')), fmtEur(cost(p.r, 'tempo'))]),
     ),
   ));

@@ -8,6 +8,7 @@ import { barChart, chartOf, cssVar, scatterChart } from '../charts';
 import { loadNote, saveNote } from '../local-store';
 import { BEDROOMS_ID, displaySurfaces } from '../household';
 import { html } from '../trusted';
+import { onCard } from '../events';
 import { activeRooms, catColor, esc, firstDay, fmtKwh, lastDay, longDate, nf0, pct, table, referenceColor } from '../ui';
 import {
   type HomeWorks,
@@ -60,7 +61,6 @@ function draw() {
   if (!el || !ds) return;
   el.outerHTML = html(card());
   drawCharts();
-  bind();
 }
 
 const num1 = (v: number) => v.toLocaleString('fr-FR', { maximumFractionDigits: 1 });
@@ -250,33 +250,44 @@ async function save(next: HomeWorks) {
   draw();
 }
 
-function bind() {
-  const pick = document.getElementById('works-pick') as HTMLSelectElement | null;
-  if (pick) pick.onchange = () => ((chosen = pick.value), draw());
-  const add = document.getElementById('works-add');
-  if (add) {
-    add.onclick = () => {
+// #257: the controls of the card, dispatched by main.ts (no `onclick =` on the elements).
+onCard({
+  change(t) {
+    if (!works) return false;
+    if (t.id === 'works-pick') {
+      chosen = t.value;
+      draw();
+      return true;
+    }
+    if (t instanceof HTMLInputElement && t.dataset.worksSurface !== undefined) {
+      const v = Number(t.value.replace(',', '.'));
+      const surfaces = { ...works.surfaces };
+      if (t.value === '' || !(v > 0 && v <= MAX_SURFACE)) delete surfaces[t.dataset.worksSurface];
+      else surfaces[t.dataset.worksSurface] = Math.round(v * 10) / 10;
+      void save({ ...works, surfaces }).then(() => document.getElementById('works-surfaces')?.setAttribute('open', ''));
+      return true;
+    }
+    return false;
+  },
+  click(el) {
+    if (!works) return false;
+    if (el.id === 'works-add') {
       const day = (document.getElementById('works-day') as HTMLInputElement).value;
       const kind = (document.getElementById('works-kind') as HTMLSelectElement).value as WorkKind;
       const label = (document.getElementById('works-label') as HTMLInputElement).value.trim().slice(0, 80);
       if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) {
         document.getElementById('works-msg')!.textContent = 'Indiquez la date des travaux.';
-        return;
+        return true;
       }
       chosen = day;
-      void save({ ...works!, markers: sortMarkers([...works!.markers.filter((m) => m.day !== day), { day, kind: kind in WORK_KINDS ? kind : 'autre', label }]) });
-    };
-  }
-  document.querySelectorAll<HTMLButtonElement>('[data-works-del]').forEach((b) => {
-    b.onclick = () => void save({ ...works!, markers: works!.markers.filter((_, i) => i !== Number(b.dataset.worksDel)) });
-  });
-  document.querySelectorAll<HTMLInputElement>('[data-works-surface]').forEach((input) => {
-    input.onchange = () => {
-      const v = Number(input.value.replace(',', '.'));
-      const surfaces = { ...works!.surfaces };
-      if (input.value === '' || !(v > 0 && v <= MAX_SURFACE)) delete surfaces[input.dataset.worksSurface!];
-      else surfaces[input.dataset.worksSurface!] = Math.round(v * 10) / 10;
-      void save({ ...works!, surfaces }).then(() => document.getElementById('works-surfaces')?.setAttribute('open', ''));
-    };
-  });
-}
+      void save({ ...works, markers: sortMarkers([...works.markers.filter((m) => m.day !== day), { day, kind: kind in WORK_KINDS ? kind : 'autre', label }]) });
+      return true;
+    }
+    if (el.dataset.worksDel !== undefined) {
+      const i = Number(el.dataset.worksDel);
+      void save({ ...works, markers: works.markers.filter((_, j) => j !== i) });
+      return true;
+    }
+    return false;
+  },
+});

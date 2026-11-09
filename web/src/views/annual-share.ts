@@ -120,7 +120,7 @@ export function renderAnonymised(view: HTMLElement, year: number | 'lease') {
   const found = leaks(markup.replace(/<[^>]+>/g, ' '), secrets());
   if (found.length) {
     // Belt and braces: the report is built from pseudonyms only, but never show a leak.
-    view.innerHTML = html`<section class="card report"><p class="stale" role="alert">Rapport anonymisé non affiché : il contiendrait « ${esc(found.join(' », « '))} ». Renommez la pièce ou le logement concerné, ou signalez-le.</p><button type="button" class="link" data-view="report">Rapport complet</button></section>`;
+    view.innerHTML = html`<section class="card report"><p class="stale" role="alert">Rapport anonymisé non affiché : il contiendrait « ${esc(found.join(' », « '))} ». Renommez la pièce ou le logement concerné, ou signalez-le.</p><a class="link" href="#rapport">Rapport complet</a></section>`;
     return;
   }
   view.innerHTML = html(markup);

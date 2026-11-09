@@ -30,6 +30,7 @@ import { readPref, writePref } from '../money';
 import { activeRooms, avgPrice, costOf, esc, firstDay, fmtEur, fmtKwh, lastDay, nf0, table } from '../ui';
 import { currentHcHp } from './waterheater';
 import { html } from '../trusted';
+import { onCard } from '../events';
 import { NS, lsKey } from '../scope';
 
 const num1 = (v: number) => v.toLocaleString('fr-FR', { maximumFractionDigits: 1 });
@@ -41,10 +42,6 @@ function put(id: string, markup: string) {
   if (markup) el.outerHTML = html(markup);
   else el.remove();
 }
-function on(id: string, type: 'change' | 'click', fn: (el: HTMLInputElement) => void) {
-  const el = document.getElementById(id) as HTMLInputElement | null;
-  if (el) el[type === 'change' ? 'onchange' : 'onclick'] = () => fn(el);
-}
 
 export interface CalendarOpts {
   year: number;
@@ -55,7 +52,6 @@ export interface CalendarOpts {
 /** Called by analyse.ts once this module is loaded. */
 export async function fillAnalyse(cal: CalendarOpts) {
   put('telework-zone', teleworkCard());
-  bindTelework();
   const d = ds;
   const edits = await loadEdits();
   await loadModeAbsences();
@@ -145,23 +141,6 @@ function teleworkCard(): string {
       }. Les jours fériés et les congés comptent comme des jours ouvrés : ils diluent un peu l'écart.</p>
     </details>
   </section>`;
-}
-
-function bindTelework() {
-  on('tw-room', 'change', (el) => {
-    writePref(LS_ROOM, el.value);
-    rerender();
-  });
-  document.querySelectorAll<HTMLInputElement>('[data-tw-day]').forEach((el) => {
-    el.onchange = () => {
-      const cur = teleworkDays();
-      const d = Number(el.dataset.twDay);
-      if (el.checked) cur.add(d);
-      else cur.delete(d);
-      writePref(LS_DAYS, [...cur].sort().join(','));
-      rerender();
-    };
-  });
 }
 
 // ------------------------------------------------------------------ S-4.10 absences
@@ -284,26 +263,59 @@ function absenceCard(list: ReturnType<typeof absences>, edits: AbsenceEdits): st
   </section>`;
 }
 
+/** Edits of the absences shown, for the buttons of the card (#257: registered handlers). */
+let shownEdits: AbsenceEdits | null = null;
 function bindAbsences(edits: AbsenceEdits) {
-  const list = absences(edits).slice(0, 12);
-  document.querySelectorAll<HTMLButtonElement>('[data-absence]').forEach((el) => {
-    el.onclick = () => {
-      const p = list[Number(el.dataset.absence)];
-      if (!p) return;
-      void saveEdits(
-        p.manual
-          ? { ...edits, added: edits.added.filter((a) => !(a.from === p.from && a.to === p.to)) }
-          : { ...edits, dismissed: [...edits.dismissed, p.from] },
-      );
-    };
-  });
-  on('abs-add', 'click', () => {
-    const f = (document.getElementById('abs-from') as HTMLInputElement).value;
-    let t = (document.getElementById('abs-to') as HTMLInputElement).value || f;
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(f)) return;
-    if (t < f) t = f;
-    void saveEdits({ ...edits, added: [...edits.added, { from: f, to: t }] });
-  });
-  on('abs-restore', 'click', () => void saveEdits({ ...edits, dismissed: [] }));
+  shownEdits = edits;
 }
+
+// #257: the telework and absence controls, dispatched by main.ts (no `onclick =` on the elements).
+onCard({
+  change(t) {
+    if (t.id === 'tw-room') {
+      writePref(LS_ROOM, t.value);
+      rerender();
+      return true;
+    }
+    if (t instanceof HTMLInputElement && t.dataset.twDay !== undefined) {
+      const cur = teleworkDays();
+      const d = Number(t.dataset.twDay);
+      if (t.checked) cur.add(d);
+      else cur.delete(d);
+      writePref(LS_DAYS, [...cur].sort().join(','));
+      rerender();
+      return true;
+    }
+    return false;
+  },
+  click(el) {
+    const edits = shownEdits;
+    if (!edits) return false;
+    if (el.dataset.absence !== undefined) {
+      const p = absences(edits).slice(0, 12)[Number(el.dataset.absence)];
+      if (p) {
+        void saveEdits(
+          p.manual
+            ? { ...edits, added: edits.added.filter((a) => !(a.from === p.from && a.to === p.to)) }
+            : { ...edits, dismissed: [...edits.dismissed, p.from] },
+        );
+      }
+      return true;
+    }
+    if (el.id === 'abs-add') {
+      const f = (document.getElementById('abs-from') as HTMLInputElement).value;
+      let t = (document.getElementById('abs-to') as HTMLInputElement).value || f;
+      if (/^\d{4}-\d{2}-\d{2}$/.test(f)) {
+        if (t < f) t = f;
+        void saveEdits({ ...edits, added: [...edits.added, { from: f, to: t }] });
+      }
+      return true;
+    }
+    if (el.id === 'abs-restore') {
+      void saveEdits({ ...edits, dismissed: [] });
+      return true;
+    }
+    return false;
+  },
+});
 

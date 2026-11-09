@@ -17,9 +17,9 @@ import {
   saveNotes,
 } from '../shutters';
 import { html } from '../trusted';
-import { activeRooms, esc, fmtKwh, lastDay, longDate, table } from '../ui';
+import { activeRooms, downloadBlob, esc, fmt1 as num1, fmtKwh, lastDay, longDate, table } from '../ui';
+import { onCard } from '../events';
 
-const num1 = (v: number) => v.toFixed(1).replace('.', ',');
 const signed = (v: number) => `${v > 0 ? '+' : v < 0 ? '−' : ''}${num1(Math.abs(v))}`;
 /** Today in the device's time zone (the evening being noted). */
 const today = () => {
@@ -32,16 +32,26 @@ let msg = '';
 
 /** Fill the zone with the card and keep it up to date by itself (no global re-render). */
 export function renderShutters(zone: HTMLElement) {
-  if (zone.dataset.bound) return; // two renders resolved the lazy import: draw once
-  zone.dataset.bound = '1';
   notes = loadNotes();
   draw(zone);
-  zone.addEventListener('change', (e) => onChange(zone, e.target as HTMLInputElement));
-  zone.addEventListener('click', (e) => {
-    const btn = (e.target as HTMLElement).closest<HTMLButtonElement>('button[data-shutters]');
-    if (btn) onClick(zone, btn);
-  });
 }
+
+// #257: the controls of the card, dispatched by main.ts (no listener of its own).
+const zoneOf = (el: Element) => el.closest<HTMLElement>('#shutters-zone');
+onCard({
+  click(el) {
+    const zone = zoneOf(el);
+    if (!zone || !(el instanceof HTMLButtonElement) || !el.dataset.shutters) return false;
+    onClick(zone, el);
+    return true;
+  },
+  change(t) {
+    const zone = zoneOf(t);
+    if (!zone || !(t instanceof HTMLInputElement) || !t.dataset.shutters) return false;
+    onChange(zone, t);
+    return true;
+  },
+});
 
 function draw(zone: HTMLElement) {
   const t = today();
@@ -158,12 +168,7 @@ function onClick(zone: HTMLElement, btn: HTMLButtonElement) {
   } else if (action === 'pick') {
     zone.querySelector<HTMLInputElement>('[data-shutters=import]')?.click();
   } else if (action === 'export') {
-    const blob = new Blob(['﻿' + notesCsv(notes)], { type: 'text/csv;charset=utf-8' });
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = `volets-fermes-${today()}.csv`;
-    a.click();
-    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    downloadBlob(new Blob(['﻿' + notesCsv(notes)], { type: 'text/csv;charset=utf-8' }), `volets-fermes-${today()}.csv`);
   }
 }
 
