@@ -13,40 +13,59 @@
   <a class="icon-btn" href="parametres.html" aria-label="Paramètres"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/></svg></a></header>
 <main>
 
+<div class="periodbar">
+  <div class="seg" role="radiogroup" aria-label="Période">
+    <button type="button" role="radio" aria-checked="true">Mois</button><button type="button" role="radio" aria-checked="false">Saison</button><button type="button" role="radio" aria-checked="false">12 mois</button><button type="button" role="radio" aria-checked="false">Année</button>
+  </div>
+  <p class="scope">Novembre 2026, du 1ᵉʳ au 8 (8 jours sur 30) · chauffage et eau chaude, hors abonnement</p>
+</div>
+
 <section class="card" aria-labelledby="verdict">
   <div class="verdict">
     <span class="mark" aria-hidden="true">▼</span>
     <div><strong id="verdict">3 € de moins que d'habitude</strong>
-    <p class="muted">Novembre, au 8 : <b class="num">32 €</b> (170 kWh) pour 35 € attendus, à météo comparable.</p></div>
+    <p class="muted"><b class="num">32 €</b> (170 kWh) dépensés au 8 novembre, pour 35 € attendus à météo comparable.</p></div>
   </div>
-  <details class="how"><summary>Comment c'est calculé</summary><p>Attendu = consommation des années passées à la même date, corrigée des <span class="term">degrés-jours</span>. Prix du contrat en vigueur chaque jour.</p></details>
+  <div class="gauge" role="img" aria-label="Mois de novembre : 32 euros dépensés, 35 euros attendus à cette date, environ 118 euros prévus à la fin du mois">
+    <div class="track"><span class="proj" style="width:100%"></span><span class="fill" style="width:27%"></span><span class="mark" style="left:30%"></span></div>
+    <div class="scale"><span>0 €</span><span>attendu au 8 : 35 €</span><span>fin du mois ≈ 118 €</span></div>
+  </div>
+  <details class="how"><summary>Comment c'est calculé</summary><p>Attendu = consommation des années passées à la même date, corrigée des <span class="term">degrés-jours</span> (le froid réellement constaté). Prix du contrat en vigueur chaque jour, hors abonnement.</p></details>
 </section>
 
 <div class="tiles">
-  <div class="tile"><div class="label">Ce mois-ci (au 8)</div><div class="value">32 €</div><div class="delta down">▼ 16 % que l'an dernier</div></div>
-  <div class="tile"><div class="label">Depuis le 1ᵉʳ janvier</div><div class="value">978 €</div><div class="delta down">▼ 16 % que l'an dernier</div></div>
-  <div class="tile wide"><div class="label">Fin d'année estimée</div><div class="value">≈ 1 303 €</div><div class="delta">Budget 1 500 € : <b>197 € de marge</b></div></div>
+  <div class="tile"><div class="label">Ce mois-ci, au 8</div><div class="value">32 €</div><div class="delta down"><b>−16 %</b> <span class="vs">vs nov. 2025 au 8</span></div></div>
+  <div class="tile"><div class="label">Depuis le 1ᵉʳ janvier</div><div class="value">978 €</div><div class="delta down"><b>−16 %</b> <span class="vs">vs 2025 à date</span></div></div>
 </div>
+
+<section class="card" aria-labelledby="budget">
+  <div class="card-head"><h2 id="budget">Budget 2026</h2><span class="sub">1 500 € hors abonnement</span></div>
+  <div class="gauge" role="img" aria-label="Budget 2026 : 978 euros dépensés, fin d'année estimée à 1 303 euros, soit 197 euros de marge">
+    <div class="track"><span class="proj" style="width:87%"></span><span class="fill" style="width:65%;background:var(--accent)"></span></div>
+    <div class="scale"><span>978 € dépensés</span><span>fin d'année ≈ 1 303 €</span></div>
+  </div>
+  <p class="delta down"><b>197 € de marge</b> <span class="vs">si l'hiver est normal</span></p>
+</section>
 
 <div class="alert" role="note"><span class="ico" aria-hidden="true">i</span><div><b>Nouveau tarif depuis le 1ᵉʳ août</b><br>+39 € par an pour votre consommation. <a href="outils.html">Comparer les offres</a></div></div>
 
 <section class="card">
-  <div class="card-head"><h2>Ce qui a compté</h2><span class="sub">depuis le 1ᵉʳ janvier</span></div>
+  <div class="card-head"><h2>Ce qui a compté</h2><span class="sub">depuis le 1ᵉʳ janv. · part du total</span></div>
   <ul class="list" style="border:0;border-radius:0;margin:0 calc(-1*var(--space-4))">
-    <li><a href="piece.html"><span class="sw" style="background:var(--usage-heating)"></span><span><span class="t">Chambres</span><span class="s">▼ 19 % que l'an dernier</span></span><span class="v">237 €</span><span class="chev">›</span></a></li>
-    <li><a href="piece.html"><span class="sw" style="background:var(--usage-heating)"></span><span><span class="t">Salon</span><span class="s">▼ 20 %</span></span><span class="v">234 €</span><span class="chev">›</span></a></li>
-    <li><a href="pieces.html"><span class="sw" style="background:var(--usage-water)"></span><span><span class="t">Chauffe-eau</span><span class="s">▼ 3 %</span></span><span class="v">201 €</span><span class="chev">›</span></a></li>
+    <li><a href="piece.html"><span class="sw" style="background:var(--usage-heating)"></span><span><span class="t">Chambres</span><span class="s">−19 % vs 2025 à date</span><span class="share"><i style="width:24%;background:var(--usage-heating)"></i></span></span><span class="v">237 €</span><span class="chev">›</span></a></li>
+    <li><a href="piece.html"><span class="sw" style="background:var(--usage-heating)"></span><span><span class="t">Salon</span><span class="s">−20 % vs 2025 à date</span><span class="share"><i style="width:24%;background:var(--usage-heating)"></i></span></span><span class="v">234 €</span><span class="chev">›</span></a></li>
+    <li><a href="pieces.html"><span class="sw" style="background:var(--usage-water)"></span><span><span class="t">Chauffe-eau</span><span class="s">−3 % vs 2025 à date</span><span class="share"><i style="width:21%;background:var(--usage-water)"></i></span></span><span class="v">201 €</span><span class="chev">›</span></a></li>
   </ul>
   <a href="pieces.html">Toutes les pièces</a>
 </section>
 
 <section class="card">
-  <div class="card-head"><h2>Consommation</h2><button class="period" type="button">12 derniers mois ▾</button></div>
+  <div class="card-head"><h2>Consommation et froid</h2><span class="sub">12 derniers mois</span></div>
   <p class="sub"><b class="num">1 333 €</b> · 7 137 kWh du 9 nov. 2025 au 8 nov. 2026</p>
   <div class="bar-share" role="img" aria-label="Chauffage 79 %, eau chaude 21 %"><span style="width:79%;background:var(--usage-heating)"></span><span style="width:21%;background:var(--usage-water)"></span></div>
-<div class="legend"><span><i class="sw" style="background:var(--usage-heating)"></i>Chauffage 79 %</span><span><i class="sw" style="background:var(--usage-water)"></i>Eau chaude 21 %</span></div>
+<div class="legend"><span><i class="sw" style="background:var(--usage-heating)"></i>Chauffage 79 %</span><span><i class="sw" style="background:var(--usage-water)"></i>Eau chaude 21 %</span><span><i class="hatch"></i>Mois en cours (8 j)</span><span>··· Température extérieure</span></div>
   <svg class="chart" viewBox="0 0 360 180" role="img" aria-labelledby="c1t">
-<title id="c1t">Consommation par mois sur 12 mois : maximum en janvier (1 250 kWh), minimum en juillet (100 kWh, eau chaude seule).</title>
+<defs><pattern id="partial" width="4" height="4" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="2" height="4" fill="var(--usage-heating)"/></pattern></defs><title id="c1t">Consommation par mois sur 12 mois : maximum en janvier (1 250 kWh), minimum en juillet (100 kWh, eau chaude seule).</title>
 <line class="grid" x1="34" x2="360" y1="150.0" y2="150.0"/><text x="28" y="154.0" text-anchor="end">0</text>
 <line class="grid" x1="34" x2="360" y1="100.0" y2="100.0"/><text x="28" y="104.0" text-anchor="end">500</text>
 <line class="grid" x1="34" x2="360" y1="50.0" y2="50.0"/><text x="28" y="54.0" text-anchor="end">1 000</text>
@@ -79,7 +98,9 @@
 <rect x="314.4" y="138.0" width="16.0" height="12.0" fill="var(--usage-water)"/>
 <rect x="314.4" y="110.0" width="16.0" height="28.0" fill="var(--usage-heating)" rx="2"/>
 <rect x="339.4" y="147.0" width="16.0" height="3.0" fill="var(--usage-water)"/>
-<rect x="339.4" y="134.0" width="16.0" height="13.0" fill="var(--usage-heating)" rx="2"/>
+<rect x="339.4" y="134.0" width="16.0" height="13.0" fill="url(#partial)" stroke="var(--usage-heating)" rx="2"/>
+<polyline class="temp-line" points="46.5,104 71.6,122 96.7,128 121.8,118 146.8,104 171.9,86 197.0,70 222.1,58 247.1,52 272.2,56 297.3,72 322.4,90 347.5,100"/>
+<text x="356" y="12" text-anchor="end">°C ext. (pointillé)</text>
 <text x="347.5" y="168" text-anchor="middle">nov.</text>
 </svg>
   <details class="how"><summary>Voir les valeurs</summary><p>Tableau mois par mois (kWh, €).</p></details>
