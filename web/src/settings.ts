@@ -56,6 +56,15 @@ export const GROUPS: SecretGroup[] = [
     ],
   },
   {
+    id: 'shelly',
+    title: 'Prises connectées Shelly (facultatif)',
+    help: "Application Shelly → Paramètres utilisateur → Clé d'autorisation cloud : copiez la clé et le serveur (ex. shelly-103-eu.shelly.cloud).",
+    fields: [
+      { name: 'SHELLY_AUTH_KEY', label: "Clé d'autorisation cloud", secret: true },
+      { name: 'SHELLY_SERVER', label: 'Serveur', secret: false, placeholder: 'shelly-103-eu.shelly.cloud' },
+    ],
+  },
+  {
     id: 'ia',
     title: 'Analyse IA mensuelle (facultatif)',
     help: 'console.anthropic.com → clé API. Seuls des totaux mensuels sont envoyés.',
@@ -169,6 +178,10 @@ export function validate(name: string, value: string): string | null {
   if (name === 'ENEDIS_PRM' && !/^\d{14}$/.test(v)) return 'Le PDL compte 14 chiffres.';
   if (name === 'INTUIS_USERNAME' && !v.includes('@')) return 'Adresse e-mail attendue.';
   if (name === 'ANTHROPIC_API_KEY' && !v.startsWith('sk-ant-')) return 'Une clé Anthropic commence par « sk-ant- ».';
+  // Same rule as the collector (collector/shelly.py): the key is only ever sent to *.shelly.cloud.
+  if (name === 'SHELLY_SERVER' && !/^(https:\/\/)?[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)*\.shelly\.cloud\/?$/i.test(v))
+    return 'Serveur Shelly attendu, par exemple shelly-103-eu.shelly.cloud.';
+  if (name === 'SHELLY_AUTH_KEY' && (v.length < 20 || /\s/.test(v))) return 'Clé Shelly incomplète (copiez-la en entier).';
   return null;
 }
 

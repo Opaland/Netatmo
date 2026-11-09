@@ -15,7 +15,7 @@ from contextlib import contextmanager
 
 # Calls per collection. A daily sync uses a few dozen at most; the first run (backfill)
 # walks back year by year and needs more, hence the larger Intuis cap in that case.
-DEFAULT_CAPS = {"intuis": 300, "netatmo": 400, "linky": 200, "open-meteo": 20}
+DEFAULT_CAPS = {"intuis": 300, "netatmo": 400, "linky": 200, "open-meteo": 20, "shelly": 30}
 BACKFILL_CAPS = {"intuis": 3000}
 
 

@@ -7,6 +7,7 @@ verify      Déchiffre les données locales et affiche un résumé
 export-csv  Exporte les données déchiffrées en CSV
 demo        Génère des données de démonstration chiffrées (phrase « demo »)
 restore-backup FICHIER  Restaure dans data/ une sauvegarde chiffrée téléchargée depuis l'appli
+import-ha FICHIER  Verse un export Home Assistant (statistiques) dans l'archive chiffrée
 snapshot    Relevé horaire de l'état des pièces, chiffré dans un dossier (workflow « Relevé horaire »)
 """
 
@@ -131,6 +132,7 @@ EXPIRY_WARNING_DAYS = 30
 RENEW = {
     "linky": "nouvel accord sur conso.boris.sh, puis secret ENEDIS_TOKEN",
     "netatmo": "nouveau refresh token (scope read_station) sur dev.netatmo.com, puis secret NETATMO_REFRESH_TOKEN",
+    "shelly": "nouvelle clé dans l'application Shelly (Clé d'autorisation cloud), puis secret SHELLY_AUTH_KEY",
 }
 
 
@@ -334,6 +336,18 @@ def _linky(s: Settings, store: Store, tz: str, sources: Sources) -> None:
         _warn(f"{err} — la consommation quotidienne Linky n'est pas affectée")
 
 
+def _shelly(s: Settings, store: Store, tz: str, sources: Sources) -> None:
+    """S-1.17: one counter reading per Shelly plug. Never fatal."""
+    from .shelly import ShellyError, collect, note
+
+    sources.credential("shelly", s.shelly_auth_key)
+    try:
+        sources.ok("shelly", note(collect(store, s.shelly_auth_key, s.shelly_server, tz)))
+    except (ShellyError, FormatError, CallCapReached) as err:
+        sources.error("shelly", err)
+        _warn(str(err))
+
+
 def cmd_sync(s: Settings, args: argparse.Namespace, backfill: bool = False) -> None:
     s.require("passphrase")
     store = Store(s.data_dir, s.passphrase)
@@ -364,11 +378,17 @@ def cmd_sync(s: Settings, args: argparse.Namespace, backfill: bool = False) -> N
     extra = {"weather_source": source} if source else {}
     if s.enedis_token and s.enedis_prm and store.first_day():
         _linky(s, store, home.timezone, sources)
+    if s.shelly_auth_key and s.shelly_server:
+        _shelly(s, store, home.timezone, sources)
     rs_rows = _room_states(s, store, syncer, sources)
     if store.doc("roomstate").get("rooms"):
         extra["has_roomstate"] = True
     if store.doc("linky").get("daily"):
         extra["has_linky"] = True
+    if store.doc("shelly").get("daily"):
+        extra["has_shelly"] = True
+    if store.doc("ha").get("daily"):
+        extra["has_ha"] = True
     if store.doc("station").get("daily"):
         extra["has_station"] = True
     if os.environ.get("ANTHROPIC_API_KEY"):
@@ -501,6 +521,7 @@ def _job_summary(store: Store, syncer: Syncer, changed: list[str], extra_rows: l
         f"| Station Netatmo (tous modules) | {yes(m.get('has_station'))} |",
         f"| Linky | {yes(m.get('has_linky'))} |",
         f"| Linky, courbe de charge 30 min | {yes(m.get('linky_curve_years'))} |",
+        f"| Prises Shelly | {yes(m.get('has_shelly'))} |",
         f"| Analyse IA | {yes(store.doc('insights').get('period'))} |",
         f"| Contrat partagé | {_contract_label(m.get('contract'))} |",
         *(extra_rows or []),
@@ -523,6 +544,10 @@ def _job_summary(store: Store, syncer: Syncer, changed: list[str], extra_rows: l
         fh.write("\n".join(lines) + "\n")
 
 
+# Meta keys that a command other than sync keeps as they are.
+KEPT_META = ("weather_source", "sources", "contract", "cold_alert", "backfill_pending")
+
+
 def cmd_insights(s: Settings, args: argparse.Namespace) -> None:
     from .insights import generate
 
@@ -532,14 +557,37 @@ def cmd_insights(s: Settings, args: argparse.Namespace) -> None:
         store.save(
             store.meta.get("home", {}),
             store.meta.get("rooms", []),
-            {
-                k: v
-                for k, v in store.meta.items()
-                if k.startswith("has_")
-                or k in ("weather_source", "sources", "contract", "cold_alert", "backfill_pending")
-            },
+            {k: v for k, v in store.meta.items() if k.startswith("has_") or k in KEPT_META},
         )
         print(store.doc("insights")["markdown"])
+
+
+def cmd_import_ha(s: Settings, args: argparse.Namespace) -> None:
+    """S-1.18: Home Assistant export → daily aggregates in data/ha.enc.json (counts printed only)."""
+    from .homeassistant import ImportFormatError, import_file
+
+    s.require("passphrase")
+    store = Store(s.data_dir, s.passphrase)
+    if not store.meta:
+        raise SystemExit("Aucune donnée dans data/ : lancez d'abord une collecte.")
+    tz = store.meta.get("home", {}).get("timezone") or "Europe/Paris"
+    try:
+        counts = import_file(store, Path(args.file), tz)
+    except (ImportFormatError, UnicodeDecodeError, OSError) as err:
+        why = str(err) if isinstance(err, ImportFormatError) else type(err).__name__
+        raise SystemExit(f"Import refusé : {why}") from None
+    print(f"{counts['sensors']} capteurs, {counts['days']} jours agrégés, {counts['skipped']} sans jour complet.")
+    if args.dry_run or not counts["sensors"]:
+        print("Rien n'est écrit.")
+        return
+    sources = Sources(store.meta.get("sources"))
+    sources.ok("home-assistant", f"import manuel : {counts['sensors']} capteurs")
+    keep = {k: v for k, v in store.meta.items() if k.startswith("has_") or k in KEPT_META}
+    changed = store.save(
+        store.meta.get("home", {}), store.meta.get("rooms", []), {**keep, "has_ha": True, "sources": sources.state}
+    )
+    print("Fichiers modifiés : " + (", ".join(changed) if changed else "aucun"))
+    print("Contrôle puis commit de data/ (fichiers chiffrés uniquement).")
 
 
 def cmd_rekey(s: Settings, args: argparse.Namespace) -> None:
@@ -651,11 +699,16 @@ def main(argv: list[str] | None = None) -> None:
     rb = sub.add_parser("restore-backup", help="restaurer une sauvegarde chiffrée téléchargée depuis l'appli")
     rb.add_argument("file", metavar="FICHIER")
     rb.add_argument("--dry-run", action="store_true", help="vérifier sans rien écrire")
+    ih = sub.add_parser("import-ha", help="verser un export Home Assistant dans l'archive chiffrée")
+    ih.add_argument("file", metavar="FICHIER")
+    ih.add_argument("--dry-run", action="store_true", help="vérifier sans rien écrire")
     dm = sub.add_parser("demo")
     dm.add_argument("-o", "--output", default="web/public/demo")
     dm.add_argument("--passphrase", default="demo")
     args = p.parse_args(argv)
     logging.basicConfig(level=logging.INFO if args.verbose else logging.WARNING, format="%(levelname)s %(message)s")
+    # httpx logs each request URL at INFO: query strings (Shelly key, Linky PRM) stay out of public logs.
+    logging.getLogger("httpx").setLevel(logging.WARNING)
     s = Settings.from_env()
     {
         "discover": cmd_discover,
@@ -669,6 +722,7 @@ def main(argv: list[str] | None = None) -> None:
         "export-csv": cmd_export,
         "demo": cmd_demo,
         "restore-backup": cmd_restore_backup,
+        "import-ha": cmd_import_ha,
         "snapshot": cmd_snapshot,
     }[args.cmd](s, args)
 

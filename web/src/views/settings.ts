@@ -72,6 +72,8 @@ export function renderSettings(view: HTMLElement) {
       ${status(!!m.weather_source, `Météo (${m.weather_source === 'netatmo' ? 'station Netatmo' : 'Open-Meteo'})`, m.weather_source === 'netatmo' ? 'netatmo' : 'open-meteo', false)}
       ${status(!!(m as { has_station?: boolean }).has_station, 'Station Netatmo, tous les modules', 'netatmo')}
       ${status(!!m.has_linky || !!src.linky, 'Compteur Linky', 'linky')}
+      ${status(!!(m as { has_shelly?: boolean }).has_shelly || !!src.shelly, 'Prises Shelly', 'shelly')}${noteLine(src.shelly)}
+      ${src['home-assistant'] ? status(true, 'Home Assistant (import manuel)', 'home-assistant', false) : ''}
       ${status(!!ds!.insights, 'Analyse IA mensuelle', 'ia')}
       ${status(!!m.has_roomstate, `Relevé horaire de l'état des pièces${src['releve-horaire']?.note ? ` (${esc(src['releve-horaire'].note)})` : ''}`, 'releve-horaire', false)}
     </ul>
@@ -136,6 +138,7 @@ export function renderSettings(view: HTMLElement) {
         ['Intuis (Muller)', 'Consommation des radiateurs et du chauffe-eau', 'Vos identifiants Intuis'],
         ['Netatmo', 'Station météo (si activée)', 'Votre jeton Netatmo'],
         ['Conso API (conso.boris.sh) → Enedis', 'Linky (si activé)', 'Votre jeton et votre PDL'],
+        ['Shelly Cloud (*.shelly.cloud)', 'Compteurs des prises Shelly (si activé)', 'Votre clé cloud Shelly'],
         ['Open-Meteo', 'Météo de la commune', 'Coordonnées arrondies à ~1 km'],
         ['Anthropic (Claude)', 'Analyse du mois (si activée)', 'Totaux mensuels et noms des pièces'],
         ['CRE, api-couleur-tempo.fr', 'Tarifs et couleurs Tempo publics', 'Rien de personnel'],
@@ -154,6 +157,11 @@ export function renderSettings(view: HTMLElement) {
   // S-12.6 tenant mode, S-12.5 prolonged cold alert: lazy modules
   void import('./tenant-card').then((x) => x.mountTenant(document.getElementById('tenant-card'))).catch(() => {});
   void import('./coldalert').then((x) => x.mountColdSettings(document.getElementById('cold-card'), () => settingsRepo)).catch(() => {});
+}
+
+/** Informative note of a source (counts only, written by the collector), e.g. plugs without a counter. */
+function noteLine(s?: SourceStatus) {
+  return s?.note && !(s.error && (!s.ok || s.error > s.ok)) ? `<li class="hint muted">${esc(s.note)}</li>` : '';
 }
 
 /** S-12.1: the contract used on this device, and the button that shares it with the others. */

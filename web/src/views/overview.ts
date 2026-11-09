@@ -97,6 +97,7 @@ export function renderOverview(view: HTMLElement, records: DayRecord[]) {
   ${linkyCard()}
   <div id="invoice-zone"></div>
   ${curveCard()}
+  ${breakdownCard()}
   <section class="card">
     <div class="card-head">
       <h2>Consommation <small class="muted">kWh</small></h2>
@@ -124,6 +125,7 @@ export function renderOverview(view: HTMLElement, records: DayRecord[]) {
   ${qualityCard()}`;
   drawLinky();
   drawCurve();
+  drawBreakdown();
   // S-2.11 / S-2.12 / S-2.13: budget, CO₂ and new tariff, loaded on demand (S-7.10)
   import('./budget').then((m) => m.fillOverview()).catch(() => {});
   // S-2.3: reconcile with an invoice (lazy module)
@@ -210,6 +212,17 @@ function drawCurve() {
   const card = document.getElementById('curve-card');
   if (!card) return;
   import('./linky').then((m) => card.isConnected && m.renderCurveCard(card)).catch(() => card.remove());
+}
+
+/** S-4.12 / S-1.17: breakdown of the Linky "other usages", lazily imported ./breakdown module. */
+function breakdownCard() {
+  return ds!.linky.size && !tenant().on ? '<section class="card" id="breakdown-card" hidden></section>' : '';
+}
+
+function drawBreakdown() {
+  const card = document.getElementById('breakdown-card');
+  if (!card) return;
+  import('./breakdown').then((m) => card.isConnected && m.renderBreakdownCard(card)).catch(() => card.remove());
 }
 
 function drawLinky() {
