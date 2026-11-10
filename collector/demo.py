@@ -572,6 +572,51 @@ def _home_assistant(store: Store, today: date, office: dict[date, list[int]]) ->
     import_bytes(store, json.dumps(doc).encode(), "Europe/Paris")
 
 
+def _volets(store: Store, today: date) -> None:
+    """#200: three fictitious Wiser shutters read by a NAS, the last 120 days. Through the same
+    aggregation as the real journals (collector/volets.py). A few days without any journal (NAS
+    off), a few hours without readings (hub unreachable), and a failure reported alone."""
+    from .volets import Journal, merge
+
+    rnd = random.Random(200)  # separate stream: the rest of the demo stays identical
+    tz = ZoneInfo("Europe/Paris")
+    names = {"1": "Salon", "2": "Chambre parentale", "3": "Bureau"}
+    state = {"1": 0, "2": 0, "3": 0}
+    for back in range(120, 0, -1):
+        d = today - timedelta(days=back)
+        if back in (41, 42, 43):  # NAS off: nothing received, the days stay unknown
+            continue
+        if back == 40:
+            merge(store, None, d.isoformat(), "aucun_releve", "Europe/Paris")
+            continue
+        j = Journal(d.isoformat(), names=dict(names))
+
+        def ev(minute: int, sid: str, lift: int, src: str, day: date = d, journal: Journal = j) -> None:
+            t = datetime(day.year, day.month, day.day, minute // 60, minute % 60, tzinfo=tz)
+            journal.events.append((int(t.timestamp()), sid, lift, "Stopped", src))
+            state[sid] = lift
+
+        for sid in names:
+            ev(5, sid, state[sid], "Other")
+        doy = d.timetuple().tm_yday
+        dusk = int(17.8 * 60 + 110 * math.sin((doy - 80) / 365 * 2 * math.pi))  # sunset, roughly
+        ev(7 * 60 + 30 + rnd.randint(-5, 25), "1", 100, "FromSchedule")
+        ev(dusk + rnd.randint(-5, 10), "1", 0, "FromSchedule")
+        ev(7 * 60 + 50 + rnd.randint(0, 60), "2", 100, "FromManualControl")
+        # bedroom: closed by hand, often after 22 h, forgotten one evening in eight
+        if rnd.random() > 0.125:
+            ev(20 * 60 + 30 + rnd.randint(0, 180), "2", 0, "FromManualControl")
+        ev(8 * 60 + 15 + rnd.randint(0, 40), "3", 60, "FromManualControl")
+        if rnd.random() > 0.3:
+            ev(dusk + rnd.randint(30, 120), "3", 0, "FromManualControl")
+        if back == 9:  # hub unreachable for three hours
+            j.cov = [0 if 13 <= h < 16 else 6 for h in range(24)]
+            j.failed, j.errors = 18, ["hub_injoignable"]
+        else:
+            j.cov = [6] * 24
+        merge(store, j, d.isoformat(), None, "Europe/Paris")
+
+
 def _sources(today: date) -> dict:
     """State of the sources (S-1.7, S-1.12) as the settings screen shows it."""
     ok = f"{today.isoformat()}T04:12:00+00:00"
@@ -815,4 +860,5 @@ def generate(out_dir: Path, passphrase: str = "demo", start_year: int = 2022, to
             },
         },
     )
+    _volets(store, today)
     return store.save({"id": "demo", "name": "Maison démo", "timezone": "Europe/Paris"}, rooms, extra)

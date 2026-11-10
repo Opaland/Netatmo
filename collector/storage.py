@@ -28,6 +28,8 @@ data/
   netatmo-token.enc.json  rotating refresh token of the Netatmo weather station (optional)
   shelly.enc.json         Shelly plugs: daily Wh per plug from cumulative counters (collector/shelly.py)
   ha.enc.json             Home Assistant daily aggregates per sensor, imported by hand (homeassistant.py)
+  volets.enc.json         #200: Wiser shutters read by the owner's NAS, one record per day and shutter
+                          (closing / opening times, mean position, position at 22 h): collector/volets.py
   devices.enc.json        v1.5: health of the devices (modules answering, firmware changes, gateway
                           restarts and Wi-Fi, Tempo colour of the gateway): collector/devices.py
 """

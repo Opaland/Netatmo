@@ -233,10 +233,10 @@ export async function load(source: Source, key: CryptoKey): Promise<Dataset> {
 // view), so toggling the household view neither downloads nor decrypts anything again: the
 // room merge of the hourly documents is applied afterwards. #232: emptied on lock.
 type Cache<V> = WeakMap<CryptoKey, Map<string, Promise<V>>>;
-let caches: { hourly: Cache<Hourly>; station: Cache<StationHourly>; roomState: Cache<import('./windows').RoomState | null>; curve: Cache<Map<string, number>>; ha: Cache<import('./ha').HaDoc | null>; room30: Cache<Room30> };
+let caches: { hourly: Cache<Hourly>; station: Cache<StationHourly>; roomState: Cache<import('./windows').RoomState | null>; curve: Cache<Map<string, number>>; ha: Cache<import('./ha').HaDoc | null>; room30: Cache<Room30>; volets: Cache<import('./shutters').VoletsDoc | null> };
 /** Forget every decrypted document (on lock). */
 export function clearDataCaches() {
-  caches = { hourly: new WeakMap(), station: new WeakMap(), roomState: new WeakMap(), curve: new WeakMap(), ha: new WeakMap(), room30: new WeakMap() };
+  caches = { hourly: new WeakMap(), station: new WeakMap(), roomState: new WeakMap(), curve: new WeakMap(), ha: new WeakMap(), room30: new WeakMap(), volets: new WeakMap() };
   merged = new WeakMap();
 }
 let merged = new WeakMap<Hourly, WeakMap<Map<string, string>, Hourly>>();
@@ -347,6 +347,11 @@ export function loadRoomState(ds: Dataset): Promise<import('./windows').RoomStat
 /** Home Assistant daily aggregates (S-1.18, ha.enc.json), loaded on demand. */
 export function loadHa(ds: Dataset): Promise<import('./ha').HaDoc | null> {
   return once(caches.ha, ds, 'ha', () => optional<import('./ha').HaDoc>(ds.source, 'ha', ds.key));
+}
+
+/** Shutter readings sent by the NAS (#200, volets.enc.json), loaded on demand; null without NAS. */
+export function loadVolets(ds: Dataset): Promise<import('./shutters').VoletsDoc | null> {
+  return once(caches.volets, ds, 'volets', () => optional<import('./shutters').VoletsDoc>(ds.source, 'volets', ds.key));
 }
 
 /** Linky 30-min load curve (S-1.11), one document per year, loaded on demand, once per dataset

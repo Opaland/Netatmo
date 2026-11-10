@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { addDays } from './aggregate';
 import type { Hourly, Weather } from './analysis';
-import { compareShutters, loadNotes, nightHours, nights, notesCsv, parseNotesCsv, saveNotes } from './shutters';
+import { type VoletsDoc, compareShutters, evenings, lastReceived, loadNotes, nightHours, nights, notesCsv, parseNotesCsv, recentFailures, saveNotes, shutterNames, summarize } from './shutters';
 
 describe('shutters notes (S-9.6)', () => {
   beforeEach(() => {
@@ -90,5 +90,77 @@ describe('shutters comparison', () => {
       ['2025-01-02', [0, 0, 0]],
     ]);
     expect(nights(hourly, ['r'], weather, new Set(), '2025-01-01', '2025-01-02')).toEqual([]);
+  });
+});
+
+describe('relevé automatique des volets (#200)', () => {
+  const doc: VoletsDoc = {
+    received: '2026-01-10',
+    shutters: { v0: { name: 'Salon' }, v1: { name: '' } },
+    days: {
+      '2026-01-07': { evening: [2, 2], shutters: { v0: { close: '17:50', at22: 0, mean: 40 }, v1: { close: '21:00', at22: 0, mean: 50 } } },
+      '2026-01-08': { evening: [1, 2], shutters: { v0: { close: '18:10', at22: 0, mean: 60 }, v1: { at22: 100, mean: 80 } } },
+      '2026-01-09': { err: ['hub_injoignable', 'inconnu'], shutters: { v0: { close: '18:00', at22: null, mean: 50 } } }, // no evening: unknown
+      '2026-01-10': { err: ['aucun_releve'] },
+    },
+  };
+
+  it('le relevé remplace la note du soir, un soir partiel compte comme ouvert, un soir inconnu est écarté', () => {
+    // 08: noted by hand, but read with one shutter open at 22 h → not closed
+    // 09: read without evening, noted → the note counts; 11: noted only → counts
+    const ev = evenings(doc, ['2026-01-08', '2026-01-09', '2026-01-11']);
+    expect(ev.auto).toBe(2);
+    expect([...ev.known!].sort()).toEqual(['2026-01-07', '2026-01-08', '2026-01-09', '2026-01-11']);
+    expect([...ev.closed].sort()).toEqual(['2026-01-07', '2026-01-09', '2026-01-11']);
+  });
+
+  it('sans relevé, les notes comme avant (tous les soirs comptent)', () => {
+    for (const d of [null, {}, { days: { '2026-01-01': { err: ['aucun_releve'] } } }] as VoletsDoc[]) {
+      const ev = evenings(d, ['2026-01-02']);
+      expect(ev.known).toBeNull();
+      expect([...ev.closed]).toEqual(['2026-01-02']);
+      expect(ev.auto).toBe(0);
+    }
+  });
+
+  it('les nuits hors des soirs connus sont laissées de côté', () => {
+    const hourly: Hourly = new Map([['r', new Map()]]);
+    const weather: Weather = new Map();
+    for (let d = '2026-01-01'; d <= '2026-01-06'; d = addDays(d, 1)) {
+      weather.set(d, [0, 4, 2]);
+      for (const h of nightHours(d)) hourly.get('r')!.set(h, 1);
+    }
+    const all = nights(hourly, ['r'], weather, new Set(['2026-01-02']), '2026-01-01', '2026-01-05');
+    expect(all.map((n) => n.day)).toEqual(['2026-01-01', '2026-01-02', '2026-01-03', '2026-01-04']);
+    const known = nights(hourly, ['r'], weather, new Set(['2026-01-02']), '2026-01-01', '2026-01-05', new Set(['2026-01-02', '2026-01-04']));
+    expect(known.map((n) => [n.day, n.closed])).toEqual([
+      ['2026-01-02', true],
+      ['2026-01-04', false],
+    ]);
+  });
+
+  it('résumé par volet : heure habituelle de fermeture, soirs fermés à 22 h, position moyenne', () => {
+    const [salon, b] = summarize(doc, '2026-01-10', 14);
+    expect(salon).toEqual({ key: 'v0', name: 'Salon', close: 18 * 60, closedAt22: 2, knownAt22: 2, mean: 50, days: 3 });
+    expect(b).toEqual({ key: 'v1', name: 'Volet B', close: 21 * 60, closedAt22: 1, knownAt22: 2, mean: 65, days: 2 });
+    // the window ends on `until` and spans n days
+    expect(summarize(doc, '2026-01-08', 1)[0]).toMatchObject({ close: 18 * 60 + 10, days: 1 });
+  });
+
+  it("échecs récents, les plus récents d'abord, codes inconnus ignorés", () => {
+    expect(recentFailures(doc, '2026-01-10')).toEqual([
+      ['2026-01-10', 'aucun relevé ce jour-là'],
+      ['2026-01-09', 'passerelle injoignable depuis le NAS'],
+    ]);
+    expect(recentFailures(doc, '2026-01-08')).toEqual([]);
+  });
+
+  it('noms : ceux de la passerelle, sinon « Volet A », B…', () => {
+    expect([...shutterNames(doc)]).toEqual([
+      ['v0', 'Salon'],
+      ['v1', 'Volet B'],
+    ]);
+    expect(lastReceived(doc)).toBe('2026-01-10');
+    expect(lastReceived({ received: 'hier' } as VoletsDoc)).toBeNull();
   });
 });

@@ -1,20 +1,28 @@
 // S-9.6: « Volets fermés ce soir » card of the Analyse tab (lazy module).
 // Notes stay on this device (localStorage), exportable / importable as CSV; the
 // comparison with the night signature appears once enough evenings are noted.
+// #200: when the NAS sends the Wiser readings (volets.enc.json), the evenings read at 22 h
+// replace the notes; the evenings with neither are left out of the comparison.
 import { addDays, minusYears } from '../aggregate';
 import { ds } from '../app';
 import { cssVar, scatterChart } from '../charts';
-import { loadHourly } from '../data';
+import { loadHourly, loadVolets } from '../data';
 import { unavailable } from '../offline';
 import {
   MIN_CLOSED,
+  MIN_OPEN,
   type ShutterComparison,
+  type VoletsDoc,
   compareShutters,
+  evenings,
+  lastReceived,
   loadNotes,
   nights,
   notesCsv,
   parseNotesCsv,
+  recentFailures,
   saveNotes,
+  summarize,
 } from '../shutters';
 import { html } from '../trusted';
 import { activeRooms, downloadBlob, esc, fmt1 as num1, fmtKwh, lastDay, longDate, table } from '../ui';
@@ -30,11 +38,62 @@ const today = () => {
 
 let notes: string[] = [];
 let msg = '';
+let auto: VoletsDoc | null = null; // #200: readings sent by the NAS (null: none)
+let autoNote = '';
 
 /** Fill the zone with the card and keep it up to date by itself (no global re-render). */
 export function renderShutters(zone: HTMLElement) {
   notes = loadNotes();
-  draw(zone);
+  auto = null;
+  autoNote = '';
+  const d = ds;
+  if (!d) return draw(zone);
+  // A small document: read before the first drawing, so the card does not change under the eyes.
+  loadVolets(d).then(
+    (doc) => {
+      if (ds !== d) return;
+      auto = doc;
+      draw(zone);
+    },
+    () => {
+      if (ds !== d) return;
+      autoNote = unavailable('Relevé automatique des volets');
+      draw(zone);
+    },
+  );
+}
+
+const hm = (minutes: number) => `${Math.floor(minutes / 60)} h ${String(minutes % 60).padStart(2, '0')}`;
+const DAYS = 14;
+
+/** #200: what the NAS read, the last 14 days up to the last day received. */
+function autoSection(): string {
+  if (autoNote) return `<p class="hint muted">${esc(autoNote)}</p>`;
+  const until = lastReceived(auto);
+  if (!until) return '';
+  const stale = until < addDays(today(), -2);
+  const rows = summarize(auto, until, DAYS).filter((r) => r.days > 0);
+  const failures = recentFailures(auto, until);
+  return `<div id="shutters-auto">
+    <h3>Relevé automatique <small class="muted">passerelle Wiser, lue par le NAS</small></h3>
+    <p class="hint">Dernier jour reçu : ${esc(longDate(until))}.${stale ? ' <strong>Plus rien n’arrive depuis :</strong> vérifiez que le NAS est allumé et que ses deux tâches planifiées tournent.' : ''}
+      Les soirs relevés remplacent vos notes ; un soir compte « volets fermés » quand tous les volets sont fermés à 22 h.
+      Ci-dessous, les ${DAYS} derniers jours reçus : heure habituelle de fermeture le soir, soirs fermés à 22 h, et ouverture moyenne sur la journée (100 % = grand ouvert).</p>
+    ${
+      rows.length
+        ? table(
+            ['Volet', 'Fermé vers', 'Fermé à 22 h', 'Ouvert en moyenne'],
+            rows.map((r) => [
+              esc(r.name),
+              r.close === null ? '—' : hm(r.close),
+              r.knownAt22 ? `${r.closedAt22} soir${r.closedAt22 > 1 ? 's' : ''} sur ${r.knownAt22}` : '—',
+              r.mean === null ? '—' : `${Math.round(r.mean)} %`,
+            ]),
+          )
+        : `<p class="hint muted">Aucun volet relevé ces ${DAYS} derniers jours.</p>`
+    }
+    ${failures.length ? `<ul class="hint" style="margin:.25rem 0;padding-left:1.2rem">${failures.slice(0, 5).map(([d, m]) => `<li>${esc(longDate(d))} : ${esc(m)}</li>`).join('')}</ul>` : ''}
+  </div>`;
 }
 
 // #257: the controls of the card, dispatched by main.ts (no listener of its own).
@@ -79,6 +138,7 @@ function draw(zone: HTMLElement) {
       <input type="file" accept=".csv,text/csv,text/plain" data-shutters="import" hidden>
     </div>
     ${msg ? `<p class="hint" role="status">${esc(msg)}</p>` : ''}
+    ${autoSection()}
     <div id="shutters-result" aria-live="polite"></div>
   </section>`;
   msg = '';
@@ -106,15 +166,20 @@ async function drawComparison() {
   if (ds !== d) return; // #247: locked or another dataset since: the hourly data belong to the old one
   const last = lastDay();
   const heat = activeRooms().filter((r) => r.category === 'heating').map((r) => r.id);
-  const all = nights(hourly, heat, weather, new Set(notes), addDays(minusYears(last), 1), last);
+  const ev = evenings(auto, notes);
+  const all = nights(hourly, heat, weather, ev.closed, addDays(minusYears(last), 1), last, ev.known);
   const cmp = compareShutters(all);
   if (!document.body.contains(out)) return;
   if (!cmp) {
     const n = all.filter((x) => x.closed && x.t < 15).length;
-    out.innerHTML = html`<p class="hint muted">Comparaison avec / sans volets fermés dès ${MIN_CLOSED} soirs notés en période de chauffe avec données horaires (${n} pour l'instant) ; comptez environ 4 semaines en alternant les soirs.</p>`;
+    out.innerHTML = html(
+      ev.auto
+        ? `<p class="hint muted">Comparaison avec / sans volets fermés dès ${MIN_CLOSED} soirs fermés et ${MIN_OPEN} autres en période de chauffe, relevés ou notés, avec données horaires (${n} soirs fermés pour l'instant).</p>`
+        : `<p class="hint muted">Comparaison avec / sans volets fermés dès ${MIN_CLOSED} soirs notés en période de chauffe avec données horaires (${n} pour l'instant) ; comptez environ 4 semaines en alternant les soirs.</p>`,
+    );
     return;
   }
-  out.innerHTML = html(result(cmp));
+  out.innerHTML = html(result(cmp, ev.auto > 0));
   const el = document.getElementById('shutters-chart');
   if (!el) return;
   const xs = [...cmp.open, ...cmp.closed].map((n) => n.t);
@@ -133,7 +198,7 @@ async function drawComparison() {
   });
 }
 
-function result(c: ShutterComparison) {
+function result(c: ShutterComparison, readings: boolean) {
   const verdict = c.significant
     ? c.gap < 0
       ? `Les soirs volets fermés, le chauffage de nuit est <strong>plus bas de ${fmtKwh(-c.gap)}</strong> que ne le prévoit la température extérieure, par rapport aux autres soirs`
@@ -149,7 +214,11 @@ function result(c: ShutterComparison) {
     )}
     <div class="chart" id="shutters-chart" role="img" aria-label="Chauffage de nuit selon la température extérieure, volets fermés ou non"></div>
     <details class="table-details"><summary>Méthode</summary>
-      <p class="hint">Chauffage (toutes les pièces chauffées, données horaires) de 22 h à 7 h après chaque soir, face à la moyenne des températures extérieures des deux jours. La droite (signature de nuit) est calculée sur les nuits sans note ; chaque nuit est comparée à cette droite, puis on compare l'écart moyen des nuits volets fermés à celui des autres. L'intervalle à 95 % vaut 1,96 fois l'erreur type de la différence : un écart plus petit que lui peut venir du hasard (vent, soleil, présence). Une nuit sans note compte comme volets ouverts : notez aussi les soirs où vous les fermez sans y penser. Ensoleillement, absences et consignes modifiées ne sont pas corrigés.</p>
+      <p class="hint">Chauffage (toutes les pièces chauffées, données horaires) de 22 h à 7 h après chaque soir, face à la moyenne des températures extérieures des deux jours. La droite (signature de nuit) est calculée sur les nuits volets non fermés ; chaque nuit est comparée à cette droite, puis on compare l'écart moyen des nuits volets fermés à celui des autres. L'intervalle à 95 % vaut 1,96 fois l'erreur type de la différence : un écart plus petit que lui peut venir du hasard (vent, soleil, présence). ${
+        readings
+          ? 'Avec le relevé automatique, un soir compte « volets fermés » quand tous les volets relevés sont fermés à 22 h, et comme les autres soirs sinon ; un soir sans relevé garde votre note, un soir sans relevé ni note est laissé de côté.'
+          : 'Une nuit sans note compte comme volets ouverts : notez aussi les soirs où vous les fermez sans y penser.'
+      } Ensoleillement, absences et consignes modifiées ne sont pas corrigés.</p>
     </details>`;
 }
 

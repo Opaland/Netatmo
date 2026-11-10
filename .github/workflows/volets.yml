@@ -1,0 +1,83 @@
+name: Volets
+
+# #200: the shutter readings of one day, sent each night by the owner's NAS
+# (scripts/nas/volets.sh envoi), which polls the Wiser hub on the local network: GitHub cannot
+# reach it. Read only: nothing here talks to the hub.
+#
+# `journal` is the day's journal encrypted with the PUBLIC certificate (CMS, AES-256), base64;
+# only the private key (secret VOLETS_PRIVATE_KEY, given to the step that needs it) opens it.
+# `erreur` is a white-listed code the NAS sends instead when it has nothing to send: the run
+# then records it and fails, so that a broken reading is seen rather than silent.
+# The input is untrusted (anyone holding the certificate can encrypt): the collector validates
+# it strictly and refuses the whole journal at the first line outside its grammar. Public logs:
+# the day and counts, never a name, a position or an id. Inputs are passed through env, never
+# expanded inside a script.
+on:
+  workflow_dispatch:
+    inputs:
+      jour:
+        description: "Jour du relevé (AAAA-MM-JJ, heure du NAS)"
+        required: true
+        type: string
+      journal:
+        description: "Journal chiffré (base64), envoyé par le NAS"
+        required: false
+        type: string
+        default: ""
+      erreur:
+        description: "Code d'échec envoyé par le NAS à la place du journal"
+        required: false
+        type: string
+        default: ""
+
+permissions:
+  contents: read
+
+concurrency:
+  # One day at a time: two nights caught up at once commit one after the other.
+  group: volets
+  cancel-in-progress: false
+
+jobs:
+  volets:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - id: check
+        env:
+          CONFIGURED: ${{ secrets.VOLETS_PRIVATE_KEY != '' && secrets.DATA_PASSPHRASE != '' }}
+        run: |
+          if [ "$CONFIGURED" != "true" ]; then
+            echo "::error::Secrets VOLETS_PRIVATE_KEY ou DATA_PASSPHRASE absents : voir docs/etudes/volets-wiser.md"
+            exit 1
+          fi
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements-lock.txt
+      # S-1.16 #265: locked versions with hashes, and no secret in this step's environment.
+      - run: pip install --require-hashes -r requirements-lock.txt
+      - name: Vérification et agrégation
+        env:
+          DATA_PASSPHRASE: ${{ secrets.DATA_PASSPHRASE }}
+          VOLETS_PRIVATE_KEY: ${{ secrets.VOLETS_PRIVATE_KEY }}
+          VOLETS_JOUR: ${{ inputs.jour }}
+          VOLETS_JOURNAL: ${{ inputs.journal }}
+          VOLETS_ERREUR: ${{ inputs.erreur }}
+        run: python -m collector volets --alerte "$RUNNER_TEMP/alerte.txt"
+      # #262: the push is retried (fetch + rebase) when main moved meanwhile.
+      - name: Commit des données chiffrées
+        env:
+          VOLETS_JOUR: ${{ inputs.jour }}
+        run: |
+          scripts/commit-data.sh "data: volets du $VOLETS_JOUR" data/volets.enc.json
+      - name: Échec signalé par le NAS
+        run: |
+          if [ -s "$RUNNER_TEMP/alerte.txt" ]; then
+            echo "::error::$(cat "$RUNNER_TEMP/alerte.txt")"
+            exit 1
+          fi
