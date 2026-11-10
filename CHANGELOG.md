@@ -11,6 +11,8 @@
   plannings et le bandeau d'horaires : lues dans les relevés à la demi-heure, sinon saisies dans
   ⚙ Mon contrat (plusieurs plages, à la minute, chiffrées sur l'appareil), sinon 22 h → 6 h dit
   supposé ; une borne au milieu d'une demi-heure la compte au prorata des minutes (#428).
+- « Expliquer un mois » : le bois du poêle est compté sans les jours de coupure, comme
+  l'électricité, et la ligne « Compté : » le dit (#423).
 
 ## v1.6 — novembre 2026 : refonte UX/UI, nouveau design system, écrans reconstruits
 

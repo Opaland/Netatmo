@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest';
 import { type DayRecord, addDays } from './aggregate';
 import type { Weather } from './analysis';
 import { demoDataset } from './__fixtures__/demo';
-import { type ExplainInput, explainMonth, explainSentence, explainableMonths, kwhSigned, stepNote } from './explain';
+import { type ExplainInput, explainMonth, explainSentence, explainWood, explainableMonths, kwhSigned, stepNote } from './explain';
 import { applyStopped, estimateOffline, offlineRuns, parseStopped } from './room-offline';
 
 const ROOMS = [
@@ -76,6 +76,17 @@ describe('explain a month', () => {
     expect(e.basis).toBe('linky');
     for (const k of ['meteo', 'pieces', 'eau', 'autres']) expect(step(e, k)).toBeCloseTo(0, 6); // no part takes the cut
     expect(sumSteps(e)).toBeCloseTo(e.delta, 6);
+  });
+
+  it('#423: the stove\'s wood leaves out the same days as the electricity', () => {
+    const e = explainMonth({ ...input(), cuts: new Map([['2026-01-10', 'power'], ['2025-01-20', 'internet']]) })!;
+    // 10 kWh and 1 € of wood every day of both Januaries, 100 kWh on the days of cut
+    const daily = new Map<string, [number, number]>();
+    for (const d of [...month('2025-01'), ...month('2026-01')]) daily.set(d, ['2026-01-10', '2025-01-10', '2026-01-20', '2025-01-20'].includes(d) ? [100, 10] : [10, 1]);
+    const w = explainWood(daily, e);
+    expect(w.now).toEqual({ kwh: 290, eur: 29 }); // 31 days − the 10th and the 20th
+    expect(w.ref).toEqual({ kwh: 290, eur: 29 });
+    expect(explainWood(daily, { ...e, cuts: [] }).now.kwh).toBe(310 + 180); // without cuts, every day
   });
 
   it('the same month: nothing to explain', () => {
