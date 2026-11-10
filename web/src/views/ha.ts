@@ -12,6 +12,7 @@ import { esc, longDate, nf0, table } from '../ui';
 import { type RoomState, bedroomGrouping } from '../windows';
 import { NS } from '../scope';
 import { fmt1 as f1 } from '../glossary';
+import { howDetails } from '../components';
 
 // #247: loaded for the dataset shown; `doc` / `rs` / `failed` are refreshed from it at each render.
 const haDoc = datasetDoc((d) =>
@@ -83,9 +84,10 @@ export function haCard(showBedrooms: boolean): string {
   const openings = sums.filter((s) => s.kind === 'opening');
   const anyPrivate = openings.some((s) => isPrivate(s.key, s.name));
   return `<section class="card" id="ha-card">${head}
-    <p class="hint muted">Agrégats quotidiens versés par <code>python -m collector import-ha</code> (voir <code>docs/import-ha.md</code>)${
-      doc.imported ? `, dernier import le ${esc(longDate(doc.imported.slice(0, 10)))}` : ''
-    }. Rien n'est lu depuis Home Assistant par GitHub.</p>
+    <p class="hint muted">Un total par jour, versé depuis Home Assistant${
+      doc.imported ? ` (dernier import le ${esc(longDate(doc.imported.slice(0, 10)))})` : ''
+    }. GitHub ne lit rien dans Home Assistant.</p>
+    ${howDetails("Pour l'installateur", '<p class="hint muted">Import : <code>python -m collector import-ha</code>, décrit dans <code>docs/import-ha.md</code> du dépôt.</p>')}
     ${table(['Capteur', 'Type', 'Jours importés', '30 derniers jours importés'], rows, 99)}
     ${openings.length ? agreementBlock(openings.map((s) => ({ key: s.key, name: s.name, hidden: isPrivate(s.key, s.name) })), roomOf, rooms) : ''}
     ${anyPrivate ? '<button type="button" class="btn secondary" data-comfort="show-bedrooms">Afficher le détail des chambres</button>' : ''}

@@ -13,7 +13,7 @@ import { type Dataset, loadRoom30, loadRoomState } from '../data';
 import type { DatasetDoc } from '../loader';
 import { BEDROOMS_ID } from '../household';
 import { rangesFromR30, rangesText, toHours } from '../offpeak';
-import { NO_REFERENCE, TEMP, dayLong, dayShort, fmt1, fmtTemp, hourMin, hourRange, vsLabel } from '../glossary';
+import { NO_REFERENCE, TEMP, dayLong, dayShort, fmt1, fmtTemp, hourMin, hourRange, plural, vsLabel } from '../glossary';
 import { HOME_PERIODS, type HomeRange, homePeriod, homeRange, scopeTitle } from '../home';
 import { daysBetween } from '../periods';
 import { bucketMarks } from '../periods';
@@ -57,7 +57,6 @@ onDatasetLoaded(() => {
  */
 export const piecesRange = (last: string): HomeRange => homeRange(homePeriod(state.pieces), last);
 const HALF_HOURS = 40;
-const plural = (n: number, w: string) => `${n} ${w}${n > 1 ? 's' : ''}`;
 
 /** A document, redrawing the page shown once it arrives; undefined while loading, null when absent. */
 function doc<T>(d: DatasetDoc<Dataset, T | null>, key: string): T | null | undefined {

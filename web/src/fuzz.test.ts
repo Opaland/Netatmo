@@ -20,6 +20,7 @@ import { INSTALL_HASH, inviteUrl } from './invite';
 import { validInvoice } from './invoice';
 import { loadNote } from './local-store';
 import { MAX_RANGES, parseHcRanges, slotShares } from './offpeak';
+import { agreePlurals } from './glossary';
 import { parseFlags } from './onboarding';
 import { STOP_REASONS, parseStopped } from './room-offline';
 import { MAX_PURCHASES, SPECIES, parseWood } from './wood';
@@ -396,6 +397,17 @@ describe('#359 fuzz : adresses, facture, CSV, enveloppes', () => {
       const inner = cell.startsWith('"') ? cell.slice(1, -1).replace(/""/g, '"') : cell;
       assert(!/^[=+\-@\t\r]/.test(inner), `formule en tête : ${JSON.stringify(inner.slice(0, 20))}`);
       assert(untextCell(inner) === s, 'aller-retour');
+    });
+  });
+
+  it('notes du collecteur (#406) : plus aucun « (s) » après un mot, le reste intact, sans exception', () => {
+    fuzz('agreePlurals', (r) => {
+      const words = ['module(s)', 'injoignable(s)', '2', '1', '0', '12 345', 'prise(s)', '(s)', 'mot(x)', ' ', ', ', 'é(s)'];
+      const s = r() < 0.5 ? Array.from({ length: 1 + Math.floor(r() * 8) }, () => pick(r, words)).join(' ') : randomString(r);
+      const out = agreePlurals(s);
+      assert(typeof out === 'string', 'une chaîne');
+      assert(!/[\p{L}'’-]\((s|x)\)/u.test(out), `reste un « (s) » : ${JSON.stringify(out.slice(0, 60))}`);
+      assert(out.replace(/[sx]/g, '') === s.replace(/[\p{L}'’-]\((s|x)\)/gu, (m) => m.slice(0, -3)).replace(/[sx]/g, ''), 'seuls les « (s) » changent');
     });
   });
 

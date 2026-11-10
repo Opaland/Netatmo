@@ -293,7 +293,7 @@ try {
   progress('sélection gardée');
   for (const answer of ['Réinitialiser', 'Garder']) {
     const c = await browser.newContext({ viewport: { width: 360, height: 780 }, deviceScaleFactor: 1, serviceWorkers: 'block' });
-    // the last visit chose « Chauffe-eau » (set once: the app saves the state again afterwards)
+    // the last visit chose « Eau chaude » (set once: the app saves the state again afterwards)
     await c.addInitScript(() => {
       if (sessionStorage.getItem('e2e-seeded')) return;
       sessionStorage.setItem('e2e-seeded', '1');
@@ -305,7 +305,7 @@ try {
     await p.click('#demo');
     await ready(p);
     const banner = p.locator('.kept-filter');
-    check((await banner.count()) === 1 && /Chauffe-eau/.test(await banner.innerText()), `#301 : pas de rappel de la sélection gardée au démarrage (${await p.locator('#view').getAttribute('data-page')})`);
+    check((await banner.count()) === 1 && /Eau chaude/.test(await banner.innerText()), `#301 : pas de rappel de la sélection gardée au démarrage (${await p.locator('#view').getAttribute('data-page')})`);
     await go(p, 'historique');
     check((await banner.count()) === 1, '#301 : le rappel de la sélection gardée disparaît en changeant de page');
     await p.getByRole('button', { name: answer, exact: true }).click();

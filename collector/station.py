@@ -35,6 +35,7 @@ from .http import Paced
 from .model import parse_measure_columns
 from .schema import FormatError
 from .storage import KeyMap, Store
+from .texte import nombre
 
 log = logging.getLogger(__name__)
 
@@ -445,9 +446,9 @@ def health_note(counts: dict[str, int]) -> str | None:
     """Sources note and job summary (counts only, never a module name)."""
     parts = []
     if counts.get("low_battery"):
-        parts.append(f"pile faible : {counts['low_battery']} module(s)")
+        parts.append(f"pile faible : {nombre(counts['low_battery'], 'module')}")
     if counts.get("silent"):
-        parts.append(f"{counts['silent']} module(s) muet(s) depuis plus de {SILENT_HOURS} h")
+        parts.append(f"{nombre(counts['silent'], 'module muet', 'modules muets')} depuis plus de {SILENT_HOURS} h")
     return " ; ".join(parts) or None
 
 

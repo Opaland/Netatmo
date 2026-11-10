@@ -81,6 +81,10 @@ const grouping = (showBedrooms: boolean) => bedroomGrouping(ds!.meta.rooms, show
 
 const head = `<div class="card-head"><h2>Fenêtres ouvertes et radiateurs <small class="muted">relevé horaire de l'état des pièces</small></h2></div>`;
 
+/** #406: the mode of the water-heater contactor as Intuis reports it, in words (the only one seen so far; another one as it comes). */
+const CONTACTOR_MODE: Record<string, string> = { auto: 'automatique' };
+const contactorMode = (m: string) => (Object.hasOwn(CONTACTOR_MODE, m) ? CONTACTOR_MODE[m] : m);
+
 export function windowsCard(showBedrooms: boolean): string {
   if (!ds!.meta.has_roomstate)
     return `<section class="card" id="windows-card">${head}
@@ -198,8 +202,8 @@ function offloadBlock(rs: RoomState, last: string) {
     parts.push(`<p class="hint muted">Le délestage coupe des radiateurs quand la puissance appelée approche de l'abonnement. ${days.length} jour${days.length > 1 ? 's' : ''} avec délestage sur 90 jours.</p>
     ${tableToggle(table(['Jour', 'Pièces délestées', 'Heures (toutes pièces)', 'Pic Linky du jour'], days.slice(0, 30).map((d) => [esc(longDate(d.day)), d.rooms, h1(d.hours), d.pmax === null ? '—' : `${f1(d.pmax)} kVA`])))}`);
   if (c.lastMode)
-    parts.push(`<p class="hint muted">Contacteur du chauffe-eau : mode relevé <strong>${esc(c.lastMode)}</strong> le ${esc(longDate(c.last!))} (${Object.entries(c.hours)
-      .map(([m, h]) => `${esc(m)} ${nf0.format(h)} h`)
+    parts.push(`<p class="hint muted">Contacteur du chauffe-eau : en mode <strong>${esc(contactorMode(c.lastMode))}</strong> le ${esc(longDate(c.last!))} (${Object.entries(c.hours)
+      .map(([m, h]) => `${esc(contactorMode(m))} ${nf0.format(h)} h`)
       .join(', ')} sur 90 jours ; valeurs à vérifier).</p>`);
   return parts.length ? `<h3 class="sub-title">Délestage et contacteur <small class="muted">90 derniers jours</small></h3>${parts.join('')}` : '';
 }

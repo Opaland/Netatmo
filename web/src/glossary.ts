@@ -1,7 +1,7 @@
 // #315 / #299: one vocabulary for the whole interface (docs/design/architecture-cible.md § 4,
 // docs/design/audit-graphiques.md § 7). Period names, categories, units, comparison phrasing and
 // date / hour formats live here only; views import them instead of writing their own.
-import { MONTHS_LONG, MONTHS_SHORT } from './aggregate';
+import { type Category, MONTHS_LONG, MONTHS_SHORT } from './aggregate';
 
 export { MONTHS_LONG, MONTHS_SHORT };
 
@@ -39,6 +39,29 @@ export const CATEGORY = {
   other: 'Autres usages',
   standby: 'Veille',
 } as const;
+/**
+ * #406: the name of a category when it is a USAGE (a share, a filter, a series): « Eau chaude »,
+ * as on Accueil and Compteur. CATEGORY_LABEL (aggregate.ts) names the APPLIANCE of a room
+ * (« Chauffe-eau » in the list of rooms).
+ */
+export const usageLabel = (c: Category): string => (c === 'heating' ? CATEGORY.heating : c === 'water_heater' ? CATEGORY.water : 'Ignoré');
+
+/** « 1 jour », « 3 jours », « 0 jour » (French: singular under 2). `many`: an irregular plural. */
+export const plural = (n: number, one: string, many = `${one}s`): string => `${n} ${n > 1 ? many : one}`;
+/**
+ * #406: « 2 module(s) injoignable(s) » → « 2 modules injoignables ». Every « word(s) » takes the
+ * number written last before it (a note written by the collector before v1.7, kept in the data).
+ */
+export function agreePlurals(text: string): string {
+  let n = 2;
+  return text.replace(/(\d[\d\u202f\u00a0]*(?:,\d+)?)|([\p{L}'’-]+)\((s|x)\)/gu, (m, num: string | undefined, word: string | undefined, end: string | undefined) => {
+    if (num !== undefined) {
+      n = Number(num.replace(/[\u202f\u00a0]/g, '').replace(',', '.'));
+      return m;
+    }
+    return `${word}${n >= 2 ? end : ''}`;
+  });
+}
 
 // ------------------------------------------------------------------ units and numbers (§ 4.2)
 export const UNIT = { energy: 'kWh', power: 'kVA', watt: 'W', temp: '°C', co2: 'kg CO₂e', ppm: 'ppm', eur: '€' } as const;

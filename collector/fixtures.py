@@ -321,8 +321,7 @@ def compte_charge(f: Fixture) -> None:
     src["appareils"] = {
         "ok": now,
         "note": (
-            "12 modules, 1 module(s) injoignable(s), 3 mise(s) à jour de firmware détectée(s), "
-            "passerelle redémarrée 2 fois (7 j)"
+            "12 modules, 1 module injoignable, 3 mises à jour de firmware détectées, passerelle redémarrée 2 fois (7 j)"
         ),
     }
     src["linky"] = {**src.get("linky", {}), "error": now, "message": "erreur RemoteProtocolError"}
@@ -335,13 +334,13 @@ def compte_charge(f: Fixture) -> None:
     src["shelly"] = {
         "ok": now,
         "note": (
-            "2 prise(s) sans compteur d'énergie : non exploitable(s) sans hub ; "
-            "1 prise(s) hors ligne, rattrapée(s) à la prochaine collecte"
+            "2 prises sans compteur d'énergie : non exploitables sans hub ; "
+            "1 prise hors ligne, rattrapée à la prochaine collecte"
         ),
     }
     src["netatmo"] = {
         **src.get("netatmo", {}),
-        "note": "pile faible : 2 module(s) ; 1 module(s) muet(s) depuis plus de 6 h",
+        "note": "pile faible : 2 modules ; 1 module muet depuis plus de 6 h",
     }
     src["home-assistant"] = {"ok": now}
     # ⚙ Sources, « État des appareils »: what the collection names (radiator switched off on

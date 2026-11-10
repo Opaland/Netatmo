@@ -49,6 +49,7 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from .storage import KeyMap, Store
+from .texte import nombre
 
 DOC = "volets"
 VERSION = 1
@@ -308,5 +309,5 @@ def receive(
     hours = sum(1 for c in j.cov if c)
     summary = f"relevé du {day} enregistré : {hours}/24 heures relevées"
     if j.errors:
-        summary += f", {len(set(j.errors))} type(s) d'échec signalé(s)"
+        summary += f", {nombre(len(set(j.errors)), "type d'échec signalé", "types d'échec signalés")}"
     return summary, rec

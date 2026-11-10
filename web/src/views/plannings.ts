@@ -8,7 +8,7 @@
 import { addDays } from '../aggregate';
 import { activeRooms, ds } from '../app';
 import { homeAwayHours } from '../away';
-import { alert, card, legend, list, scheduleBand, tile } from '../components';
+import { alert, card, legend, list, scheduleBand, tile, countedText } from '../components';
 import { loadRoom30, loadRoomState } from '../data';
 import { dayShort, fmt1, hourMin, hourRange } from '../glossary';
 import { type HcRange, rangesFromR30, rangesText, slotMask, toHours } from '../offpeak';
@@ -122,7 +122,7 @@ function render(r30: Room30, away: Map<string, number>): string {
   const shifts = results.flatMap((r) => r.groups.map((x) => x.shift).filter((s): s is Shift => !!s));
   const low = shifts.reduce((s, x) => s + x.low, 0);
   const high = shifts.reduce((s, x) => s + x.high, 0);
-  const counted = `Compté : 4 semaines, du ${dayShort(from)} au ${dayShort(to, true)}, relevés à la demi-heure des radiateurs${skip.size ? ` (${skip.size} jour${skip.size > 1 ? 's' : ''} d'absence mis de côté)` : ''}`;
+  const counted = countedText(`4 semaines, du ${dayShort(from)} au ${dayShort(to, true)}, relevés à la demi-heure des radiateurs${skip.size ? ` (${skip.size} jour${skip.size > 1 ? 's' : ''} d'absence mis de côté)` : ''}`);
 
   const head = card({
     id: 'plannings-summary',

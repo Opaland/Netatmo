@@ -3,6 +3,7 @@
 // report and the anonymised one (S-6.4). Loaded lazily with the report extras.
 import { WITH_SUBSCRIPTION } from './synthese';
 import { MONTHS_LONG } from './aggregate';
+import { plural } from './glossary';
 import { type DaySplit, type OfferCost, type TempoRow, type TrveRow, compareOffers } from './analysis';
 
 const nf0 = new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 0 });
@@ -126,7 +127,7 @@ export function pmaxSectionHtml(p: PmaxYear | null): string {
           : ' Puissance adaptée aux pics.';
   return `<section class="report-section" id="report-pmax">${head}
     <p>Pic de l'année : <strong>${nf1.format(max)} kVA</strong> le ${longDate(day)}${kva ? `, pour ${nf0.format(kva)} kVA souscrits (${nf0.format((max / kva) * 100)} %)` : ''}.${verdict}${
-      kva ? ` ${p.daysOver ? `${p.daysOver} jour(s) au-dessus de la puissance souscrite, ` : ''}${p.daysNear} jour(s) à 90 % ou plus.` : ''
+      kva ? ` ${p.daysOver ? `${plural(p.daysOver, 'jour')} au-dessus de la puissance souscrite, ` : ''}${plural(p.daysNear, 'jour')} à 90 % ou plus.` : ''
     }</p>
     ${tableHtml(
       ['Mois', 'Pic (kVA)', 'Jour', 'Souscrite (kVA)'],

@@ -1,5 +1,6 @@
 // Analyse: AI insight, energy signature, anomalies, calendar, hourly profile,
 // peak / off-peak split, Netatmo station and room temperatures.
+import { countedNote } from '../components';
 import { type DayRecord, addDays, bucketLabel, minusYears, seasonOf } from '../aggregate';
 import { anomalies, dayProfile, daysAbove, weekHourGrid } from '../analysis';
 import { type CiFit, MIN_DAYS, type SeasonSignatures, seasonSignatures, signatureDays } from '../indoorsig';
@@ -297,7 +298,7 @@ function stationCard() {
     ${state.stationMetric === 'co2' ? '<p class="hint muted">CO₂ : au-delà de 1 000 ppm, l\'air est confiné (aérer) ; 1 500 ppm et plus, aération insuffisante. Mesuré par les modules intérieurs seulement.</p>' : ''}
     <div class="chart" id="station-chart" role="img" aria-label="Mesures de la station Netatmo"></div>
     <div id="station-table"></div>
-    <p class="counted"><span class="counted-k">Compté :</span> les modules de la station Netatmo (pas les sondes des radiateurs), le CO₂ à l'intérieur seulement.</p>
+    ${countedNote("les modules de la station Netatmo (pas les sondes des radiateurs), le CO₂ à l'intérieur seulement.")}
   </section>`;
 }
 
@@ -381,9 +382,11 @@ function drawHourly(records: DayRecord[], range?: [string, string]) {
   const byHalf = !!half && halfDays >= HALF_HOUR_MIN_DAYS;
   zone.innerHTML = html`<div class="chart" id="hour-grid" style="height:280px" role="img" aria-label="Consommation moyenne par jour de semaine et par heure"></div>
     <div class="chart" id="hour-profile" style="height:240px" role="img" aria-label="Journée type${byHalf ? ' au pas de 30 minutes' : ''}"></div>
-    <p class="counted"><span class="counted-k">Compté :</span> les radiateurs et le chauffe-eau (pas tout le logement), kWh moyens par heure, du ${esc(longDate(from))} au ${esc(longDate(last))}${
-      byHalf ? ` ; courbe au pas de 30 minutes sur ${halfDays} jours mesurés pièce par pièce` : ''
-    }.</p>`;
+    ${countedNote(
+      `les radiateurs et le chauffe-eau (pas tout le logement), kWh moyens par heure, du ${esc(longDate(from))} au ${esc(longDate(last))}${
+        byHalf ? ` ; courbe au pas de 30 minutes sur ${halfDays} jours mesurés pièce par pièce` : ''
+      }.`,
+    )}`;
   gridHeatmap(document.getElementById('hour-grid')!, {
     xLabels: hours,
     yLabels: dows,

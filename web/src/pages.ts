@@ -80,7 +80,7 @@ function filterChip(): string {
   return `<p class="filter-chip" role="status"><span>Sélection : <strong>${esc(what)}</strong></span> <button type="button" class="link" data-filter-reset>Tout afficher</button></p>`;
 }
 
-/** « Chauffe-eau · 2 pièces sur 7 », or '' when everything is counted. */
+/** « Eau chaude · 2 pièces sur 7 », or '' when everything is counted. */
 export function currentSelection(): string {
   const all = activeRooms().length;
   return selectionLabel({ cat: state.cat, rooms: state.rooms ? state.rooms.length : all, allRooms: all });

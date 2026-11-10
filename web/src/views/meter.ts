@@ -5,7 +5,7 @@
 // Main page: « Part des usages », « Puissance maximale » (subscribed vs used, peaks, load
 // shedding), then the detail pages: « Journée type », « Veille », « Autres usages en détail »,
 // « Heures pleines / creuses ». Figures in meter.ts (pure, tested).
-import { CATEGORY_LABEL, type DayRecord, bucketLabel } from '../aggregate';
+import { type DayRecord, bucketLabel } from '../aggregate';
 import { tariffSplit } from '../analysis';
 import { ds, state } from '../app';
 import { barChart, cssVar } from '../charts';
@@ -28,6 +28,7 @@ import {
 } from '../meter';
 import { periodAt } from '../offers';
 import { term } from '../plain';
+import { usageLabel } from '../glossary';
 import type { MeterPage, Route } from '../router';
 import { tenant, tenantNote } from '../tenant';
 import { html } from '../trusted';
@@ -49,7 +50,7 @@ function periodBar(r: HomeRange, what = 'tout le logement, relevé par le compte
   const all = activeRooms().length;
   const note = filterNote({
     cat: state.cat,
-    catLabel: state.cat === 'all' ? '' : CATEGORY_LABEL[state.cat],
+    catLabel: state.cat === 'all' ? '' : usageLabel(state.cat),
     rooms: state.rooms ? state.rooms.length : all,
     allRooms: all,
   });

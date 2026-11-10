@@ -7,7 +7,7 @@ describe('Historique : ce que compte chaque carte (#386, #301)', () => {
   it('la sélection se nomme, et rien quand tout est affiché', () => {
     expect(selectionLabel(all)).toBe('');
     expect(narrowed(all)).toBe(false);
-    expect(selectionLabel({ cat: 'water_heater', rooms: 2, allRooms: 7 })).toBe('Chauffe-eau · 2 pièces sur 7');
+    expect(selectionLabel({ cat: 'water_heater', rooms: 2, allRooms: 7 })).toBe('Eau chaude · 2 pièces sur 7');
     expect(selectionLabel({ cat: 'all', rooms: 1, allRooms: 7 })).toBe('1 pièce sur 7');
     expect(narrowed({ cat: 'heating', rooms: 7, allRooms: 7 })).toBe(true);
   });
@@ -20,7 +20,7 @@ describe('Historique : ce que compte chaque carte (#386, #301)', () => {
 
   it('une carte du chauffage seul le dit, et dit quand la sélection la vide', () => {
     expect(historyCounted(all, true)).toMatch(/^le chauffage seul, des radiateurs \(pas tout/);
-    expect(historyCounted({ cat: 'water_heater', rooms: 7, allRooms: 7 }, true)).toMatch(/^rien : .*« Chauffe-eau »/);
+    expect(historyCounted({ cat: 'water_heater', rooms: 7, allRooms: 7 }, true)).toMatch(/^rien : .*« Eau chaude »/);
   });
 });
 

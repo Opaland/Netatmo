@@ -10,6 +10,7 @@
 // without a restart = Internet cut; a restart alone = a power cut shorter than the hour between two
 // readings. Rooms whose radiator was switched off on purpose (#346) are left out from their date.
 import { addDays } from './aggregate';
+import { plural } from './glossary';
 import type { CutKind } from './periods';
 export type { CutKind };
 import { type DevicesDoc, LOW_BATTERY, type StationHealth, typeLabel } from './devices';
@@ -183,7 +184,6 @@ export function byMonth(list: Incident[], months = 12): MonthIncidents[] {
   return [...map.values()].sort((a, b) => (a.month < b.month ? 1 : -1)).slice(0, months);
 }
 
-const plural = (n: number, one: string, many: string) => `${n} ${n > 1 ? many : one}`;
 
 /** « 1 coupure de courant, 3 h sans Internet, 2 jours avec un module muet » ('' when nothing). */
 export function monthSummary(m: MonthIncidents): string {

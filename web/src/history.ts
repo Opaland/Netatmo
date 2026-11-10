@@ -1,7 +1,7 @@
 // #386 / #301 / #299: what each card of the Historique tab counts and over which period, written
 // once. Pure text builders (no DOM, no state), tested in history.test.ts. The views pass the
 // selection of the moment (usage and rooms, kept from one visit to the next).
-import { periodLine } from './glossary';
+import { periodLine, usageLabel } from './glossary';
 
 export interface Selection {
   /** Usage filter: « all », « heating » or « water_heater ». */
@@ -11,10 +11,11 @@ export interface Selection {
   allRooms: number;
 }
 
-const usage = (cat: string) => (cat === 'heating' ? 'Chauffage' : cat === 'water_heater' ? 'Chauffe-eau' : '');
+/** #406: the usage is « Eau chaude » (usageLabel), as on Accueil and Compteur. */
+const usage = (cat: string) => (cat === 'heating' || cat === 'water_heater' ? usageLabel(cat) : '');
 const roomsText = (o: Selection) => (o.rooms < o.allRooms ? `${o.rooms} pièce${o.rooms > 1 ? 's' : ''} sur ${o.allRooms}` : '');
 
-/** « Chauffe-eau · 2 pièces sur 7 », or '' when everything is shown. */
+/** « Eau chaude · 2 pièces sur 7 », or '' when everything is shown. */
 export function selectionLabel(o: Selection): string {
   return [usage(o.cat), roomsText(o)].filter(Boolean).join(' · ');
 }
@@ -29,7 +30,7 @@ export const narrowed = (o: Selection) => selectionLabel(o) !== '';
 export function historyCounted(o: Selection, heatingOnly = false): string {
   const what = heatingOnly
     ? o.cat === 'water_heater'
-      ? 'rien : ce graphique ne porte que sur les radiateurs, et la sélection « Chauffe-eau » les laisse de côté'
+      ? 'rien : ce graphique ne porte que sur les radiateurs, et la sélection « Eau chaude » les laisse de côté'
       : 'le chauffage seul, des radiateurs'
     : o.cat === 'heating'
       ? 'les radiateurs seuls'

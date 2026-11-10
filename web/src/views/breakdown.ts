@@ -7,7 +7,7 @@ import type { Hourly } from '../analysis';
 import { datasetDoc, ds, onDatasetLoaded } from '../app';
 import { addDays, minusYears } from '../aggregate';
 import { type Breakdown, type Declared, type Part, breakdown, kwhPerYear, parseDeclared, plugsFrom } from '../breakdown';
-import { list } from '../components';
+import { list, countedNote } from '../components';
 import { openLocal, sealLocal } from '../crypto';
 import { type Curve, lastCurveDay, measuredWattsCached, talon } from '../curve';
 import { type Dataset, loadCurve, loadHourly } from '../data';
@@ -166,9 +166,11 @@ function summary(b: Breakdown): string {
 /** #301: what the card counts, on the days of the tab's period that the meter covers. */
 function counted(b: Breakdown, hasPlugs: boolean): string {
   const cov = coverage(b.days, range.from, range.to);
-  return `<p class="counted"><span class="counted-k">Compté :</span> le compteur moins les radiateurs et le chauffe-eau, ${cov ? esc(coveredText(cov)) : ''}${
-    hasPlugs ? ' ; une prise mesurée moins longtemps compte à sa moyenne les autres jours' : ''
-  } ; les appareils saisis, à leur rythme.</p>`;
+  return countedNote(
+    `le compteur moins les radiateurs et le chauffe-eau, ${cov ? esc(coveredText(cov)) : ''}${
+      hasPlugs ? ' ; une prise mesurée moins longtemps compte à sa moyenne les autres jours' : ''
+    } ; les appareils saisis, à leur rythme.`,
+  );
 }
 
 const KIND_LABEL = { plug: 'mesuré (prise Shelly)', declared: 'saisi', talon: 'nuits, hors appareils permanents', unexplained: 'différence' };
