@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  splitStopped,
   type DevicesDoc,
   contractMismatch,
   fillTempo,
@@ -149,5 +150,20 @@ describe('Shelly channels (#279)', () => {
       ['p0', 'Frigo'],
       ['p1c1', 'Four'],
     ]);
+  });
+});
+
+describe('#346: a radiator switched off on purpose is not « injoignable »', () => {
+  it('the modules of a stopped room are set apart, with their setting; the others stay out of reach', () => {
+    const mods = [
+      { key: 'i1', type: 'NMH', room: 'r-cuisine', since: '2025-10-14' },
+      { key: 'i2', type: 'NMH', room: 'r-ch2', since: '2026-11-05' },
+      { key: 'i3', type: 'NMG', since: '2026-11-07' },
+    ];
+    const stop = { room: 'r-cuisine', from: '2025-10-14', reason: 'poele', label: 'poêle à bois' };
+    const r = splitStopped(mods, [stop]);
+    expect(r.stopped).toEqual([{ ...mods[0], stop }]);
+    expect(r.off.map((m) => m.key)).toEqual(['i2', 'i3']);
+    expect(splitStopped(mods, []).off).toHaveLength(3);
   });
 });
