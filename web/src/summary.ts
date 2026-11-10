@@ -57,7 +57,7 @@ export function changeSummary(start: { label: string; value: number }, end: { la
 
 /** Scatter + line per season: days and slope (« 2025–2026 : 228 jours, pente 2,3 kWh par °C »). */
 export function slopeSummary(series: { name: string; days: number; slope: number | null; unit: string }[]): string {
-  return series.map((s) => `${s.name} : ${s.days} jours${s.slope !== null ? `, pente ${nf1.format(Math.abs(s.slope))} ${s.unit}` : ''}`).join(' ; ');
+  return series.map((s) => `${s.name} : ${s.days} jours${s.slope !== null ? `, ${nf1.format(Math.abs(s.slope))} ${s.unit}` : ''}`).join(' ; ');
 }
 
 /** Days of a year (calendar): total, mean and the day that used the most. */

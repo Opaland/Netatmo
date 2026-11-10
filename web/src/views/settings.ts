@@ -20,7 +20,7 @@ import {
   invalidFields,
 } from '../settings';
 import { contractInfo, esc, longDate, table } from '../ui';
-import { localDateTime } from '../glossary';
+import { localDateTime, localDay } from '../glossary';
 import { html } from '../trusted';
 import { lazyAction, lazyCard } from '../lazy';
 import { showBuild } from '../build';
@@ -50,7 +50,7 @@ export function scopeTag(kind: 'foyer' | 'appareil'): string {
 export function renderSettings(view: HTMLElement, section: SettingsSection) {
   const m = ds!.meta;
   const src = ((m as { sources?: Record<string, SourceStatus> }).sources ?? {}) as Record<string, SourceStatus>;
-  const today = new Date().toISOString().slice(0, 10);
+  const today = localDay(); // #299: the local day (UTC is the day before until 1 or 2 am)
   /** S-1.12: expiry of the token, or "expiration inconnue" (never a made-up date). */
   const expiry = (s?: SourceStatus) => {
     const e = expiryInfo(s, today);
@@ -408,7 +408,7 @@ export function handleClick(btn: HTMLElement): boolean {
 /** S-5.8 / ADR-5: share of the last 3 monthly analyses judged useful on this device. */
 function iaRateLine() {
   if (!ds!.insights) return '';
-  const r = usefulRate(loadVotes(), new Date().toISOString().slice(0, 10));
+  const r = usefulRate(loadVotes(), localDay());
   return `<p class="hint muted">Analyse IA jugée utile sur cet appareil : ${
     r.rated ? `<strong>${r.useful} sur ${r.rated}</strong> analyse${r.rated > 1 ? 's' : ''} notée${r.rated > 1 ? 's' : ''} des 3 derniers mois` : 'aucune analyse notée sur les 3 derniers mois'
   } (règle ADR-5 : la garder si elle est utile au moins 2 mois sur 3 ; notez-la dans Outils → Analyse du mois).</p>`;

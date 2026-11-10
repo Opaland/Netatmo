@@ -3,6 +3,7 @@
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 import { type DayRecord, aggregate, total } from './aggregate';
 import { NO_PRICES, projectYear } from './analysis';
+import { historyCounted } from './history';
 import type { Dataset } from './data';
 import { demoDataset } from './__fixtures__/demo';
 
@@ -21,7 +22,7 @@ vi.mock('./charts', () => ({ cssVar: () => '', escapeHtml: (s: string) => s, wat
 vi.mock('./tenant', () => ({ tenant: () => ({ on: false, leaseFrom: null, leaseTo: null }) }));
 
 const { avgPrice, costOf } = await import('./ui');
-const { costScope, linkyMonths, pmaxMonths, projectedCost, twelveMonths } = await import('./synthese');
+const { EUROS_NOTE, linkyMonths, pmaxMonths, projectedCost, twelveMonths } = await import('./synthese');
 
 let ds: Dataset;
 const LAST = '2026-11-08';
@@ -95,8 +96,9 @@ describe('#291: the euros of a selection come from the selection', () => {
 
 describe('#292: what the euros cover', () => {
   it('Synthèse: energy only, no subscription, radiators and water heater', () => {
-    expect(costScope('all')).toMatch(/hors abonnement, radiateurs et chauffe-eau \(pas tout le logement\)/);
-    expect(costScope('water_heater')).toMatch(/chauffe-eau seul/);
+    expect(EUROS_NOTE).toMatch(/^euros : énergie seule, hors abonnement ;/);
+    expect(historyCounted({ cat: 'all', rooms: 7, allRooms: 7 })).toMatch(/radiateurs et le chauffe-eau \(pas tout le logement\)/);
+    expect(historyCounted({ cat: 'water_heater', rooms: 7, allRooms: 7 })).toMatch(/chauffe-eau seul/);
     // 1 133 € in Comparer and the report: the same energy plus the subscription
     expect(Math.round(costOf(ds.records, '2026-01-01', LAST, true)!)).toBe(1133);
   });

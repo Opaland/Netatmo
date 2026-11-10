@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { METER_PAGES, SETTINGS, TABS, TOOLS, allowed, parentOf, parseRoute, routeKey, simpleTabs, tabOf, titleOf, visibleTabs } from './router';
+import { HISTORY_PAGES, METER_PAGES, SETTINGS, TABS, TOOLS, allowed, parentOf, parseRoute, routeKey, simpleTabs, tabOf, titleOf, visibleTabs } from './router';
 import { fmt1 } from './glossary';
 import { dispatch, type Handlers } from './events';
 
@@ -21,6 +21,7 @@ describe('router (#308)', () => {
       ...Object.keys(SETTINGS).map((s) => `parametres-${s}`),
       ...Object.keys(TOOLS).map((t) => `outils-${t}`),
       ...Object.keys(METER_PAGES).map((m) => `compteur-${m}`),
+      ...Object.keys(HISTORY_PAGES).map((m) => `historique-${m}`),
     ];
     for (const k of keys) {
       const r = parseRoute(`#${k}`);
@@ -35,7 +36,7 @@ describe('router (#308)', () => {
   });
 
   it('unknown addresses are not routes (anchors, #installer, old names)', () => {
-    for (const k of ['#installer', '#quality', '#overview', '#outils-inconnu', '#compteur-inconnu', '#parametres-x', '#piece-%E0%A4%A', '']) expect(parseRoute(k)).toBeNull();
+    for (const k of ['#installer', '#quality', '#overview', '#outils-inconnu', '#compteur-inconnu', '#historique-inconnu', '#historique-constructor', '#parametres-x', '#piece-%E0%A4%A', '']) expect(parseRoute(k)).toBeNull();
   });
 
   it('a sub-page lights its tab and goes back to it', () => {
@@ -49,6 +50,10 @@ describe('router (#308)', () => {
     expect(tabOf({ page: 'parametres', section: null })).toBeNull();
     expect(tabOf({ page: 'compteur-detail', sub: 'veille' })).toBe('compteur');
     expect(parentOf({ page: 'compteur-detail', sub: 'veille' })).toBe('compteur');
+    // #386: the sub-pages of Historique
+    expect(tabOf({ page: 'historique-detail', sub: 'froid' })).toBe('historique');
+    expect(parentOf({ page: 'historique-detail', sub: 'froid' })).toBe('historique');
+    expect(titleOf({ page: 'historique-detail', sub: 'froid' })).toBe('Le logement face au froid');
   });
 
   it('titles of the sub-pages', () => {

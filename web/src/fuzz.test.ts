@@ -22,7 +22,7 @@ import { loadNote } from './local-store';
 import { parseFlags } from './onboarding';
 import { STOP_REASONS, parseStopped } from './room-offline';
 import { MAX_PURCHASES, SPECIES, parseWood } from './wood';
-import { METER_PAGES, SETTINGS, TOOLS, parseRoute, routeKey } from './router';
+import { HISTORY_PAGES, METER_PAGES, SETTINGS, TOOLS, parseRoute, routeKey } from './router';
 import { lockNotice } from './session';
 import { readShellyPrefs } from './shelly-prefs';
 import { INPUT_FIELDS, MAX_ROOFS, parseLocation, parsePvgisFile, parseSolarDoc, parseSolarInputs } from './solar';
@@ -340,7 +340,7 @@ describe('#359 fuzz : préférences relues de cet appareil', () => {
 });
 
 describe('#359 fuzz : adresses, facture, CSV, enveloppes', () => {
-  const ROUTE_WORDS = ['', '#', '#/', 'accueil', 'pieces', 'historique', 'compteur', 'outils', 'parametres', 'piece-', 'outils-', 'parametres-', 'compteur-', 'bienvenue', 'bienvenue-', 'expliquer-', '2026-01', '2026-13', 'constructor', '__proto__', 'toString', 'hasOwnProperty', '%', '%20', '%E2%82%AC', '\ud83d', '😀', ...Object.keys(TOOLS), ...Object.keys(SETTINGS), ...Object.keys(METER_PAGES), '1', '5'];
+  const ROUTE_WORDS = ['', '#', '#/', 'accueil', 'pieces', 'historique', 'compteur', 'outils', 'parametres', 'piece-', 'outils-', 'parametres-', 'compteur-', 'bienvenue', 'bienvenue-', 'expliquer-', '2026-01', '2026-13', 'constructor', '__proto__', 'toString', 'hasOwnProperty', '%', '%20', '%E2%82%AC', '\ud83d', '😀', ...Object.keys(TOOLS), ...Object.keys(SETTINGS), ...Object.keys(METER_PAGES), 'historique-', ...Object.keys(HISTORY_PAGES), '1', '5'];
 
   it('routes : null, ou une route connue que routeKey redonne à l\'identique', () => {
     fuzz('parseRoute', (r, n) => {
@@ -351,6 +351,7 @@ describe('#359 fuzz : adresses, facture, CSV, enveloppes', () => {
       if (route.page === 'outil') assert(Object.hasOwn(TOOLS, route.tool), `outil ${route.tool}`);
       if (route.page === 'parametres' && route.section !== null) assert(Object.hasOwn(SETTINGS, route.section), `section ${route.section}`);
       if (route.page === 'compteur-detail') assert(Object.hasOwn(METER_PAGES, route.sub), `page ${route.sub}`);
+      if (route.page === 'historique-detail') assert(Object.hasOwn(HISTORY_PAGES, route.sub), `page ${route.sub}`);
       const key = routeKey(route); // must not throw (half a UTF-16 pair: encodeURIComponent throws)
       expect(parseRoute(key)).toEqual(route);
     });
