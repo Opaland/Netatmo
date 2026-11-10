@@ -22,13 +22,19 @@ export interface Invoice {
 }
 
 const DAY_RE = /^\d{4}-\d{2}-\d{2}$/;
+/** #359: a day that exists (the pattern alone lets 2026-02-30 through, read by Date as 2 March). */
+const isDay = (s: string) => {
+  if (!DAY_RE.test(s)) return false;
+  const t = Date.parse(`${s}T00:00:00Z`);
+  return Number.isFinite(t) && new Date(t).toISOString().slice(0, 10) === s;
+};
 const num = (v: unknown, max: number) => (typeof v === 'number' && Number.isFinite(v) && v >= 0 && v < max ? v : null);
 
 /** A clean invoice or null (local storage is not trusted blindly). */
 export function validInvoice(v: unknown): Invoice | null {
   if (!v || typeof v !== 'object') return null;
   const o = v as Record<string, unknown>;
-  if (typeof o.from !== 'string' || typeof o.to !== 'string' || !DAY_RE.test(o.from) || !DAY_RE.test(o.to) || o.to < o.from) return null;
+  if (typeof o.from !== 'string' || typeof o.to !== 'string' || !isDay(o.from) || !isDay(o.to) || o.to < o.from) return null;
   const amount = num(o.amount, 1e6);
   if (amount === null) return null;
   return {

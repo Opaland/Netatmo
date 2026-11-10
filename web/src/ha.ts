@@ -89,6 +89,12 @@ const fold = (s: string) =>
     .toLowerCase();
 
 /** The heated room whose name appears in the sensor's name or entity (longest match), else null. */
+/** #359: the room chosen on this device for each sensor (sensor key → room id or ''), strings only. */
+export function parseHaLinks(raw: unknown): Record<string, string> {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {};
+  return Object.fromEntries(Object.entries(raw).filter(([k, v]) => typeof v === 'string' && k !== '__proto__'));
+}
+
 export function guessRoom(sensor: { name?: string; entity?: string }, rooms: { id: string; name: string }[]): string | null {
   const hay = fold(`${sensor.name ?? ''} ${(sensor.entity ?? '').replace(/_/g, ' ')}`);
   let best: { id: string; len: number } | null = null;
