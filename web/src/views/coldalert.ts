@@ -24,7 +24,7 @@ import { html } from '../trusted';
 import '../simulators.css';
 import { lsKey } from '../scope';
 import { fmt1 as num1 } from '../glossary';
-import { alert } from '../components';
+import { alert, alertHtml, switchField } from '../components';
 
 export const COLD_VARIABLE = 'COLD_ALERT_JSON';
 const LS = lsKey('cold-draft');
@@ -100,7 +100,7 @@ export function mountColdSettings(card: HTMLElement | null, repo: () => string, 
   card.hidden = false;
   card.innerHTML = html`<h2>Alerte froid prolongé <small class="muted">désactivée par défaut</small></h2>
     <p class="hint">Pour un proche âgé ou une résidence secondaire : quand une pièce choisie reste sous le seuil sur une journée entière (moyenne de 24 h), la collecte de la nuit ouvre une issue GitHub « 🥶 Alerte froid prolongé » (GitHub vous l'envoie par e-mail), qui se ferme d'elle-même au retour au-dessus du seuil. L'issue est publique : <strong>ni température ni nom de pièce</strong>, seulement un pseudonyme (Pièce A, B…) dont la correspondance n'est visible qu'ici.</p>
-    <p class="notice"><strong>Ce n'est pas un dispositif de sécurité.</strong> Avec une collecte par nuit, l'alerte peut arriver jusqu'à 24 h après la journée froide, davantage si la collecte échoue ou si une sonde ne remonte plus. Pour une personne fragile, gardez un autre moyen de contact.</p>
+    ${alertHtml('warn', "<strong>Ce n'est pas un dispositif de sécurité.</strong> Avec une collecte par nuit, l'alerte peut arriver jusqu'à 24 h après la journée froide, davantage si la collecte échoue ou si une sonde ne remonte plus. Pour une personne fragile, gardez un autre moyen de contact.")}
     <p class="hint">${
       active
         ? `<span class="badge">active</span> Enregistrée par la collecte : ${active.rooms.length} pièce${active.rooms.length > 1 ? 's' : ''}, seuil ${num1(active.threshold)} °C pendant ${active.days} jour${active.days > 1 ? 's' : ''}.`
@@ -113,7 +113,7 @@ export function mountColdSettings(card: HTMLElement | null, repo: () => string, 
     <fieldset class="sim-choices"><legend>Pièces suivies (${COLD_MAX_ROOMS} au plus)</legend>
       ${list
         .map(
-          (s) => `<label class="check"><input type="checkbox" data-cold-room="${esc(s.id)}" ${chosen.includes(s.id) ? 'checked' : ''}> ${esc(s.name)} <small class="muted">${s.kind === 'station' ? 'station' : 'sonde du radiateur'}</small></label>`,
+          (s) => switchField(s.name, chosen.includes(s.id), { 'data-cold-room': s.id }, { sub: s.kind === 'station' ? 'station' : 'sonde du radiateur' }),
         )
         .join('')}
     </fieldset>
@@ -127,7 +127,7 @@ export function mountColdSettings(card: HTMLElement | null, repo: () => string, 
             }),
             99,
           )
-        : '<p class="hint muted">Cochez au moins une pièce.</p>'
+        : '<p class="hint muted">Activez au moins une pièce.</p>'
     }
     <p class="hint muted">Variable du dépôt <code>${COLD_VARIABLE}</code> (Settings → Secrets and variables → Actions → Variables) :</p>
     <code class="sim-json">${esc(chosen.length ? coldJson(cfg) : '—')}</code>
@@ -138,7 +138,7 @@ export function mountColdSettings(card: HTMLElement | null, repo: () => string, 
     <p class="hint muted">${
       demo ? 'Mode démonstration : rien n\'est enregistré.' : hasToken() ? 'Prise en compte à la prochaine collecte.' : 'Connectez un jeton GitHub ci-dessus (permission Variables) pour enregistrer, ou copiez la variable à la main.'
     }</p>
-    ${message ? `<p class="settings-msg ${message.ok ? 'ok' : 'ko'}" role="status">${esc(message.text)}</p>` : ''}`;
+    ${message ? alertHtml(message.ok ? 'info' : 'bad', esc(message.text), { role: 'status' }) : ''}`;
   if (focus) card.querySelector<HTMLElement>(focus)?.focus();
   const update = (patch: Partial<ColdConfig>, from: string) => {
     saveDraft({ ...cfg, ...patch });

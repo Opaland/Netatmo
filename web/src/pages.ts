@@ -89,8 +89,7 @@ function roomsPicker(): string {
         <div class="rooms-actions"><button type="button" data-rooms="all">Toutes</button><button type="button" data-rooms="none">Aucune</button></div>
         ${activeRooms()
           .map(
-            (r) => `<label class="check"><input type="checkbox" data-room="${esc(r.id)}" ${!state.rooms || state.rooms.includes(r.id) ? 'checked' : ''}>
-            <span class="swatch" style="background:${roomColor(r.id)}"></span>${esc(r.name)} <small class="muted">${CATEGORY_LABEL[r.category]}</small></label>`,
+            (r) => switchField(r.name, !state.rooms || state.rooms.includes(r.id), { 'data-room': r.id }, { sub: CATEGORY_LABEL[r.category], swatch: roomColor(r.id) }),
           )
           .join('')}
       </div>

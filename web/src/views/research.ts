@@ -17,6 +17,7 @@ import {
 import { html } from '../trusted';
 import { downloadBlob } from '../download';
 import { esc } from '../ui';
+import { radioField, switchField } from '../components';
 
 function form(): string {
   return `<form method="dialog" class="research-form">
@@ -29,15 +30,15 @@ function form(): string {
           .map(([k, l]) => `<option value="${k}">${esc(k)} — ${esc(l)}</option>`)
           .join('')}
       </select></label>
-    <label class="check"><input type="checkbox" id="research-shift" checked> Décaler les dates (heures comptées depuis une origine relative, dates réelles masquées)</label>
+    ${switchField('Décaler les dates (heures comptées depuis une origine relative, dates réelles masquées)', true, { id: 'research-shift' })}
     <label class="money-field">Localisation approximative
       <select id="research-zone">
         <option value="">Non communiquée</option>
         ${CLIMATE_ZONES.map((z) => `<option value="${z}">Zone climatique ${z}</option>`).join('')}
       </select></label>
     <fieldset class="research-format"><legend>Format</legend>
-      <label class="check"><input type="radio" name="research-format" value="csv" checked> CSV (en-tête commenté)</label>
-      <label class="check"><input type="radio" name="research-format" value="json"> JSON</label>
+      ${radioField('CSV (en-tête commenté)', true, { name: 'research-format', value: 'csv' })}
+      ${radioField('JSON', false, { name: 'research-format', value: 'json' })}
     </fieldset>
     <p class="hint muted">Limites rappelées dans le fichier : un seul logement ; la météo croisée avec une archive peut aider à retrouver la région et les dates. Format décrit dans docs/export-recherche.md.</p>
     <p class="hint" id="research-status" role="status"></p>

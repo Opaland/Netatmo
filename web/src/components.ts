@@ -135,10 +135,22 @@ export const periodBar = (segHtml: string, scope: string) => `<div class="period
 export function chip(label: string, pressed: boolean, a: Attrs = {}, swatch?: string): string {
   return `<button type="button" class="chip" aria-pressed="${pressed}"${attrs(a)}>${swatch ? `<span class="swatch" style="background:${color(swatch)}" aria-hidden="true"></span>` : ''}${esc(label)}</button>`;
 }
-/** Switch: a checkbox with role="switch" (same change event as a checkbox). */
-export function switchField(label: string, checked: boolean, a: Attrs = {}): string {
-  return `<label class="switch"><span>${esc(label)}</span><input type="checkbox" role="switch"${attrs(a)}${checked ? ' checked' : ''}></label>`;
+/**
+ * Switch: a checkbox with role="switch" (same change event as a checkbox). The only on / off
+ * control of the app (#317: replaces the old `.toggle` and `.check` boxes). `sub`: grey detail
+ * after the label; `swatch`: colour key before it (a room).
+ */
+export function switchField(label: string, checked: boolean, a: Attrs = {}, extra: { sub?: string; swatch?: string } = {}): string {
+  const key = extra.swatch ? `<span class="swatch" style="background:${color(extra.swatch)}" aria-hidden="true"></span>` : '';
+  const sub = extra.sub ? ` <small class="muted">${esc(extra.sub)}</small>` : '';
+  return `<label class="switch"><span>${key}${esc(label)}${sub}</span><input type="checkbox" role="switch"${attrs(a)}${checked ? ' checked' : ''}></label>`;
 }
+/** One answer of a short list where only one applies (native radio: same change event). */
+export function radioField(label: string, checked: boolean, a: Attrs = {}): string {
+  return `<label class="radio"><input type="radio"${attrs(a)}${checked ? ' checked' : ''}><span>${esc(label)}</span></label>`;
+}
+/** Message of a form, next to its button: empty until an action fills it (live region). */
+export const formMsg = (text: string, a: Attrs = {}) => `<p class="form-msg"${attrs({ role: 'alert', ...a })}>${esc(text)}</p>`;
 
 // ------------------------------------------------------------------ messages and states
 const ICON = { info: 'i', warn: '!', bad: '!', good: '✓' } as const;
@@ -148,6 +160,15 @@ export function alert(kind: keyof typeof ICON, title: string, text = '', action 
   return `<div class="alert${kind === 'info' ? '' : ` ${kind}`}" role="${role}"><span class="ico" aria-hidden="true">${ICON[kind]}</span><div><p><b>${esc(title)}</b></p>${
     text ? `<p>${esc(text)}</p>` : ''
   }${action}</div></div>`;
+}
+/**
+ * Alert whose content is already-safe HTML (a sentence with <strong>, a link, several
+ * paragraphs): same look and roles as alert(); `a` adds an id or replaces the role (a message
+ * that is a status, not an error). #317: replaces the old `.notice` and `.stale` blocks.
+ */
+export function alertHtml(kind: keyof typeof ICON, body: string, a: Attrs = {}): string {
+  const content = /^\s*<(p|ul|ol|div|details)\b/.test(body) ? body : `<p>${body}</p>`;
+  return `<div class="alert${kind === 'info' ? '' : ` ${kind}`}"${attrs({ role: kind === 'bad' ? 'alert' : 'note', ...a })}><span class="ico" aria-hidden="true">${ICON[kind]}</span><div>${content}</div></div>`;
 }
 const STATE_ICON = { empty: '○', loading: '…', error: '!', offline: '⌁' } as const;
 /** Empty, loading, error or offline state of a card (same classes as the lazy cards, lazy.ts). */

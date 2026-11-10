@@ -11,6 +11,7 @@ import { esc, lastDay, longDate, table } from '../ui';
 import { html } from '../trusted';
 import { f1, intuisContractLine, plural, roomLabel } from './devices-quality';
 import { stoppedRooms } from './offline-rooms';
+import { alertHtml } from '../components';
 
 const stationName = (key: string) => ds!.station?.modules?.[key]?.name ?? key;
 
@@ -42,9 +43,12 @@ export function mountDevices(el: HTMLElement | null) {
   }
   if (off.length) {
     parts.push(
-      `<p class="notice">⚠️ ${plural(off.length, 'module')} Intuis ne répond plus : ${off
+      alertHtml(
+        'warn',
+        `${plural(off.length, 'module')} Intuis ne répond plus : ${off
         .map((m) => `${esc(typeLabel(m.type))} (${esc(roomLabel(m.room))}) depuis le ${esc(longDate(m.since))}`)
-        .join(' ; ')}. Les jours concernés, la pièce peut afficher 0 kWh sans avoir rien consommé : ce sont des jours « module hors ligne ».</p>`,
+        .join(' ; ')}. Les jours concernés, la pièce peut afficher 0 kWh sans avoir rien consommé : ce sont des jours « module hors ligne ».`,
+      ),
     );
   } else if (doc?.reach && !stopped.length) parts.push('<p class="hint muted">✓ Tous les radiateurs, relais et le chauffe-eau répondaient lors de la dernière collecte.</p>');
   // #276
@@ -63,7 +67,7 @@ export function mountDevices(el: HTMLElement | null) {
     const low = health.filter((h) => h.low);
     parts.push(
       `<h3>Station Netatmo : piles et signal</h3>${
-        low.length ? `<p class="notice">🔋 Pile faible (moins de 15 %) : ${low.map((h) => esc(stationName(h.key))).join(', ')}. Changez-la avant que les relevés s'arrêtent.</p>` : ''
+        low.length ? alertHtml('warn', `Pile faible (moins de 15 %) : ${low.map((h) => esc(stationName(h.key))).join(', ')}. Changez-la avant que les relevés s'arrêtent.`) : ''
       }${table(
         ['Module', 'Batterie', 'Évolution (90 j)', 'Signal', 'État'],
         health.map((h) => [

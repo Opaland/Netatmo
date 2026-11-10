@@ -34,6 +34,7 @@ import { currentHcHp } from './waterheater';
 import { html } from '../trusted';
 import { onCard } from '../events';
 import { NS, lsKey } from '../scope';
+import { switchField } from '../components';
 
 const num1 = (v: number) => v.toLocaleString('fr-FR', { maximumFractionDigits: 1 });
 const shortDate = (d: string) => `${Number(d.slice(8, 10))} ${MONTHS_SHORT[Number(d.slice(5, 7)) - 1]} ${d.slice(0, 4)}`;
@@ -111,7 +112,7 @@ function teleworkCard(): string {
     <label class="money-field">Pièce
       <select id="tw-room">${rooms.map((r) => `<option value="${esc(r.id)}" ${r.id === room ? 'selected' : ''}>${esc(r.name)}</option>`).join('')}</select></label>
     <fieldset class="days-pick"><legend class="hint">Mes jours de télétravail habituels</legend>${DOW.map(
-      (l, i) => `<label class="check"><input type="checkbox" data-tw-day="${i}" ${tw.has(i) ? 'checked' : ''}> ${l}</label>`,
+      (l, i) => switchField(l, tw.has(i), { 'data-tw-day': i }),
     ).join('')}</fieldset>`;
   if (!ds!.weather) {
     return `<section class="card" id="telework-card">${head}<p class="hint muted">Il faut la météo (prochaine collecte) pour comparer les jours à climat égal.</p></section>`;
@@ -134,7 +135,7 @@ function teleworkCard(): string {
       ? `Une journée de télétravail coûte <strong>${money(Math.abs(diff))} ${more}</strong> qu'une journée au bureau pour chauffer « ${esc(name)} » ${delta}, à climat égal.`
       : a === 'telework'
         ? `Tous vos jours ouvrés sont en télétravail : dans « ${esc(name)} », une journée de télétravail coûte <strong>${money(g('telework').kwh)}</strong> et un jour de week-end <strong>${money(g('weekend').kwh)}</strong>, à climat égal, soit ${money(Math.abs(diff))} ${more} ${delta}. Sans jour au bureau, le week-end sert de point de comparaison.`
-        : `Dans « ${esc(name)} », un jour ouvré coûte <strong>${money(g('weekday').kwh)}</strong> et un jour de week-end <strong>${money(g('weekend').kwh)}</strong>, à climat égal : écart de ${money(Math.abs(diff))} par jour. Cochez vos jours de télétravail pour isoler leur coût.`;
+        : `Dans « ${esc(name)} », un jour ouvré coûte <strong>${money(g('weekday').kwh)}</strong> et un jour de week-end <strong>${money(g('weekend').kwh)}</strong>, à climat égal : écart de ${money(Math.abs(diff))} par jour. Activez vos jours de télétravail pour isoler leur coût.`;
   return `<section class="card" id="telework-card">${head}
     <p>${sentence}</p>
     ${table(

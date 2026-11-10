@@ -8,6 +8,7 @@ import { displayId } from '../household';
 import { rebuildLost, rebuildTotals, suspectDays } from '../reconstitute';
 import { activeRooms, esc, fmtKwh, longDate, roomName, series, table, measureColor } from '../ui';
 import { html } from '../trusted';
+import { alertHtml } from '../components';
 
 const monthLabel = (m: string) => `${MONTHS_SHORT[Number(m.slice(5, 7)) - 1]} ${m.slice(2, 4)}`;
 const kwh = (v: number | null) => (v === null ? '—' : fmtKwh(v));
@@ -25,7 +26,7 @@ export function renderReconstitution(zone: HTMLElement) {
     extérieure du jour, au prorata de la part habituelle des pièces (chauffe-eau : sa valeur médiane des jours voisins). Ces valeurs
     <strong>ne sont jamais ajoutées</strong> aux données mesurées : elles restent dans cette carte, en série distincte.</p>`;
   if (!rebuilt.length) {
-    zone.innerHTML = html`${method}<p class="notice">Aucun jour perdu ne peut être reconstitué : il faut Linky ou la météo ces jours-là.</p>${suspectsBlock(suspects)}`;
+    zone.innerHTML = html`${method}${alertHtml('info', 'Aucun jour perdu ne peut être reconstitué : il faut Linky ou la météo ces jours-là.')}${suspectsBlock(suspects)}`;
     return;
   }
   // Monthly chart over the months that have rebuilt days.

@@ -17,6 +17,7 @@ import { OFFERS, periodAt } from '../offers';
 import { contracts, esc, lastDay, longDate, table } from '../ui';
 import { fmt1 } from '../glossary';
 import { stoppedRooms } from './offline-rooms';
+import { alertHtml } from '../components';
 
 export const roomLabel = (id?: string) => (id ? ((rawDataset() ?? ds!).meta.rooms.find((r) => r.id === id)?.name ?? 'pièce inconnue') : '—');
 /** #258: the shared one-decimal format (typographic minus). */
@@ -33,7 +34,7 @@ export function intuisContractLine(): string {
   const diff = contractMismatch(ic, current);
   const what = `Intuis indique : option ${esc(label)}${typeof ic.kva === 'number' ? `, ${f1(ic.kva).replace(',0', '')} kVA` : ''}.`;
   return diff.length
-    ? `<p class="notice">⚠️ ${what} Cela diffère du contrat en vigueur (${esc(diff.join(' et '))}) : si le tarif saisi dans l'application Intuis est faux, son découpage heures pleines / creuses l'est aussi. Corrigez-le dans l'application Intuis (ou ici, si c'est le contrat partagé qui est faux).</p>`
+    ? alertHtml('warn', `${what} Cela diffère du contrat en vigueur (${esc(diff.join(' et '))}) : si le tarif saisi dans l'application Intuis est faux, son découpage heures pleines / creuses l'est aussi. Corrigez-le dans l'application Intuis (ou ici, si c'est le contrat partagé qui est faux).`)
     : `<p class="hint muted">${what} Conforme au contrat en vigueur.</p>`;
 }
 

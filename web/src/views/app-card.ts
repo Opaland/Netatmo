@@ -4,6 +4,7 @@ import { escapeHtml as esc } from '../charts';
 import { html } from '../trusted';
 import { INSTALL_EVENT, IOS_GESTURE, MENU_GESTURE, type InstallState, currentInstallState, promptInstall } from '../install';
 import { offlineReady, reloadApp } from '../pwa';
+import { alertHtml } from '../components';
 
 export interface AppCardInfo {
   install: InstallState;
@@ -46,7 +47,7 @@ export function appCardHtml(i: AppCardInfo): string {
       <strong>Gardés</strong> : la clé mémorisée (« Rester connecté »), vos notes chiffrées (factures, travaux, corrections),
       les données chiffrées gardées pour le hors connexion et vos réglages.</p>
     <div class="controls"><button type="button" class="btn secondary" id="reload-app">Recharger l'application</button></div>
-    ${i.message ? `<p class="settings-msg ko" role="status">${esc(i.message)}</p>` : ''}`;
+    ${i.message ? alertHtml('bad', esc(i.message), { role: 'status' }) : ''}`;
 }
 
 async function persisted(): Promise<boolean | null> {
