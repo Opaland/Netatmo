@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { type DayRecord, addDays } from './aggregate';
 import type { Weather } from './analysis';
-import { absencePeriods, dayKind, dayTypeCost, lowDays, mergeAbsences, summarizeAbsence, waterTalon, withModeAbsences } from './habits';
+import { absencePeriods, dayKind, dayTypeCost, lowDays, mergeAbsences, summarizeAbsence, teleworkPlan, waterTalon, withModeAbsences } from './habits';
 
 const days = (from: string, n: number) => Array.from({ length: n }, (_, i) => addDays(from, i));
 const rec = (day: string, room: string, cat: 'heating' | 'water_heater', kwh: number) => ({ day, room, cat, kwh }) as DayRecord;
@@ -29,6 +29,27 @@ describe('S-4.9 telework: cost per kind of day at equal climate', () => {
     expect(dayKind('2025-01-06', new Set([0]))).toBe('telework'); // Monday
     expect(dayKind('2025-01-07', new Set([0]))).toBe('office');
     expect(dayKind('2025-01-11', new Set([0]))).toBe('weekend');
+  });
+
+  it.each([0, 1, 2, 3, 4, 5])('keeps every group of the table filled with %i weekday(s) ticked', (n) => {
+    const tw = new Set(Array.from({ length: n }, (_, i) => i));
+    const plan = teleworkPlan(tw);
+    const r = dayTypeCost(perDay, weather, '2025-01-01', '2025-12-31', plan.group)!;
+    // every kind shown in the table has its own row (5 ticked used to need an « office » group: empty card)
+    for (const k of plan.kinds) expect(r.groups.has(k)).toBe(true);
+    expect(plan.kinds).toContain(plan.compare[0]);
+    expect(plan.kinds).toContain(plan.compare[1]);
+    expect(r.days).toBe(70);
+    // weekdays all cost 1 kWh per DJU, whatever their label; weekends half of it
+    for (const k of plan.kinds) expect(r.groups.get(k)!.kwh).toBeCloseTo(k === 'weekend' ? r.dju * 0.5 : r.dju, 5);
+  });
+
+  it('compares telework with the office, or with the weekend when every weekday is telework', () => {
+    expect(teleworkPlan(new Set()).compare).toEqual(['weekday', 'weekend']);
+    expect(teleworkPlan(new Set([0, 2])).compare).toEqual(['telework', 'office']);
+    expect(teleworkPlan(new Set([0, 1, 2, 3, 4])).kinds).toEqual(['telework', 'weekend']);
+    expect(teleworkPlan(new Set([0, 1, 2, 3, 4])).group('2025-01-10')).toBe('telework'); // Friday
+    expect(teleworkPlan(new Set([0, 1, 2, 3, 4])).group('2025-01-11')).toBe('weekend');
   });
 
   it('ignores mild days and returns null without heating days', () => {

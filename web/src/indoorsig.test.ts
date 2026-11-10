@@ -59,7 +59,10 @@ describe('S-3.7 indoor − outdoor points', () => {
 
   it('picks the module of the most consuming mapped room, else the main station', () => {
     expect(indoorModule(st, new Map([['ch', 'm2']]), records)).toBe('m2');
-    expect(indoorModule(st, new Map([['salon', 'm3']]), records)).toBe('m0'); // the cellar is not heated
+    // a module named « Cave » linked by the user to a heated room stands for that room
+    expect(indoorModule(st, new Map([['salon', 'm3']]), records)).toBe('m3');
+    // never the outdoor module, even if linked by mistake
+    expect(indoorModule(st, new Map([['salon', 'm1']]), records)).toBe('m0');
     expect(indoorModule(st, new Map(), records)).toBe('m0');
     expect(indoorModule({ modules: { m1: st.modules.m1 }, daily: {} }, new Map(), records)).toBeNull();
   });

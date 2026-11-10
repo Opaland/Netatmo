@@ -41,9 +41,18 @@ export function heatedModules(modules: Record<string, StationModule>): string[] 
   return Object.keys(modules).filter((k) => !isOutdoor(modules[k]) && !isUnheated(modules[k].name));
 }
 
-/** Modules whose night CO₂ matters: indoor, not unheated spaces; bedrooms first. */
-export function co2Modules(modules: Record<string, StationModule>, nightly: Record<string, unknown> = {}): string[] {
-  const keys = heatedModules(modules).filter((k) => nightly[k] !== undefined);
+/**
+ * Every indoor module, whatever its name: the choices offered to link a room to the station.
+ * A module named « Cave » may well sit in a bedroom: the name only drives the suggestion.
+ */
+export function indoorModules(modules: Record<string, StationModule>): string[] {
+  return Object.keys(modules).filter((k) => !isOutdoor(modules[k]));
+}
+
+/** Modules whose night CO₂ matters: indoor, not unheated spaces (unless linked to a room); bedrooms first. */
+export function co2Modules(modules: Record<string, StationModule>, nightly: Record<string, unknown> = {}, linked: Iterable<string> = []): string[] {
+  const link = new Set(linked);
+  const keys = indoorModules(modules).filter((k) => (link.has(k) || !isUnheated(modules[k].name)) && nightly[k] !== undefined);
   return [...keys.filter((k) => isBedroom(modules[k].name)), ...keys.filter((k) => !isBedroom(modules[k].name))];
 }
 
@@ -263,7 +272,7 @@ export function effectiveMapping(
   saved: Record<string, string>,
 ): Map<string, string> {
   const out = new Map<string, string>();
-  const valid = new Set(Object.keys(modules));
+  const valid = new Set(indoorModules(modules)); // any indoor module, « Cave » included; never the outdoor one
   const taken = new Set(Object.values(saved).filter((k) => valid.has(k)));
   const suggested = suggestMapping(rooms, modules);
   for (const r of rooms) {

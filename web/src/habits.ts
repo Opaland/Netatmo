@@ -68,6 +68,26 @@ export function dayKind(day: string, telework: Set<number>): 'weekend' | 'telewo
   return telework.has(d) ? 'telework' : 'office';
 }
 
+export type TeleworkKind = 'telework' | 'office' | 'weekday' | 'weekend';
+
+/**
+ * How the days are grouped for the telework card, from the weekdays ticked (0 = Monday … 4 = Friday):
+ * - none ticked: weekday vs weekend;
+ * - some ticked: telework vs office vs weekend, the sentence compares telework with office;
+ * - all five ticked: there is no office day left, so telework vs weekend (before the fix the
+ *   « office » group was required and missing, which emptied the card and hid the table).
+ */
+export function teleworkPlan(telework: Set<number>): {
+  kinds: readonly TeleworkKind[];
+  compare: [TeleworkKind, TeleworkKind];
+  group: (day: string) => TeleworkKind;
+} {
+  const n = [0, 1, 2, 3, 4].filter((d) => telework.has(d)).length;
+  if (!n) return { kinds: ['weekday', 'weekend'], compare: ['weekday', 'weekend'], group: (d) => (dow(d) >= 5 ? 'weekend' : 'weekday') };
+  if (n === 5) return { kinds: ['telework', 'weekend'], compare: ['telework', 'weekend'], group: (d) => (dow(d) >= 5 ? 'weekend' : 'telework') };
+  return { kinds: ['telework', 'office', 'weekend'], compare: ['telework', 'office'], group: (d) => dayKind(d, telework) };
+}
+
 // ------------------------------------------------------------------ S-4.10 absences
 export interface Period {
   from: string;
@@ -207,8 +227,10 @@ export function mergeAbsences(detected: AbsencePeriod[], edits: AbsenceEdits): (
 export interface AbsenceEdits {
   dismissed: string[]; // first day of a detected period that was not an absence
   added: Period[];
+  /** S-13.7: first day of the periods whose start was moved back by the detection delay of the absence mode. */
+  earlier?: string[];
 }
-export const NO_EDITS: AbsenceEdits = { dismissed: [], added: [] };
+export const NO_EDITS: AbsenceEdits = { dismissed: [], added: [], earlier: [] };
 
 /**
  * Standing consumption of the water heater: 10th percentile of its daily kWh outside

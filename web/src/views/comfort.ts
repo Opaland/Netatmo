@@ -11,11 +11,13 @@ import {
   effectiveMapping,
   heatedModules,
   hoursBelow,
+  indoorModules,
   humidRuns,
   isCellar,
   isBedroom,
   lastNightDay,
   lastNights,
+  nameSimilarity,
   nightVerdict,
   offsetAdvice,
   offsetStats,
@@ -40,7 +42,10 @@ let hourly: StationHourly | null = null;
 let hourlyFailed = false;
 /** S-11.1 / S-12.2: bedroom detail hidden until a deliberate gesture, forgotten at the next lock. */
 let showBedrooms = false;
+/** The module choices stay unfolded after a change (the view is drawn again). */
+let linksOpen = false;
 onDatasetLoaded(() => {
+  linksOpen = false;
   hourly = null;
   hourlyFailed = false;
   showBedrooms = false;
@@ -64,6 +69,15 @@ function heatingRooms() {
 function mapping(st: Station | null) {
   return st ? effectiveMapping(heatingRooms(), st.modules, state.roomModuleMap) : new Map<string, string>();
 }
+/**
+ * Name shown for a station module: the room it is linked to when the names differ (a module
+ * « Cave » placed in « Chambre bleue » reads « Chambre bleue (module Cave) »), else its own name.
+ */
+function moduleLabel(st: Station, map: Map<string, string>, k: string): string {
+  const name = st.modules[k].name;
+  const room = heatingRooms().find((r) => map.get(r.id) === k);
+  return room && nameSimilarity(room.name, name) < 1 ? `${room.name} (module ${name})` : name;
+}
 
 export function renderComfort(view: HTMLElement) {
   const st = ds!.station;
@@ -77,15 +91,15 @@ export function renderComfort(view: HTMLElement) {
         : 'Aucune station Netatmo n\'est reliée : seules les températures mesurées par les radiateurs sont utilisées (moyennes par jour). Ajoutez la station dans Paramètres pour le CO₂ de la nuit et l\'humidité de la cave.'
     }</p>
   </section>
-  ${st ? co2Cards(st) : ''}
-  ${st ? cellarCards(st) : ''}
+  ${st ? co2Cards(st, map) : ''}
+  ${st ? cellarCards(st, map) : ''}
   ${coldCard(st, map)}
   ${windows.windowsCard(showBedrooms)}
   ${ha.haCard(showBedrooms)}
   ${st ? probeCard(st, map) : ''}`;
   if (st) {
-    drawCo2(st);
-    drawCellar(st);
+    drawCo2(st, map);
+    drawCellar(st, map);
     drawProbes(st, map);
   }
   drawCold(st, map);
@@ -101,13 +115,13 @@ function nightsOf(st: Station, k: string): (NightRow | null)[] | null {
   return lastNights(nightly, last, 30);
 }
 
-function co2Cards(st: Station) {
-  const keys = co2Modules(st.modules, st.nightly ?? {});
+function co2Cards(st: Station, map: Map<string, string>) {
+  const keys = co2Modules(st.modules, st.nightly ?? {}, map.values());
   if (!keys.length)
     return `<section class="card"><h2>CO₂ de la nuit</h2><p class="hint muted">Les agrégats de nuit arriveront avec la prochaine collecte de la station (relevés horaires).</p></section>`;
   return keys
     .map((k, i) => {
-      const name = st.modules[k].name;
+      const name = moduleLabel(st, map, k);
       const head = `<h2>CO₂ de la nuit — ${esc(name)} <small class="muted">22 h → 7 h, 30 dernières nuits</small></h2>`;
       if (isBedroom(name) && !showBedrooms)
         return `<section class="card">${head}
@@ -148,8 +162,8 @@ function co2Cards(st: Station) {
     .join('');
 }
 
-function drawCo2(st: Station) {
-  co2Modules(st.modules, st.nightly ?? {}).forEach((k, i) => {
+function drawCo2(st: Station, map: Map<string, string>) {
+  co2Modules(st.modules, st.nightly ?? {}, map.values()).forEach((k, i) => {
     const el = document.getElementById(`co2-${i}`);
     const rows = nightsOf(st, k);
     if (!el || !rows) return;
@@ -171,14 +185,16 @@ function drawCo2(st: Station) {
 }
 
 // ------------------------------------------------------------------ S-11.2 cellar humidity
-function cellarKeys(st: Station) {
-  return Object.keys(st.modules).filter((k) => st.modules[k].indoor && isCellar(st.modules[k].name));
+/** Cellar-like modules, except one the user linked to a heated room: it is in that room, not in a cellar. */
+function cellarKeys(st: Station, map: Map<string, string>) {
+  const linked = new Set(map.values());
+  return Object.keys(st.modules).filter((k) => st.modules[k].indoor && isCellar(st.modules[k].name) && !linked.has(k));
 }
 
-function cellarCards(st: Station) {
+function cellarCards(st: Station, map: Map<string, string>) {
   const last = lastDay();
   const from = addDays(last, -89);
-  return cellarKeys(st)
+  return cellarKeys(st, map)
     .map((k, i) => {
       const name = st.modules[k].name;
       const daily = st.daily[k] ?? {};
@@ -241,10 +257,10 @@ function cellarCards(st: Station) {
     .join('');
 }
 
-function drawCellar(st: Station) {
+function drawCellar(st: Station, map: Map<string, string>) {
   const last = lastDay();
   const ds90 = days(addDays(last, -89), last);
-  cellarKeys(st).forEach((k, i) => {
+  cellarKeys(st, map).forEach((k, i) => {
     const el = document.getElementById(`cellar-${i}`);
     if (!el) return;
     const daily = st.daily[k] ?? {};
@@ -379,36 +395,31 @@ function drawCold(st: Station | null, map: Map<string, string>) {
 }
 
 // ------------------------------------------------------------------ S-3.8 radiator probe vs station
+/** Rooms compared on the card: every heated room linked to a station module, in the same order for the charts. */
+function probeRooms(map: Map<string, string>) {
+  return heatingRooms().filter((r) => map.has(r.id));
+}
+
 function probeCard(st: Station, map: Map<string, string>) {
-  const rooms = heatingRooms().filter((r) => ds!.temps.has(r.id));
+  const rooms = heatingRooms();
   if (!rooms.length) return '';
-  const candidates = heatedModules(st.modules);
-  const suggested = suggestMapping(heatingRooms(), st.modules);
+  // every indoor module, whatever its name (a « Cave » module may sit in « Chambre bleue »)
+  const candidates = indoorModules(st.modules);
+  if (!candidates.length) return '';
+  const suggested = suggestMapping(rooms, st.modules);
   const last = lastDay();
   const from = addDays(minusYears(last), 1);
-  const linked = rooms.filter((r) => map.has(r.id));
-  return `<section class="card">
-    <h2>Sonde du radiateur et station <small class="muted">même pièce</small></h2>
-    <p class="hint muted">Chaque pièce a deux thermomètres : la sonde du radiateur, qui pilote la chauffe, et le module de la station Netatmo. Liez-les pour comparer. Une pièce liée utilise la <strong>station</strong> pour le confort ; sinon, le <strong>radiateur</strong>. Correspondance gardée sur cet appareil.</p>
-    ${table(
-      ['Pièce (radiateurs)', 'Module Netatmo'],
-      rooms.map((r) => [
-        esc(r.name),
-        `<label class="select"><span class="sr-only">Module lié à ${esc(r.name)}</span><select data-map-room="${esc(r.id)}">
-          <option value="" ${map.has(r.id) ? '' : 'selected'}>— aucun —</option>
-          ${candidates.map((k) => `<option value="${esc(k)}" ${map.get(r.id) === k ? 'selected' : ''}>${esc(st.modules[k].name)}${suggested[r.id] === k ? ' (suggéré)' : ''}</option>`).join('')}
-        </select></label>`,
-      ]),
-      2,
-    )}
-    ${Object.keys(state.roomModuleMap).length ? '<p><button type="button" class="link" data-comfort="reset-map">Revenir aux suggestions</button></p>' : ''}
-    ${linked
-      .map((r, i) => {
-        const k = map.get(r.id)!;
-        const o = offsetStats(ds!.temps.get(r.id), st.daily[k], from, last);
-        if (!o) return `<h3 class="sub-title">${esc(r.name)} ↔ ${esc(st.modules[k].name)}</h3><p class="hint muted">Pas de jour de chauffe (novembre à mars) avec les deux mesures sur les 12 derniers mois.</p>`;
-        return `<h3 class="sub-title">${esc(r.name)} ↔ ${esc(st.modules[k].name)}</h3>
-        <p>Écart moyen <strong>${signed(o.mean)} °C</strong> (radiateur − station) sur ${o.n} jours de chauffe, écart-type ${f1(o.sd)} °C : ${o.stable ? 'stable' : 'variable'}.</p>
+  const linked = probeRooms(map);
+  const pair = (r: { name: string }, k: string) =>
+    `<h3 class="sub-title">${esc(r.name)} <small class="muted">sonde du radiateur ↔ module « ${esc(st.modules[k].name)} »</small></h3>`;
+  const compared = linked
+    .map((r, i) => {
+      const k = map.get(r.id)!;
+      if (!ds!.temps.has(r.id)) return `${pair(r, k)}<p class="hint muted">Pas de température relevée par les radiateurs de cette pièce : rien à comparer.</p>`;
+      const o = offsetStats(ds!.temps.get(r.id), st.daily[k], from, last);
+      if (!o) return `${pair(r, k)}<p class="hint muted">Pas de jour de chauffe (novembre à mars) avec les deux mesures sur les 12 derniers mois.</p>`;
+      return `${pair(r, k)}
+        <p>Écart moyen <strong>${signed(o.mean)} °C</strong> : la sonde du radiateur lit ${o.mean >= 0 ? 'plus chaud' : 'plus froid'} que la station, sur ${o.n} jours de chauffe (écart-type ${f1(o.sd)} °C : ${o.stable ? 'stable' : 'variable'}).</p>
         ${offsetAdvice(o, state.comfortThreshold)
           .map((p) => `<p class="hint">${esc(p)}</p>`)
           .join('')}
@@ -422,8 +433,27 @@ function probeCard(st: Station, map: Map<string, string>) {
               .map((m) => [bucketLabel(`${m.month}-01`, 'month'), `${f1(m.radiator)} °C`, `${f1(m.station)} °C`, `${signed(m.offset)} °C`, m.n]),
           ),
         )}`;
-      })
-      .join('')}
+    })
+    .join('');
+  return `<section class="card" id="probe-card">
+    <h2>Radiateur et station : écart de température <small class="muted">pièces liées à un module</small></h2>
+    <p class="hint muted">Le radiateur règle sa chauffe sur sa propre sonde, placée contre l'appareil ; le module de la station, posé dans la pièce, mesure ce que vous ressentez. L'<strong>écart moyen</strong> (radiateur − station, jours de chauffe des 12 derniers mois) dit de combien la sonde se trompe : s'il est stable, recalez la consigne d'autant pour obtenir la température voulue à la station.</p>
+    ${compared || `<p class="notice">Aucune pièce n'est liée à un module de la station : choisissez son module ci-dessous pour comparer.</p>`}
+    <details class="table-details" id="probe-links" ${linked.length && !linksOpen ? '' : 'open'}><summary>Choisir le module de chaque pièce</summary>
+    <p class="hint muted">Tous les modules intérieurs de la station sont proposés, quel que soit leur nom : un module « Cave » posé dans une chambre peut lui être lié. Une pièce liée utilise la station pour le confort ; sinon, la sonde du radiateur. Choix gardé sur cet appareil.</p>
+    ${table(
+      ['Pièce (radiateurs)', 'Module de la station'],
+      rooms.map((r) => [
+        esc(r.name),
+        `<label class="select"><span class="sr-only">Module lié à ${esc(r.name)}</span><select data-map-room="${esc(r.id)}">
+          <option value="" ${map.has(r.id) ? '' : 'selected'}>— aucun —</option>
+          ${candidates.map((k) => `<option value="${esc(k)}" ${map.get(r.id) === k ? 'selected' : ''}>${esc(st.modules[k].name)}${suggested[r.id] === k ? ' (suggéré)' : ''}</option>`).join('')}
+        </select></label>`,
+      ]),
+      2,
+    )}
+    ${Object.keys(state.roomModuleMap).length ? '<p><button type="button" class="link" data-comfort="reset-map">Revenir aux suggestions</button></p>' : ''}
+    </details>
   </section>`;
 }
 
@@ -431,25 +461,23 @@ function drawProbes(st: Station, map: Map<string, string>) {
   const last = lastDay();
   const from = addDays(minusYears(last), 1);
   const heat = days(from, last).filter((d) => seasonOf(d) !== null);
-  heatingRooms()
-    .filter((r) => ds!.temps.has(r.id) && map.has(r.id))
-    .forEach((r, i) => {
-      const el = document.getElementById(`probe-${i}`);
-      if (!el) return;
-      const k = map.get(r.id)!;
-      const t = ds!.temps.get(r.id)!;
-      lineChart(el, {
-        labels: heat.map(dayLabel),
-        series: [
-          { name: 'Sonde du radiateur', color: measureColor(), data: heat.map((d) => t.get(d)?.[0] ?? null) },
-          { name: `Station (${st.modules[k].name})`, color: cssVar('--accent'), data: heat.map((d) => st.daily[k]?.[d]?.[2] ?? null) },
-        ],
-        price: null,
-        unit: '°C',
-        scale: true,
-        endLabels: false,
-      });
+  probeRooms(map).forEach((r, i) => {
+    const el = document.getElementById(`probe-${i}`);
+    const t = ds!.temps.get(r.id);
+    if (!el || !t) return;
+    const k = map.get(r.id)!;
+    lineChart(el, {
+      labels: heat.map(dayLabel),
+      series: [
+        { name: 'Sonde du radiateur', color: measureColor(), data: heat.map((d) => t.get(d)?.[0] ?? null) },
+        { name: `Station (${st.modules[k].name})`, color: cssVar('--accent'), data: heat.map((d) => st.daily[k]?.[d]?.[2] ?? null) },
+      ],
+      price: null,
+      unit: '°C',
+      scale: true,
+      endLabels: false,
     });
+  });
 }
 
 // ------------------------------------------------------------------ events
@@ -464,6 +492,7 @@ export function handleClick(btn: HTMLElement): boolean {
     return true;
   }
   if (btn.dataset.comfort === 'reset-map') {
+    linksOpen = true;
     setState({ roomModuleMap: {} });
     return true;
   }
@@ -479,6 +508,7 @@ export function handleChange(t: HTMLInputElement | HTMLSelectElement): boolean {
   }
   if (t.dataset.mapRoom !== undefined) {
     // Freeze the current links so that unlinking one room does not re-suggest its module elsewhere.
+    linksOpen = true;
     const cur = Object.fromEntries(heatingRooms().map((r) => [r.id, mapping(ds!.station).get(r.id) ?? '']));
     setState({ roomModuleMap: { ...cur, [t.dataset.mapRoom]: t.value } });
     return true;
