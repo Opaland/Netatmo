@@ -15,7 +15,7 @@ import {
 import { compareOffers, daySplits, djuBetween, monthlyDju, offPeakShares } from '../analysis';
 import { ds, setState, state } from '../app';
 import { type Series, barChart, chartCaption, cssVar, lineChart } from '../charts';
-import { SEASON_DEFINITION, dayLong, monthLong, monthShort, seasonLabel, signedPct } from '../glossary';
+import { SEASON_DEFINITION, dayLong, monthLong, monthShort, plural, seasonLabel, signedPct } from '../glossary';
 import { routeKey } from '../router';
 import { uncertainDays } from '../checks';
 import { cutDays } from './quality';
@@ -417,7 +417,7 @@ function simWarning() {
   const from = addDays(minusYears(last), 1);
   const over = [...ds!.pmax].filter(([d, v]) => d >= from && v > state.simKva!).length;
   return over
-    ? alertHtml('bad', `Sur 12 mois, votre puissance a dépassé ${state.simKva} kVA pendant ${over} jour(s) : avec cet abonnement, le disjoncteur aurait coupé.`)
+    ? alertHtml('bad', `Sur 12 mois, votre puissance a dépassé ${state.simKva} kVA pendant ${plural(over, 'jour')} : avec cet abonnement, le disjoncteur aurait coupé.`)
     : `<p class="hint muted">Sur 12 mois, votre pic n'a jamais dépassé ${state.simKva} kVA.</p>`;
 }
 

@@ -215,7 +215,7 @@ try {
       await page.waitForSelector('#devices-card:not([hidden])', { timeout: 15000 });
       const dev = await page.locator('#devices-card').innerText();
       check(/Radiateur arrêté volontairement : Cuisine, depuis le 14 octobre 2025 \(chauffée par un poêle à bois\)/.test(dev), `${name} : État des appareils sans « radiateur arrêté volontairement » (« ${dev.slice(0, 300)} »)`);
-      check(/ne répond plus : radiateur \(Chambre enfant\)/.test(dev) && !/radiateur \(Cuisine\) depuis/.test(dev), `${name} : État des appareils dit la Cuisine injoignable (« ${dev.slice(0, 300)} »)`);
+      check(/Un module Intuis ne répond plus\s+Radiateur \(Chambre enfant\)/.test(dev) && !/adiateur \(Cuisine\) depuis/.test(dev), `${name} : État des appareils dit la Cuisine injoignable (« ${dev.slice(0, 300)} »)`);
       check((await wide(page)) <= 1, `${name} : défilement horizontal sur État des données (${await wide(page)} px)`);
       await audit(page, `${name}/etat`, enhanced);
 

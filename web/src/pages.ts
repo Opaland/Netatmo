@@ -5,7 +5,7 @@
 import { activeRooms, ds, householdStatus, state } from './app';
 import { alert, list, seg as segment, switchField } from './components';
 import type { Handlers } from './events';
-import { dayShort, fmt1 } from './glossary';
+import { dayShort, fmt1, usageLabel } from './glossary';
 import { type Route, SETTINGS, type SettingsPage, type Tool, routeKey } from './router';
 import { LOCK_CHOICES } from './session';
 import { tenant } from './tenant';
@@ -77,7 +77,7 @@ function filterChip(): string {
   const all = activeRooms().length;
   const n = state.rooms ? state.rooms.length : all;
   if (state.cat === 'all' && n === all) return '';
-  const what = [state.cat === 'all' ? '' : CATEGORY_LABEL[state.cat], n === all ? '' : `${n} pièce${n > 1 ? 's' : ''} sur ${all}`].filter(Boolean).join(' · ');
+  const what = [state.cat === 'all' ? '' : usageLabel(state.cat), n === all ? '' : `${n} pièce${n > 1 ? 's' : ''} sur ${all}`].filter(Boolean).join(' · ');
   return `<p class="filter-chip" role="status"><span>Sélection : <strong>${esc(what)}</strong></span> <button type="button" class="link" data-filter-reset>Tout afficher</button></p>`;
 }
 

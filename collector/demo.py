@@ -624,7 +624,7 @@ def _sources(today: date) -> dict:
     return {
         "intuis": {"ok": ok},
         "open-meteo": {"ok": ok},
-        "netatmo": {"ok": ok, "since": "2023-11-20", "note": "pile faible : 1 module(s)"},
+        "netatmo": {"ok": ok, "since": "2023-11-20", "note": "pile faible : 1 module"},
         "linky": {
             "ok": ok,
             "since": linky_since.isoformat(),
@@ -635,12 +635,12 @@ def _sources(today: date) -> dict:
         "shelly": {
             "ok": ok,
             "since": (today - timedelta(days=SHELLY_DAYS)).isoformat(),
-            "note": "1 prise(s) sans compteur d'énergie : non exploitable(s) sans hub",
+            "note": "1 prise sans compteur d'énergie : non exploitable sans hub",
         },
         "releve-horaire": {"ok": ok, "note": "161 relevés sur 168 heures (7 derniers jours)"},
         "appareils": {
             "ok": ok,
-            "note": "8 modules, 2 module(s) injoignable(s), 0 mise(s) à jour de firmware détectée(s), "
+            "note": "8 modules, 2 modules injoignables, 0 mise à jour de firmware détectée, "
             "passerelle redémarrée 0 fois (7 j)",
         },
         "ia": {"ok": ok},

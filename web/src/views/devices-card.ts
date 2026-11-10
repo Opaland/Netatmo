@@ -45,9 +45,11 @@ export function mountDevices(el: HTMLElement | null) {
     parts.push(
       alertHtml(
         'warn',
-        `${plural(off.length, 'module')} Intuis ne répond plus : ${off
-        .map((m) => `${esc(typeLabel(m.type))} (${esc(roomLabel(m.room))}) depuis le ${esc(longDate(m.since))}`)
-        .join(' ; ')}. Les jours concernés, la pièce peut afficher 0 kWh sans avoir rien consommé : ce sont des jours « module hors ligne ».`,
+        `${off
+          .map((m) => `${esc(typeLabel(m.type).charAt(0).toUpperCase() + typeLabel(m.type).slice(1))} (${esc(roomLabel(m.room))}) depuis le ${esc(longDate(m.since))}`)
+          .join(' ; ')}. Les jours concernés, la pièce peut afficher 0 kWh sans avoir rien consommé : ce sont des jours « module hors ligne ».`,
+        {},
+        off.length > 1 ? `${off.length} modules Intuis ne répondent plus` : 'Un module Intuis ne répond plus',
       ),
     );
   } else if (doc?.reach && !stopped.length) parts.push('<p class="hint muted">✓ Tous les radiateurs, relais et le chauffe-eau répondaient lors de la dernière collecte.</p>');
@@ -67,15 +69,22 @@ export function mountDevices(el: HTMLElement | null) {
     const low = health.filter((h) => h.low);
     parts.push(
       `<h3>Station Netatmo : piles et signal</h3>${
-        low.length ? alertHtml('warn', `Pile faible (moins de 15 %) : ${low.map((h) => esc(stationName(h.key))).join(', ')}. Changez-la avant que les relevés s'arrêtent.`) : ''
+        low.length
+          ? alertHtml(
+              'warn',
+              `Moins de 15 % : ${low.length > 1 ? 'changez-les' : 'changez-la'} avant que les relevés s'arrêtent.`,
+              {},
+              `Pile faible : ${low.map((h) => stationName(h.key)).join(', ')}`,
+            )
+          : ''
       }${table(
         ['Module', 'Batterie', 'Évolution (90 j)', 'Signal', 'État'],
         health.map((h) => [
           esc(stationName(h.key)),
-          h.battery === null ? 'secteur' : `${h.battery} %${h.low ? ' ⚠️' : ''}`,
+          h.battery === null ? 'secteur' : `${h.battery} %${h.low ? ' (faible)' : ''}`,
           spark(h.trend),
           h.signal === null ? '—' : `${h.signal}${h.weakSignal ? ' (faible)' : ''}`,
-          h.answering ? 'répond' : '⚠️ muet depuis plus de 6 h',
+          h.answering ? 'répond' : 'muet depuis plus de 6 h',
         ]),
         99,
       )}<p class="hint muted">Signal : radio (modules) ou Wi-Fi (module principal), plus le nombre est bas, meilleur il est. Une valeur par nuit.</p>`,

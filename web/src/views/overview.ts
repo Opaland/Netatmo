@@ -1,7 +1,6 @@
 // Overview (v1.5 « Synthèse »), split up (#308, #311): « Consommation en détail » of Historique,
 // invoice and data quality (the Linky cards are the Compteur tab, views/meter.ts). Accueil itself is views/home.ts.
 import {
-  CATEGORY_LABEL,
   type Category,
   type DayRecord,
   addDays,
@@ -14,7 +13,7 @@ import {
 import { ds, setState, state } from '../app';
 import { type Series, barChart } from '../charts';
 import { OTHER, activeRooms, avgPrice, catColor, delta, esc, eurOf, firstDay, fmtKwh, lastDay, longDate, nf0, roomColor, roomGroup, roomName, seg, table, tableToggle } from '../ui';
-import { NO_REFERENCE, PERIOD, vsLabel } from '../glossary';
+import { NO_REFERENCE, PERIOD, usageLabel, vsLabel } from '../glossary';
 import { chartMarks, cutDays, cutDaysIn, uncertainDays, yoyGapNote } from './quality';
 import { cutText } from '../periods';
 import { html } from '../trusted';
@@ -91,7 +90,7 @@ export function renderOverview(view: HTMLElement, records: DayRecord[], part: Ov
         <label class="select"><span class="sr-only">Période</span><select data-set="period">${periodOptions
           .map(([v, l]) => `<option value="${v}" ${state.period === v ? 'selected' : ''}>${l}</option>`)
           .join('')}</select></label>
-        ${seg('cat', state.cat, [['all', 'Tout'], ['heating', 'Chauffage'], ['water_heater', 'Chauffe-eau']], 'Usage')}
+        ${seg('cat', state.cat, [['all', 'Tout'], ['heating', usageLabel('heating')], ['water_heater', usageLabel('water_heater')]], 'Usage')}
         ${seg('gran', state.gran, [['day', 'Jour'], ['week', 'Semaine'], ['month', 'Mois'], ['year', 'An']], 'Granularité')}
         ${seg('split', split, [['category', 'Par usage'], ['room', 'Par pièce']], 'Détail')}
       </div>
@@ -102,7 +101,7 @@ export function renderOverview(view: HTMLElement, records: DayRecord[], part: Ov
         ? `<div class="share" aria-hidden="true">${shares
             .map((s) => `<span style="flex:${s.p};background:${catColor(s.c)}"></span>`)
             .join('')}</div><p class="share-legend">${shares
-            .map((s) => `<span><i style="background:${catColor(s.c)}"></i>${CATEGORY_LABEL[s.c]} ${nf0.format(s.p)} % · ${fmtKwh(s.v)}</span>`)
+            .map((s) => `<span><i style="background:${catColor(s.c)}"></i>${usageLabel(s.c)} ${nf0.format(s.p)} % · ${fmtKwh(s.v)}</span>`)
             .join('')}</p>`
         : ''
     }
@@ -117,7 +116,7 @@ export function renderOverview(view: HTMLElement, records: DayRecord[], part: Ov
       ? (['heating', 'water_heater'] as string[]).filter((k) => set.groups.has(k))
       : [...activeRooms().map((r) => r.id), OTHER].filter((k) => set.groups.has(k));
   const ser: Series[] = order.map((k) => ({
-    name: split === 'category' ? CATEGORY_LABEL[k as Category] : roomName(k),
+    name: split === 'category' ? usageLabel(k as Category) : roomName(k),
     color: split === 'category' ? catColor(k as Category) : roomColor(k),
     data: set.groups.get(k)!.map((v) => Math.round(v * 10) / 10),
   }));

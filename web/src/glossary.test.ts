@@ -1,5 +1,23 @@
 import { describe, expect, it } from 'vitest';
-import { dayLong, dayShort, hour, hourMin, hourRange, localDateTime, localDay, monthShort, periodBounds, periodLine, rangeLabel, seasonLabel, signedPct, vsLabel } from './glossary';
+import {
+  agreePlurals,
+  dayLong,
+  dayShort,
+  hour,
+  hourMin,
+  hourRange,
+  localDateTime,
+  localDay,
+  monthShort,
+  periodBounds,
+  periodLine,
+  plural,
+  rangeLabel,
+  seasonLabel,
+  signedPct,
+  usageLabel,
+  vsLabel,
+} from './glossary';
 
 describe('glossaire : dates et heures (#299)', () => {
   it('écrit « 1er » et les mois en français', () => {
@@ -59,5 +77,28 @@ describe('glossaire : nombres et comparaisons (#315)', () => {
     expect(vsLabel('2025-01-01', '2025-12-31')).toBe('vs 2024');
     expect(vsLabel('2025-11-09', '2026-11-08')).toBe('vs les 12 mois précédents');
     expect(vsLabel('2026-10-10', '2026-11-08')).toBe("vs la même période l'an dernier");
+  });
+});
+
+describe('glossaire : usage et pluriels (#406)', () => {
+  it("l'usage s'appelle « Eau chaude » partout, l'appareil « Chauffe-eau » ailleurs", () => {
+    expect(usageLabel('heating')).toBe('Chauffage');
+    expect(usageLabel('water_heater')).toBe('Eau chaude');
+  });
+  it('accorde un nombre et son nom (pluriel à partir de 2)', () => {
+    expect(plural(0, 'jour')).toBe('0 jour');
+    expect(plural(1, 'jour')).toBe('1 jour');
+    expect(plural(2, 'jour')).toBe('2 jours');
+    expect(plural(3, 'travail', 'travaux')).toBe('3 travaux');
+  });
+  it('accorde les notes du collecteur écrites « module(s) » (données d’avant la v1.7)', () => {
+    expect(agreePlurals('pile faible : 1 module(s)')).toBe('pile faible : 1 module');
+    expect(agreePlurals('8 modules, 2 module(s) injoignable(s), 0 mise(s) à jour de firmware détectée(s), passerelle redémarrée 0 fois (7 j)')).toBe(
+      '8 modules, 2 modules injoignables, 0 mise à jour de firmware détectée, passerelle redémarrée 0 fois (7 j)',
+    );
+    expect(agreePlurals("1 prise(s) sans compteur d'énergie : non exploitable(s) sans hub")).toBe("1 prise sans compteur d'énergie : non exploitable sans hub");
+    expect(agreePlurals('12 345 relevé(s)')).toBe('12 345 relevés');
+    expect(agreePlurals('relevé(s) manquant(s)')).toBe('relevés manquants');
+    expect(agreePlurals('161 relevés sur 168 heures (7 derniers jours)')).toBe('161 relevés sur 168 heures (7 derniers jours)');
   });
 });

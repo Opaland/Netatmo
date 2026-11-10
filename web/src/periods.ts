@@ -3,7 +3,7 @@
 // period shown or the data only covers part of it; it is « uncertain » when it contains
 // estimated or lost days. Both are said in the tooltip and on the bar, at every granularity.
 import { type Granularity, addDays, bucketKey, minusYears } from './aggregate';
-import { dayShort } from './glossary';
+import { dayShort, plural } from './glossary';
 
 /** #394: the cause of a cut (incidents.ts). */
 export type CutKind = 'power' | 'internet';
@@ -42,7 +42,6 @@ export function bucketRange(key: string, g: Granularity): [string, string] {
   }
 }
 
-const plural = (n: number, word: string) => `${n} ${word}${n > 1 ? 's' : ''}`;
 /** « 18 jours estimés ou manquants ». */
 export const uncertainText = (n: number) => `${plural(n, 'jour')} estimé${n > 1 ? 's' : ''} ou manquant${n > 1 ? 's' : ''}`;
 

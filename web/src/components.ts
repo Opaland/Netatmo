@@ -164,11 +164,14 @@ export function alert(kind: keyof typeof ICON, title: string, text = '', action 
 /**
  * Alert whose content is already-safe HTML (a sentence with <strong>, a link, several
  * paragraphs): same look and roles as alert(); `a` adds an id or replaces the role (a message
- * that is a status, not an error). #317: replaces the old `.notice` and `.stale` blocks.
+ * that is a status, not an error); `title`: the short title in bold, as in alert() (#401).
+ * #317: replaces the old `.notice` and `.stale` blocks.
  */
-export function alertHtml(kind: keyof typeof ICON, body: string, a: Attrs = {}): string {
+export function alertHtml(kind: keyof typeof ICON, body: string, a: Attrs = {}, title = ''): string {
   const content = /^\s*<(p|ul|ol|div|details)\b/.test(body) ? body : `<p>${body}</p>`;
-  return `<div class="alert${kind === 'info' ? '' : ` ${kind}`}"${attrs({ role: kind === 'bad' ? 'alert' : 'note', ...a })}><span class="ico" aria-hidden="true">${ICON[kind]}</span><div>${content}</div></div>`;
+  return `<div class="alert${kind === 'info' ? '' : ` ${kind}`}"${attrs({ role: kind === 'bad' ? 'alert' : 'note', ...a })}><span class="ico" aria-hidden="true">${ICON[kind]}</span><div>${
+    title ? `<p><b>${esc(title)}</b></p>` : ''
+  }${content}</div></div>`;
 }
 const STATE_ICON = { empty: '○', loading: '…', error: '!', offline: '⌁' } as const;
 /** Empty, loading, error or offline state of a card (same classes as the lazy cards, lazy.ts). */

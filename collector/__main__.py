@@ -37,6 +37,7 @@ from .errors import SourceError
 from .schema import FormatError
 from .storage import Store
 from .sync import Syncer
+from .texte import nombre
 
 
 def _client(s: Settings) -> IntuisClient:
@@ -177,14 +178,16 @@ def _devices(store: Store, syncer: Syncer, sources: Sources) -> tuple[list[str],
         _warn(f"État des appareils Intuis non relevé ({type(err).__name__})")
         return [], []
     boots = boots_since(store, 7, datetime.now(UTC).timestamp(), home.timezone)
+    unreachable = nombre(counts["unreachable"], "module injoignable", "modules injoignables")
     note = (
-        f"{counts['modules']} modules, {counts['unreachable']} module(s) injoignable(s), "
-        f"{counts['firmware']} mise(s) à jour de firmware détectée(s), passerelle redémarrée {boots} fois (7 j)"
+        f"{nombre(counts['modules'], 'module')}, {unreachable}, "
+        f"{nombre(counts['firmware'], 'mise à jour de firmware détectée', 'mises à jour de firmware détectées')}, "
+        f"passerelle redémarrée {boots} fois (7 j)"
     )
     sources.ok("appareils", note)
     print(f"Appareils Intuis : {note}")
     if counts["unreachable"]:
-        _warn(f"{counts['unreachable']} module(s) Intuis injoignable(s)")
+        _warn(f"{nombre(counts['unreachable'], 'module Intuis injoignable', 'modules Intuis injoignables')}")
     return [f"| Appareils Intuis | {note} |"], counts["alerts"]
 
 
@@ -626,10 +629,8 @@ def _cold_label(cfg: dict | None, counts: dict[str, int]) -> str:
     # Counts only: neither the rooms, nor the threshold, nor a temperature (public log).
     if not cfg:
         return "Alerte froid : désactivée"
-    return (
-        f"Alerte froid : {counts['suivies']} pièce(s) suivie(s), {counts['froides']} sous le seuil, "
-        f"{counts['sans_mesure']} sans mesure récente"
-    )
+    followed = nombre(counts["suivies"], "pièce suivie", "pièces suivies")
+    return f"Alerte froid : {followed}, {counts['froides']} sous le seuil, {counts['sans_mesure']} sans mesure récente"
 
 
 def _room30_label(h: dict | None) -> str:
