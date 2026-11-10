@@ -20,6 +20,7 @@ import { historyCounted, yearLine, yearsLine } from '../history';
 import { term } from '../plain';
 import { routeKey } from '../router';
 import { uncertainDays } from '../checks';
+import { cutDays } from './quality';
 import { WITH_SUBSCRIPTION } from '../synthese';
 import { bucketMarks, monthKeys, shortDate, yoyCaveat, yoyWindow } from '../periods';
 import { periodAt } from '../offers';
@@ -320,7 +321,7 @@ function yearsCard(records: DayRecord[], first: string, last: string, uncertain:
       const isCurrent = y === lastYear;
       const d = win ? pctChange(total(records, win.from, win.to), total(records, win.prevFrom, win.prevTo)) : null;
       // « à date » is said once under the table; what is left weakens the change of this year
-      const parts = yoyCaveat(win, uncertain).split(' · ').filter((c) => c && c !== 'à date');
+      const parts = yoyCaveat(win, uncertain, { cuts: cutDays() }).split(' · ').filter((c) => c && c !== 'à date');
       const caveat = parts.length > 0;
       if (caveat && d !== null) caveats.push(`Évolution de ${y} : ${parts.map((c) => c.replace(/^(\d{4}) : /, '$1 compte ')).join(', ')}`);
       const end = isCurrent ? last : `${y}-12-31`;

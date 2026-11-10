@@ -8,7 +8,7 @@ import { MIN_DAYS, indoorModule, seasonSignatures, signatureDays } from '../indo
 import { seasonOf } from '../aggregate';
 import { signatureTable } from './analyse';
 import { activeRooms, esc, lastDay, measureColor } from '../ui';
-import { uncertainDays } from './quality';
+import { judgedOut } from './quality';
 import { html } from '../trusted';
 import { dayLong, seasonLabel } from '../glossary';
 import { alertHtml } from '../components';
@@ -22,7 +22,7 @@ export function renderIndoorSignature(card: HTMLElement, records: DayRecord[]) {
   const mapping = effectiveMapping(heating, st.modules, state.roomModuleMap);
   const indoor = indoorModule(st, mapping, records);
   if (!indoor) return card.remove();
-  const exclude = uncertainDays(ds!.records, ds!.estimated, '0000-01-01', lastDay());
+  const exclude = judgedOut(ds!.records, '0000-01-01', lastDay()); // #394: cut days too
   const sigs = seasonSignatures(signatureDays(records, ds!.weather, st, indoor, exclude)).slice(-3);
   const withDelta = sigs.filter((s) => s.delta);
   const latest = withDelta[withDelta.length - 1];

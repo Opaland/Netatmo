@@ -16,7 +16,8 @@ import { OTHER, activeRooms, avgPrice, catColor, esc, eurOf, firstDay, fmtKwh, l
 import { rangeLabel } from '../glossary';
 import { yearGranularityAllowed } from '../history';
 import { countedHtml } from './compare';
-import { chartMarks, uncertainDays } from './quality';
+import { chartMarks, cutDays, cutDaysIn, uncertainDays } from './quality';
+import { cutText } from '../periods';
 import { html } from '../trusted';
 import { lazyCard } from '../lazy';
 import { ENERGY_ONLY, EUROS_NOTE } from '../synthese';
@@ -126,7 +127,10 @@ export function renderOverview(view: HTMLElement, records: DayRecord[], part: Ov
 
 function estimatedNote(records: DayRecord[], from: string, to: string) {
   const n = uncertainDays(records, ds!.estimated, from, to).size;
-  return n ? ` <a class="muted" href="#etat" title="Jours estimés à partir du total mensuel ou perdus chez Intuis : voir « État des données ».">· ${n} jour${n > 1 ? 's' : ''} estimé${n > 1 ? 's' : ''} ou manquant${n > 1 ? 's' : ''}</a>` : '';
+  const cuts = cutText(cutDaysIn(from, to), cutDays()); // #394
+  return `${n ? ` <a class="muted" href="#etat" title="Jours estimés à partir du total mensuel ou perdus chez Intuis : voir « État des données ».">· ${n} jour${n > 1 ? 's' : ''} estimé${n > 1 ? 's' : ''} ou manquant${n > 1 ? 's' : ''}</a>` : ''}${
+    cuts ? ` <a class="muted" href="#etat" id="cut-note" title="Journal des incidents : voir « État des données ».">· ${esc(cuts)}</a>` : ''
+  }`;
 }
 
 /** Returns true when the change belonged to this view. */

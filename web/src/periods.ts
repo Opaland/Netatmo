@@ -5,6 +5,17 @@
 import { type Granularity, addDays, bucketKey, minusYears } from './aggregate';
 import { dayShort } from './glossary';
 
+/** #394: the cause of a cut (incidents.ts). */
+export type CutKind = 'power' | 'internet';
+
+/** « 1 jour de coupure de courant », « 2 jours de coupure (courant, Internet) » ('' when none). */
+export function cutText(days: string[], causes: Map<string, CutKind>): string {
+  if (!days.length) return '';
+  const kinds = new Set(days.map((d) => causes.get(d)));
+  const n = `${days.length} jour${days.length > 1 ? 's' : ''} de coupure`;
+  return kinds.size > 1 ? `${n} (courant, Internet)` : `${n} ${kinds.has('power') ? 'de courant' : 'Internet'}`;
+}
+
 const DAY_MS = 86400000;
 /** Days from `from` to `to`, both included (calendar days: no DST effect, dates are UTC). */
 export const daysBetween = (from: string, to: string) => Math.round((Date.parse(to) - Date.parse(from)) / DAY_MS) + 1;
@@ -121,7 +132,7 @@ export function countIn(days: Set<string>, from: string, to: string): number {
  * The warning that goes with a year-over-year percentage (#297): the window when it is cut,
  * and the estimated or lost days on either side. Empty when the comparison is clean.
  */
-export function yoyCaveat(w: YoyWindow | null, uncertain: Set<string>, opts: { toDate?: boolean } = {}): string {
+export function yoyCaveat(w: YoyWindow | null, uncertain: Set<string>, opts: { toDate?: boolean; cuts?: Map<string, CutKind> } = {}): string {
   if (!w) return '';
   const parts: string[] = [];
   if (w.cut) parts.push(`même période (${w.label})`);
@@ -130,6 +141,12 @@ export function yoyCaveat(w: YoyWindow | null, uncertain: Set<string>, opts: { t
   const before = countIn(uncertain, w.prevFrom, w.prevTo);
   if (now) parts.push(`${w.from.slice(0, 4)} : ${uncertainText(now)}`);
   if (before) parts.push(`${w.prevFrom.slice(0, 4)} : ${uncertainText(before)}`);
+  // #394: a cut lowers its day without saying anything of the household
+  const cut = (f: string, t: string) => cutText([...(opts.cuts?.keys() ?? [])].filter((d) => d >= f && d <= t), opts.cuts ?? new Map());
+  const cutNow = cut(w.from, w.to);
+  const cutBefore = cut(w.prevFrom, w.prevTo);
+  if (cutNow) parts.push(`${w.from.slice(0, 4)} : ${cutNow}`);
+  if (cutBefore) parts.push(`${w.prevFrom.slice(0, 4)} : ${cutBefore}`);
   return parts.join(' · ');
 }
 

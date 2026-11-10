@@ -10,6 +10,8 @@
 // without a restart = Internet cut; a restart alone = a power cut shorter than the hour between two
 // readings. Rooms whose radiator was switched off on purpose (#346) are left out from their date.
 import { addDays } from './aggregate';
+import type { CutKind } from './periods';
+export type { CutKind };
 import { type DevicesDoc, LOW_BATTERY, type StationHealth, typeLabel } from './devices';
 
 export type IncidentKind = 'power' | 'internet' | 'module' | 'station' | 'battery' | 'collect';
@@ -206,3 +208,25 @@ export function simpleSentence(months: MonthIncidents[], last: string): string {
 export function cutDays(list: Incident[], kind: 'power' | 'internet'): string[] {
   return [...new Set(list.filter((e) => e.kind === kind).map((e) => e.day))].sort();
 }
+
+export const CUT_ICON: Record<CutKind, string> = { power: KIND_ICON.power, internet: KIND_ICON.internet };
+
+/**
+ * #394: every day touched by a power or Internet cut, with its probable cause (a power cut wins
+ * when both touch the same day). A cut that runs past midnight touches both days. Such a day does
+ * not measure the household's habits: it is marked on the consumption charts and never judged
+ * « économe » (unusual days, absences, signature, « Expliquer un mois »).
+ */
+export function cutCauses(list: Incident[]): Map<string, CutKind> {
+  const out = new Map<string, CutKind>();
+  for (const e of list) {
+    if (e.kind !== 'power' && e.kind !== 'internet') continue;
+    const end = e.at && e.hours ? hourAdd(e.at.slice(0, 13), e.hours - 1).slice(0, 10) : e.day;
+    for (let d = e.day; d <= end; d = addDays(d, 1)) if (out.get(d) !== 'power') out.set(d, e.kind);
+  }
+  return out;
+}
+
+/** The cut days of a devices document: only its gateway is read (no module, station nor stopped room). */
+export const cutCausesOf = (devices: DevicesDoc | null | undefined): Map<string, CutKind> =>
+  cutCauses(incidents({ devices: { gateway: devices?.gateway }, last: '0000-01-01' }));

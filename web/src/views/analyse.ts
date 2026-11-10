@@ -15,7 +15,7 @@ import { weeklyMeans } from '../chart-theme';
 import { activeRooms, catColor, esc, fmt1, isOutdoor, moduleColor, roomName, fmtKwh, lastDay, longDate, seasonStyle, seg, table, measureColor, referenceColor } from '../ui';
 import { hour } from '../glossary';
 import { SUSPECT_RATIO } from '../reconstitute';
-import { uncertainDays } from './quality';
+import { judgedOut } from './quality';
 import { drawSetpoint, setpointCard } from './setpoint';
 import { windBlock } from './windsig';
 import { drawWaterHeater, hcAlerts, waterHeaterCard } from './waterheater';
@@ -171,7 +171,7 @@ export function renderAnalyse(view: HTMLElement, records: DayRecord[], part: Ana
   // signature (#303: the same days as the indoor signature, lost or estimated days and days
   // without heating left out; a season still too short is dashed and called « provisoire »)
   if (ds!.weather && has('sig-chart')) {
-    const exclude = uncertainDays(ds!.records, ds!.estimated, '0000-01-01', last);
+    const exclude = judgedOut(ds!.records, '0000-01-01', last); // #394: cut days too
     const days = signatureDays(records, ds!.weather, ds!.station ?? null, null, exclude);
     const sigs = seasonSignatures(days).slice(-3);
     const cur = Number(seasonOf(last).slice(0, 4));
@@ -253,8 +253,8 @@ export function renderAnalyse(view: HTMLElement, records: DayRecord[], part: Ana
 
 function anomaliesCard(records: DayRecord[]) {
   if (!ds!.weather) return '';
-  // S-1.10: lost or estimated days are not "unusual", they are not measured
-  const list = anomalies(records, ds!.weather, uncertainDays(ds!.records, ds!.estimated, '0000-01-01', lastDay())).slice(0, 12);
+  // S-1.10: lost or estimated days are not "unusual", they are not measured; #394: nor a day of power or Internet cut
+  const list = anomalies(records, ds!.weather, judgedOut(ds!.records, '0000-01-01', lastDay())).slice(0, 12);
   const suspect = (a: (typeof list)[number]) => a.z < 0 && a.kwh < SUSPECT_RATIO * a.expected;
   const alerts = hcAlerts();
   if (!list.length) return alerts ? `<section class="card"><h2>Jours inhabituels</h2>${alerts}${countedHtml(true)}</section>` : '';
@@ -263,7 +263,7 @@ function anomaliesCard(records: DayRecord[]) {
   const since = list[list.length - 1].day;
   return `<section class="card" id="unusual-card"><div class="card-head"><h2>Jours inhabituels</h2><span class="card-period">${esc(`les ${list.length} plus récents, depuis le ${dayShort(since, true)}`)}</span></div>
     ${alerts}
-    <p class="hint muted">Jours où le chauffage s'écarte nettement de ce qu'annonçait la température dehors (plus de 2 fois l'écart habituel et plus de 3 kWh) : fenêtre ouverte, absence, invités, réglage oublié… « Attendu » : le chauffage d'un jour ordinaire à la même température, lu sur la saison. Les jours perdus chez Intuis ou estimés n'y figurent pas ; un jour très en dessous de l'attendu est marqué <strong>à vérifier</strong> (donnée peut-être incomplète, voir « État des données » dans Outils).</p>
+    <p class="hint muted">Jours où le chauffage s'écarte nettement de ce qu'annonçait la température dehors (plus de 2 fois l'écart habituel et plus de 3 kWh) : fenêtre ouverte, absence, invités, réglage oublié… « Attendu » : le chauffage d'un jour ordinaire à la même température, lu sur la saison. Les jours perdus chez Intuis ou estimés, et ceux d'une coupure de courant ou d'Internet (journal des incidents), n'y figurent pas ; un jour très en dessous de l'attendu est marqué <strong>à vérifier</strong> (donnée peut-être incomplète, voir « État des données » dans Outils).</p>
     ${withStates ? '<p class="hint muted">« Explication possible » : heures de fenêtre ouverte de toutes les pièces ce jour-là, ou mode absence relevé (relevé horaire de l’état des pièces). Une fenêtre ouverte coupe le radiateur de la pièce, qui relance ensuite : le jour peut se retrouver au-dessus ou en dessous de l’attendu.</p>' : ''}
     ${table(
       ['Jour', 'Consommé', 'Attendu', 'Écart', ...(withStates ? ['Explication possible'] : [])],

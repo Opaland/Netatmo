@@ -70,7 +70,8 @@ const DESTINATIONS = {
   accueil: ['.periodbar [data-set=home]', '.periodbar .scope', '.verdict .gauge', '.home-tiles .kpi', '#grid-card .alert', '#counted-card .list .row', '#home-chart canvas', '#insight-card .md', 'a[href="#historique"]'],
   pieces: ['.rooms-picker', '#rooms-chart canvas', 'a[href="#confort"]', 'a[href="#chauffe-eau"]'],
   // #386: winter against winter and « en détail » on the tab, the rest in its sub-pages, each card saying what it counts
-  historique: ['#cmp-chart canvas', '#cmp-card .card-period', '#cmp-card .counted', '#explore-card #main-chart canvas', '#explore-card [data-set=cat]', '#explore-card [data-set=gran]', '#explore-card .counted', '#history-more a[href="#historique-froid"]'],
+  // #394: the cut days of the incident log, said under « Consommation en détail » and in its chart's summary
+  historique: ['#cmp-chart canvas', '#cmp-card .card-period', '#cmp-card .counted', '#explore-card #main-chart canvas', '#explore-card #cut-note', '#main-chart[aria-label*="Jours de coupure"]', '#explore-card [data-set=cat]', '#explore-card [data-set=gran]', '#explore-card .counted', '#history-more a[href="#historique-froid"]'],
   'historique-annees': ['#years-card table', '#years-card .card-period', '#years-card .counted', '#years-card button.term[data-term=dju]', 'text:Totaux par année'],
   'historique-changements': ['#rooms-waterfall canvas', '#changes-card .card-period', '#changes-card .counted'],
   'historique-froid': ['#sig-chart canvas', '#sig-card .counted', '#sig-wind table', 'text:Le vent explique', '#indoor-sig-chart canvas'],
