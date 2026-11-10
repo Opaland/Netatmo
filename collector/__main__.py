@@ -218,6 +218,20 @@ def stopped_config() -> list[dict]:
         return []
 
 
+def wood_config() -> dict | None:
+    """#366: WOOD_JSON (the wood bought for a stove); None when unset or invalid."""
+    from .devices import WoodError, parse_wood
+
+    raw = os.environ.get("WOOD_JSON", "").strip()
+    if not raw:
+        return None
+    try:
+        return parse_wood(raw)
+    except WoodError as err:
+        _warn(f"Variable WOOD_JSON ignorée ({err})")
+        return None
+
+
 def write_device_file(lines: list[str]) -> None:
     """Optional alert issue (#214, #215): module types, counts and dates, never a name or an id."""
     path = os.environ.get("DEVICE_FILE")
@@ -593,6 +607,9 @@ def cmd_sync(s: Settings, args: argparse.Namespace, backfill: bool = False) -> N
     stopped = stopped_config()
     if stopped or "STOPPED_ROOMS_JSON" in os.environ:
         extra["stopped_rooms"] = stopped  # #346: shown by the app, set from ⚙ Mon logement
+    wood = wood_config()
+    if wood is not None or "WOOD_JSON" in os.environ:
+        extra["wood"] = wood or {"purchases": []}  # #366: the stove's wood, set from ⚙ Mon logement
     cold = cold_config(_warn)
     if cold:
         extra["cold_alert"] = cold

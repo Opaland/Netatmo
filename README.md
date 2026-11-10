@@ -310,6 +310,14 @@ l'activation des tarifs dans l'application Intuis (2025), la répartition heures
 n'existe pas : elle est estimée pour chaque pièce à partir de sa répartition mesurée depuis. Vous
 pouvez aussi saisir vos propres prix. Ces réglages restent sur votre appareil.
 
+**Poêle à bois.** Le bois ne passe pas par le compteur : dans ⚙ Paramètres → Mon logement → *Poêle à
+bois*, notez chaque achat (date, stères, essence, humidité, prix). L'appli le convertit en chaleur avec
+des hypothèses affichées et modifiables (kWh par stère selon l'essence à 20 % d'humidité, correction
+d'humidité, rendement du poêle), le répartit sur la saison de chauffe qui suit l'achat au prorata des
+degrés-jours, et compte électricité **et** bois dans le coût du chauffage (Accueil, hiver contre hiver,
+« Expliquer un mois »). Enregistré pour le foyer dans la variable du dépôt `WOOD_JSON`, recopiée
+chiffrée par la collecte ; le journal public n'en dit rien.
+
 **Fenêtres ouvertes, boost et état des radiateurs** (relevé horaire, facultatif) : l'API Intuis ne
 donne l'état des pièces qu'en instantané. Pour en garder l'historique :
 1. D'abord, **Actions → Diagnostic → Run workflow**, case « Chercher un historique des fenêtres /

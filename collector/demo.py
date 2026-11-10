@@ -63,6 +63,15 @@ CONTRACT = [
 #   running on its last local setting (no schedule, no absence mode): the app warns after 48 h.
 STOPPED_ROOM = ("r-cuisine", date(2025, 10, 14))
 STOPPED = [{"room": "r-cuisine", "from": "2025-10-14", "reason": "poele", "label": "chauffée par un poêle à bois"}]
+# #366: the wood bought for that stove (meta.wood, WOOD_JSON): fictitious, in the usual range
+WOOD = {
+    "purchases": [
+        {"day": "2025-09-27", "steres": 0.5, "species": "chene", "moisture": 20, "price": 55},
+        {"day": "2026-01-24", "steres": 0.25, "species": "hetre", "moisture": 25, "price": 30},
+        {"day": "2026-06-13", "steres": 1, "species": "melange", "moisture": 18, "price": 95},
+    ],
+    "efficiency": 70,
+}
 OFFLINE_ROOM = ("r-ch2", date(2026, 11, 5))
 OFFLINE_EXTRA = 1.5
 # #337: a cold spell in January 2026 (°C below the drawn mean), applied after the draws.
@@ -878,6 +887,7 @@ def generate(out_dir: Path, passphrase: str = "demo", start_year: int = 2022, to
         "intuis_contract": INTUIS_CONTRACT,
         "sources": _sources(today),
         "stopped_rooms": STOPPED,
+        "wood": WOOD,
     }
     store.replace(
         "insights",

@@ -368,6 +368,8 @@ function renderSettingsPage(view: HTMLElement, route: Route) {
           el.innerHTML = html`<section class="card" id="location-card" aria-busy="true"><p class="hint muted" role="status">Chargement…</p></section>`;
           void lazyCard(() => import('./views/location'), (m) => m.mountLocation(document.getElementById('location-card'), settings.currentRepo), { zone: 'location-card', what: 'Localisation et toits' });
         },
+        // #366: the wood bought for the stove, turned into heat and euros
+        (el) => void lazyCard(() => import('./views/wood'), (m) => m.mountWood(el, settings.currentRepo), { zone: el, what: 'Poêle à bois' }),
         (el) => analyse.renderAnalyse(el, records, 'travaux'),
         (el) =>
           (el.innerHTML = html(`<section class="card"><div class="card-head"><h2>Appareils saisis à la main</h2>${scopeTag('appareil')}</div>

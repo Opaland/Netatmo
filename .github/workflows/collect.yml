@@ -105,6 +105,7 @@ jobs:
           CONTRACT_JSON: ${{ vars.CONTRACT_JSON }}
           # #346: radiators switched off on purpose (stove…), set from ⚙ Mon logement: no alert.
           STOPPED_ROOMS_JSON: ${{ vars.STOPPED_ROOMS_JSON }}
+          WOOD_JSON: ${{ vars.WOOD_JSON }}
           # S-12.5: prolonged cold alert (rooms and threshold, disabled when unset). Never printed:
           # the issue below only carries pseudonyms (Pièce A, B…), the log only counts.
           COLD_ALERT_JSON: ${{ vars.COLD_ALERT_JSON }}
