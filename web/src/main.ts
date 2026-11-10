@@ -4,13 +4,14 @@
 // Each view lives in src/views/, shared helpers in src/ui.ts, state in src/app.ts.
 import { toCsv } from './aggregate';
 import { type State, activeRooms, app, ds, onDatasetOpened, onLock, setDataset, setRenderer, setState, state } from './app';
-import { disposeAll } from './charts';
+import { disposeAll, useChartPrefs } from './charts';
 import { BadEnvelope, WrongPassphrase } from './crypto';
 import { type Dataset, NoData, clearDataCaches, dataDir, forgetKeys, load, recallKey } from './data';
 import { type Ctl, cardHandlers, dispatch } from './events';
 import { lazyAction } from './lazy';
 import { clearMemo } from './memo';
-import { onceReady, viewRendered } from './ready';
+import { onceReady, track, viewRendered } from './ready';
+import { type Anchor, anchorOf, placeAnchor, scrolledAway } from './scroll-anchor';
 import { framedHtml, isFramed } from './frame';
 import { prefetchForOffline, unavailable, updateNetStatus } from './offline';
 import { PAGES, dataStatus } from './pages';
@@ -124,9 +125,11 @@ function render() {
   const changed = shownRoute !== null && shownRoute !== key;
   const focus = changed ? null : focusSelector(document.activeElement);
   // a redraw of the same page (a segment, a filter, a setting) keeps the reader where they were
-  const keepY = shownRoute === key ? window.scrollY : null;
+  // #370: anchored on the control acted on, so that it stays where it was on screen
+  const keepY = shownRoute === key ? anchorNow(focus) : null;
   const keepTab = changed && (document.activeElement as HTMLElement | null)?.closest?.('.tabs') ? focusSelector(document.activeElement) : null;
   disposeAll(app);
+  useChartPrefs(state.chart); // #20
   const { meta } = ds;
   const tab = tabOf(route);
   const parent = parentOf(route);
@@ -175,15 +178,39 @@ function render() {
 
 /**
  * Retours v1.6: the whole shell is drawn again on every change of state, which empties the page
- * for a moment and sends the browser back to the top. Put the scroll position back, and hold it
- * while the lazy cards and charts of the page fill in (they make the page tall again), until the
- * reader scrolls or the view has settled.
+ * for a moment and sends the browser back to the top. Put the control acted on back where it was
+ * on screen (#370: not the old scroll position, the content above it may have changed), and hold
+ * it there while the lazy cards and charts of the page fill in, until the reader scrolls or the
+ * view has settled.
  */
 let releaseScroll: (() => void) | null = null;
-function holdScroll(y: number) {
+/** Top on screen of the control found by `sel` (its label for a styled box), or null. */
+function topOf(sel: string | null): number | null {
+  const el = sel ? app.querySelector<HTMLElement>(sel) : null;
+  if (!el) return null;
+  const r = (el.closest('label') ?? el).getBoundingClientRect();
+  return r.width || r.height ? r.top : null;
+}
+const anchorNow = (sel: string | null): Anchor => anchorOf(window.scrollY, sel, topOf(sel), window.innerHeight);
+function holdScroll(a: Anchor) {
   releaseScroll?.();
-  window.scrollTo(0, y);
-  if (y <= 0) return;
+  let slack = 0;
+  let spacer: HTMLElement | null = null; // room under a page that got shorter than the anchor needs
+  /** Scroll so the anchor is where it was; returns how far the page still is from there. */
+  const place = () => {
+    const doc = document.documentElement.scrollHeight - slack;
+    const to = placeAnchor(a, { y: window.scrollY, top: topOf(a.sel), natural: doc, winH: window.innerHeight });
+    if (to.slack !== slack) {
+      slack = to.slack;
+      if (!spacer?.isConnected) spacer = app.appendChild(document.createElement('div'));
+      spacer.setAttribute('aria-hidden', 'true');
+      spacer.style.height = `${slack}px`;
+    }
+    if (Math.abs(window.scrollY - to.y) > 1) window.scrollTo(0, to.y);
+    return Math.abs(window.scrollY - to.y);
+  };
+  const y = (place(), window.scrollY);
+  if (y <= 0 && !a.sel) return;
   let frame = 0;
   const until = performance.now() + 3000;
   const stop = () => {
@@ -193,16 +220,28 @@ function holdScroll(y: number) {
   };
   for (const t of ['wheel', 'touchstart', 'keydown', 'pointerdown'] as const) window.addEventListener(t, stop, { capture: true, passive: true });
   releaseScroll = stop;
+  // #370: where the hold left the page, and where the control was in it (to tell a redraw, which
+  // moves the control, from a scroll by something else, which does not)
+  const docTop = () => {
+    const t = topOf(a.sel);
+    return t === null ? null : window.scrollY + t;
+  };
+  let lastY = window.scrollY;
+  let lastDoc = docTop();
   const tick = () => {
-    if (Math.abs(window.scrollY - y) > 1) window.scrollTo(0, y);
-    const settled = document.querySelector('#view[data-ready]') && Math.abs(window.scrollY - y) <= 1;
+    const doc = docTop();
+    const bottom = window.scrollY + window.innerHeight >= document.documentElement.scrollHeight - 1;
+    if (a.sel && doc !== null && lastDoc !== null && scrolledAway(window.scrollY, lastY, doc - lastDoc, bottom)) return stop();
+    const settled = place() <= 1 && document.querySelector('#view[data-ready]');
+    lastY = window.scrollY;
+    lastDoc = docTop();
     if (settled || performance.now() > until) return stop();
     frame = requestAnimationFrame(tick);
   };
   frame = requestAnimationFrame(tick);
 }
 
-function finishRender(route: Route, key: string, changed: boolean, focus: string | null, keepTab: string | null, keepY: number | null) {
+function finishRender(route: Route, key: string, changed: boolean, focus: string | null, keepTab: string | null, keepY: Anchor | null) {
   renderView(document.getElementById('view')!, route);
   shownRoute = key;
   if (keepY !== null && !changed) holdScroll(keepY);
@@ -290,6 +329,12 @@ async function shellClick(el: HTMLElement, e: MouseEvent): Promise<boolean> {
   if (el.dataset.rooms) {
     setState({ rooms: el.dataset.rooms === 'all' ? null : [] });
     document.querySelector<HTMLDetailsElement>('.rooms-picker')?.setAttribute('open', '');
+    return true;
+  }
+  if (el.dataset.chartSettings !== undefined) {
+    // #20: the « Réglages du graphique » sheet, loaded on first use
+    const at = [...app.querySelectorAll('[data-chart-settings]')].indexOf(el);
+    void track(import('./chart-sheet')).then((m) => m.openChartSheet(at));
     return true;
   }
   if (el.dataset.filterReset !== undefined) {

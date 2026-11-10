@@ -11,6 +11,7 @@ import { DEFAULT_LOCK_MINUTES } from './session';
 import { lsKey } from './scope';
 import { DatasetDoc, DatasetHooks } from './loader';
 import { track } from './ready';
+import { CHART_DEFAULT, type ChartPrefs, chartPrefs } from './chart-prefs';
 
 /**
  * #308: the page shown, as its address without « # » (router.ts): « accueil », « piece-r-salon »,
@@ -72,6 +73,8 @@ export interface State {
   groupBedrooms: boolean;
   /** #309: colour theme of this device (system preference, or forced light / dark). */
   theme: Theme;
+  /** #20: « Réglages du graphique » of this device, for every chart (chart-prefs.ts). */
+  chart: ChartPrefs;
 }
 
 export const DEFAULT: State = {
@@ -107,6 +110,7 @@ export const DEFAULT: State = {
   roomModuleMap: {},
   groupBedrooms: false,
   theme: 'system',
+  chart: CHART_DEFAULT,
 };
 
 const LS_KEY = lsKey('state');
@@ -120,7 +124,7 @@ export function loadState(): State {
     delete saved.household;
     // v1.6 (#308): the five v1.5 views became pages of the new navigation
     if (typeof saved.view === 'string' && LEGACY_VIEWS[saved.view]) saved.view = LEGACY_VIEWS[saved.view];
-    return { ...DEFAULT, ...saved, prices: { ...NO_PRICES, ...(saved.prices ?? {}) } };
+    return { ...DEFAULT, ...saved, prices: { ...NO_PRICES, ...(saved.prices ?? {}) }, chart: chartPrefs(saved.chart) };
   } catch {
     return { ...DEFAULT };
   }

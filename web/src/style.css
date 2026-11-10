@@ -1674,6 +1674,84 @@ code.hash {
 .research-dialog::backdrop {
   background: var(--scrim);
 }
+/* #20: « Réglages du graphique », button under each chart and its sheet (bottom sheet on a
+   phone, a window from 760 px), common to all the charts. */
+.chart-settings {
+  display: flex;
+  margin: 0 0 var(--space-1) auto;
+  font-size: var(--font-sm);
+}
+/* on the line of the « Voir les valeurs » fold that follows the chart (no extra line: the Accueil
+   holds in 3 phone screens, #311); the open table goes under both */
+.chart-settings:has(+ .table-details) {
+  float: right;
+  margin: 0 0 0 var(--space-2);
+}
+.chart-settings + .table-details > :not(summary) {
+  clear: both;
+}
+/* the fold's title is a flex box: beside the float it would shrink to nothing at 200 % (seen at
+   0 px wide); with a minimum width, it goes under the button when there is no room left */
+.chart-settings + .table-details > summary {
+  min-width: min(100%, 9em);
+}
+.sheet {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 100%;
+  max-height: 85dvh;
+  margin: auto 0 0;
+  padding: var(--space-4) var(--space-4) calc(var(--space-4) + env(safe-area-inset-bottom));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border: 1px solid var(--border);
+  border-bottom: 0;
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  background: var(--surface-card);
+  color: var(--text);
+  box-shadow: var(--shadow-1);
+}
+.sheet::backdrop {
+  background: var(--scrim);
+}
+.sheet-head h2 {
+  margin: 0;
+}
+.sheet-head::before {
+  content: '';
+  display: block;
+  width: 40px;
+  height: 4px;
+  margin: 0 auto var(--space-3);
+  border-radius: 2px;
+  background: var(--border-strong);
+}
+.sheet-choice {
+  border-top: 1px solid var(--border);
+  padding-top: var(--space-1);
+}
+.sheet-choice .switch span {
+  overflow-wrap: anywhere;
+}
+.sheet-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+}
+@media (min-width: 760px) {
+  .sheet {
+    width: min(520px, calc(100vw - 32px));
+    max-height: calc(100dvh - 32px);
+    margin: auto;
+    border-bottom: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+  }
+  .sheet-head::before {
+    display: none;
+  }
+}
 .research-form {
   display: grid;
   gap: 8px;
