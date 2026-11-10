@@ -27,6 +27,8 @@ import { suspectDays } from '../reconstitute';
 import { html } from '../trusted';
 import { esc } from '../ui';
 import { stoppedRooms } from './offline-rooms';
+import { incidentsCard } from './incidents';
+import { SOURCE_NAME } from '../pages';
 
 const pct = (v: number | null) => (v === null ? '—' : `${Math.floor(v * 100)} %`);
 const plural = (n: number, w: string) => `${n} ${w}${n > 1 ? 's' : ''}`;
@@ -99,6 +101,7 @@ export function mountEtat(el: HTMLElement | null) {
         )
         .join('')}
     </section>
+    ${incidentsCard(rawDataset() ?? ds!, stoppedRooms(), SOURCE_NAME)}
     <section class="card" id="quality-sources" aria-labelledby="qs-title">
       <div class="card-head"><h2 id="qs-title">Source par source</h2></div>
       <p class="card-sub">Part des jours couverts chaque année, depuis le premier relevé de la source ; trous de 3 jours ou plus, avec leur cause quand elle est connue.</p>

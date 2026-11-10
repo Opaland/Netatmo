@@ -1,5 +1,7 @@
 import json
+from datetime import datetime
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 import httpx
 import pytest
@@ -278,6 +280,7 @@ def test_station_rotates_refresh_token_and_reads_every_module(tmp_path):
                 {"_id": "out", "type": "NAModule1", "module_name": "Extérieur"},
                 {"_id": "kids", "type": "NAModule4", "module_name": "Chambre enfants"},
                 {"_id": "cave", "type": "NAModule4", "module_name": "Cave"},
+                {"_id": "wind", "type": "NAModule2", "module_name": "Anémomètre"},
             ]
             return httpx.Response(
                 200,
@@ -287,6 +290,13 @@ def test_station_rotates_refresh_token_and_reads_every_module(tmp_path):
             )
         if path == "/api/getmeasure":
             module = request.url.params.get("module_id")
+            # G4 (#221): the anemometer is never asked anything (it has no temperature)
+            assert module != "wind"
+            if "pressure" in request.url.params["type"]:
+                assert module is None and request.url.params["scale"] == "1day"  # main module only
+                return httpx.Response(
+                    200, json={"body": {"1704063600": [1016.4, 1012.0, 1019.9], "1704150000": [1009.2, 1005.1, 1013.3]}}
+                )
             assert ("co2" in request.url.params["type"]) == (module != "out")
             if request.url.params["scale"] == "1hour":
                 return httpx.Response(200, json={"body": []})
@@ -308,9 +318,52 @@ def test_station_rotates_refresh_token_and_reads_every_module(tmp_path):
     assert weather["outdoor"]["2024-01-01"] == [-2.0, 6.0, 2.0]
     assert weather["indoor"]["2024-01-01"] == 20.2
     station = store.doc("station")
-    assert [m["name"] for m in station["modules"].values()] == ["Salon", "Extérieur", "Chambre enfants", "Cave"]
+    names = [m["name"] for m in station["modules"].values()]
+    assert names == ["Salon", "Extérieur", "Chambre enfants", "Cave", "Anémomètre"]
     assert station["daily"]["m2"]["2024-01-01"] == [18.0, 20.0, 19.1, 55, 900]
     assert station["daily"]["m1"]["2024-01-01"] == [-2.0, 6.0, 2.0, 85, None]
+    assert "m4" not in station["daily"]  # the anemometer has no daily temperature
+    # S-11.4 (#220): pressure of the main module, with the trend vs the day before
+    assert station["pressure"]["m0"] == {
+        "2024-01-01": [1016.4, 1012.0, 1019.9, None],
+        "2024-01-02": [1009.2, 1005.1, 1013.3, -7.2],
+    }
+    assert "noise" not in station  # opt-in only (STATION_NOISE)
+
+
+def test_station_noise_is_opt_in_and_kept_as_noisy_hours_per_day(tmp_path):
+    from collector.station import NOISY_ABOVE, Station, noisy_hours
+
+    zone = ZoneInfo("Europe/Paris")
+    base = int(datetime(2024, 1, 1, 0, tzinfo=zone).timestamp())
+    points = [(base + h * 3600, [40 + h]) for h in range(24)] + [(base + 86400, [None])]
+    days = noisy_hours(points, zone)
+    assert days == {"2024-01-01": {"n": 24, "loud": sum(1 for h in range(24) if 40 + h > NOISY_ABOVE)}}
+
+    asked = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/oauth2/token":
+            return httpx.Response(200, json={"access_token": "a", "refresh_token": "r"})
+        if request.url.path == "/api/getstationsdata":
+            return httpx.Response(200, json={"body": {"devices": [{"_id": "main", "type": "NAMain", "modules": []}]}})
+        asked.append(request.url.params["type"])
+        if request.url.params["type"] == "noise":
+            return httpx.Response(
+                200, json={"body": {str(base + h * 3600): [70 if h in (20, 21) else 38] for h in range(24)}}
+            )
+        return httpx.Response(200, json={"body": []})
+
+    http = httpx.Client(transport=httpx.MockTransport(handler))
+    Station(Store(tmp_path / "a", "pw"), "id", "s", "seed", http=http, min_interval=0).collect(
+        "Europe/Paris", "2024-01-01"
+    )
+    assert "noise" not in asked  # off by default
+    store = Store(tmp_path / "b", "pw")
+    Station(store, "id", "s", "seed", http=http, min_interval=0, noise=True).collect("Europe/Paris", "2024-01-01")
+    assert "noise" in asked
+    assert store.doc("station")["noise"]["m0"] == {"2024-01-01": {"n": 24, "loud": 2}}
+    assert set(store.doc("station")["noise"]["m0"]["2024-01-01"]) == {"n", "loud"}  # never an hour
 
 
 def test_linky_parser_accepts_unknown_shapes_and_kwh(tmp_path):
@@ -1100,3 +1153,116 @@ def test_station_keys_stay_stable_when_a_module_is_added(tmp_path):
     store.save({"id": "h"}, [])
     st2 = Station(Store(tmp_path, "pw"), "id", "secret", "tok", http=object())
     assert st2.module_keys([cellar, new, main, out, kids]) == ["m3", "m4", "m0", "m1", "m2"]
+
+
+# ---------------------------------------------------------------- S-3.12 (#221) wind and rain
+def test_open_meteo_asks_wind_and_rain_in_the_same_calls(tmp_path):
+    from collector.weather import open_meteo
+
+    asked = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        asked.append(request.url.params["daily"])
+        daily = {
+            "time": ["2024-01-01", "2024-01-02"],
+            "temperature_2m_min": [1.0, 2.0],
+            "temperature_2m_max": [7.0, 9.0],
+            "temperature_2m_mean": [4.0, 5.0],
+            "wind_speed_10m_mean": [18.24, None],
+            "wind_gusts_10m_max": [61.7, 40.0],
+            "precipitation_sum": [3.25, 0.0],
+        }
+        return httpx.Response(200, json={"daily": daily})
+
+    store = Store(tmp_path, "pw")
+    open_meteo(
+        store, 48.85, 2.35, "Europe/Paris", "2024-01-01", http=httpx.Client(transport=httpx.MockTransport(handler))
+    )
+    assert len(asked) == 2 and all("wind_speed_10m_mean" in a and "temperature_2m_mean" in a for a in asked)
+    w = store.doc("weather")
+    assert w["wind"] == {"2024-01-01": [18.2, 62]}  # a day without the mean wind is not kept
+    assert w["rain"] == {"2024-01-01": 3.2, "2024-01-02": 0.0}
+    assert w["wind_source"] == "open-meteo"
+
+
+def test_open_meteo_keeps_the_temperatures_when_the_wind_is_refused(tmp_path):
+    from collector.weather import open_meteo
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if "wind" in request.url.params["daily"]:
+            return httpx.Response(400, json={"reason": "Cannot initialize WeatherVariable"})
+        daily = {
+            "time": ["2024-01-01"],
+            "temperature_2m_min": [1.0],
+            "temperature_2m_max": [7.0],
+            "temperature_2m_mean": [4.0],
+        }
+        return httpx.Response(200, json={"daily": daily})
+
+    store = Store(tmp_path, "pw")
+    open_meteo(
+        store, 48.85, 2.35, "Europe/Paris", "2024-01-01", http=httpx.Client(transport=httpx.MockTransport(handler))
+    )
+    assert store.doc("weather")["outdoor"] == {"2024-01-01": [1.0, 7.0, 4.0]}
+    assert "wind" not in store.doc("weather")
+
+
+def test_wind_alone_when_the_station_gives_the_temperatures(tmp_path):
+    from collector.weather import open_meteo_wind
+
+    asked = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        asked.append(request.url.params["daily"])
+        return httpx.Response(200, json={"daily": {"time": ["2024-01-01"], "wind_speed_10m_mean": [9.0]}})
+
+    store = Store(tmp_path, "pw")
+    store.set_top("weather", "source", "netatmo")
+    open_meteo_wind(
+        store, 48.85, 2.35, "Europe/Paris", "2024-01-01", http=httpx.Client(transport=httpx.MockTransport(handler))
+    )
+    assert asked and all("temperature" not in a for a in asked)
+    assert store.doc("weather")["wind"] == {"2024-01-01": [9.0, None]}
+    assert store.doc("weather")["source"] == "netatmo"  # the temperatures stay the station's
+
+
+# ---------------------------------------------------------------- #280 incident log
+def test_incidents_hours_cut_off_and_failed_sources(tmp_path):
+    from collector.devices import note_failures, observe_offline
+
+    store = Store(tmp_path, "pw")
+    t = datetime(2026, 11, 3, 14, 20, tzinfo=ZoneInfo("Europe/Paris")).timestamp()
+    assert not observe_offline(store, t, [True, False], "Europe/Paris")  # one radiator only: not a cut
+    assert not observe_offline(store, t, [], "Europe/Paris")
+    assert observe_offline(store, t, [True, True], "Europe/Paris")
+    assert observe_offline(store, t + 600, [True, True], "Europe/Paris")  # same hour, kept once
+    assert store.doc("devices")["gateway"]["offline"] == ["2026-11-03T14"]
+    state = {"linky": {"error": "2026-11-03T03:10:00+00:00"}, "intuis": {"ok": "2026-11-03T03:10:00+00:00"}}
+    state["netatmo"] = {"error": "2026-10-01T03:10:00+00:00"}  # an old failure is not tonight's
+    assert note_failures(store, state, "2026-11-03T03:10:00+00:00", "Europe/Paris") == ["linky"]
+    assert store.doc("devices")["failures"] == {"2026-11-03": ["linky"]}
+
+
+def test_snapshots_with_every_radiator_out_of_reach_mark_the_hour(tmp_path):
+    from collector.roomstate import merge_snapshots
+
+    store = Store(tmp_path, "pw")
+    z = ZoneInfo("Europe/Paris")
+    t0 = int(datetime(2026, 11, 3, 9, 5, tzinfo=z).timestamp())
+    snaps = [
+        {"t": t0, "rooms": {}, "modules": {"a": {"reachable": False}, "b": {"reachable": False}}},
+        {"t": t0 + 3600, "rooms": {}, "modules": {"a": {"reachable": True}, "b": {"reachable": False}}},
+    ]
+    merge_snapshots(store, snaps, "Europe/Paris", {}, today="2026-11-05")
+    assert store.doc("devices")["gateway"]["offline"] == ["2026-11-03T09"]
+
+
+def test_noise_threshold_is_the_same_in_the_collector_and_the_app():
+    """#220: the app writes « au-dessus de N dB » with the threshold the collection counted with."""
+    import re
+    from pathlib import Path
+
+    from collector.station import NOISY_ABOVE
+
+    src = (Path(__file__).resolve().parents[1] / "web" / "src" / "pressure.ts").read_text(encoding="utf-8")
+    assert int(re.search(r"export const NOISY_DB = (\d+);", src).group(1)) == NOISY_ABOVE

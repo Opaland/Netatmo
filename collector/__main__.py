@@ -388,13 +388,20 @@ def _weather(s: Settings, store: Store, home, sources: Sources, keep: dict | Non
 
         sources.credential("netatmo", s.netatmo_refresh_token)
         try:
-            station = Station(store, s.netatmo_client_id, s.netatmo_client_secret, s.netatmo_refresh_token)
+            station = Station(
+                store,
+                s.netatmo_client_id,
+                s.netatmo_client_secret,
+                s.netatmo_refresh_token,
+                noise=_flag("STATION_NOISE"),  # S-11.4 (#220): opt-in, daily noisy hours only
+            )
             if keep is not None:
                 keep["station"] = station
             station.collect(home.timezone, first)
             from .station import health_note
 
             sources.ok("netatmo", health_note(station.health))
+            _wind(store, home, sources)
             return "netatmo"
         except (StationError, httpx.HTTPError, FormatError, CallCapReached) as err:
             sources.error("netatmo", err)
@@ -413,6 +420,19 @@ def _weather(s: Settings, store: Store, home, sources: Sources, keep: dict | Non
         sources.error("open-meteo", err)
         _warn(f"Météo Open-Meteo indisponible : {redact.safe_message(err)}")
         return store.meta.get("weather_source")
+
+
+def _wind(store: Store, home, sources: Sources) -> None:
+    """S-3.12 (#221): wind and rain from Open-Meteo when the station gives the temperatures (no
+    anemometer on the account). Never fatal, never marks the station as failing."""
+    if home.latitude is None or home.longitude is None:
+        return
+    from .weather import open_meteo_wind
+
+    try:
+        open_meteo_wind(store, home.latitude, home.longitude, home.timezone, store.first_day() or "")
+    except (SourceError, httpx.HTTPError, FormatError, CallCapReached) as err:
+        _warn(f"Vent Open-Meteo indisponible : {redact.safe_message(err)}")
 
 
 def _linky(s: Settings, store: Store, tz: str, sources: Sources) -> None:
@@ -535,6 +555,7 @@ def cmd_sync(s: Settings, args: argparse.Namespace, backfill: bool = False) -> N
             sources.failed("ia", f"erreur {type(err).__name__}")
             _warn(f"Analyse IA non rédigée ({type(err).__name__})")
     extra["sources"] = sources.state
+    _note_failures(store, sources, home.timezone)
     if pending:
         extra["backfill_pending"] = True
     contract = shared_contract(store.meta.get("contract"))
@@ -562,6 +583,17 @@ def cmd_sync(s: Settings, args: argparse.Namespace, backfill: bool = False) -> N
     _job_summary(store, syncer, changed, rs_rows)
     if _flag("STATION_INVENTORY"):
         _station_inventory(kept.get("station"))
+
+
+def _note_failures(store: Store, sources: Sources, tz: str) -> None:
+    """#280: the sources that failed tonight, kept per day for the incident log (names of
+    sources only). Never fatal."""
+    from .devices import note_failures
+
+    try:
+        note_failures(store, sources.state, sources.now, tz)
+    except Exception as err:  # the journal is a convenience, never a reason to lose the night
+        _warn(f"Journal des incidents non mis à jour ({type(err).__name__})")
 
 
 def _intuis_contract(syncer: Syncer) -> dict | None:
