@@ -30,8 +30,8 @@ const errors = [];
 const check = (ok, msg) => ok || errors.push(msg);
 const t0 = Date.now();
 const progress = (s) => console.log(`[${Math.round((Date.now() - t0) / 1000)} s] plannings ${s}`);
-const PAGES = ['outils-plannings', 'outils-absences', 'historique-calendrier'];
-const WAIT = { 'outils-plannings': '#plannings-summary', 'outils-absences': '#absence-card', 'historique-calendrier': '#hist-absences' };
+const PAGES = ['outils-plannings', 'outils-absences', 'historique-calendrier', 'parametres-contrat'];
+const WAIT = { 'outils-plannings': '#plannings-summary', 'outils-absences': '#absence-card', 'historique-calendrier': '#hist-absences', 'parametres-contrat': '#hc-card #hc-now', 'outils-voiture': '#ev-card #ev-result table' };
 
 async function waitForServer() {
   for (let i = 0; i < 50; i++) {
@@ -96,6 +96,33 @@ try {
     check(/À revoir/.test(sdb) && /n'est atteint que/.test(sdb), `Salle de bain : créneau jamais atteint non signalé → ${sdb.slice(0, 400)}`);
     check(/sans atteindre la consigne/.test(sdb), 'Salle de bain : heures de montée inutiles absentes');
     await page.screenshot({ path: `${OUT}/plannings-mobile.png`, fullPage: true });
+
+    // ------------------------------------------------------------ #428: one source of the off-peak hours
+    // The demo counts its half hours HC from 22 h to 6 h: read in the data, they win over what is typed.
+    progress('heures creuses');
+    await go(page, 'parametres-contrat');
+    check(/Heures creuses lues dans vos relevés : 22 h → 6 h/.test(await text(page, '#hc-now')), `⚙ Mon contrat : source des heures creuses → ${await text(page, '#hc-now')}`);
+    await page.locator('#hc-form summary').click();
+    const rows = page.locator('#hc-card [data-hc-row]');
+    check((await rows.count()) === 2, `⚙ Mon contrat : ${await rows.count()} plage(s) proposée(s), 2 attendues`);
+    // fictitious ranges: one at night, one in the afternoon, bounds inside a half hour
+    await rows.nth(0).locator('[data-hc=from]').fill('02:15');
+    await rows.nth(0).locator('[data-hc=to]').fill('07:45');
+    await rows.nth(1).locator('[data-hc=from]').fill('13:15');
+    await rows.nth(1).locator('[data-hc=to]').fill('15:45');
+    await page.locator('#hc-save').click();
+    await page
+      .waitForFunction(() => /Saisies : 2 h 15 → 7 h 45, 13 h 15 → 15 h 45/.test((document.querySelector('#hc-form')?.textContent ?? '').replace(/\s+/g, ' ')), null, { timeout: 10000 })
+      .catch(() => errors.push('⚙ Mon contrat : les plages saisies ne sont pas relues'));
+    check(/lues dans vos relevés/.test(await text(page, '#hc-now')), '⚙ Mon contrat : les plages saisies passent avant celles des relevés');
+    await page.screenshot({ path: `${OUT}/heures-creuses-mobile.png`, fullPage: true });
+    await go(page, 'outils-voiture');
+    check(/Heures creuses lues dans vos relevés : 22 h → 6 h/.test(await text(page, '#ev-result')), 'recharge : la source des heures creuses n’est pas dite');
+    await go(page, 'parametres-contrat');
+    await page.locator('#hc-clear').click();
+    await page
+      .waitForFunction(() => !/Saisies :/.test(document.querySelector('#hc-form')?.textContent ?? ''), null, { timeout: 10000 })
+      .catch(() => errors.push('⚙ Mon contrat : « Effacer les plages saisies » ne les efface pas'));
 
     // ------------------------------------------------------------ absences (S-13.7)
     await go(page, 'outils-absences');

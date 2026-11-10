@@ -6,7 +6,7 @@ import { KVA_STEPS, compareOffers, daySplits, offPeakShares } from '../analysis'
 import { datasetDoc, ds, state } from '../app';
 import { lastCurveDay } from '../curve';
 import { loadCurve } from '../data';
-import { EV_DEFAULT, type EvInput, HC_END, HC_START, addCharge, chargePeaks, evPlan, kmPerYear, parseEvInput } from '../ev';
+import { EV_DEFAULT, type EvInput, addCharge, chargePeaks, evPlan, kmPerYear, parseEvInput } from '../ev';
 import { periodAt } from '../offers';
 import { tenant } from '../tenant';
 import { contracts, fmtEur, lastDay, longDate, nf0, offCol, table } from '../ui';
@@ -14,6 +14,8 @@ import { html } from '../trusted';
 import '../simulators.css';
 import { lsKey } from '../scope';
 import { alertHtml } from '../components';
+import { offPeakSentence } from '../offpeak';
+import { offPeakNow } from './offpeak-state';
 
 const LS = lsKey('ev');
 const POWERS: [number, string][] = [
@@ -70,7 +72,7 @@ export function mountEv(view: HTMLElement) {
     <div id="ev-result" class="sim-result" aria-live="polite"></div>
     <div id="ev-peak" class="sim-result"></div>
     <details class="table-details"><summary>Comment c'est calculé</summary>
-      <p class="hint">Chaque jour, la voiture se recharge de l'énergie de la semaine divisée par 7, à puissance constante, à partir de l'heure choisie (au-delà de minuit si besoin). Les heures creuses sont supposées de ${HC_START} h à ${HC_END} h (celles de Tempo ; celles de votre compteur, sur votre facture, peuvent différer). Cette énergie est ajoutée aux heures creuses ou pleines de chaque jour des 12 derniers mois, puis les trois offres sont recalculées comme le comparateur ci-dessus : tarifs réglementés en vigueur chaque jour (CRE), abonnement compris, couleur Tempo réelle du jour où la recharge commence, puissance de votre contrat (ou celle simulée ci-dessus).</p>
+      <p class="hint">Chaque jour, la voiture se recharge de l'énergie de la semaine divisée par 7, à puissance constante, à partir de l'heure choisie (au-delà de minuit si besoin). Les heures creuses sont celles dites sous le résultat : lues dans vos relevés à la demi-heure, sinon saisies dans ⚙ Mon contrat, sinon supposées de 22 h à 6 h ; une demi-heure coupée par une borne compte au prorata de ses minutes. Cette énergie est ajoutée aux heures creuses ou pleines de chaque jour des 12 derniers mois, puis les trois offres sont recalculées comme le comparateur ci-dessus : tarifs réglementés en vigueur chaque jour (CRE), abonnement compris, couleur Tempo réelle du jour où la recharge commence, puissance de votre contrat (ou celle simulée ci-dessus).</p>
       <p class="hint">Dépassements : à chaque demi-heure de la courbe de charge Linky, on ajoute la puissance de la recharge et on compare à la puissance souscrite (kVA assimilés à des kW). La courbe est une moyenne sur 30 minutes : un appel bref plus fort n'y apparaît pas, la marge réelle est donc plus faible.</p>
       <p class="hint muted">Hypothèses : recharge tous les jours à la même heure, pertes de charge comprises dans l'énergie saisie (environ 10 %), aucun changement d'habitude les jours rouges Tempo, pas d'offre spéciale véhicule électrique (heures super creuses). La conversion en kilomètres suppose ${REF_KWH_100} kWh/100 km.</p>
     </details>
@@ -96,7 +98,14 @@ export function mountEv(view: HTMLElement) {
   const read = (): EvInput => ({ kwhWeek: Number(kwhEl.value.replace(',', '.')), powerKw: Number(powerEl.value), startHour: Number(startEl.value) });
   const show = () => {
     const v = read();
-    const plan = evPlan(v);
+    const zoneHc = card.querySelector<HTMLElement>('#ev-result')!;
+    // #428: the shared off-peak hours (read, typed or assumed)
+    const hc = offPeakNow(() => card.isConnected && show());
+    if (!hc) {
+      zoneHc.innerHTML = html('<p class="hint muted" role="status">Chargement des heures creuses…</p>');
+      return;
+    }
+    const plan = evPlan(v, hc.share);
     const zone = card.querySelector<HTMLElement>('#ev-result')!;
     const peakZone = card.querySelector<HTMLElement>('#ev-peak')!;
     if (!plan || v.kwhWeek > 500) {
@@ -122,6 +131,7 @@ export function mountEv(view: HTMLElement) {
     const evKwh = plan.kwhDay * days;
     const bestCost = tot(withEv, bWith) - tot(without, bWith);
     zone.innerHTML = html`<p class="hint">≈ <strong>${nf0.format(kmPerYear(v.kwhWeek, REF_KWH_100))} km par an</strong> pour une voiture à ${REF_KWH_100} kWh/100 km. Chaque jour : ${nf1.format(plan.kwhDay)} kWh en ${duration(plan.hours)}, de ${hh(v.startHour)} à ${hh(Math.floor(endMin / 60))} ${String(endMin % 60).padStart(2, '0')}, dont <strong>${nf0.format(hcPct)} %</strong> en heures creuses.</p>
+    <p class="hint muted">${offPeakSentence(hc)}.</p>
     <div class="verdict">
       <span class="verdict-icon" aria-hidden="true">${bWith === bWithout ? '=' : '⇄'}</span>
       <div><p class="verdict-title">Avec la voiture, l'offre la moins chère serait ${names[bWith]}</p>

@@ -8,8 +8,9 @@ import { datasetDoc, ds, onLock } from '../app';
 import { alert, alertHtml, list } from '../components';
 import { lastCurveDay } from '../curve';
 import { loadCurve, loadSolarDoc } from '../data';
-import { HC_END, HC_START, isOffPeakSlot } from '../ev';
 import { loadNote, saveNote } from '../local-store';
+import { type OffPeak, offPeakSentence } from '../offpeak';
+import { offPeakNow } from './offpeak-state';
 import { lsKey } from '../scope';
 import {
   INPUT_FIELDS,
@@ -115,7 +116,7 @@ export function mountSolar(view: HTMLElement) {
     <div id="solar-result" class="sim-result" aria-live="polite"></div>
     <details class="table-details"><summary>Comment c’est calculé</summary>
       <p class="hint">Chaque demi-heure des 365 derniers jours de relevés Linky est confrontée à la production de la même demi-heure, au même jour de l’année, dans le profil (une année de météo réelle, heure par heure). Ce que la maison consomme pendant que les panneaux produisent est autoconsommé ; le reste part sur le réseau (surplus). Un jour sans courbe complète est reconstitué à partir du total du jour Linky, réparti comme une journée moyenne de la courbe.</p>
-      <p class="hint">Pilotage : chaque jour, l’énergie du chauffe-eau relevée par Intuis (et la recharge saisie, supposée la nuit dans la courbe) quitte les heures creuses (${HC_START} h → ${HC_END} h) pour les demi-heures où il y a du surplus, dans la limite de la puissance de l’appareil ; ce qui ne trouve pas de soleil reste la nuit.</p>
+      <p class="hint">Pilotage : chaque jour, l’énergie du chauffe-eau relevée par Intuis (et la recharge saisie, supposée la nuit dans la courbe) quitte les heures creuses (celles dites sous le résultat) pour les demi-heures où il y a du surplus, dans la limite de la puissance de l’appareil ; ce qui ne trouve pas de soleil reste la nuit.</p>
       <p class="hint">Batterie : après le pilotage, le surplus la charge (avec le rendement saisi), elle rend son énergie dès que la maison tire sur le réseau, d’un jour au suivant. Sa puissance n’est pas limitée et elle ne vieillit pas : le résultat est le meilleur cas.</p>
       <p class="hint">Économie : achats évités (heures pleines ou creuses selon la demi-heure) plus le surplus payé au tarif de rachat, sans abonnement ni taxes nouvelles. Retour : coût installé divisé par l’économie d’une année, sans actualisation ni entretien.</p>
     </details>
@@ -139,7 +140,7 @@ function profileOf(view: HTMLElement): { doc: SolarDoc | null; waiting: boolean 
   };
   const collected = solarDoc.get(ds, redraw);
   const imported = importDoc.get(ds, redraw) ?? memoryImport;
-  const waiting = solarDoc.status(ds) === 'loading' || importDoc.status(ds) === 'loading' || curveDoc.status(ds) === 'loading';
+  const waiting = solarDoc.status(ds) === 'loading' || importDoc.status(ds) === 'loading' || curveDoc.status(ds) === 'loading' || !offPeakNow(redraw);
   const pick = useImport ?? !!imported;
   return { doc: (pick ? imported : collected) ?? collected ?? imported ?? null, waiting };
 }
@@ -176,8 +177,10 @@ function draw(view: HTMLElement, d: NonNullable<typeof ds>) {
     zone.innerHTML = html('<p class="hint">Pas une seule journée complète dans la courbe de charge : rien à simuler pour l’instant.</p>');
     return;
   }
-  const rows = runAll(w, inputs, isOffPeakSlot);
-  zone.innerHTML = html(result(rows, inputs, w, doc, profile ? yearlyPerKwc(profile) : 0, heater.size > 0));
+  // #428: the shared off-peak hours (read, typed or assumed), a bound inside a half hour pro rata
+  const hc = offPeakNow()!;
+  const rows = runAll(w, inputs, hc.share);
+  zone.innerHTML = html(result(rows, inputs, w, doc, profile ? yearlyPerKwc(profile) : 0, heater.size > 0, hc));
 }
 
 function drawProfile(pz: HTMLElement, view: HTMLElement, d: NonNullable<typeof ds>, doc: SolarDoc | null, collected: SolarDoc | null, imported: SolarDoc | null) {
@@ -234,7 +237,7 @@ function drawProfile(pz: HTMLElement, view: HTMLElement, d: NonNullable<typeof d
   });
 }
 
-function result(rows: SizeRows[], i: SolarInputs, w: NonNullable<ReturnType<typeof simWindow>>, doc: SolarDoc, perKwc: number, hasHeater: boolean): string {
+function result(rows: SizeRows[], i: SolarInputs, w: NonNullable<ReturnType<typeof simWindow>>, doc: SolarDoc, perKwc: number, hasHeater: boolean, hc: OffPeak): string {
   const money = moneyMissing(i);
   const mid = rows.find((r) => r.kwc === 4.5) ?? rows[0];
   const [sans, pilote] = mid.rows;
@@ -286,7 +289,7 @@ function result(rows: SizeRows[], i: SolarInputs, w: NonNullable<ReturnType<type
     `Relevés Linky du ${longDate(w.days[0].day)} au ${longDate(w.to)} : ${nf0.format(w.days.length)} jours, dont ${nf0.format(w.curveDays)} de courbe à la demi-heure et ${nf0.format(w.rebuiltDays)} reconstitués depuis le total du jour${w.days.length < 365 ? ` ; chiffres ramenés à 365 jours (× ${nf2.format(365 / w.days.length)})` : ''}.`,
     `Profil : ${nf0.format(perKwc)} kWh par kWc et par an ; une installation de 3, 4,5 ou 6 kWc garde la répartition de vos toits${kwcRoofs !== null && SIZES.some((k) => k > kwcRoofs) ? ` (vos toits portent ${nf1.format(kwcRoofs)} kWc : au-delà, c’est une hypothèse)` : ''}.`,
     ...INPUT_FIELDS.map(([k, label]) => `${label.charAt(0).toUpperCase()}${label.slice(1)} : ${i[k] === null ? '<em>non saisi</em>' : `${nf2.format(i[k]!)}${k === 'batteryEfficiency' ? ' %' : k === 'heaterKw' || k === 'evKw' ? ' kW' : k === 'evKwhWeek' ? ' kWh par semaine' : ' €'}`}`),
-    `Heures creuses de ${HC_START} h à ${HC_END} h (celles de votre compteur, sur votre facture, peuvent différer)${hasHeater ? ' ; énergie du chauffe-eau relevée chaque jour par Intuis' : ' ; aucun chauffe-eau relevé par Intuis : seule la recharge saisie peut être pilotée'}.`,
+    `${esc(offPeakSentence(hc))}${hasHeater ? ' ; énergie du chauffe-eau relevée chaque jour par Intuis' : ' ; aucun chauffe-eau relevé par Intuis : seule la recharge saisie peut être pilotée'}.`,
   ];
   return `${verdict}
     ${needs.length ? alertHtml('info', `Pour compléter le tableau, indiquez : ${esc([...new Set(needs)].join(', '))}.`, { role: 'status' }) : ''}

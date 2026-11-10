@@ -7,7 +7,6 @@ import {
   meanIn,
   modeAt,
   modeText,
-  offPeakRanges,
   reasonText,
   scheduleOf,
   tempAxis,
@@ -61,15 +60,6 @@ describe('page Pièce : maintenant (#313)', () => {
     expect(modeText(half, 2)).toBe('Économie jusqu’à 7 h 30, puis confort 20,0 °C');
   });
 
-  it('finds the off-peak hours from the HC column, over midnight', () => {
-    const r30: Room30 = new Map([['a', new Map([['2026-11-08', day()]])]]);
-    expect(offPeakRanges(r30, '2026-11-01', '2026-11-08')).toEqual([[22, 6]]);
-    // a base contract (everything in one column): nothing hatched
-    const base: Room30 = new Map([['a', new Map([['2026-11-08', [flat(100), flat(0), 20, 19] as Day30]])]]);
-    expect(offPeakRanges(base, '2026-11-01', '2026-11-08')).toEqual([]);
-    // out of the period
-    expect(offPeakRanges(r30, '2026-11-09', '2026-11-10')).toEqual([]);
-  });
 });
 
 describe('temps à la consigne (#313, « tps consigné ? »)', () => {
