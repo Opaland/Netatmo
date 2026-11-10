@@ -1,5 +1,51 @@
 # Historique des versions
 
+## v1.6 — novembre 2026 : refonte UX/UI, nouveau design system, écrans reconstruits
+
+Version de refonte : nouvelle navigation, nouveau design system et **tous les écrans reconstruits**
+d'après les maquettes validées (`docs/design/maquettes/`), plus les fonctions demandées pendant la
+version. Revue de fin de version par **72 personas** (10 nouveaux, #63 à #72) et revue design par
+agents ; détail dans [`docs/bmad/revues/v1.6.md`](docs/bmad/revues/v1.6.md).
+
+- **Navigation et design system**
+  - Design system maison sur les échelles Open Props et les couleurs Radix : jetons, composants,
+    thème des graphiques, contraste élevé, texte à 200 % (#330) ; migration terminée, un test interdit
+    toute couleur ou taille hors jetons et les anciennes classes (#317, #411).
+  - Cinq onglets (Accueil, Pièces, Historique, Compteur, Outils), centre de paramètres en 8 pages,
+    menu ⋮ supprimé (#308, #309, #339) ; une seule période par écran et une ligne « Compté : »
+    (#299, #301) ; comparaisons nommées (« −16 % vs nov. 2025 au 8 », #302).
+- **Écrans reconstruits**
+  - Accueil : verdict en euros sur un seul périmètre, jauge du mois, ce qui a compté, consommation
+    et froid (#311, #341, #383, #412). Pièces et page Pièce qui commence par « maintenant » (#313,
+    #342, #384). Historique hiver contre hiver, à climat égal (#345). Compteur (#347). Outils et
+    État des données avec bilan qualité par source et par année (#314, #318, #344). Premier lancement
+    et vue Proche sur le même calcul que l'Accueil (#312, #316, #343, #400).
+  - Graphiques lisibles : échelles, points, trous, légendes, résumés textuels, axes sans graduation
+    en double, une couleur par pièce partout, barres horizontales lisibles à 200 % (#299–#306, #398,
+    #399, #410, #413) ; feuille « Réglages du graphique » (#20, #396).
+- **Nouvelles fonctions**
+  - « Expliquer un mois » : écart décomposé (météo, consignes, pièces, poêle, autres usages), pièce
+    hors ligne ou arrêtée volontairement (poêle) (#337, #346, #354, #369).
+  - Mes plannings et les heures creuses ; absences reconstituées par le mode absent (#210, #211, #352).
+  - Station : pression et bruit ; vent et pluie dans la signature ; journal des incidents (#220,
+    #221, #280, #393).
+  - Vraie PWA : nouvelle version en attente avec bandeau « Recharger », Installer, « Recharger
+    l'application » sans toucher aux données (#357, #368) ; `SECURITY.md` (#364).
+- **Corrections remontées par le propriétaire** : déconnexion au rafraîchissement (verrouillage
+  partagé entre onglets, #334) et bouton « Afficher la phrase » (#335, #340) ; module « Cave » liable
+  à une chambre, télétravail 5 jours, défilement conservé (#355, #370, #396).
+- **Qualité**
+  - Tests E2E robustes : fixtures de démo, balayage systématique de chaque page × 4 affichages,
+    explorateur de contrôles, invariants (débordement, textes recouverts, mots coupés, focus, saut de
+    défilement), smoke test sur les vraies données en assertions seules (0 échec), sonde du site
+    publié (#353, #367, #371, #372).
+  - Fuzz à graine fixe, mutation (66,8 % → 89,2 %), porte unique `npm run porte`, `AGENTS.md`
+    source unique, `docs/APPRENTISSAGES.md`, chiffres de la doc tenus par un test, sources publiques
+    réelles (#358 à #363, #395).
+- **Reporté** (raison dans chaque issue) : plan de la maison (#202), volets Wiser (#24, #26, #200),
+  localisation exacte (#204), pince (#281), coupures dans les graphiques (#394), mutants de la
+  reconstitution (#392), constats mineurs de la revue design (#401 à #409), origine dédiée (#229, v2).
+
 ## v1.5 — novembre 2026 : revue de code complète et corrections
 
 Version de qualité : **tout le code** relu par quatre agents de revue (collecteur et workflows ; PWA
