@@ -4,7 +4,7 @@
 > d'utilisation des services qu'il appelle, et comment il les applique. Elle peut être incomplète ou
 > dépassée : en cas de doute, lisez les textes eux-mêmes ou consultez un professionnel du droit.
 
-Dernière revue : **9 novembre 2026** (S-8.14). La même information est résumée dans l'application,
+Dernière revue : **10 novembre 2026** (S-8.14 ; PVGIS et localisation de la maison, #204, #356). La même information est résumée dans l'application,
 ⚙ Paramètres → À propos et confidentialité → **Cadre juridique** (fichier source : `web/src/legal.ts`, à mettre
 à jour en même temps que cette page).
 

@@ -16,7 +16,7 @@ export interface LegalService {
   risk: Risk;
 }
 
-export const LEGAL_REVIEW = '2026-11-09';
+export const LEGAL_REVIEW = '2026-11-10';
 
 export const SERVICES: LegalService[] = [
   {
