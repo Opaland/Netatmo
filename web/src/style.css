@@ -660,6 +660,77 @@ html {
 .source-quality .gaps p {
   margin: 0;
 }
+/* #280: incident log, one month per <details>, a timeline (decoration) and its list */
+.incident-month {
+  border-top: 1px solid var(--border);
+  padding: var(--space-2) 0;
+}
+.incident-month summary {
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+.frise {
+  margin: var(--space-3) 0 var(--space-2);
+}
+.frise-lane {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-1);
+}
+.frise-label {
+  flex: 0 0 5.5em;
+  font-size: var(--font-sm);
+  color: var(--text-muted);
+}
+.frise-track {
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 1.6em;
+  background: var(--surface-sunken);
+  border-radius: 4px;
+  overflow: hidden;
+}
+.frise-mark {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  min-width: 1.4em;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--font-sm);
+  line-height: 1;
+  border-radius: 4px;
+  background: var(--state-warn-soft);
+  overflow: hidden;
+}
+.frise-mark.k-power,
+.frise-mark.k-internet {
+  background: var(--state-bad-soft);
+}
+.frise-axis {
+  display: flex;
+  justify-content: space-between;
+  margin-left: calc(5.5em + var(--space-2));
+  font-size: var(--font-sm);
+  color: var(--text-muted);
+}
+.incident-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.incident-list li {
+  display: flex;
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
+  overflow-wrap: anywhere;
+}
+.incident-list p {
+  margin: 0;
+}
 .card.off {
   background: var(--surface-sunken);
   box-shadow: none;

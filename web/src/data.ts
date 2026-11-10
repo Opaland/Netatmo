@@ -35,6 +35,9 @@ export interface Dataset {
   tariffs: TariffMap;
   temps: Map<string, Map<string, [number, number | null]>>; // room -> day -> [measured, setpoint]
   weather: Weather | null;
+  /** S-3.12 (#221): day -> [mean wind km/h, gust km/h | null] and day -> rain mm (Open-Meteo). */
+  wind?: Map<string, [number, number | null]>;
+  rain?: Map<string, number>;
   indoor: Map<string, number>;
   linky: Map<string, number>; // day -> kWh, whole home
   insights: Insights | null;
@@ -59,6 +62,8 @@ export interface Station {
   nightly?: Record<string, Record<string, Night>>; // module -> night D (22 h → 7 h) -> CO₂ hours (S-11.1)
   hours?: Record<string, Record<string, DayHours>>; // module -> day -> humid / cold hours (S-11.2, S-11.3)
   health?: StationHealth; // #215: module -> day -> [battery %, signal, answering]
+  pressure?: Record<string, Record<string, [number, number | null, number | null, number | null]>>; // #220: [mean, min, max, trend] hPa
+  noise?: Record<string, Record<string, { n: number; loud: number }>>; // #220 (opt-in): noisy hours per day
 }
 
 /** Public CRE file, refreshed at each deploy; bundled copy as fallback. */
@@ -149,7 +154,13 @@ export async function load(source: Source, key: CryptoKey): Promise<Dataset> {
         return [String(y), doc] as const;
       }),
     ),
-    optional<{ source?: string; outdoor?: Record<string, [number, number, number]>; indoor?: Record<string, number> }>(
+    optional<{
+      source?: string;
+      outdoor?: Record<string, [number, number, number]>;
+      indoor?: Record<string, number>;
+      wind?: Record<string, [number, number | null]>;
+      rain?: Record<string, number>;
+    }>(
       source,
       'weather',
       key,
@@ -197,6 +208,8 @@ export async function load(source: Source, key: CryptoKey): Promise<Dataset> {
     tariffs,
     temps,
     weather: outdoor && outdoor.size ? outdoor : null,
+    wind: new Map(Object.entries(weatherDoc?.wind ?? {})),
+    rain: new Map(Object.entries(weatherDoc?.rain ?? {})),
     indoor: new Map(Object.entries(weatherDoc?.indoor ?? {})),
     linky: new Map(Object.entries(linkyDoc?.daily ?? {}).map(([d, wh]) => [d, wh / 1000])),
     insights,

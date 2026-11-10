@@ -171,6 +171,19 @@ OPEN_METEO_DAILY = {
         "temperature_2m_min": [(int, float, type(None))],
         "temperature_2m_max": [(int, float, type(None))],
         "temperature_2m_mean": [(int, float, type(None))],
+        # S-3.12 (#221): wind and rain, asked in the same call (absent when not asked)
+        "wind_speed_10m_mean": Optional([(int, float, type(None))]),
+        "wind_gusts_10m_max": Optional([(int, float, type(None))]),
+        "precipitation_sum": Optional([(int, float, type(None))]),
+    }
+}
+# S-3.12 (#221): wind and rain alone, when the Netatmo station gives the temperatures.
+OPEN_METEO_WIND = {
+    "daily": {
+        "time": [str],
+        "wind_speed_10m_mean": [(int, float, type(None))],
+        "wind_gusts_10m_max": Optional([(int, float, type(None))]),
+        "precipitation_sum": Optional([(int, float, type(None))]),
     }
 }
 
