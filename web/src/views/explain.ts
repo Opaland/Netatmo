@@ -11,6 +11,7 @@ import { routeKey } from '../router';
 import { html } from '../trusted';
 import { avgPrice, costAvailable, esc, fmtKwh, lastDay, table, tableToggle } from '../ui';
 import { offlineInfo } from './offline-rooms';
+import { stoveName, woodOver } from './wood-state';
 import { cutDays } from './quality';
 
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
@@ -77,6 +78,7 @@ export function renderExplain(view: HTMLElement, asked?: string) {
       ),
     )}
   </section>
+  ${woodCard(e, price)}
   ${roomsCard(e)}
   <section class="card"><div class="card-head"><h2>Comment c’est calculé</h2></div>
     ${howDetails('Le détail des parts', howText(e))}
@@ -160,6 +162,42 @@ function stoppedBlock(e: Explanation): string {
       ),
     )
     .join('');
+}
+
+/**
+ * #366: the stove's wood (out of the meter, so out of the parts above, which add up to the change
+ * of electricity): its heat and cost both months, and the whole heating electricity + wood.
+ */
+function woodCard(e: Explanation, price: number | null): string {
+  const now = woodOver(e.from, e.to);
+  const ref = woodOver(e.refFrom, e.refTo);
+  if (!now || !ref || (now.kwh < 1 && ref.kwh < 1)) return '';
+  const heatNow = e.rooms.reduce((s, r) => s + r.now, 0);
+  const heatRef = e.rooms.reduce((s, r) => s + r.ref, 0);
+  const allNow = heatNow + now.kwh;
+  const allRef = heatRef + ref.kwh;
+  const eur = (w: { eur: number }, kwh: number) => (price ? `, ≈ ${Math.round(w.eur + kwh * price)} €` : '');
+  return `<section class="card" id="explain-wood" aria-labelledby="explain-wood-title">
+    <div class="card-head"><h2 id="explain-wood-title">${esc(stoveName())}</h2><span class="sub muted">bois, hors compteur</span></div>
+    ${list(
+      [
+        {
+          title: 'Poêle (bois)',
+          sub: `≈ ${fmtKwh(now.kwh)} de chaleur et ≈ ${Math.round(now.eur)} € en ${monthShort(e.from)}, contre ≈ ${fmtKwh(ref.kwh)} et ≈ ${Math.round(ref.eur)} € en ${monthShort(e.refFrom)}`,
+          value: kwhSigned(now.kwh - ref.kwh),
+          color: '--usage-heating',
+        },
+        {
+          title: 'Chauffage électricité + bois',
+          sub: `${fmtKwh(allNow)}${eur(now, heatNow)} contre ${fmtKwh(allRef)}${eur(ref, heatRef)}`,
+          value: allRef > 0 ? signedPct(((allNow - allRef) / allRef) * 100) : '—',
+          color: '--usage-heating',
+        },
+      ],
+      'Le bois du poêle',
+    )}
+    <p class="hint muted">Le bois ne passe pas par le compteur : il n’entre pas dans les parts ci-dessus. Chaleur d’après vos achats et les hypothèses de <a class="link" href="#parametres-logement">⚙ Mon logement</a>, répartie selon le froid de chaque jour.</p>
+  </section>`;
 }
 
 function roomsCard(e: Explanation): string {

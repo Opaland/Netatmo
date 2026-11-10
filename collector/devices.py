@@ -38,7 +38,7 @@ from __future__ import annotations
 
 import json
 import re
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from zoneinfo import ZoneInfo
 
 from .roomstate import DISCONNECTED, gateway_fields, is_gateway, norm
@@ -313,6 +313,64 @@ def parse_stopped(raw: str) -> list[dict]:
 
 
 _DAY = re.compile(r"\d{4}-\d{2}-\d{2}")
+
+
+WOOD_SPECIES = ("chene", "hetre", "charme", "frene", "melange", "resineux")
+MAX_PURCHASES = 60
+
+
+class WoodError(ValueError):
+    """Invalid WOOD_JSON. Messages never quote the values (public log)."""
+
+
+def _number(v: object, lo: float, hi: float) -> float | None:
+    if isinstance(v, bool) or not isinstance(v, int | float):
+        return None
+    return float(v) if lo <= v <= hi else None
+
+
+def parse_wood(raw: str) -> dict:
+    """#366: the wood bought for a stove (repository variable WOOD_JSON, set from ⚙ Mon logement):
+    {"purchases": [{"day": "YYYY-MM-DD", "steres": 4, "species": "chene", "moisture": 20,
+    "price": 360}], "efficiency": 70, "kwhPerStere": {"chene": 2100}}. Copied into the encrypted
+    meta, read by the app (web/src/wood.ts, same limits); never written to the public log."""
+    try:
+        data = json.loads(raw)
+    except ValueError as err:
+        raise WoodError("JSON illisible") from err
+    if not isinstance(data, dict):
+        raise WoodError("objet attendu")
+    items = data.get("purchases", [])
+    if not isinstance(items, list) or len(items) > MAX_PURCHASES:
+        raise WoodError(f"liste de {MAX_PURCHASES} achats au plus attendue")
+    purchases = []
+    for item in items:
+        if not isinstance(item, dict):
+            raise WoodError("achat attendu")
+        day = item.get("day")
+        if not isinstance(day, str) or not _DAY.fullmatch(day):
+            raise WoodError("date AAAA-MM-JJ attendue")
+        try:
+            date.fromisoformat(day)
+        except ValueError as err:
+            raise WoodError("date inexistante") from err
+        if item.get("species") not in WOOD_SPECIES:
+            raise WoodError("essence inconnue")
+        limits = (("steres", 0.1, 100), ("moisture", 5, 60), ("price", 0, 100000))
+        steres, moisture, price = (_number(item.get(k), lo, hi) for k, lo, hi in limits)
+        if steres is None or moisture is None or price is None:
+            raise WoodError("quantité, humidité ou prix hors limites")
+        purchases.append(
+            {"day": day, "steres": steres, "species": item["species"], "moisture": moisture, "price": price}
+        )
+    out: dict = {"purchases": sorted(purchases, key=lambda p: p["day"])}
+    efficiency = _number(data.get("efficiency"), 10, 100)
+    if efficiency is not None:
+        out["efficiency"] = efficiency
+    kwh = data.get("kwhPerStere")
+    if isinstance(kwh, dict):
+        out["kwhPerStere"] = {k: v for k in WOOD_SPECIES if (v := _number(kwh.get(k), 500, 3000)) is not None}
+    return out
 
 
 def silent_rooms(
