@@ -277,9 +277,11 @@ def _copy_room(f: Fixture, src: str, new: str, name: str) -> None:
 
 def compte_charge(f: Fixture) -> None:
     """A fuller account than the demo, as a real one may be: more rooms (ids made of digits, as
-    Intuis gives them), long room and module names, every optional source on, and sources that
-    failed with the longest messages the collector writes (an exception class name, a schema
-    path: words without a space)."""
+    Intuis gives them), long room and module names (some without a space), every optional source
+    on, sources that failed with the longest messages the collector writes (an exception class
+    name, a schema path: words without a space), long notes, a radiator switched off on purpose
+    with a long label, one that stopped answering and long Shelly clamp names. The end-to-end
+    sweep opens it as real data (lock screen), so the cards only a real account shows are seen."""
     names = {
         "r-salon": "Salon salle à manger",
         "r-ch1": "Chambre parentale (étage)",
@@ -293,7 +295,7 @@ def compte_charge(f: Fixture) -> None:
             ("r-ch1", "Chambre d'amis"),
             ("r-ch2", "Bibliothèque-mezzanine"),
             ("r-salon", "Véranda"),
-            ("r-sdb", "Salle d'eau du rez-de-chaussée"),
+            ("r-sdb", "Salle_d_eau_du_rez-de-chaussée_nord"),
         ]
     ):
         _copy_room(f, src, f"318004{i:04d}", name)
@@ -301,7 +303,7 @@ def compte_charge(f: Fixture) -> None:
     for key, name in {
         "m0": "Séjour (station principale)",
         "m2": "Chambre des enfants côté jardin",
-        "m3": "Cave à vin du sous-sol",
+        "m3": "Thermomètre_cave_à_vin_sous-sol",
     }.items():
         if key in station:
             station[key]["name"] = name
@@ -316,7 +318,14 @@ def compte_charge(f: Fixture) -> None:
             "champ « body.home.rooms[].therm_setpoint_end_time » absent"
         ),
     }
-    src["appareils"] = {"ok": ok, "error": now, "message": "erreur RemoteProtocolError"}
+    src["appareils"] = {
+        "ok": now,
+        "note": (
+            "12 modules, 1 module(s) injoignable(s), 3 mise(s) à jour de firmware détectée(s), "
+            "passerelle redémarrée 2 fois (7 j)"
+        ),
+    }
+    src["linky"] = {**src.get("linky", {}), "error": now, "message": "erreur RemoteProtocolError"}
     src["ia"] = {"ok": ok, "error": now, "message": "erreur AuthenticationError"}
     src["releve-horaire"] = {"ok": ok, "error": now, "message": "agrégation impossible (UnicodeDecodeError)"}
     src["linky-30min"] = {
@@ -335,6 +344,21 @@ def compte_charge(f: Fixture) -> None:
         "note": "pile faible : 2 module(s) ; 1 module(s) muet(s) depuis plus de 6 h",
     }
     src["home-assistant"] = {"ok": now}
+    # ⚙ Sources, « État des appareils »: what the collection names (radiator switched off on
+    # purpose with its label, a radiator that stopped answering, clamp channels of a Shelly meter)
+    f.meta["stopped_rooms"] = [
+        {**s, "label": "chauffée_par_le_poêle_à_granulés_du_séjour (arrêt volontaire pour tout l'hiver)"}
+        for s in f.meta.get("stopped_rooms", [])
+    ]
+    reach = f.doc("devices").setdefault("reach", {})
+    for key in f.module_of("r-ch2"):
+        days = reach.setdefault(key, {})
+        for back in range(3, 0, -1):
+            days[f.ago(back)] = 0
+    for i, key in enumerate(("p4c0", "p4c1")):
+        plug = f.doc("shelly").get("plugs", {}).get(key)
+        if plug:
+            plug["name"] = f"Compteur_à_pinces_tableau_principal_sous-sol · canal {i + 1}"
 
 
 FIXTURES: dict[str, Callable[[Fixture], None]] = {

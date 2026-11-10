@@ -572,6 +572,14 @@ html {
   box-shadow: var(--shadow-1);
   min-width: 0;
 }
+/* #353 (smoke test on real data): a name or a label made of data can be one long word (a room
+   « Salle_d_eau… », a radiator stopped « chauffée_par_le_poêle… »): anywhere in the page, it
+   breaks rather than sticking out at 360 px with text at 200 % (inherited by every card, alert
+   and list). Only a word that does not fit its line is broken; sizes computed from the content
+   (tables, flex, grid) are unchanged — a grid column that must not grow says so itself. */
+#view {
+  overflow-wrap: break-word;
+}
 .kpi {
   padding: var(--space-3) var(--space-4);
   border-radius: var(--radius-md);
@@ -1258,6 +1266,14 @@ fieldset.secrets {
   display: grid;
   gap: 8px;
   min-width: 0;
+}
+/* #353 (smoke test on real data, shown only to a real account): the help of a group names hosts
+   and identifiers without a space (« shelly-103-eu.shelly.cloud », « (client_secret) »); the grid
+   column no longer grows to them (360 px, text at 200 %). */
+fieldset.secrets,
+.inline-form {
+  grid-template-columns: minmax(0, 1fr);
+  overflow-wrap: anywhere;
 }
 fieldset.secrets legend {
   font-weight: 600;
