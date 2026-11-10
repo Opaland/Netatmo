@@ -102,7 +102,7 @@ export function modeAt(s: Schedule, slot: number): { kind: Slot['kind']; until: 
 export function modeText(s: Schedule, slot: number): string {
   const m = modeAt(s, slot);
   const name = (k: Slot['kind']) => (k === 'comfort' ? 'confort' : 'économie');
-  const temp = (k: Slot['kind']) => `${fmt1(k === 'comfort' ? s.comfort : s.eco)} °C`;
+  const temp = (k: Slot['kind']) => `${fmt1(k === 'comfort' ? s.comfort : s.eco)}\u00a0°C`;
   const now = name(m.kind);
   return `${now[0].toUpperCase()}${now.slice(1)} jusqu’à ${hourMin(Math.floor(m.until), Math.round((m.until % 1) * 60))}, puis ${name(m.next)} ${temp(m.next)}`;
 }
@@ -234,13 +234,13 @@ export function reasonText(r: Reason, threshold: number): string {
     case 'window':
       return `fenêtre ouverte ${hours(r.hours)}`;
     case 'drop':
-      return `chute de ${fmt1(r.fall)} °C vers ${hourMin(r.at)} (fenêtre ou porte ouverte ?)`;
+      return `chute de ${fmt1(r.fall)}\u00a0°C vers ${hourMin(r.at)} (fenêtre ou porte ouverte ?)`;
     case 'offload':
       return `radiateur coupé ${hours(r.hours)} (délestage)`;
     case 'mode':
       return `mode ${modeLabel(r.mode)} ${hours(r.hours)}`;
     case 'setpoint':
-      return `température demandée de ${fmt1(r.value)} °C, sous le seuil de ${fmt1(threshold)} °C`;
+      return `température demandée de ${fmt1(r.value)}\u00a0°C, sous le seuil de ${fmt1(threshold)}\u00a0°C`;
     case 'none':
       return 'pas d’explication trouvée : fenêtre fermée, ni délestage ni absence';
     default:
@@ -258,7 +258,7 @@ export const WINDOW_PILL_HOURS = 4;
 
 /** Comfort pill of a room: cold days first, then a window often open, else « confort ». */
 export function comfortPill(cold: number, openHours: number | null, threshold: number): Pill {
-  if (cold > 0) return { level: 'warn', text: `${cold} j sous ${fmt1(threshold)} °C` };
+  if (cold > 0) return { level: 'warn', text: `${cold} j sous ${fmt1(threshold)}\u00a0°C` };
   if (openHours !== null && openHours >= WINDOW_PILL_HOURS) return { level: 'warn', text: `fenêtre ${hours(Math.round(openHours))}` };
   return { level: 'ok', text: 'confort' };
 }

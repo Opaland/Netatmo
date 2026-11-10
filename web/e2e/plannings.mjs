@@ -84,11 +84,11 @@ try {
     progress('plannings');
     const sum = await text(page, '#plannings-summary');
     check(/Compté : 4 semaines, du .+ au 8 nov\. 2026/.test(sum), `plannings : « Compté : » → ${sum.slice(0, 200)}`);
-    check(/En heures creuses \d+ %/.test(sum), `plannings : part en heures creuses absente → ${sum.slice(0, 300)}`);
+    check(/En heures creuses \d+\s%/.test(sum), `plannings : part en heures creuses absente → ${sum.slice(0, 300)}`);
     check(/Gain possible/.test(sum), 'plannings : tuile « Gain possible » absente');
     check(/Lecture seule/.test(sum) && /ne modifie jamais/.test(sum), 'plannings : la lecture seule n’est pas dite');
     const salon = await text(page, '#plan-r-salon');
-    check(/7 h → 20,0 °C/.test(salon), `Salon : relance de 7 h absente → ${salon.slice(0, 300)}`);
+    check(/7 h → 20,0\s°C/.test(salon), `Salon : relance de 7 h absente → ${salon.slice(0, 300)}`);
     check(/Avancer la relance de 7 h à \d+ h/.test(salon) && /€ par mois de chauffe/.test(salon), `Salon : pas de suggestion chiffrée → ${salon.slice(0, 400)}`);
     check(/heures pleines/.test(salon), 'Salon : part en heures pleines de la montée absente');
     check(await page.locator('#plan-r-salon .sched').count(), 'Salon : planning type absent');

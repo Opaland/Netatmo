@@ -182,8 +182,8 @@ describe('radiator vs station offset (S-3.8)', () => {
     expect(o.stable).toBe(true);
     expect(o.months.map((m) => m.month)).toEqual(['2026-01', '2026-02']);
     const advice = offsetAdvice(o, 19).join(' ');
-    expect(advice).toMatch(/\+0,8 °C/);
-    expect(advice).toMatch(/consigne vers 19,8 °C/);
+    expect(advice).toMatch(/\+0,8\s°C/);
+    expect(advice).toMatch(/consigne vers 19,8\s°C/);
     expect(advice).toMatch(/ne pilote pas/);
   });
   it('refuses to advise on a drifting offset', () => {

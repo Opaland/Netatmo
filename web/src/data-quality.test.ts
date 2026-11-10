@@ -12,6 +12,8 @@ import {
   qualityReport,
   runs,
   seenParts,
+  sourceVerdict,
+  type SourceQuality,
   yearVerdicts,
   type QualityInput,
 } from './data-quality';
@@ -84,7 +86,7 @@ describe('qualityReport: Intuis', () => {
     expect(v.map((x) => x.year)).toEqual([2024, 2023]);
     expect(v[0].level).toBe('good');
     expect(v[1].level).toBe('poor');
-    expect(v[1].headline).toBe('88 % des jours complets pour les radiateurs (324 sur 365)');
+    expect(v[1].headline).toBe('88 % des jours complets pour les radiateurs (324 sur 365)');
     expect(v[1].reasons.join(' ')).toMatch(/trou de 41 jours sur toutes les pièces \(sept\.–oct\. 2023\)/);
   });
 
@@ -213,7 +215,7 @@ describe('values that look wrong', () => {
     r.low.push({ year: 2024, share: 0.2, usual: 0.6 });
     const [v] = yearVerdicts(r);
     expect(v.level).toBe('fair');
-    expect(v.reasons.join(' ')).toMatch(/Valeurs basses.*20 %.*60 %/);
+    expect(v.reasons.join(' ')).toMatch(/Valeurs basses.*20\s%.*60\s%/);
     expect(v.reasons.join(' ')).toMatch(/2 jours suspects/);
   });
 });
@@ -247,6 +249,27 @@ describe('monthStatus', () => {
     const records = recs('2026-10-25', '2026-11-08', { b: new Set(['2026-11-03']) });
     const m = monthStatus({ last: '2026-11-08', rooms, records, estimated: new Set(['a|2026-11-05']) });
     expect(m).toEqual({ expected: 8, ok: 6, estimated: 1, missing: 1 });
+  });
+});
+
+describe('sourceVerdict (#387: one line per source)', () => {
+  const y = (year: number, expected: number, full: number, missing = 0, estimated = 0) => ({ year, expected, full, estimated, partial: 0, missing });
+  const src = (years: ReturnType<typeof y>[], gaps: SourceQuality['gaps'] = []): SourceQuality => ({ id: 'heating', label: 'Radiateurs', first: null, last: null, years, gaps, scattered: 0, notes: [] });
+  it('names the worst year, not the first one under the threshold', () => {
+    const v = sourceVerdict(src([y(2023, 365, 347, 18), y(2024, 366, 326, 40), y(2025, 365, 365)]));
+    expect(v).toMatchObject({ level: 'poor', worst: { year: 2024 }, text: 'à vérifier : 2024 (89 %)' });
+    expect(v.overall).toBeCloseTo((347 + 326 + 365) / (365 + 366 + 365));
+  });
+  it('estimated days count as covered; 90 to 98 %: « presque complet »', () => {
+    expect(sourceVerdict(src([y(2022, 365, 300, 0, 65)])).text).toBe('complet depuis 2022');
+    expect(sourceVerdict(src([y(2022, 100, 95, 5), y(2023, 100, 100)]))).toMatchObject({ level: 'fair', text: 'presque complet : 2022 (95 %)' });
+  });
+  it('a source silent right now says so, and is not « good »', () => {
+    const gap = { from: '2026-11-05', to: '2026-11-08', days: 4, who: 'Chambre', all: false, ongoing: true, cause: '', recover: '' };
+    expect(sourceVerdict(src([y(2026, 312, 312)], [gap]))).toMatchObject({ level: 'fair', text: 'complet depuis 2026 · muet depuis 4 jours (Chambre)' });
+  });
+  it('nothing expected', () => {
+    expect(sourceVerdict(src([])).text).toBe('aucun jour attendu');
   });
 });
 

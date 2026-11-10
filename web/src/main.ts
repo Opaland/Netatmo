@@ -160,7 +160,7 @@ function render() {
     ${tabs
       .map(
         ([k, l]) =>
-          `<a href="#${k}" data-view="${k}"${isOn(k) ? ' aria-current="page"' : ''}>${icon(state.simple && k.startsWith('piece') ? 'piece' : state.simple && k === 'aide' ? 'aide' : k)}<span>${esc(l)}</span></a>`,
+          `<a href="#${k}" data-view="${k}" aria-label="${esc(l)}"${isOn(k) ? ' aria-current="page"' : ''}>${icon(state.simple && k.startsWith('piece') ? 'piece' : state.simple && k === 'aide' ? 'aide' : k)}<span>${esc(l)}</span></a>`,
       )
       .join('')}
   </nav>

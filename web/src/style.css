@@ -233,32 +233,28 @@ html {
   color: var(--accent-text);
 }
 
-/* Tab bar: icon + label, 44 px targets at least; five tabs fit 360 px at 200 % text (labels wrap). */
+/* Tab bar: icon + label, 44 px targets at least, equal widths (flex: 1 1 0). The bar is a size
+   container: its em are the text size of the system (#348 does the same for the header). */
 .tabs {
   position: fixed;
   left: 0;
   right: 0;
   bottom: 0;
   z-index: 10;
-  display: grid;
-  grid-template-columns: repeat(var(--tab-count, 5), minmax(0, 1fr));
+  display: flex;
+  container-type: inline-size;
   padding: var(--space-1) 2px calc(var(--space-1) + env(safe-area-inset-bottom));
   background: var(--surface-card);
   border-top: 1px solid var(--border);
 }
-.tabs.three {
-  --tab-count: 3;
-}
-.tabs:has(> a:nth-child(4):last-child) {
-  --tab-count: 4;
-}
 .tabs a {
   display: flex;
+  flex: 1 1 0;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   gap: 2px;
-  min-width: 0;
+  min-width: 44px;
   min-height: 56px;
   padding: 6px 2px;
   color: var(--text-muted);
@@ -274,6 +270,25 @@ html {
   overflow-wrap: anywhere;
   /* #397: a label too wide for its tab (« Historique » in bold at 200 %) breaks between syllables */
   hyphens: auto;
+}
+/* #389 (WCAG 1.4.4): five labels side by side only fit up to about 120 % of text on a phone
+   (the min() above keeps them within the width until then, a 9 % shrink at most). Larger, the bar
+   shows the icons alone and the label of the current tab only, at the full size of the text, the
+   current tab taking the width it needs. Kept over « a bar on two lines » (a third of a phone
+   screen at 200 %, on every page) and over « labels under 12 px » (unread at 200 %). The name of
+   each tab stays its aria-label. 19em = 360 px at 118 % (the header switches at the same size). */
+@container (max-width: 19em) {
+  .tabs a:not([aria-current='page']) span {
+    display: none;
+  }
+  .tabs a[aria-current='page'] {
+    flex: 0 1 auto;
+    min-width: 0;
+    padding-inline: var(--space-2);
+  }
+  .tabs a[aria-current='page'] span {
+    font-size: var(--font-xs);
+  }
 }
 .tabs .icon {
   width: 22px;
@@ -615,6 +630,8 @@ html {
      font) « 80 % / 20 % » wraps at its spaces instead of widening the page */
   body.is-report .kpis .kpi-value {
     white-space: normal;
+    /* #389: a number keeps its unit (non-breaking space): the compact size of the other tiles */
+    font-size: var(--font-kpi-compact);
   }
 }
 /* #384: with text at 200 % on a phone (tiles under 18rem), the amount goes under its label
@@ -733,11 +750,79 @@ html {
   background: var(--state-bad-soft);
   color: var(--state-bad);
 }
-.source-quality {
-  margin-top: var(--space-4);
+/* #387: a reading page shows one line per subject (a <summary>), the detail folded under it. */
+details.fold > summary,
+.source-quality > summary {
+  cursor: pointer;
+  list-style: none;
+  min-height: var(--target-min);
 }
-.source-quality h3 {
-  margin: 0 0 var(--space-2);
+details.fold > summary::-webkit-details-marker,
+.source-quality > summary::-webkit-details-marker {
+  display: none;
+}
+details.fold > summary::before,
+.source-quality > summary::before {
+  content: '▸';
+  color: var(--text-muted);
+}
+details.fold[open] > summary::before,
+.source-quality[open] > summary::before {
+  content: '▾';
+}
+details.fold > summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-1) var(--space-2);
+}
+details.fold > summary h2 {
+  margin: 0;
+}
+details.fold[open] > summary {
+  margin-bottom: var(--space-2);
+}
+.fold-sub {
+  color: var(--text-muted);
+  font-size: var(--font-sm);
+}
+.source-quality {
+  border-top: 1px solid var(--border);
+}
+.source-quality > summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-1) var(--space-2);
+  padding: var(--space-2) 0;
+}
+/* the name and its verdict take the line; with large text the percentage goes under, words whole */
+.source-quality > summary .sq-text {
+  flex: 1 1 12em;
+  min-width: 0;
+}
+.source-quality > summary .sq-pct {
+  margin-left: auto;
+}
+.source-quality > summary .swatch {
+  margin: 0;
+}
+.source-quality[data-level='good'] > summary .swatch {
+  background: var(--state-good);
+}
+.source-quality[data-level='fair'] > summary .swatch {
+  background: var(--state-warn);
+}
+.source-quality[data-level='poor'] > summary .swatch {
+  background: var(--state-bad);
+}
+.sq-verdict {
+  display: block;
+  color: var(--text-muted);
+  font-size: var(--font-sm);
+}
+.source-quality[open] {
+  padding-bottom: var(--space-3);
 }
 .source-quality .gaps p {
   margin: 0;

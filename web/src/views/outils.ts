@@ -33,7 +33,7 @@ export function renderOutils(view: HTMLElement, status: Freshness & { label: str
   const ins = d.insights;
   view.innerHTML = html`<h1 class="page-title" id="page-title" tabindex="-1">Outils</h1>
   ${t ? alert('info', 'Mode locataire', 'L’onglet Compteur est masqué : la part du logement, la puissance et la courbe de charge supposent le compteur Linky et le contrat du titulaire.') : ''}
-  <p class="section-title">Simulateurs <span class="tag">et si…</span></p>
+  <p class="section-title">Simulateurs <span class="tag">et si&nbsp;?</span></p>
   ${list(
     [
       ...(t ? [] : [row('offres', offers || 'Base, heures creuses ou Tempo, sur votre consommation réelle')]),

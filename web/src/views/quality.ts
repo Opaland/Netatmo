@@ -1,17 +1,16 @@
 // S-1.10: data quality per month. Days estimated from a monthly total (Intuis kept the
 // month but lost the days) vs days lost at Intuis (neither the day nor the month).
-import { type DayRecord, type Granularity, MONTHS_LONG, bucketKey, minusYears } from '../aggregate';
+import { type DayRecord, type Granularity, bucketKey, minusYears } from '../aggregate';
 import { ds, onDatasetLoaded, rawDataset, state } from '../app';
 import type { Dataset } from '../data';
 import { CUT_ICON, type CutKind, cutCausesOf } from '../incidents';
 import type { Handlers } from '../events';
 import { type Coverage, computeCoverage, gapMonths, uncertainDays } from '../checks';
 import { bucketMarks, countIn, cutText, shortDate, uncertainText } from '../periods';
-import { activeRooms, esc, lastDay, roomName, table } from '../ui';
+import { activeRooms, esc, lastDay } from '../ui';
 import { html } from '../trusted';
 import { lsKey } from '../scope';
 import { lazyCard } from '../lazy';
-import { devicesQualityHtml } from './devices-quality';
 import { switchField } from '../components';
 
 let cached: Coverage | null = null;
@@ -83,54 +82,29 @@ export function drawReconstitution() {
   void lazyCard(() => import('./reconstitution'), (m) => zone.isConnected && m.renderReconstitution(zone), { zone, what: 'Reconstitution' });
 }
 
-const monthLabel = (m: string) => `${MONTHS_LONG[Number(m.slice(5, 7)) - 1]} ${m.slice(0, 4)}`;
-
 /** #394: what a screen reader hears of the cut days of a chart (the 6 latest named). */
 function cutSummary(days: string[], cuts: Map<string, CutKind>): string {
   const named = days.slice(-6).map((d) => `${shortDate(d)} (${cuts.get(d) === 'power' ? 'courant' : 'Internet'})`);
   return `Jours de coupure, marqués ${CUT_ICON.power} ou ${CUT_ICON.internet} et d’un trait pointillé : ${days.length > 6 ? `${days.length}, dont ` : ''}${named.join(', ')}`;
 }
 
-/** Collapsible card under the main chart; empty when every month is complete and no device event is known. */
+/**
+ * #387: the lost days of État des données, folded under one line: the switch that rebuilds them
+ * apart (from Linky and the signature). The months and the causes are in « Source par source »
+ * just above (one report, not two); empty when Intuis lost no day.
+ */
 export function qualityCard(open = false): string {
   const rooms = new Set(activeRooms().map((r) => r.id));
   const gaps = gapMonths(coverage(), rooms);
-  const devices = devicesQualityHtml(); // v1.5: firmware, restarts, modules offline, Tempo, Linky index
-  if (!gaps.length && !devices) return '';
-  const years = [...new Set(gaps.map((g) => g.month.slice(0, 4)))].sort();
-  const lost = gaps.some((g) => g.missing > 0);
+  if (!gaps.some((g) => g.missing > 0)) return '';
   // The card is inserted by the caller in this same task: draw once it is in the page.
-  if (lost && reconOn) queueMicrotask(drawReconstitution);
-  const summary = gaps.length ? `${gaps.length} mois incomplet${gaps.length > 1 ? 's' : ''} (${years.join(', ')})` : 'appareils et compteurs';
-  return `<details class="card quality" id="quality"${open ? ' open' : ''}>
-    <summary><strong>Qualité des données</strong> · ${summary}</summary>
-    ${gaps.length ? gapsHtml(gaps, lost) : ''}
-    ${devices}
+  if (reconOn) queueMicrotask(drawReconstitution);
+  return `<details class="card fold quality" id="quality"${open || reconOn ? ' open' : ''}>
+    <summary><h2>Jours perdus chez Intuis</h2> <span class="fold-sub">les estimer à part</span></summary>
+    <p class="hint muted">Ni le jour ni le total du mois ne sont disponibles chez Intuis : les totaux ne contiennent que des valeurs mesurées, et sur les graphiques les barres qui contiennent ces jours sont plus pâles. Une reconstitution à part, depuis le compteur Linky et la signature énergétique, en donne une estimation, sans jamais la mêler aux mesures.</p>
+    ${switchField('Reconstituer les jours perdus (à part, depuis Linky et la signature)', reconOn, { 'data-recon': true })}
+    <div id="recon-zone"></div>
   </details>`;
-}
-
-function gapsHtml(gaps: ReturnType<typeof gapMonths>, lost: boolean): string {
-  return `<p class="hint muted"><strong>Estimé</strong> : Intuis a gardé le total du mois mais perdu le détail de certains jours ; la collecte répartit l'écart sur ces jours. <strong>Perdu chez Intuis</strong> : ni le jour ni le total du mois ne sont disponibles ; la consommation de ces jours manque dans les totaux, qui ne contiennent que des valeurs mesurées. Sur les graphiques, les barres qui contiennent de tels jours sont plus pâles à toutes les granularités (jour, semaine, mois, an), et leur infobulle donne le nombre de jours ; les évolutions par rapport à l'année précédente le signalent.</p>
-    ${table(
-      ['Mois', 'Jours estimés', 'Jours perdus chez Intuis', 'Pièces concernées'],
-      gaps.map((g) => [
-        monthLabel(g.month),
-        g.estimated || '—',
-        g.missing || '—',
-        esc(
-          g.rooms
-            .map((r) => roomName(r))
-            .sort()
-            .join(', '),
-        ),
-      ]),
-    )}
-    ${
-      lost
-        ? `${switchField('Reconstituer les jours perdus (à part, depuis Linky et la signature)', reconOn, { 'data-recon': true })}
-    <div id="recon-zone"></div>`
-        : ''
-    }`;
 }
 
 /** #297: the estimated or lost days behind a « vs l'an dernier » of [from, to] (HTML, empty when there are none). */

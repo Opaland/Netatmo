@@ -82,7 +82,7 @@ describe('explain a month', () => {
     const e = explainMonth(input())!;
     expect(e.delta).toBeCloseTo(0, 6);
     expect(e.basis).toBe('linky');
-    expect(explainSentence(e)).toBe('En janvier 2026, le logement a consommé à peu près autant qu’en janvier 2025 (0 %).');
+    expect(explainSentence(e)).toBe('En janvier 2026, le logement a consommé à peu près autant qu’en janvier 2025 (0 %).');
   });
 
   it('colder: all of the heating change goes to the weather', () => {
@@ -180,7 +180,7 @@ describe('on the demo: January 2026, the owner’s question', () => {
     expect(e.stopped.map((x) => x.id)).toEqual(['r-cuisine']);
     const s = explainSentence(e, 0.2);
     expect(s).toBe(
-      'En janvier 2026, le logement a consommé 162 kWh de moins qu’en janvier 2025 (−9 %, ≈ 32 €). Surtout le poêle (Cuisine) (−170 kWh) et les autres usages (−76 kWh) ; en partie compensé par un mois plus froid (+66 kWh).',
+      'En janvier 2026, le logement a consommé 162 kWh de moins qu’en janvier 2025 (−9 %, ≈ 32 €). Surtout le poêle (Cuisine) (−170 kWh) et les autres usages (−76 kWh) ; en partie compensé par un mois plus froid (+66 kWh).',
     );
   });
 });

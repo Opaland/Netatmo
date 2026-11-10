@@ -95,8 +95,8 @@ try {
       const num = (s) => Number(s.replace(/[\s  ]/g, '').replace('−', '-'));
       const title = (await page.locator('#verdict-title').innerText()).trim();
       const said = (await page.locator('.verdict .verdict-sub').first().innerText()).replace(/\s+/g, ' ');
-      const h = /^([\d\s  ]+) € de (moins|plus) que d'habitude$/.exec(title);
-      const s = /^([\d\s  ]+) € \(([\d\s  ]+) kWh\) dépensés ⚠ hors Chambre enfant, hors ligne depuis le 5 nov\. \(que faire \?\), en novembre \(au 8\), pour ([\d\s  ]+) € attendus .*?\(([−+]?[\d\s  ]+) %\)/.exec(said);
+      const h = /^([\d\s  ]+)\s€ de (moins|plus) que d'habitude$/.exec(title);
+      const s = /^([\d\s  ]+)\s€ \(([\d\s  ]+)\skWh\) dépensés ⚠ hors Chambre enfant, hors ligne depuis le 5 nov\. \(que faire \?\), en novembre \(au 8\), pour ([\d\s  ]+)\s€ attendus .*?\(([−+]?[\d\s  ]+)\s%\)/.exec(said);
       check(h && s, `${name} : verdict illisible (« ${title} » / « ${said.slice(0, 200)} »)`);
       if (h && s) {
         const gap = num(h[1]) * (h[2] === 'moins' ? -1 : 1);
@@ -148,20 +148,20 @@ try {
     });
     check(!clash.length, `${name} : cascade, textes superposés : ${clash.slice(0, 4).join(' ; ')}`);
     const sentence = await page.locator('#explain-sentence').innerText();
-    check(/^En janvier 2026, le logement a consommé \d+ kWh de moins qu’en janvier 2025/.test(sentence), `${name} : phrase de synthèse inattendue (« ${sentence} »)`);
+    check(/^En janvier 2026, le logement a consommé \d+\skWh de moins qu’en janvier 2025/.test(sentence), `${name} : phrase de synthèse inattendue (« ${sentence} »)`);
     check(/Surtout le poêle \(Cuisine\)/.test(sentence) && /plus froid/.test(sentence), `${name} : la synthèse ne cite ni le poêle ni la météo (« ${sentence} »)`);
     const steps = await page.locator('#explain-steps ul[aria-label="Écart par cause"] .row').allInnerTexts();
     const want = ['Météo', 'Températures demandées', 'Changement de mode de chauffage (poêle : Cuisine)', 'Pièces', 'Eau chaude', 'Autres usages']; // the full names, under the chart
     check(want.every((w, i) => steps[i]?.startsWith(w)), `${name} : parts de l'écart (${steps.map((s) => s.split('\n')[0]).join(' | ')})`);
     // #366: the stove's wood, out of the meter: its own line, never in the parts that add up
     const wood = await page.locator('#explain-wood').innerText();
-    check(/Poêle \(bois\)[\s\S]*≈ [\d\s ]+ kWh de chaleur et ≈ \d+ € en janv\. 2026/.test(wood) && /Chauffage électricité \+ bois/.test(wood), `${name} : ligne « poêle » absente (« ${wood.slice(0, 200)} »)`);
+    check(/Poêle \(bois\)[\s\S]*≈ [\d\s ]+\skWh de chaleur et ≈ \d+\s€ en janv\. 2026/.test(wood) && /Chauffage électricité \+ bois/.test(wood), `${name} : ligne « poêle » absente (« ${wood.slice(0, 200)} »)`);
     check(!steps.some((s) => /bois/.test(s.split('\n')[0])), `${name} : le bois compté dans les parts de l'écart`);
     const scope = await page.locator('#view .periodbar .scope').innerText();
     check(/^Compté : tout le logement \(compteur Linky\), du 1er janv\. au 31 janv\. 2026, comparé aux mêmes jours de janvier 2025$/.test(scope), `${name} : ligne « Compté : » (« ${scope} »)`);
     // the parts are drawn from 0 (no zoomed axis): the summary gives both totals
     const aria = (await page.locator('#explain-chart').getAttribute('aria-label')) ?? '';
-    check(/^Écart par cause, en kWh\. de [\d\s ]+ kWh \(janv\. 2025\) à [\d\s ]+ kWh \(janv\. 2026\)/.test(aria), `${name} : résumé de la cascade (« ${aria.slice(0, 160)} »)`);
+    check(/^Écart par cause, en kWh\. de [\d\s ]+\skWh \(janv\. 2025\) à [\d\s ]+\skWh \(janv\. 2026\)/.test(aria), `${name} : résumé de la cascade (« ${aria.slice(0, 160)} »)`);
     const view = await page.locator('#view').innerText();
     check(/Cuisine : radiateur arrêté depuis le 14 oct\. 2025 \(poêle\)/.test(view) && !/Cuisine : hors ligne/.test(view), `${name} : la Cuisine arrêtée n'est pas signalée comme telle dans l'explication`);
     check((await page.locator('#explain-rooms .row').count()) >= 5, `${name} : pièce par pièce incomplet`);
@@ -173,7 +173,7 @@ try {
     if (name === 'clair' || big) {
       await go(page, 'historique');
       const seasons = (await page.locator('#wood-seasons').count()) ? await page.locator('#wood-seasons').innerText() : '';
-      check(/2025–2026 : ≈ [\d\s ]+ kWh dont [\d\s ]+ kWh de bois, ≈ [\d\s ]+ €/.test(seasons) && /en énergie, [−+]\d+ % en euros/.test(seasons), `${name} : hiver contre hiver sans le bois (« ${seasons.slice(0, 200)} »)`);
+      check(/2025–2026 : ≈ [\d\s ]+\skWh dont [\d\s ]+\skWh de bois, ≈ [\d\s ]+\s€/.test(seasons) && /en énergie, [−+]\d+\s% en euros/.test(seasons), `${name} : hiver contre hiver sans le bois (« ${seasons.slice(0, 200)} »)`);
       check((await wide(page)) <= 1, `${name} : défilement horizontal sur Historique (${await wide(page)} px)`);
     }
 
@@ -217,6 +217,9 @@ try {
       progress(`${name} : État des données`);
       await go(page, 'etat');
       await page.waitForSelector('#quality-sources', { timeout: 15000 });
+      // #387: the details are folded, one line per source and per year
+      await page.click('#quality-sources [data-source=heating] > summary');
+      await page.click('#quality-years > summary');
       const etat = await page.locator('#view').innerText();
       check(/Cuisine : radiateur arrêté volontairement depuis le 14 oct\. 2025 \(chauffée par un poêle à bois\) : pas de données attendues/.test(etat), `${name} : État des données sans « arrêté volontairement : pas de données attendues »`);
       check(!/muette depuis le 14 oct\. 2025/.test(etat), `${name} : État des données compte la Cuisine comme muette`);
@@ -224,7 +227,8 @@ try {
       const years = (await page.locator('#quality-years .year-verdict').allInnerTexts()).slice(0, 2).join(' ');
       check(/^2026/.test(years) && /2025/.test(years) && !/Cuisine/.test(years), `${name} : 2025 ou 2026 expliquée par la Cuisine arrêtée (« ${years.replace(/\s+/g, ' ').slice(0, 300)} »)`);
       // État des appareils: the kitchen radiator is switched off on purpose, not « injoignable »
-      await page.waitForSelector('#devices-card:not([hidden])', { timeout: 15000 });
+      await page.waitForSelector('#devices-card:not([hidden])', { state: 'attached', timeout: 15000 });
+      await page.click('#devices-fold > summary');
       const dev = await page.locator('#devices-card').innerText();
       check(/Radiateur arrêté volontairement : Cuisine, depuis le 14 octobre 2025 \(chauffée par un poêle à bois\)/.test(dev), `${name} : État des appareils sans « radiateur arrêté volontairement » (« ${dev.slice(0, 300)} »)`);
       check(/ne répond plus : radiateur \(Chambre enfant\)/.test(dev) && !/radiateur \(Cuisine\) depuis/.test(dev), `${name} : État des appareils dit la Cuisine injoignable (« ${dev.slice(0, 300)} »)`);
