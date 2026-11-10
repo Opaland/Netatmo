@@ -61,6 +61,16 @@ jobs:
       - run: npm run e2e:compteur # v1.6 #301 : onglet Compteur (période, « Compté : », 360 px 200 %, axe clair/sombre/contraste)
       - run: npm run e2e:proche # v1.6 #312, #316 : premier lancement et vue Proche
       - run: npm run e2e:piece # v1.6 #313 : liste Pièces et page Pièce (axe, 200 %, vue foyer)
+      # #353 : balayage systématique (chaque route × fixtures de démo × 360 px, 1280 px, 200 %, sombre)
+      # puis explorateur de contrôles. Les fixtures (données fictives) sont générées dans dist/,
+      # jamais publiées ; le collecteur tourne depuis le dépôt, versions verrouillées avec hashes.
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - run: pip install --require-hashes -r ../requirements-lock.txt
+      - run: python -m collector fixtures -o web/dist/demo-fixtures
+        working-directory: .
+      - run: npm run e2e:sweep
       - uses: actions/upload-artifact@v4
         if: always()
         with:

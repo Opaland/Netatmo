@@ -37,14 +37,23 @@ export const frames = (page) => page.evaluate(() => new Promise((r) => requestAn
  * may differ (a route redirected in tenant mode or in the simple view): returns its key.
  */
 export async function goto(page, hash, timeout = 30000) {
-  await page.evaluate((h) => {
-    if (location.hash === `#${h}`) return; // already there (a redirect wrote it): no hashchange will come
+  // The view drawn now is marked; the page is ready once a NEW view is drawn and settled. When
+  // nothing is redrawn (already there, or a route that the app maps to the page shown, like the
+  // meter pages in tenant mode), the marked view counts after a grace second.
+  const t0 = await page.evaluate((h) => {
     const view = document.getElementById('view');
-    view?.removeAttribute('data-ready');
-    view?.removeAttribute('data-page');
-    location.hash = `#${h}`;
+    if (view) view.dataset.e2eOld = '';
+    if (location.hash !== `#${h}`) location.hash = `#${h}`;
+    return performance.now();
   }, hash);
-  await ready(page, timeout);
+  await page.waitForFunction(
+    (t0) => {
+      const v = document.getElementById('view');
+      return !!v && v.hasAttribute('data-ready') && v.dataset.page !== undefined && (v.dataset.e2eOld === undefined || performance.now() - t0 > 1000);
+    },
+    t0,
+    { timeout, polling: 50 },
+  );
   return page.evaluate(() => document.getElementById('view')?.dataset.page ?? '');
 }
 

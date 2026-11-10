@@ -1,0 +1,41 @@
+name: Balayage E2E complet
+
+# #353: the full sweep of web/e2e/sweep.mjs on the demo: every route × every named fixture
+# (collector/fixtures.py, made-up data) × 360 px, 1280 px, text at 200 %, dark, axe everywhere,
+# and the control explorer on every fixture. The CI runs a subset on each push (ci.yml).
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 2 * * *"
+
+permissions:
+  contents: read
+
+jobs:
+  sweep:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - run: pip install --require-hashes -r ../requirements-lock.txt
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npm run build
+      - run: python -m collector fixtures -o web/dist/demo-fixtures
+        working-directory: .
+      - run: npm run e2e:sweep
+        env:
+          SWEEP_SCOPE: full

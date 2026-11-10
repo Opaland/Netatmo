@@ -291,6 +291,8 @@ async function act(s, css, how) {
   }
   s.lastAct = { css, ...(await el.evaluate((e) => ({ y: window.scrollY, top: (e.closest('label') ?? e).getBoundingClientRect().top }))) };
   try {
+    // a list is chosen from while it has the focus (Playwright's selectOption does not give it)
+    if (how.value !== undefined) await el.focus();
     if (how.value !== undefined) await el.selectOption(how.value, { timeout: 5000 });
     else await el.click({ force: true, timeout: 5000 });
   } catch {
