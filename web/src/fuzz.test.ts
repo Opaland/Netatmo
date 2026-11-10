@@ -21,6 +21,7 @@ import { validInvoice } from './invoice';
 import { loadNote } from './local-store';
 import { parseFlags } from './onboarding';
 import { STOP_REASONS, parseStopped } from './room-offline';
+import { MAX_PURCHASES, SPECIES, parseWood } from './wood';
 import { METER_PAGES, SETTINGS, TOOLS, parseRoute, routeKey } from './router';
 import { lockNotice } from './session';
 import { readShellyPrefs } from './shelly-prefs';
@@ -248,6 +249,29 @@ describe('#359 fuzz : préférences relues de cet appareil', () => {
         assert(isStr(s.room) && s.room.length > 0 && s.room.length <= 64 && DAY.test(s.from), 'pièce');
         assert(isStr(s.label) && s.label.length <= 60, 'libellé');
       }
+    });
+  });
+
+  it('#366 bois du poêle : essence connue, jours réels, valeurs bornées, 60 achats au plus', () => {
+    fuzz('parseWood', (r) => {
+      const field = () => (r() < 0.2 ? anyValue(r) : r() < 0.2 ? pick(r, STRINGS) : r() < 0.5 ? 1 + Math.floor(r() * 50) : (r() - 0.3) * 10 ** Math.floor(r() * 6));
+      const raw =
+        r() < 0.3
+          ? anyValue(r)
+          : {
+              purchases: Array.from({ length: Math.floor(r() * 70) }, () => ({ day: r() < 0.5 ? '2026-01-15' : pick(r, STRINGS), steres: field(), species: r() < 0.5 ? pick(r, ['chene', 'resineux']) : pick(r, STRINGS), moisture: field(), price: field() })),
+              efficiency: field(),
+              kwhPerStere: r() < 0.5 ? anyValue(r) : { chene: field(), [pick(r, KEYS)]: field() },
+            };
+      const w = parseWood(raw);
+      assert(w.purchases.length <= MAX_PURCHASES, 'trop d’achats');
+      for (const p of w.purchases) {
+        assert(Object.hasOwn(SPECIES, p.species), `essence ${p.species}`);
+        assert(DAY.test(p.day) && new Date(`${p.day}T00:00:00Z`).toISOString().startsWith(p.day), `jour ${p.day}`);
+        assert(p.steres >= 0.1 && p.steres <= 100 && p.moisture >= 5 && p.moisture <= 60 && p.price >= 0 && p.price <= 100000, 'valeurs');
+      }
+      assert(w.efficiency >= 10 && w.efficiency <= 100, 'rendement');
+      assert(Object.keys(w.kwhPerStere).every((k) => Object.hasOwn(SPECIES, k)) && Object.values(w.kwhPerStere).every((v) => v >= 500 && v <= 3000), 'kWh par stère');
     });
   });
 

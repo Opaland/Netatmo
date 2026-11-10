@@ -148,6 +148,7 @@ export function renderSettings(view: HTMLElement, section: SettingsSection) {
         ['Journaux de collecte', 'GitHub Actions (public)', 'Tout le monde : uniquement des comptes et des codes, jamais de valeur'],
         ['Prix saisis ici, contrat non partagé', 'Votre appareil (stockage du navigateur)', 'Vous seul'],
         ['Contrat partagé (dates, offre, puissance)', 'Variable GitHub CONTRACT_JSON, puis données chiffrées', 'Les administrateurs du dépôt ; chiffré dans data/'],
+        ['Achats de bois du poêle (dates, stères, prix)', 'Variable GitHub WOOD_JSON, puis données chiffrées ; brouillon chiffré sur cet appareil', 'Les administrateurs du dépôt ; chiffré dans data/'],
         ['Alerte froid prolongé (pièces suivies, seuil)', 'Variable GitHub COLD_ALERT_JSON ; issue publique', 'Variable : les administrateurs du dépôt ; issue : tout le monde, avec des pseudonymes seulement (ni nom ni température)'],
         [
           'Clé « Rester connecté », notes chiffrées, réglages, cache hors ligne',
