@@ -69,7 +69,8 @@ const DESTINATIONS = {
   // #311: period, verdict and its gauge, 3 tiles, alerts, what counted, consumption and cold, AI summary
   accueil: ['.periodbar [data-set=home]', '.periodbar .scope', '.verdict .gauge', '.home-tiles .kpi', '#grid-card .alert', '#counted-card .list .row', '#home-chart canvas', '#insight-card .md', 'a[href="#historique"]'],
   pieces: ['.rooms-picker', '#rooms-chart canvas', 'a[href="#confort"]', 'a[href="#chauffe-eau"]'],
-  historique: ['.kpis-one .kpi', '#explore-card #main-chart canvas', '#explore-card [data-set=cat]', '#explore-card [data-set=gran]', '#cmp-chart canvas', 'text:Totaux annuels', '#rooms-waterfall canvas', '#sig-chart canvas', '#sig-wind table', 'text:Le vent explique', '#indoor-sig-chart canvas', '#unusual-card', '#cal-chart canvas', '#station-chart canvas'],
+  // #394: the cut days of the incident log, said under « Consommation en détail » and in its chart's summary
+  historique: ['.kpis-one .kpi', '#explore-card #main-chart canvas', '#explore-card #cut-note', '#main-chart[aria-label*="Jours de coupure"]', '#explore-card [data-set=cat]', '#explore-card [data-set=gran]', '#cmp-chart canvas', 'text:Totaux annuels', '#rooms-waterfall canvas', '#sig-chart canvas', '#sig-wind table', 'text:Le vent explique', '#indoor-sig-chart canvas', '#unusual-card', '#cal-chart canvas', '#station-chart canvas'],
   // #301: part of the usages, maximum power (shedding in « Voir les valeurs »), then the detail pages
   compteur: ['#linky-chart canvas', '#pmax-chart canvas', '#offload-zone table', '#share-card .counted', '#power-card .counted', 'a[href="#compteur-veille"]', 'a[href="#compteur-heures-creuses"]'],
   'compteur-journee': ['#curve-typical canvas', '#curve-day-chart canvas', '#hour-grid canvas', '#curve-card .counted'],

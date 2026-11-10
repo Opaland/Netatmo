@@ -15,7 +15,8 @@ import { ds, setState, state } from '../app';
 import { type Series, barChart } from '../charts';
 import { OTHER, activeRooms, avgPrice, catColor, delta, esc, eurOf, firstDay, fmtKwh, lastDay, longDate, nf0, roomColor, roomGroup, roomName, seg, table, tableToggle } from '../ui';
 import { NO_REFERENCE, PERIOD, vsLabel } from '../glossary';
-import { chartMarks, uncertainDays, yoyGapNote } from './quality';
+import { chartMarks, cutDays, cutDaysIn, uncertainDays, yoyGapNote } from './quality';
+import { cutText } from '../periods';
 import { html } from '../trusted';
 import { lazyCard } from '../lazy';
 import { ENERGY_ONLY, costScope } from '../synthese';
@@ -136,7 +137,10 @@ export function renderOverview(view: HTMLElement, records: DayRecord[], part: Ov
 
 function estimatedNote(records: DayRecord[], from: string, to: string) {
   const n = uncertainDays(records, ds!.estimated, from, to).size;
-  return n ? ` <a class="muted" href="#etat" title="Jours estimés à partir du total mensuel ou perdus chez Intuis : voir « État des données ».">· ${n} jour${n > 1 ? 's' : ''} estimé${n > 1 ? 's' : ''} ou manquant${n > 1 ? 's' : ''}</a>` : '';
+  const cuts = cutText(cutDaysIn(from, to), cutDays()); // #394
+  return `${n ? ` <a class="muted" href="#etat" title="Jours estimés à partir du total mensuel ou perdus chez Intuis : voir « État des données ».">· ${n} jour${n > 1 ? 's' : ''} estimé${n > 1 ? 's' : ''} ou manquant${n > 1 ? 's' : ''}</a>` : ''}${
+    cuts ? ` <a class="muted" href="#etat" id="cut-note" title="Journal des incidents : voir « État des données ».">· ${esc(cuts)}</a>` : ''
+  }`;
 }
 
 /** Returns true when the change belonged to this view. */
