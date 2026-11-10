@@ -199,7 +199,10 @@ function settingsButton(el: HTMLElement) {
   b.className = 'btn tertiary chart-settings';
   b.dataset.chartSettings = el.id || '';
   b.setAttribute('aria-haspopup', 'dialog');
-  b.innerHTML = html(`${SLIDERS}<span>Réglages du graphique</span>`);
+  // a short visible label, so that it shares the line of « Voir les valeurs » (the Accueil holds
+  // in 3 phone screens, #311); the full name for assistive tech (it contains the visible word)
+  b.setAttribute('aria-label', 'Réglages du graphique');
+  b.innerHTML = html(`${SLIDERS}<span>Réglages</span>`);
   el.after(b);
 }
 
