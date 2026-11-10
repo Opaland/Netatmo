@@ -26,6 +26,7 @@ import {
 import { html } from '../trusted';
 import { offlineText } from '../room-offline';
 import { offlineRun } from './offline-rooms';
+import { countedHtml } from './compare';
 
 /**
  * #308: « list » (Pièces, under the list by cost of #313: this year against the last one, room
@@ -116,10 +117,11 @@ export function renderRooms(view: HTMLElement, records: DayRecord[], part: 'list
     ? ` ${esc(stoveRooms.map((r) => `${r.name} : ${offlineText(offlineRun(r.id, minusYears(cFrom), cTo)!)}`).join(' ; '))}, sa baisse vient du changement de mode de chauffage.`
     : '';
   const changesCard = () => `
-  <section class="card">
-    <h2>Qu'est-ce qui a changé ? <small class="muted">${year - 1} → ${year}${suffix}</small></h2>
+  <section class="card" id="changes-card">
+    <div class="card-head"><h2>Pièce par pièce</h2><span class="card-period">${esc(`${year - 1} → ${year}${suffix}`)}</span></div>
     <p class="hint muted">Chaque barre montre de combien une pièce a fait monter (rouge) ou baisser (vert) le total.${offNote}${stoveNote}</p>
     <div class="chart" id="rooms-waterfall" role="img" aria-label="Évolution par pièce"></div>
+    ${countedHtml()}
   </section>`;
   view.innerHTML = html(part === 'list' ? listCard() : changesCard());
 
@@ -133,7 +135,7 @@ export function renderRooms(view: HTMLElement, records: DayRecord[], part: 'list
     labels: pSorted.map((x) => x.name),
     series: [
       {
-        name: 'Période',
+        name: 'Période (couleur de la pièce)',
         color: cssVar('--text-muted'),
         data: pSorted.map((x) => Math.round(pNow.get(x.id) ?? 0)),
         colors: pSorted.map((x) => roomColor(x.id)),

@@ -9,7 +9,7 @@ import { CATEGORY_LABEL, type DayRecord, bucketLabel } from '../aggregate';
 import { tariffSplit } from '../analysis';
 import { ds, state } from '../app';
 import { barChart, cssVar } from '../charts';
-import { type LegendItem, alert, gauge, howDetails, legend, list, seg } from '../components';
+import { type LegendItem, alert, countedNote, gauge, howDetails, legend, list, seg } from '../components';
 import { HOME_PERIODS, type HomeRange, homeRange, scopeTitle } from '../home';
 import { lazyCard } from '../lazy';
 import {
@@ -36,7 +36,7 @@ import * as analyse from './analyse';
 
 const hasCurve = () => !!((ds!.meta as { linky_curve_years?: number[] }).linky_curve_years ?? []).length;
 const hasTariffs = () => !!ds!.meta.has_tariffs;
-const counted = (text: string) => `<p class="counted"><span class="counted-k">Compté :</span> ${text}</p>`;
+const counted = countedNote;
 const head = (id: string, title: string, sub: string) =>
   `<div class="card-head"><h2 id="${id}">${esc(title)}</h2><span class="card-period">${esc(sub)}</span></div>`;
 
