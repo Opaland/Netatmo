@@ -24,6 +24,7 @@ import { localDateTime } from '../glossary';
 import { html } from '../trusted';
 import { lazyAction, lazyCard } from '../lazy';
 import { showBuild } from '../build';
+import { track } from '../ready';
 import { handleAppClick, mountAppCard } from './app-card';
 import { loadVotes, usefulRate } from '../insight';
 import { tenant, tenantNote } from '../tenant';
@@ -200,7 +201,8 @@ export function renderSettings(view: HTMLElement, section: SettingsSection) {
   };
   view.innerHTML = html(body[section]);
   const has = (id: string) => !!document.getElementById(id);
-  if (has('build-info')) void showBuild(document.getElementById('build-info'));
+  // the card fills from build.json: the view is not ready before (the sweep saw it empty under load)
+  if (has('build-info')) void track(showBuild(document.getElementById('build-info')));
   if (has('app-card')) void mountAppCard(document.getElementById('app-card')); // #357
   // S-12.6 tenant mode, S-12.5 prolonged cold alert: lazy modules
   if (has('tenant-card')) void lazyCard(() => import('./tenant-card'), (x) => x.mountTenant(document.getElementById('tenant-card')), { zone: 'tenant-card', what: 'Mode locataire' });
