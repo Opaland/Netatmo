@@ -67,7 +67,7 @@ async function go(page, key) {
  */
 const DESTINATIONS = {
   // #311: period, verdict and its gauge, 3 tiles, alerts, what counted, consumption and cold, AI summary
-  accueil: ['.periodbar [data-set=home]', '.periodbar .scope', '.verdict .gauge', '.home-tiles .kpi', '#grid-card .alert', '#counted-card .list .row', '#home-chart canvas', '#insight-card .md', 'a[href="#historique"]'],
+  accueil: ['.periodbar [data-set=home]', '.periodbar .scope', '.verdict .gauge', '.home-tiles .kpi', '#grid-card .alert', '#counted-card .list .row', 'text:Poêle à bois (Cuisine)', '#home-chart canvas', '#insight-card .md', 'a[href="#historique"]'],
   pieces: ['.rooms-picker', '#rooms-chart canvas', 'a[href="#confort"]', 'a[href="#chauffe-eau"]'],
   historique: ['.kpis-one .kpi', '#explore-card #main-chart canvas', '#explore-card [data-set=cat]', '#explore-card [data-set=gran]', '#cmp-chart canvas', 'text:Totaux annuels', '#rooms-waterfall canvas', '#sig-chart canvas', '#sig-wind table', 'text:Le vent explique', '#indoor-sig-chart canvas', '#unusual-card', '#cal-chart canvas', '#station-chart canvas'],
   // #301: part of the usages, maximum power (shedding in « Voir les valeurs »), then the detail pages
@@ -93,7 +93,8 @@ const DESTINATIONS = {
   'outils-questions': ['#questions-card [data-question]'],
   'outils-exports': ['#export', '[data-export-long=csv]', '[data-export-long=json]', '[data-research]', '#backup'],
   'parametres-contrat': ['[data-pmode]', '#contract-share'],
-  'parametres-logement': ['#works-card [data-works-surface]', 'a[href="#compteur-autres"]'],
+  // #366: the stove's wood (demo: three purchases, two seasons), on Accueil too (winter against winter: e2e/expliquer.mjs)
+  'parametres-logement': ['#wood-card [aria-label="Bois par saison"] .row', '#wood-card #wood-add', '#works-card [data-works-surface]', 'a[href="#compteur-autres"]'],
   'parametres-sources': ['.status-list', '#gh-login', '#devices-card'],
   'parametres-objectifs': ['#money-card #budget-input', '#co2-input', '[data-threshold]', '#cold-card [data-cold-room]'],
   'parametres-affichage': ['[data-set=theme]', '[data-toggle=simple]', 'select[data-pin]', '[data-toggle=household]'],

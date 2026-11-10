@@ -44,6 +44,7 @@ import { html } from '../trusted';
 import { alertHtml, legend, tile } from '../components';
 import { lazyCard } from '../lazy';
 import { tenant, tenantNote } from '../tenant';
+import { woodOver } from './wood-state';
 
 /**
  * #308: « history » (Historique: years or seasons compared, annual totals), « offers » (Outils →
@@ -329,6 +330,32 @@ let chipsOpen = false;
  * (its heating × degree-days ratio; the water heater is not corrected), so that the tiles and the
  * sentence give the same change; the raw kWh are written under it.
  */
+/**
+ * #366: winter against winter with the wood of the stove: the whole heating (electricity + wood)
+ * in energy and in euros, so that heat moved to the stove does not read as a saving.
+ */
+function woodSeasons2(records: DayRecord[], a: number, b: number): string {
+  const span = (y: number) => [`${y}-09-01`, `${y + 1}-08-31`] as const;
+  const wa = woodOver(...span(a));
+  const wb = woodOver(...span(b));
+  if (!wa || !wb || (wa.kwh < 1 && wb.kwh < 1)) return '';
+  const heat = records.filter((r) => r.cat === 'heating');
+  const side = (y: number, w: { kwh: number; eur: number }) => {
+    const kwh = total(heat, ...span(y));
+    const eur = costOf(heat, ...span(y));
+    return { kwh: kwh + w.kwh, wood: w.kwh, eur: eur === null ? null : eur + w.eur };
+  };
+  const A = side(a, wa);
+  const B = side(b, wb);
+  const pe = pctChange(A.kwh, B.kwh);
+  const pm = A.eur !== null && B.eur !== null ? pctChange(A.eur, B.eur) : null;
+  const one = (y: number, x: typeof A) =>
+    `${seasonLabel(y)} : ≈ ${fmtKwh(x.kwh)}${x.wood >= 1 ? ` dont ${fmtKwh(x.wood)} de bois` : ''}${x.eur !== null ? `, ≈ ${fmtEur(x.eur)}` : ''}`;
+  return `<p id="wood-seasons"><b>Chauffage électricité + bois</b> (hors abonnement) : ${esc(one(a, A))} ; ${esc(one(b, B))}.${
+    pe !== null ? ` <b>${signedPct(pe)} en énergie${pm !== null ? `, ${signedPct(pm)} en euros` : ''}</b> vs l'hiver ${esc(seasonLabel(b))}, météo non corrigée.` : ''
+  } <a class="link" href="#parametres-logement">Bois et hypothèses</a></p>`;
+}
+
 function seasonTiles(records: DayRecord[], picked: number[], current: number, climate: boolean): string {
   const done = picked.filter((y) => y < current).slice(-2);
   if (done.length < 2) return '';
@@ -372,7 +399,7 @@ function seasonTiles(records: DayRecord[], picked: number[], current: number, cl
         ? `<b>${signedPct(raw)} ${esc(vs)}</b>.`
         : '';
   // #348: the shared tiles of Accueil (#311): side by side when there is room, an amount never cut
-  return `<div class="kpis season-tiles">${tiles}</div><p>${sentence}</p>`;
+  return `<div class="kpis season-tiles">${tiles}</div><p>${sentence}</p>${woodSeasons2(records, a, b)}`;
 }
 
 // ------------------------------------------------------------------ EDF offer comparator

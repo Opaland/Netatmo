@@ -39,6 +39,7 @@ import { chartMarks, yoyGapNote } from './quality';
 import { offlineEstimate, offlineLine, offlineNow, offlineRun, stoppedIn } from './offline-rooms';
 import { offlineText } from '../room-offline';
 import { type Scope, fmtMoney, homeScope, money, yoy } from './verdict-scope';
+import { stoveName, woodOver } from './wood-state';
 
 const ord = (day: string) => (Number(day.slice(8, 10)) === 1 ? '1er' : String(Number(day.slice(8, 10))));
 const END_LABEL = { month: 'fin du mois', season: 'fin de saison', year: "fin d'année", '12m': '' } as const;
@@ -223,11 +224,13 @@ function countedCard(records: DayRecord[], r: HomeRange): string {
   const vs = vsLabel(r.from, r.to);
   const off = (id: string) => offlineRun(id, r.from, r.to) ?? offlineRun(id, minusYears(r.from), minusYears(r.to));
   const cat = new Map(rooms.map((x) => [x.id, x]));
+  const wood = woodRow(records, r, euros);
   return `<section class="card" id="counted-card" aria-labelledby="counted-title">
     <div class="card-head"><h2 id="counted-title">Ce qui a compté</h2><span class="sub muted">${esc(periodPhrase(r))} · part du total</span></div>
     ${list(
       [
-        ...rows.slice(0, 3).map((x) => {
+        // #366: with the stove's wood, two rooms and the stove (#311: the screen holds in three)
+        ...rows.slice(0, wood.length ? 2 : 3).map((x) => {
           const room = cat.get(x.id)!;
           const water = room.category === 'water_heater';
           const run = off(x.id);
@@ -241,6 +244,7 @@ function countedCard(records: DayRecord[], r: HomeRange): string {
             href: `#${routeKey({ page: 'piece', room: x.id })}`,
           };
         }),
+        ...wood,
         ...silent.map((x) => ({
           title: x.name,
           sub: offlineLine(x.id, r.from, r.to),
@@ -251,8 +255,25 @@ function countedCard(records: DayRecord[], r: HomeRange): string {
       ],
       'Pièces qui ont le plus compté',
     )}
-    <p class="card-foot"><a class="link" href="#pieces">Toutes les pièces${rows.length > 3 ? ` (${rows.length})` : ''}</a></p>
+    <p class="card-foot"><a class="link" href="#pieces">Toutes les pièces${rows.length > (wood.length ? 2 : 3) ? ` (${rows.length})` : ''}</a></p>
   </section>`;
+}
+
+/**
+ * #366: the wood of the stove over the period (it does not go through the meter): its cost, and
+ * the whole heating — electricity + wood — with the share of each. One row of « Ce qui a compté »
+ * (#311: the screen holds in three).
+ */
+function woodRow(records: DayRecord[], r: HomeRange, euros: boolean) {
+  const wood = woodOver(r.from, r.to);
+  if (!wood || wood.kwh < 1) return [];
+  const heat = records.filter((x) => x.cat === 'heating');
+  const elec = euros ? costOf(heat, r.from, r.to) : null;
+  const sub =
+    elec !== null
+      ? `chauffage ≈ ${fmtEur(elec + wood.eur)} : bois ${Math.round((wood.eur / (elec + wood.eur)) * 100)} %`
+      : `chauffage ≈ ${fmtKwh(total(heat, r.from, r.to) + wood.kwh)} : bois ${Math.round((wood.kwh / (total(heat, r.from, r.to) + wood.kwh)) * 100)} %`;
+  return [{ title: stoveName(), sub, value: `≈ ${euros ? fmtEur(wood.eur) : fmtKwh(wood.kwh)}`, color: '--usage-heating', href: '#parametres-logement' }];
 }
 
 // ------------------------------------------------------------------ rooms offline (#346)
