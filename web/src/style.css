@@ -1663,7 +1663,7 @@ code.hash {
   box-shadow: var(--shadow-1);
 }
 .sheet::backdrop {
-  background: rgb(0 0 0 / 0.45);
+  background: var(--scrim);
 }
 .sheet-head h2 {
   margin: 0;
