@@ -122,9 +122,7 @@ function dataFixtures() {
  * that no longer happens is reported so that it is removed from here.
  * { route: regex on the route, kind: invariant, why }.
  */
-const EXPECTED = [
-  { route: /^(pieces|confort)$/, kind: 'defilement-saute', fixture: 'compte-charge', why: '#370 : la page saute après une case ou une liste, avec 10 pièces' },
-];
+const EXPECTED = [];
 const expected = (f) => EXPECTED.find((e) => e.route.test(f.route) && e.kind === f.kind && (!e.fixture || e.fixture === f.fixture));
 
 // ------------------------------------------------------------------ invariants (in the page)
