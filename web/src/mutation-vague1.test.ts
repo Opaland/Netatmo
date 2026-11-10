@@ -245,14 +245,14 @@ describe('invoice.ts (#358)', () => {
     expect(line(oneMissing, 'missing')!.text).toMatch(/^1 jour sans relevé Linky dans la période/);
   });
 
-  it('abonnement : année bissextile, case décochée ; jours sans prix', () => {
+  it('abonnement : année bissextile, interrupteur désactivé ; jours sans prix', () => {
     const leap = { ...flat, fixedYear: 366 };
     const feb = reconcile(one({ from: '2024-02-01', to: '2024-02-29' }), data({ linky: new Map([['2024-02-01', 1]]), priceAt: () => leap }));
     expect(feb.subscription).toBeCloseTo(29, 9);
     expect(line(feb, 'subscription')!.text).toBe(
       "Abonnement compté au prorata des jours : 29,00 € pour 29 jours. Un fournisseur le facture souvent par mois entier ou d'avance : quelques euros d'écart en viennent.",
     );
-    expect(line(reconcile(one({ subscription: false }), data()), 'subscription')!.text).toBe('Abonnement exclu des deux côtés (case décochée).');
+    expect(line(reconcile(one({ subscription: false }), data()), 'subscription')!.text).toBe('Abonnement exclu des deux côtés (« Le montant comprend l’abonnement » désactivé).');
     // a day with kWh but no price: not priced, no crash
     const two = reconcile(one({ to: '2025-03-02' }), data({ linky: new Map([['2025-03-01', 10], ['2025-03-02', 10]]), priceAt: (d) => (d === '2025-03-02' ? flat : null) }));
     expect(two.avgPrice).toBe(0.25);

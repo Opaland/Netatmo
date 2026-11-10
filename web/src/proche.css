@@ -24,7 +24,7 @@ body.simple-nav #view :is(h2, h3, .proche-strong, .page-title) {
 }
 /* the labels of the three tabs follow the text size (at least the body size) */
 body.simple-nav .tabs a span {
-  font-size: max(1rem, min(var(--font-sm), 3.3vw));
+  font-size: max(var(--font-root), min(var(--font-sm), 3.3vw));
   overflow-wrap: normal;
   hyphens: manual;
   letter-spacing: -0.02em;
@@ -55,7 +55,7 @@ body.simple-nav #view .card h3.muted {
 }
 .proche-big {
   margin: 0;
-  font-size: min(2.5rem, 12vw);
+  font-size: min(var(--font-big-simple), 12vw);
   font-weight: 600;
   line-height: 1.1;
   font-variant-numeric: tabular-nums;

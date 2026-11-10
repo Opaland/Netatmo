@@ -215,7 +215,7 @@ export function reconcile(inv: Invoice, d: InvoiceData): Reconciliation {
     eur: null,
     text: inv.subscription
       ? `Abonnement compté au prorata des jours : ${eur(subscription)} pour ${days} jours. Un fournisseur le facture souvent par mois entier ou d'avance : quelques euros d'écart en viennent.`
-      : 'Abonnement exclu des deux côtés (case décochée).',
+      : 'Abonnement exclu des deux côtés (« Le montant comprend l’abonnement » désactivé).',
   });
   const residual = gap - explained;
   lines.push({
