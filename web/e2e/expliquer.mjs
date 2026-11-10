@@ -249,6 +249,10 @@ try {
       await go(page, 'parametres-logement');
       const card = page.locator('#stopped-card');
       check(/Cuisine/.test(await card.locator('ul[aria-label="Radiateurs arrêtés"]').innerText()), `${name} : la Cuisine n'est pas listée parmi les radiateurs arrêtés`);
+      // revue v1.7: a stopped room keeps the colour of its room (#300), not the orange of the heating usage
+      const swatchOf = (sel) => page.locator(sel).first().evaluate((e) => getComputedStyle(e).backgroundColor);
+      const [stoppedColor, roomColorShown] = [await swatchOf('#stopped-card ul[aria-label="Radiateurs arrêtés"] .swatch'), await swatchOf('a[href="#piece-r-cuisine"] .swatch')];
+      check(stoppedColor === roomColorShown, `${name} : radiateur arrêté de la Cuisine en ${stoppedColor}, la pièce en ${roomColorShown}`);
       check(/Chambre enfant n’envoie plus rien depuis le 5 nov\. 2026/.test(await card.innerText()), `${name} : la Chambre enfant n'est pas proposée`);
       await audit(page, `${name}/logement`, enhanced);
       if (!big) {
