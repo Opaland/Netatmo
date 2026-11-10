@@ -183,11 +183,11 @@ export function woodDaily(s: WoodSettings, weather: Weather | null, last: string
   return out;
 }
 
-/** Wood heat and cost over [from, to]. */
-export function woodIn(daily: Map<string, [number, number]>, from: string, to: string): { kwh: number; eur: number } {
+/** Wood heat and cost over [from, to], the days of `skip` left out (#423: the cuts of « Expliquer un mois »). */
+export function woodIn(daily: Map<string, [number, number]>, from: string, to: string, skip?: ReadonlySet<string>): { kwh: number; eur: number } {
   let kwh = 0;
   let eur = 0;
-  for (const [d, v] of daily) if (d >= from && d <= to) (kwh += v[0]), (eur += v[1]);
+  for (const [d, v] of daily) if (d >= from && d <= to && !skip?.has(d)) (kwh += v[0]), (eur += v[1]);
   return { kwh, eur };
 }
 

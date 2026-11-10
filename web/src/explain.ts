@@ -15,6 +15,7 @@ import { type Weather, dju } from './analysis';
 import { ADEME_PER_DEGREE } from './checks';
 import { MONTHS_LONG, monthLong, signedPct } from './glossary';
 import type { CutKind } from './incidents';
+import { woodIn } from './wood';
 import { type OfflineEstimate, type OfflineRun, type StoppedRoom, offlineDaysIn, offlineText } from './room-offline';
 
 export type StepKey = 'meteo' | 'consignes' | 'mode' | 'pieces' | 'horsligne' | 'eau' | 'autres';
@@ -130,6 +131,21 @@ function linkySum(linky: Map<string, number>, from: string, to: string, skip: Se
   return s;
 }
 
+/**
+ * #394, #423: the days left out of both periods (each day of cut and its day a year earlier). One
+ * set for the electricity here and for the stove's wood on the screen, so that both are counted on
+ * the same days.
+ */
+export function skippedDays(e: Pick<Explanation, 'cuts'>): Set<string> {
+  return new Set(e.cuts.flatMap((c) => [c.day, c.ref]));
+}
+
+/** #423: the stove's wood (kWh, €) of both periods, on the days the electricity is counted. */
+export function explainWood(daily: Map<string, [number, number]>, e: Pick<Explanation, 'from' | 'to' | 'refFrom' | 'refTo' | 'cuts'>) {
+  const skip = skippedDays(e);
+  return { now: woodIn(daily, e.from, e.to, skip), ref: woodIn(daily, e.refFrom, e.refTo, skip) };
+}
+
 /** The explanation of a month vs the same days a year earlier; null without a reference. */
 export function explainMonth(i: ExplainInput): Explanation | null {
   const from = `${i.month}-01`;
@@ -145,7 +161,7 @@ export function explainMonth(i: ExplainInput): Explanation | null {
     const kind = i.cuts?.get(d) ?? i.cuts?.get(ref);
     if (kind) cuts.push({ day: d, ref, kind, on: i.cuts?.has(d) ? 'now' : 'ref' });
   }
-  const skip = new Set(cuts.flatMap((c) => [c.day, c.ref]));
+  const skip = skippedDays({ cuts });
   const sum = (room: string, f: string, t: string) => i.records.reduce((s, r) => s + (r.room === room && r.day >= f && r.day <= t && !skip.has(r.day) ? r.kwh : 0), 0);
   const estimatedIn = (est: OfflineEstimate, room: string, f: string, t: string): number | null => {
     const days = est.days.get(room);

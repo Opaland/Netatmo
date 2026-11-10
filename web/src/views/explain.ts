@@ -4,14 +4,14 @@
 // computed. Loaded on demand (pages.ts); the computations are in explain.ts.
 import { activeRooms, ds } from '../app';
 import { alert, howDetails, list, countedText } from '../components';
-import { type Explanation, STEP_LABEL, type Step, explainMonth, explainSentence, explainableMonths, kwhSigned, stepNote } from '../explain';
+import { type Explanation, STEP_LABEL, type Step, explainMonth, explainWood, explainSentence, explainableMonths, kwhSigned, stepNote } from '../explain';
 import { dayShort, monthLong, monthShort, rangeLabel, signedPct } from '../glossary';
 import { offlineText } from '../room-offline';
 import { routeKey } from '../router';
 import { html } from '../trusted';
 import { avgPrice, costAvailable, esc, fmtKwh, lastDay, table, tableToggle } from '../ui';
 import { offlineInfo } from './offline-rooms';
-import { stoveName, woodOver } from './wood-state';
+import { stoveName, woodDays, woodSettings } from './wood-state';
 import { cutDays } from './quality';
 
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
@@ -52,7 +52,10 @@ export function renderExplain(view: HTMLElement, asked?: string) {
     return;
   }
   const price = costAvailable() ? avgPrice(d.records) : null;
-  const counted = countedText(`${e.basis === 'linky' ? 'tout le logement (compteur Linky)' : 'radiateurs et chauffe-eau (sans compteur Linky)'}, ${rangeLabel(e.from, e.to)}, comparé aux mêmes jours de ${monthLong(e.refFrom)}${cutScope(e)}`);
+  // #423: the wood on the same days as the electricity (the cuts left out of both)
+  const w = woodSettings().purchases.length ? explainWood(woodDays(), e) : null;
+  const wood = w && (w.now.kwh >= 1 || w.ref.kwh >= 1) ? w : null;
+  const counted = countedText(`${e.basis === 'linky' ? 'tout le logement (compteur Linky)' : 'radiateurs et chauffe-eau (sans compteur Linky)'}, ${rangeLabel(e.from, e.to)}, comparé aux mêmes jours de ${monthLong(e.refFrom)}${cutScope(e, !!wood)}`);
   const up = e.delta >= 0;
   const head = Math.abs(e.pct) < 3 ? 'Comme l’an dernier' : `${kwhSigned(e.delta)} vs ${monthShort(e.refFrom)}`;
   view.innerHTML = html(`<div class="periodbar">${select}<p class="scope" aria-live="polite">${esc(counted)}</p></div>
@@ -78,7 +81,7 @@ export function renderExplain(view: HTMLElement, asked?: string) {
       ),
     )}
   </section>
-  ${woodCard(e, price)}
+  ${wood ? woodCard(e, wood, price) : ''}
   ${roomsCard(e)}
   <section class="card"><div class="card-head"><h2>Comment c’est calculé</h2></div>
     ${howDetails('Le détail des parts', howText(e))}
@@ -86,14 +89,17 @@ export function renderExplain(view: HTMLElement, asked?: string) {
   </section>`);
 }
 
-/** #394: « , sans le 14 oct. (coupure de courant), retiré des deux mois » — the days left out of both periods. */
-export function cutScope(e: Explanation): string {
+/**
+ * #394: « , sans le 14 oct. (coupure de courant), retiré des deux mois » — the days left out of both
+ * periods; « , bois du poêle compris » when the wood card is shown (#423: its wood skips them too).
+ */
+export function cutScope(e: Explanation, wood = false): string {
   if (!e.cuts.length) return '';
   const what = (c: Explanation['cuts'][number]) =>
     `le ${dayShort(c.day)} (coupure ${c.kind === 'power' ? 'de courant' : 'Internet'}${c.on === 'ref' ? ` en ${c.ref.slice(0, 4)}` : ''})`;
   const list = e.cuts.map(what);
   const joined = list.length > 1 ? `${list.slice(0, -1).join(', ')} ni ${list[list.length - 1]}` : list[0];
-  return `, sans ${joined} : ${e.cuts.length > 1 ? 'jours retirés' : 'jour retiré'} des deux mois`;
+  return `, sans ${joined} : ${e.cuts.length > 1 ? 'jours retirés' : 'jour retiré'} des deux mois${wood ? ', bois du poêle compris' : ''}`;
 }
 
 /** Short name of a part on the chart (the full one, with its note, is in the list under it). */
@@ -168,10 +174,7 @@ function stoppedBlock(e: Explanation): string {
  * #366: the stove's wood (out of the meter, so out of the parts above, which add up to the change
  * of electricity): its heat and cost both months, and the whole heating electricity + wood.
  */
-function woodCard(e: Explanation, price: number | null): string {
-  const now = woodOver(e.from, e.to);
-  const ref = woodOver(e.refFrom, e.refTo);
-  if (!now || !ref || (now.kwh < 1 && ref.kwh < 1)) return '';
+function woodCard(e: Explanation, { now, ref }: ReturnType<typeof explainWood>, price: number | null): string {
   const heatNow = e.rooms.reduce((s, r) => s + r.now, 0);
   const heatRef = e.rooms.reduce((s, r) => s + r.ref, 0);
   const allNow = heatNow + now.kwh;
