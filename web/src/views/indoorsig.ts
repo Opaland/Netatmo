@@ -11,6 +11,7 @@ import { activeRooms, esc, lastDay, measureColor } from '../ui';
 import { uncertainDays } from './quality';
 import { html } from '../trusted';
 import { dayLong, seasonLabel } from '../glossary';
+import { alertHtml } from '../components';
 
 
 export function renderIndoorSignature(card: HTMLElement, records: DayRecord[]) {
@@ -34,7 +35,7 @@ export function renderIndoorSignature(card: HTMLElement, records: DayRecord[]) {
     ${
       latest
         ? `<div class="chart tall" id="indoor-sig-chart" role="img" aria-label="Chauffage selon l'écart intérieur − extérieur"></div>`
-        : `<p class="notice">Données insuffisantes : il faut au moins ${MIN_DAYS} jours de chauffage avec la température de ${name} et de l'extérieur dans une saison.</p>`
+        : alertHtml('info', `Données insuffisantes : il faut au moins ${MIN_DAYS} jours de chauffage avec la température de ${name} et de l'extérieur dans une saison.`)
     }
 `;
   // #303: one table for both signatures (same days, same fit), under the outdoor chart

@@ -69,6 +69,12 @@
   --shadow-1: 0 1px 2px rgb(33 32 28 / 0.06), 0 1px 3px rgb(33 32 28 / 0.06);
   --shadow-3: 0 8px 24px rgb(33 32 28 / 0.14);
   --hatch-ink: rgb(255 255 255 / 0.75);
+  /* #317: overlays, same in every theme: shadow at the cut edge of a table that scrolls,
+     backdrop of a dialog; print is always black on white paper */
+  --scroll-shadow: rgb(0 0 0 / 0.18);
+  --scrim: rgb(0 0 0 / 0.45);
+  --print-paper: #fff;
+  --print-ink: #000;
 }
 
 @media (prefers-color-scheme: dark) {

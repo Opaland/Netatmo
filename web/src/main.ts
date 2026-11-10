@@ -34,6 +34,7 @@ import { listenInstall } from './install';
 import { startPwa } from './pwa';
 import { nothingKept, renderOfflineScreen } from './views/offline-screen';
 import './style.css';
+import { alertHtml } from './components';
 
 // #357: Chrome may offer the installation while the page is still loading: listen first.
 listenInstall();
@@ -163,7 +164,7 @@ function render() {
       )
       .join('')}
   </nav>
-  ${s.stale ? `<p class="stale" role="alert"><span aria-hidden="true">⚠️</span> Données arrêtées au ${esc(s.date)} (il y a ${s.days} jours) : la collecte est peut-être en panne. <a href="#etat">Voir pourquoi</a></p>` : ''}
+  ${s.stale ? alertHtml('bad', `Données arrêtées au ${esc(s.date)} (il y a ${s.days} jours) : la collecte est peut-être en panne. <a href="#etat">Voir pourquoi</a>`) : ''}
   <p class="offline" id="net-status" role="status" hidden></p>
   ${
     sub

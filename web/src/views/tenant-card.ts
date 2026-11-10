@@ -4,6 +4,7 @@ import { firstDay, lastDay, longDate } from '../ui';
 import { leaseWindow, setTenant, tenant } from '../tenant';
 import { html } from '../trusted';
 import '../simulators.css';
+import { switchField } from '../components';
 
 let pendingFocus: string | null = null;
 
@@ -15,7 +16,7 @@ export function mountTenant(card: HTMLElement | null) {
   card.hidden = false;
   card.innerHTML = html`<h2>Mode locataire <small class="muted">sur cet appareil</small></h2>
     <p class="hint muted">Pour suivre son chauffage sans le compteur Linky ni le contrat du titulaire (propriétaire, bailleur), avec un coût juste et un bilan de fin de bail.</p>
-    <label class="check"><input type="checkbox" id="tenant-on" ${t.on ? 'checked' : ''}> Je suis locataire</label>
+    ${switchField('Je suis locataire', t.on, { id: 'tenant-on' })}
     ${
       t.on
         ? `<div class="sim-form">

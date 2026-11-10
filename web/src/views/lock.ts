@@ -7,6 +7,7 @@ import { html } from '../trusted';
 import { INSTALL_HASH, installSteps } from '../invite';
 import { clearLockNotice } from '../session';
 import { bindReveal, hideSecrets, revealButton } from '../reveal';
+import { alertHtml, formMsg, switchField } from '../components';
 
 /** `notice`: an information, not an error (S-7.9: key erased by the browser, data intact). */
 export function renderLock(message = '', hasRealData = true, notice = '') {
@@ -17,7 +18,7 @@ export function renderLock(message = '', hasRealData = true, notice = '') {
       <img src="icons/icon.svg" alt="" width="64" height="64">
       <h1>Historique énergie</h1>
       <p class="muted">Radiateurs et chauffe-eau Intuitiv / Intuis — vos données restent chiffrées, elles ne sont déchiffrées que sur cet appareil.</p>
-      ${notice ? `<p class="notice" id="lock-notice" role="status">${esc(notice)}</p>` : ''}
+      ${notice ? alertHtml('info', esc(notice), { id: 'lock-notice', role: 'status' }) : ''}
       ${
         hasRealData
           ? `<form id="unlock">
@@ -26,12 +27,12 @@ export function renderLock(message = '', hasRealData = true, notice = '') {
           <input id="pass" type="password" autocomplete="current-password" required autofocus spellcheck="false" autocapitalize="off">
           ${revealButton('pass')}
         </div>
-        <label class="check"><input id="remember" type="checkbox" checked> Rester connecté sur cet appareil (30 jours au plus)</label>
+        ${switchField('Rester connecté sur cet appareil (30 jours au plus)', true, { id: 'remember' })}
         <button class="primary" type="submit">Déverrouiller</button>
       </form>`
-          : `<p class="notice">Aucune donnée n'a encore été collectée. Suivez le guide d'installation du README, ou essayez la démo.</p>`
+          : alertHtml('info', "Aucune donnée n'a encore été collectée. Suivez le guide d'installation du README, ou essayez la démo.")
       }
-      <p class="error" role="alert">${esc(message)}</p>
+      ${formMsg(message, { id: 'lock-msg' })}
       <button class="link" id="demo" type="button">Essayer avec des données de démonstration</button>
       <details class="install-help" id="install-help" ${location.hash === INSTALL_HASH ? 'open' : ''}>
         <summary>Installer l'appli sur ce téléphone</summary>
@@ -59,7 +60,7 @@ async function open(source: Source, pass: string, remember: boolean) {
   opening = true;
   for (const el of app.querySelectorAll<HTMLButtonElement | HTMLInputElement>('.lock-card button, .lock-card input')) el.disabled = true;
   app.querySelector('.lock-card')?.setAttribute('aria-busy', 'true');
-  app.querySelector('.error')!.textContent = 'Déchiffrement…';
+  document.getElementById('lock-msg')!.textContent = 'Déchiffrement…';
   let opened: Dataset;
   try {
     const key = await unlock(source, pass);
@@ -99,7 +100,7 @@ export function renderError(err: unknown) {
   <main class="lock">
     <div class="lock-card">
       <h1>Affichage impossible</h1>
-      <p class="error" role="alert">Les données sont bien déchiffrées, mais l'affichage a échoué : ${esc(err instanceof Error ? err.message : String(err))}</p>
+      ${alertHtml('bad', `Les données sont bien déchiffrées, mais l'affichage a échoué : ${esc(err instanceof Error ? err.message : String(err))}`)}
       <p class="muted">Rechargez la page ; si l'erreur revient, signalez-la (le détail est dans la console du navigateur).</p>
       <button class="primary" type="button" id="reload">Recharger</button>
     </div>

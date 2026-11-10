@@ -35,6 +35,7 @@ import { html } from '../trusted';
 import * as windows from './windows';
 import * as ha from './ha';
 import { fmt1 as f1 } from '../glossary';
+import { alertHtml } from '../components';
 import { pressureCard } from './pressure';
 
 // #247: station hourly readings of the dataset shown; `hourly` / `hourlyFailed` refreshed from it.
@@ -128,7 +129,7 @@ function co2Cards(st: Station, map: Map<string, string>) {
       if (isBedroom(name) && !showBedrooms)
         return `<section class="card">${head}
         <p class="hint muted">Le détail des chambres est masqué par défaut, par respect pour leurs occupants. Il reste affiché jusqu'au prochain verrouillage.</p>
-        <button type="button" class="toggle" data-comfort="show-bedrooms">Afficher le détail des chambres</button></section>`;
+        <button type="button" class="btn secondary" data-comfort="show-bedrooms">Afficher le détail des chambres</button></section>`;
       const rows = nightsOf(st, k) ?? [];
       const s = summarizeNights(rows);
       const v = nightVerdict(s);
@@ -440,7 +441,7 @@ function probeCard(st: Station, map: Map<string, string>) {
   return `<section class="card" id="probe-card">
     <h2>Radiateur et station : écart de température <small class="muted">pièces liées à un module</small></h2>
     <p class="hint muted">Le radiateur règle sa chauffe sur sa propre sonde, placée contre l'appareil ; le module de la station, posé dans la pièce, mesure ce que vous ressentez. L'<strong>écart moyen</strong> (radiateur − station, jours de chauffe des 12 derniers mois) dit de combien la sonde se trompe : s'il est stable, recalez la consigne d'autant pour obtenir la température voulue à la station.</p>
-    ${compared || `<p class="notice">Aucune pièce n'est liée à un module de la station : choisissez son module ci-dessous pour comparer.</p>`}
+    ${compared || alertHtml('info', "Aucune pièce n'est liée à un module de la station : choisissez son module ci-dessous pour comparer.")}
     <details class="table-details" id="probe-links" ${linked.length && !linksOpen ? '' : 'open'}><summary>Choisir le module de chaque pièce</summary>
     <p class="hint muted">Tous les modules intérieurs de la station sont proposés, quel que soit leur nom : un module « Cave » posé dans une chambre peut lui être lié. Une pièce liée utilise la station pour le confort ; sinon, la sonde du radiateur. Choix gardé sur cet appareil.</p>
     ${table(

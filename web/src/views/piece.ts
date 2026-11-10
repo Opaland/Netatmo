@@ -539,7 +539,7 @@ function airCard(id: string, name: string, from30: string, last: string): string
   const foot = `<p class="hint muted">Module « ${esc(mod)} » de la station · <a href="#confort">changer le module lié</a></p>`;
   if (isBedroom(name) && !airShown)
     return `<section class="card" id="piece-air">${head}<p class="hint muted">Le CO₂ et l’humidité des chambres sont masqués par défaut, par respect pour leurs occupants. Ils restent affichés jusqu’au prochain verrouillage.</p>
-      <button type="button" class="toggle" data-piece="show-air">Afficher l’air de cette pièce</button>${foot}</section>`;
+      <button type="button" class="btn secondary" data-piece="show-air">Afficher l’air de cette pièce</button>${foot}</section>`;
   const nightly = st.nightly?.[k];
   const lastNight = nightly ? lastNightDay(nightly) : null;
   const verdict = nightly && lastNight ? nightVerdict(summarizeNights(lastNights(nightly, lastNight, 30))) : null;

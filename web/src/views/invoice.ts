@@ -9,6 +9,7 @@ import { loadNote, saveNote } from '../local-store';
 import { costAvailable, costOf, dayPrices, esc, fmtKwh, firstDay, lastDay, longDate, nf0, offCol } from '../ui';
 import { html } from '../trusted';
 import { onCard } from '../events';
+import { alertHtml, switchField } from '../components';
 
 const NOTE = 'invoices';
 let invoices: Invoice[] | null = null;
@@ -75,12 +76,12 @@ function result(inv: Invoice): string {
   const period = `du ${longDate(inv.from)} au ${longDate(inv.to)} (${r.days} jours)`;
   const outside = inv.from < firstDay() || inv.to > lastDay();
   if (r.verdict === 'no-price' || r.appTotal === null || r.gap === null) {
-    return `<p class="notice">Facture ${period} : aucun prix connu pour cette période (contrat ou tarifs à renseigner dans le menu, ou période hors des données).</p>`;
+    return alertHtml('info', `Facture ${period} : aucun prix connu pour cette période (contrat ou tarifs à renseigner dans le menu, ou période hors des données).`);
   }
   const share = (v: number | null) => (v === null || inv.amount <= 0 ? '' : ` (${nf0.format((v / inv.amount) * 100)} % de la facture)`);
   const sourceKwh = r.scope === 'heating' ? 'radiateurs et chauffe-eau (pas de compteur Linky)' : 'compteur Linky';
   return `<div class="invoice-result">
-    <p><strong>Facture ${period}</strong> <span class="badge-${r.verdict === 'ok' ? 'ok' : 'warn'}">${r.verdict === 'ok' ? 'écart expliqué' : 'écart en partie inexpliqué'}</span></p>
+    <p><strong>Facture ${period}</strong> <span class="${r.verdict === 'ok' ? 'badge-ok' : 'badge-warn'}">${r.verdict === 'ok' ? 'écart expliqué' : 'écart en partie inexpliqué'}</span></p>
     ${outside ? `<p class="hint">La période dépasse les données de l'appli (du ${longDate(firstDay())} au ${longDate(lastDay())}) : les jours hors données sont comptés comme manquants.</p>` : ''}
     <div class="table-wrap" tabindex="0"><table><tbody>
       <tr><th scope="row">Montant de la facture</th><td class="num">${eur2(inv.amount)}${inv.kwh !== null ? ` · ${fmtKwh(inv.kwh)}` : ''}</td></tr>
@@ -115,8 +116,8 @@ function card(): string {
       <label class="money-field">Montant TTC (€) <input type="number" id="inv-amount" min="0" step="0.01" inputmode="decimal" required></label>
       <label class="money-field">kWh facturés <small>(facultatif)</small> <input type="number" id="inv-kwh" min="0" step="1" inputmode="numeric"></label>
     </div>
-    <label class="check"><input type="checkbox" id="inv-sub" checked> Le montant comprend l'abonnement</label>
-    <label class="check"><input type="checkbox" id="inv-est"> Index de fin <strong>estimé</strong> par le fournisseur</label>
+    ${switchField("Le montant comprend l'abonnement", true, { id: 'inv-sub' })}
+    ${switchField('Index de fin estimé par le fournisseur', false, { id: 'inv-est' })}
     <p><button type="button" class="primary small" id="inv-add">Comparer cette facture</button> <span class="hint" id="inv-msg" role="status"></span></p>
     ${
       list.length

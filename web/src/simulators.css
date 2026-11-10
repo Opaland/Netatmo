@@ -24,12 +24,6 @@
   min-width: 0;
   box-sizing: border-box;
 }
-.sim-form .check {
-  align-self: end;
-}
-.sim-form .check input {
-  width: auto;
-}
 .sim-choices {
   display: grid;
   gap: 6px;
