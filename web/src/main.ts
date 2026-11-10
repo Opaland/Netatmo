@@ -151,7 +151,7 @@ function render() {
   app.innerHTML = html`
   <header class="top" data-swipe="${swipePeriod(route) ? 'period' : 'tab'}">
     <div class="title">
-      <h1>${esc(meta.home.name)}${ds.source === 'demo' ? ' <span class="badge">démo</span>' : ''}</h1>
+      <p class="home-name">${esc(meta.home.name)}${ds.source === 'demo' ? ' <span class="badge">démo</span>' : ''}</p>
     </div>
     <div class="top-actions"><a class="status-pill ${s.level}" href="#etat" data-view="etat" title="État des données"><span class="dot" aria-hidden="true"></span><span class="pill-long">${esc(s.label)}</span><span class="pill-short">${esc(s.short)}</span><span class="sr-only"> : ${esc(s.text)}, voir l'état des données</span></a>
     <a class="icon-btn" href="#parametres" data-view="parametres" aria-label="Paramètres"${route.page === 'parametres' ? ' aria-current="page"' : ''}>${icon('settings')}</a></div>
@@ -168,7 +168,7 @@ function render() {
   <p class="offline" id="net-status" role="status" hidden></p>
   ${
     sub
-      ? `<div class="subhead"><a class="back" href="#${parent}" data-back aria-label="Retour">${icon('back')}</a><h2 id="page-title" tabindex="-1">${esc(title)}</h2></div>`
+      ? `<div class="subhead"><a class="back" href="#${parent}" data-back aria-label="Retour">${icon('back')}</a><h1 id="page-title" tabindex="-1">${esc(title)}</h1></div>`
       : ''
   }
   ${tipHtml(route)}

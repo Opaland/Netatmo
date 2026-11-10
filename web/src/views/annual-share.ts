@@ -133,7 +133,7 @@ export function renderAnonymised(view: HTMLElement, year: number | 'lease') {
     const keys = [...months.keys()].sort();
     barChart(chart, {
       labels: keys.map((k) => `${MONTHS_SHORT[Number(k.slice(5, 7)) - 1]} ${k.slice(0, 4)}`),
-      series: [{ name: 'Bail', color: cssVar('--accent'), data: keys.map((k) => Math.round(months.get(k)!)) }],
+      series: [{ name: 'Bail', color: cssVar('--series-measure'), data: keys.map((k) => Math.round(months.get(k)!)) }],
       stacked: false,
       price: null,
     });

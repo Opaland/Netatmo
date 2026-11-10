@@ -289,7 +289,7 @@ try {
   await page.waitForSelector('.kpi', { timeout: 30000 });
   await go(page, 'pieces');
   const roomNames = (await page.locator('.rooms-panel label').allInnerTexts()).map((t) => t.split('\n')[0].replace(/\s*(Chauffage|Chauffe-eau)\s*$/, '').trim());
-  const homeName = (await page.locator('.top h1').innerText()).replace(/\s*démo$/i, '').trim();
+  const homeName = (await page.locator('.top .home-name').innerText()).replace(/\s*démo$/i, '').trim();
   check(roomNames.length >= 3, `pièces introuvables (${roomNames.join(', ')})`);
 
   // S-7.9: the five views

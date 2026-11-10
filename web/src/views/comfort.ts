@@ -469,7 +469,7 @@ function drawProbes(st: Station, map: Map<string, string>) {
       labels: heat.map(dayLabel),
       series: [
         { name: 'Sonde du radiateur', color: measureColor(), data: heat.map((d) => t.get(d)?.[0] ?? null) },
-        { name: `Station (${st.modules[k].name})`, color: cssVar('--accent'), data: heat.map((d) => st.daily[k]?.[d]?.[2] ?? null) },
+        { name: `Station (${st.modules[k].name})`, color: cssVar('--series-reference'), data: heat.map((d) => st.daily[k]?.[d]?.[2] ?? null) },
       ],
       price: null,
       unit: '°C',

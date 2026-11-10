@@ -155,7 +155,7 @@ export function renderPieces(view: HTMLElement, o: PiecesOpts) {
     const sub = s === undefined ? 'heures creuses, heures de chauffe' : `${nf0.format(s * 100)} % en heures creuses`;
     return `<li><a class="row" href="#chauffe-eau"><span class="swatch" style="background:var(--usage-water)" aria-hidden="true"></span><span><span class="t">${esc(x.room.name)}</span><span class="s">${esc(sub)}</span></span><span class="v">${value(x)}</span><span class="chev" aria-hidden="true">›</span></a></li>`;
   });
-  view.innerHTML = html(`<h2 class="page-title" id="page-title" tabindex="-1">Pièces</h2>
+  view.innerHTML = html(`<h1 class="page-title" id="page-title" tabindex="-1">Pièces</h1>
   <p class="card-sub">${esc(`${PERIOD.ytd} (au ${dayShort(last)}), trié par coût · température et confort : ${PERIOD['30d'].toLowerCase()}, seuil ${fmt1(thr)} °C`)}</p>
   ${heated.length ? `<ul class="list" aria-label="Pièces chauffées, de la plus chère à la moins chère">${heated.join('')}</ul>` : ''}
   ${water.length ? `<p class="section-title">Appareils</p><ul class="list" aria-label="Appareils">${water.join('')}</ul>` : ''}

@@ -86,7 +86,7 @@ function roomsPicker(): string {
   return `<details class="rooms-picker">
       <summary>Pièces affichées <span class="count">${roomsCount}/${activeRooms().length}</span></summary>
       <div class="rooms-panel">
-        <div class="rooms-actions"><button type="button" data-rooms="all">Toutes</button><button type="button" data-rooms="none">Aucune</button></div>
+        <div class="rooms-actions"><button type="button" class="btn secondary" data-rooms="all">Toutes</button><button type="button" class="btn secondary" data-rooms="none">Aucune</button></div>
         ${activeRooms()
           .map(
             (r) => switchField(r.name, !state.rooms || state.rooms.includes(r.id), { 'data-room': r.id }, { sub: CATEGORY_LABEL[r.category], swatch: roomColor(r.id) }),
@@ -138,7 +138,7 @@ const pieceHandlers: Handlers = { click: (el) => piece?.handleClick(el) ?? false
 // ------------------------------------------------------------------ Historique
 function renderHistorique(view: HTMLElement) {
   const records = filtered();
-  stack(view, `<h2 class="page-title" id="page-title" tabindex="-1">Historique</h2>${filterChip()}`, [
+  stack(view, `<h1 class="page-title" id="page-title" tabindex="-1">Historique</h1>${filterChip()}`, [
     (el) => overview.renderOverview(el, records, 'twelve'),
     // #311: the explorer of the v1.5 Synthèse (period, usage, granularity, by room, values) left Accueil
     (el) => overview.renderOverview(el, records, 'explore'),

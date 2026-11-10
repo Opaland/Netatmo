@@ -34,7 +34,7 @@ import { homeScope, yoy } from './verdict-scope';
 import '../proche.css';
 
 const fmtTemp = new Intl.NumberFormat('fr-FR', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
-const title = (text: string) => `<h2 class="page-title" id="page-title" tabindex="-1">${esc(text)}</h2>`;
+const title = (text: string) => `<h1 class="page-title" id="page-title" tabindex="-1">${esc(text)}</h1>`;
 
 /** « Voir plus de détails »: leaving the simple view asks for a confirmation, in the page (main.ts handles it). */
 export function simpleExit(): string {
@@ -140,7 +140,7 @@ function renderHome(view: HTMLElement) {
   const last = lastDay();
   const from = `${last.slice(0, 8)}01`;
   const room = pinned();
-  view.innerHTML = html`<h2 class="sr-only" id="page-title" tabindex="-1">Accueil</h2>
+  view.innerHTML = html`<h1 class="sr-only" id="page-title" tabindex="-1">Accueil</h1>
   ${verdictCard(from, last)}
   ${room ? roomTodayCard(room.id, room.name) : chooseRoomCard()}
   ${homeMonthCard(last)}

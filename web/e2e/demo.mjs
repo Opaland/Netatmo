@@ -91,7 +91,7 @@ const tileAmounts = (page) =>
  */
 const headerLine = (page) =>
   page.evaluate(() => {
-    const [name, pill, gear] = ['.top h1', '.top .status-pill', '.top .icon-btn'].map((s) => document.querySelector(s));
+    const [name, pill, gear] = ['.top .home-name', '.top .status-pill', '.top .icon-btn'].map((s) => document.querySelector(s));
     if (!name || !pill || !gear) return 'en-tête incomplet';
     const [n, p, g] = [name, pill, gear].map((e) => e.getBoundingClientRect());
     const out = [];
@@ -500,7 +500,7 @@ try {
     await go(page, 'rapport');
     // S-6.4: anonymised report, without any room or home name of the demo
     const roomNames = await page.locator('#report-waterfall ~ .table-wrap').first().locator('tbody td:first-child').allInnerTexts();
-    const homeName = (await page.locator('.top h1').innerText()).replace(/\s*démo$/i, '').trim();
+    const homeName = (await page.locator('.top .home-name').innerText()).replace(/\s*démo$/i, '').trim();
     if (roomNames.length < 2) errors.push(`${name}/rapport: tableau des pièces introuvable`);
     await page.click('#report-anon');
     await page.waitForSelector('.anon-report #anon-chart canvas', { timeout: 15000 });

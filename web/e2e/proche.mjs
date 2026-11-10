@@ -45,7 +45,7 @@ async function layout(p, where) {
   // no word of a title or of a tab label is cut over two lines, and none is wider than its box
   const cut = await p.evaluate(() => {
     const out = [];
-    for (const el of document.querySelectorAll('#view :is(h2, h3, .proche-strong, .onb-hero), .tabs a span')) {
+    for (const el of document.querySelectorAll('#view :is(h1, h2, h3, .proche-strong, .onb-hero), .tabs a span')) {
       if (!el.getClientRects().length || el.classList.contains('sr-only')) continue;
       if (el.scrollWidth > el.clientWidth + 1) out.push(`« ${el.textContent.trim().slice(0, 30)} » déborde`);
       const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
@@ -57,6 +57,25 @@ async function layout(p, where) {
           const tops = new Set([...r.getClientRects()].filter((q) => q.width > 0).map((q) => Math.round(q.top)));
           if (tops.size > 1) out.push(`« ${m[0]} » coupé`);
         }
+      }
+    }
+    // #407 (FALC): no word of the view is cut at the end of a line, with a hyphen or without,
+    // unless it is wider than its whole box (a name made of data has to break somewhere)
+    const view = document.getElementById('view');
+    const walker = view ? document.createTreeWalker(view, NodeFilter.SHOW_TEXT) : null;
+    for (let n = walker?.nextNode(); n && out.length < 8; n = walker.nextNode()) {
+      const el = n.parentElement;
+      if (!el || !el.getClientRects().length || el.closest('.sr-only, svg, .chart, code')) continue;
+      const box = el.closest('.card, .onb-step, p, li') ?? view;
+      const bs = getComputedStyle(box);
+      const room = box.clientWidth - parseFloat(bs.paddingLeft) - parseFloat(bs.paddingRight);
+      for (const m of n.data.matchAll(/[\p{L}\d'’]{2,}/gu)) {
+        const r = document.createRange();
+        r.setStart(n, m.index);
+        r.setEnd(n, m.index + m[0].length);
+        const parts = [...r.getClientRects()].filter((q) => q.width > 0);
+        const tops = new Set(parts.map((q) => Math.round(q.top)));
+        if (tops.size > 1 && parts.reduce((w, q) => w + q.width, 0) <= room) out.push(`« ${m[0]} » coupé en fin de ligne`);
       }
     }
     return out;

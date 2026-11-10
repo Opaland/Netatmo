@@ -53,7 +53,7 @@ export function renderHome(view: HTMLElement, records: DayRecord[]) {
   // #346, #383: the verdict leaves out the rooms offline over the period or a year earlier
   const sc = homeScope(records, r.from, r.to);
   view.innerHTML = html`
-  <h2 class="sr-only" id="page-title" tabindex="-1">Accueil</h2>
+  <h1 class="sr-only" id="page-title" tabindex="-1">Accueil</h1>
   <div class="periodbar">${seg('home', r.period, HOME_PERIODS, 'Période')}<p class="scope" aria-live="polite">${esc(scope)}${
     narrowed ? ` <button type="button" class="link" data-filter-reset>Tout compter</button>` : ''
   }</p></div>
@@ -132,7 +132,7 @@ function verdictBlock(r: HomeRange, sc: Scope): string {
     max: max * 1.04,
     expected: m.expected,
     projected: end,
-    color: '--accent',
+    color: '--series-measure',
     scale: [`0 ${m.unit}`, `attendu au ${dayShort(r.to)} : ${w.expectedAmount}`, ...(endTxt ? [endTxt] : [])],
   });
   return `<section class="verdict verdict-${m.level}" aria-labelledby="verdict-title">
