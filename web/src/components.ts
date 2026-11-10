@@ -129,6 +129,8 @@ export function seg<T extends string>(name: string, value: T, options: [T, strin
     .map(([v, l]) => `<button type="button" role="radio" aria-checked="${v === value}" data-set="${esc(name)}" data-value="${esc(v)}">${esc(l)}</button>`)
     .join('')}</div>`;
 }
+/** « Compté : … » under a card title: what its figures count (period, scope). `text` is HTML. */
+export const countedNote = (text: string) => `<p class="counted"><span class="counted-k">Compté :</span> ${text}</p>`;
 /** One period selector per screen, with its scope line (« Novembre 2026, du 1er au 8 · … »). */
 export const periodBar = (segHtml: string, scope: string) => `<div class="periodbar">${segHtml}<p class="scope" aria-live="polite">${esc(scope)}</p></div>`;
 /** Toggle chip (multiple choice, aria-pressed). */

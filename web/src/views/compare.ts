@@ -44,7 +44,7 @@ import {
   yearColor,
 } from '../ui';
 import { html } from '../trusted';
-import { alertHtml, legend, tile } from '../components';
+import { alertHtml, countedNote, legend, tile } from '../components';
 import { lazyCard } from '../lazy';
 import { tenant, tenantNote } from '../tenant';
 import { woodOver } from './wood-state';
@@ -72,7 +72,7 @@ export function explainLinks(records: DayRecord[], last: string): string {
 export function countedHtml(heatingOnly = false, more = ''): string {
   const all = activeRooms().length;
   const text = historyCounted({ cat: state.cat, rooms: state.rooms ? state.rooms.length : all, allRooms: all }, heatingOnly);
-  return `<p class="counted"><span class="counted-k">Compté :</span> ${esc(text)}${more ? ` ; ${esc(more)}` : ''}.</p>`;
+  return countedNote(`${esc(text)}${more ? ` ; ${esc(more)}` : ''}.`);
 }
 
 /**

@@ -40,6 +40,8 @@ export interface State {
   home: 'month' | 'season' | '12m' | 'year';
   /** #301: the one period of the Compteur tab and its detail pages. */
   meter: 'month' | 'season' | '12m' | 'year';
+  /** #388: the one period of Pièces and of the page of a room (« maintenant » apart). */
+  pieces: 'month' | 'season' | '12m' | 'year';
   gran: Granularity;
   split: 'category' | 'room';
   compareYears: number[];
@@ -84,6 +86,7 @@ export const DEFAULT: State = {
   period: '12m',
   home: 'month',
   meter: '12m',
+  pieces: 'month',
   gran: 'month',
   split: 'category',
   compareYears: [],

@@ -68,7 +68,7 @@ async function go(page, key) {
 const DESTINATIONS = {
   // #311: period, verdict and its gauge, 3 tiles, alerts, what counted, consumption and cold, AI summary
   accueil: ['.periodbar [data-set=home]', '.periodbar .scope', '.verdict .gauge', '.home-tiles .kpi', '#grid-card .alert', '#counted-card .list .row', 'text:Poêle à bois (Cuisine)', '#home-chart canvas', '#insight-card .md', 'a[href="#historique"]'],
-  pieces: ['.rooms-picker', '#rooms-chart canvas', 'a[href="#confort"]', 'a[href="#chauffe-eau"]'],
+  pieces: ['.periodbar [data-set=pieces]', '#pieces-compare .counted', '.rooms-picker', '#rooms-chart canvas', 'a[href="#confort"]', 'a[href="#chauffe-eau"]'],
   // #386: winter against winter and « en détail » on the tab, the rest in its sub-pages, each card saying what it counts
   // #394: the cut days of the incident log, said under « Consommation en détail » and in its chart's summary
   historique: ['#cmp-chart canvas', '#cmp-card .card-period', '#cmp-card .counted', '#explore-card #main-chart canvas', '#explore-card #cut-note', '#main-chart[aria-label*="Jours de coupure"]', '#explore-card [data-set=cat]', '#explore-card [data-set=gran]', '#explore-card .counted', '#history-more a[href="#historique-froid"]'],
@@ -448,7 +448,13 @@ try {
     await go(page, 'pieces');
     await page.waitForSelector('#rooms-chart canvas');
     const head = await page.locator('#view table thead').first().innerText();
-    check(/Jours à moyenne sous/.test(head) && /hiver \d{4}–\d{4}/.test(head), `#294 : colonne des jours froids sans définition ni hiver (« ${head.replace(/\s+/g, ' ')} »)`);
+    // #294, #388: the cold days follow the period of the page, said once by « Compté : » (no winter of their own)
+    const counted = await page.locator('#pieces-compare .counted').innerText();
+    const card = await page.locator('#pieces-compare').innerText();
+    check(
+      /Jours à moyenne sous/.test(head) && /^Compté : [A-ZÉ].* \d{4}/.test(counted) && /Températures et jours froids : mêmes jours que les kWh/.test(card) && !/hiver \d{4}–\d{4}/.test(card),
+      `#294 : colonne des jours froids sans définition ni période (« ${head.replace(/\s+/g, ' ')} » / « ${counted} »)`,
+    );
     await go(page, 'outils');
     await page.click('#view a[href="#rapport"]');
     await page.waitForSelector('.report .kpis');
