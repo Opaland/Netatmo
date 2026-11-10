@@ -108,10 +108,10 @@ html {
 /* ---------------------------------------------------------------- header (#308) */
 /* Home name, data-status pill (→ État des données) and ⚙ Paramètres; the tab bar under it
    (bottom of the screen on a phone, top from 760 px); a sub-page has a back arrow and a title. */
-/* #348: the pill keeps the dot and the date only when the header is narrow. #397: the name of
-   the home keeps its words: when it does not fit beside the pill and ⚙ (360 px at 200 % text, a
-   long name), the pill and ⚙ go to the next line, on the right, instead of squeezing the name
-   until « Maiso / n ». */
+/* #348: one line, the pill keeping the dot and the date only when the header is narrow; the name
+   wraps at its spaces beside them. #397: the name is never squeezed below 10rem (« Maiso / n »):
+   when it cannot have them beside the pill and ⚙ (360 px at 200 % text), it takes its own line
+   and the pill and ⚙ follow together, on the right, below it. */
 .top {
   display: flex;
   flex-wrap: wrap;
@@ -121,11 +121,13 @@ html {
   container-type: inline-size;
 }
 .top .title {
-  flex: 1 1 auto;
+  flex: 1 1 10rem;
   min-width: 0;
-  max-width: 100%;
 }
-.top .status-pill {
+.top-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
   margin-left: auto;
 }
 .top .title h1 {

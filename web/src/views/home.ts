@@ -108,13 +108,12 @@ function verdictBlock(r: HomeRange, sc: Scope): string {
   const { records, spent, v, left } = sc;
   const end = projection(records, r, v, spent);
   if (!v || !sc.m) {
-    const out = leftOut(left);
     const amount = spent.unit === '€' ? fmtEur(spent.value) : fmtKwh(spent.kwh);
-    const what = `<b class="num">${esc(amount)}</b>${spent.unit === '€' ? ` (${esc(fmtKwh(spent.kwh))})` : ''} ${spent.unit === '€' ? 'dépensés' : 'consommés'}${out ? ` ${esc(out)},` : ''} ${esc(periodPhrase(r))}`;
+    const what = `<b class="num">${esc(amount)}</b>${spent.unit === '€' ? ` (${esc(fmtKwh(spent.kwh))})` : ''} ${spent.unit === '€' ? 'dépensés' : 'consommés'}${left.length ? ` ${scopeHtml(left)},` : ''} ${esc(periodPhrase(r))}`;
     return `<section class="verdict" aria-labelledby="verdict-title">
     <span class="verdict-icon" aria-hidden="true">·</span>
     <div><h2 class="verdict-title" id="verdict-title">${esc(amount)} ${esc(periodPhrase(r))}</h2>
-    <p class="verdict-sub">${what}. Pas encore d'année précédente sur ces dates : la comparaison viendra avec un an de données.${offlineNote()}</p></div>
+    <p class="verdict-sub">${what}. Pas encore d'année précédente sur ces dates : la comparaison viendra avec un an de données.${offlineNote(left)}</p></div>
   </section>`;
   }
   const m = sc.m;
@@ -140,7 +139,7 @@ function verdictBlock(r: HomeRange, sc: Scope): string {
     <span class="verdict-icon" aria-hidden="true">${icon}</span>
     <div>
       <h2 class="verdict-title" id="verdict-title">${esc(w.headline)}</h2>
-      <p class="verdict-sub"><b class="num">${esc(w.spent)}</b> ${esc(w.spentRest)}, pour ${esc(w.expected)}.${offlineNote()}${explainLink(r)}</p>
+      <p class="verdict-sub"><b class="num">${esc(w.spent)}</b> ${esc(w.spentVerb)}${left.length ? ` ${scopeHtml(left)},` : ''} ${esc(periodPhrase(r))}, pour ${esc(w.expected)}.${offlineNote(left)}${explainLink(r)}</p>
       ${g}
       ${howDetails(
         'Comment c’est calculé',
@@ -183,9 +182,10 @@ function tiles(records: DayRecord[], last: string): string {
         : '';
   return `<section class="kpis home-tiles">
     ${tile({
-      label: `${PERIOD.month}, au ${ord(last)}`,
+      // #383: the scope in the label (beside the amount, no extra line: #311)
+      label: `${PERIOD.month}, au ${ord(last)}${mOut ? `, ${mOut.replace(/, hors ligne$/, '')}` : ''}`,
       value: fmtMoney(mo.value, mo.unit),
-      sub: `${versus(monthFrom, last)}${mv ? `<br>${comparison(mv.pct, expectedLabel(mv.climate))}` : ''}${mOut ? `<br><span class="muted">${esc(mOut)}</span>` : ''}`,
+      sub: `${versus(monthFrom, last)}${mv ? `<br>${comparison(mv.pct, expectedLabel(mv.climate))}` : ''}`,
     })}
     ${tile({ label: PERIOD.ytd, value: fmtMoney(yr.value, yr.unit), sub: versus(yearFrom, last) })}
     ${
@@ -256,13 +256,31 @@ function countedCard(records: DayRecord[], r: HomeRange): string {
 }
 
 // ------------------------------------------------------------------ rooms offline (#346)
-/** One alert per room offline for 48 h or more: its days are missing, not 0. */
 /**
- * #346: a room out of reach for 48 h or more, said where its absence matters — in the verdict,
- * which leaves it out — with a link to what to do. Inline (#311: the screen holds in three).
+ * #346, #383: the rooms left out of the verdict, said in its sentence, where their absence
+ * matters: « ⚠ hors Chambre enfant, hors ligne depuis le 5 nov. (que faire ?) ». One phrase for
+ * the scope and the alert (#311: the screen holds in three iPhone screens).
  */
-function offlineNote(): string {
+function scopeHtml(left: string[]): string {
+  if (!left.length) return '';
+  const now = offlineNow();
+  const items = left.map((name) => {
+    const o = now.find((x) => x.name === name);
+    return o
+      ? `<b>${esc(name)}</b>, hors ligne depuis le ${esc(dayShort(o.run.from, o.run.from.slice(0, 4) !== lastDay().slice(0, 4)))} (<a class="link" href="#${routeKey({ page: 'piece', room: o.id })}">que faire ?</a>)`
+      : `${esc(name)}, hors ligne`;
+  });
+  const text = `hors ${items.length < 2 ? items[0] : `${items.slice(0, -1).join(', ')} et ${items.at(-1)}`}`;
+  return left.some((name) => now.some((x) => x.name === name)) ? `<span class="verdict-warn"><span aria-hidden="true">⚠ </span>${text}</span>` : text;
+}
+
+/**
+ * #346: a room out of reach for 48 h or more that the verdict does not already name (the rooms
+ * it leaves out are said in its sentence), with a link to what to do.
+ */
+function offlineNote(named: string[] = []): string {
   return offlineNow()
+    .filter((o) => !named.includes(o.name))
     .map(
       (o) =>
         ` <span class="verdict-warn"><span aria-hidden="true">⚠ </span><b>${esc(`${o.name} hors ligne depuis le ${dayShort(o.run.from, o.run.from.slice(0, 4) !== lastDay().slice(0, 4))}`)}</b>, ${esc('non comptée')} (<a class="link" href="#${routeKey({ page: 'piece', room: o.id })}">que faire ?</a>).</span>`,

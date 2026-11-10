@@ -157,6 +157,8 @@ export interface VerdictWords {
   spent: string;
   /** « (130 kWh) dépensés hors Chambre enfant, hors ligne, en novembre (au 8) ». */
   spentRest: string;
+  /** « (130 kWh) dépensés » (the screen inserts the scope, with its alert, before the period). */
+  spentVerb: string;
   /** « 29 € ». */
   expectedAmount: string;
   /** « 29 € attendus à météo comparable (−16 %) ». */
@@ -170,10 +172,12 @@ export interface VerdictWords {
  */
 export function verdictWords(m: MoneyVerdict, left: string[], phrase: string, ref: string): VerdictWords {
   const out = leftOut(left);
+  const verb = m.unit === '€' ? `(${amount(m.kwh, 'kWh')}) dépensés` : 'consommés';
   return {
     headline: verdictHeadline(m),
     spent: amount(m.actual, m.unit),
-    spentRest: `${m.unit === '€' ? `(${amount(m.kwh, 'kWh')}) dépensés` : 'consommés'}${out ? ` ${out},` : ''} ${phrase}`,
+    spentRest: `${verb}${out ? ` ${out},` : ''} ${phrase}`,
+    spentVerb: verb,
     expectedAmount: amount(m.expected, m.unit),
     expected: `${amount(m.expected, m.unit)} attendus ${ref} (${signedPct(m.pct)})`,
   };
