@@ -53,3 +53,9 @@ def test_chaque_fixture_se_construit_et_garde_ses_cas_limites(tmp_path):
     assert s.doc(recent[:4])["temps"]["3180040000"] == s.doc(recent[:4])["temps"]["r-ch1"]
     assert "therm_setpoint_end_time" in meta["compte-charge"]["sources"]["intuis"]["message"]
     assert "home-assistant" in meta["compte-charge"]["sources"]
+    # what ⚙ Sources names: a long label without a space, a radiator silent, long clamp names
+    assert all(" " not in st["label"].split(" (")[0] for st in meta["compte-charge"]["stopped_rooms"])
+    assert meta["compte-charge"]["stopped_rooms"]
+    reach = s.doc("devices")["reach"]
+    assert any(days.get((today - timedelta(days=1)).isoformat()) == 0 for days in reach.values())
+    assert s.doc("shelly")["plugs"]["p4c0"]["name"].startswith("Compteur_à_pinces")

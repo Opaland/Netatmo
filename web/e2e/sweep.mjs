@@ -90,6 +90,17 @@ const MODES = {
  * 200 %, the focus lost on a room box of ⚙ Objectifs).
  */
 const RICH = new Set(['compte-charge']);
+// The RICH fixtures are opened as real data (lock screen, passphrase), not as the demo: what only
+// a real account shows (⚙ Sources: GitHub login, identifiers, manual collection) is swept too.
+// The browser is served the fixture where the app fetches data/ (nothing is copied into dist/).
+const AS_DATA = RICH;
+/** What a device of a fuller account keeps (made up): Shelly clamp names of 60 characters without a space. */
+const RICH_STORAGE = {
+  shelly: JSON.stringify({
+    names: { p4c0: 'Circuit_prises_cuisine_buanderie_et_cellier_du_sous-sol_nord', p4c1: 'Ballon_thermodynamique_garage_et_atelier_du_rez-de-chaussée' },
+    roles: { p4c1: 'water' },
+  }),
+};
 const DISPLAYS = {
   360: { viewport: { width: 360, height: 800 } },
   1280: { viewport: { width: 1280, height: 900 } },
@@ -141,7 +152,65 @@ function pageChecks() {
       .filter((el) => { for (let a = el.parentElement; a; a = a.parentElement) if (scrolls(a) && a.getBoundingClientRect().right <= window.innerWidth + 1) return false; return true; })
       .slice(0, 3)
       .map((el) => `${el.tagName.toLowerCase()}${el.id ? `#${el.id}` : ''}${el.className && typeof el.className === 'string' ? `.${el.className.split(' ')[0]}` : ''}`);
-    out.push({ kind: 'defilement-horizontal', detail: `${wide} px (${culprits.join(', ')})` });
+    // #353 (smoke test on real data): a diagnosis WITHOUT content, printed in the quiet mode —
+    // the overflow in px and the path of what sticks out as tag.classe, with only the classes the
+    // app's own style sheets define (a class made of data is dropped), never a text, an id nor an
+    // attribute value.
+    const known = new Set();
+    for (const sheet of document.styleSheets) {
+      let rules;
+      try {
+        rules = sheet.cssRules;
+      } catch {
+        continue;
+      }
+      const walk = (list) => {
+        for (const r of list) {
+          if (r.selectorText) for (const m of r.selectorText.matchAll(/\.(-?[_a-zA-Z][\w-]*)/g)) known.add(m[1]);
+          if (r.cssRules) walk(r.cssRules);
+        }
+      };
+      walk(rules);
+    }
+    const seg = (el) => {
+      const cls = [...el.classList].find((c) => known.has(c));
+      return `${el.tagName.toLowerCase()}${cls ? `.${cls}` : ''}`;
+    };
+    const path = (el) => {
+      const parts = [];
+      for (let a = el; a && a.id !== 'view' && a.id !== 'app' && a !== document.body; a = a.parentElement) parts.unshift(seg(a));
+      return parts.length > 6 ? `… > ${parts.slice(-6).join(' > ')}` : parts.join(' > ');
+    };
+    const outer = [...document.querySelectorAll('#app *')]
+      .filter((el) => out_(el) && !(el.parentElement && el.parentElement !== document.getElementById('app') && out_(el.parentElement) && !scrolls(el.parentElement)))
+      .filter((el) => { for (let a = el.parentElement; a; a = a.parentElement) if (scrolls(a) && a.getBoundingClientRect().right <= window.innerWidth + 1) return false; return true; })
+      .slice(0, 3);
+    // under the first outer box, the deepest element that still sticks out: what is too wide
+    const deepest = (el) => {
+      for (;;) {
+        const next = [...el.children].find((c) => out_(c));
+        if (!next) return el;
+        el = next;
+      }
+    };
+    // a word too long for its line sticks out of a box that fits: only its text node shows it
+    const inScroll = (el) => { for (let a = el; a; a = a.parentElement) if (scrolls(a) && a.getBoundingClientRect().right <= window.innerWidth + 1) return true; return false; };
+    const words = [];
+    const walker = document.createTreeWalker(document.getElementById('app') ?? document.body, NodeFilter.SHOW_TEXT);
+    const range = document.createRange();
+    for (let n = walker.nextNode(); n && words.length < 3; n = walker.nextNode()) {
+      const el = n.parentElement;
+      if (!el || !n.textContent.trim() || words.includes(el) || inScroll(el) || !visible(el)) continue;
+      range.selectNodeContents(n);
+      if (range.getBoundingClientRect().right > window.innerWidth + 1) words.push(el);
+    }
+    const parts = [
+      ...outer.map(path),
+      ...(outer[0] && deepest(outer[0]) !== outer[0] ? [`au plus profond : ${path(deepest(outer[0]))}`] : []),
+      ...words.map((el) => `texte trop long dans : ${path(el)}`),
+    ];
+    const quiet = `${wide} px : ${parts.join(' ; ') || 'élément non trouvé'}`;
+    out.push({ kind: 'defilement-horizontal', detail: `${wide} px (${[...culprits, ...words.map((el) => `texte de ${seg(el)}`)].join(', ')})`, quiet });
   }
   for (const card of document.querySelectorAll('#view .card')) {
     if (!visible(card)) continue;
@@ -177,7 +246,18 @@ class Session {
     const d = DISPLAYS[this.display];
     this.ctx = await this.browser.newContext({ viewport: d.viewport, colorScheme: d.colorScheme ?? 'light', serviceWorkers: 'block' });
     const storage = { ...(this.run.storage ?? {}) };
-    if (SOURCE === 'data') storage.state ??= '{}'; // a device already used: no first launch
+    if (SOURCE === 'data' || this.run.asData) storage.state ??= '{}'; // a device already used: no first launch
+    if (this.run.asData) {
+      const dir = join(WEB, 'dist/demo-fixtures', this.run.data);
+      const prefix = `${new URL(base).pathname}data/`;
+      await this.ctx.route(
+        (url) => url.pathname.startsWith(prefix),
+        (route) => {
+          const file = join(dir, new URL(route.request().url()).pathname.slice(prefix.length));
+          return file.startsWith(`${dir}/`) && existsSync(file) ? route.fulfill({ path: file }) : route.fulfill({ status: 404, body: '' });
+        },
+      );
+    }
     await this.ctx.addInitScript(
       (entries) => {
         try {
@@ -205,6 +285,7 @@ class Session {
   }
   async load(hash = '') {
     if (SOURCE === 'data') await openData(this.page, base, env.DATA_PASSPHRASE, hash);
+    else if (this.run.asData) await openData(this.page, base, 'demo', hash); // fixtures: made-up data, passphrase « demo »
     else await openDemo(this.page, base, this.run.data, hash);
     // text at 200 %, in a wide system font (DejaVu Sans, Linux's and the CI's): the worst case
     // everywhere, so that a page that fits here fits on the CI runner too
@@ -498,6 +579,8 @@ async function exploreJob(browser, job) {
 /**
  * A sweep that cannot fail proves nothing: on one page, a card « NaN », an empty card and a
  * too wide block are slipped in, and the invariants must see all three before anything else runs.
+ * The too wide block carries a text, an id, a class and attribute values: the quiet diagnosis of
+ * the overflow (printed on real data) must name its path and none of them.
  */
 async function selfTest(browser, run, display) {
   const s = new Session(browser, run, display, () => {});
@@ -516,14 +599,34 @@ async function selfTest(browser, run, display) {
       };
       card('Total : NaN kWh');
       card('');
+      // a too wide block made of « data »: a text, an id, a class and attribute values that the
+      // quiet diagnosis must never print (real data: the logs are public)
       const wide = document.createElement('div');
-      wide.style.width = '3000px';
-      wide.style.height = '1px';
+      wide.className = 'card secret-classe-42';
+      wide.id = 'secret-id-42';
+      wide.title = 'secret-titre-42';
+      wide.dataset.room = 'secret-attribut-42';
+      const inner = document.createElement('span');
+      inner.className = 'secret-classe-42';
+      inner.textContent = 'secret-texte-42';
+      inner.style.display = 'inline-block';
+      inner.style.width = '3000px';
+      wide.append(inner);
       view.append(wide);
+      // and a word too long for its line, in a box that fits (only its text sticks out)
+      const word = document.createElement('p');
+      word.className = 'hint';
+      word.textContent = 'secretmot42'.repeat(40);
+      word.style.overflowWrap = 'normal'; // the page breaks long words (#view): this one must stick out
+      view.append(word);
     });
-    const kinds = (await s.page.evaluate(pageChecks)).map((f) => f.kind);
+    const found = await s.page.evaluate(pageChecks);
+    const kinds = found.map((f) => f.kind);
     const missing = ['texte-interdit', 'carte-vide', 'defilement-horizontal'].filter((k) => !kinds.includes(k));
     if (missing.length) throw new Error(`auto-contrôle : invariants muets (${missing.join(', ')})`);
+    const quiet = found.find((f) => f.kind === 'defilement-horizontal').quiet ?? '';
+    if (!/^\d+ px : div\.card > span/.test(quiet) || !quiet.includes('texte trop long dans : p.hint') || /secret/i.test(quiet))
+      throw new Error(`auto-contrôle : diagnostic discret inattendu ou porteur de contenu (${QUIET ? 'masqué' : quiet})`);
   } finally {
     await s.close();
   }
@@ -552,7 +655,7 @@ function record(w, found) {
     if (known) item.expected = known;
     failures.push(item);
     const tag = known ? 'échec attendu' : 'échec';
-    console.log(QUIET ? `page ${name} : ${tag} : ${f.kind}` : `page ${name} : ${tag} : ${f.kind}${f.detail ? ` → ${f.detail}` : ''}${known ? ` (${known.why})` : ''}`);
+    console.log(QUIET ? `page ${name} : ${tag} : ${f.kind}${f.quiet ? ` → ${f.quiet}` : ''}` : `page ${name} : ${tag} : ${f.kind}${f.detail ? ` → ${f.detail}` : ''}${f.quiet ? ` [discret : ${f.quiet}]` : ''}${known ? ` (${known.why})` : ''}`);
   }
 }
 
@@ -570,7 +673,7 @@ try {
   const runsAll =
     SOURCE === 'data'
       ? [{ name: 'donnees-reelles', data: null }]
-      : [{ name: 'demo', data: null }, ...fixtures.map((f) => ({ name: f, data: f })), ...Object.entries(MODES).map(([name, m]) => ({ name, ...m }))];
+      : [{ name: 'demo', data: null }, ...fixtures.map((f) => ({ name: f, data: f, asData: AS_DATA.has(f), ...(RICH.has(f) ? { storage: RICH_STORAGE } : {}) })), ...Object.entries(MODES).map(([name, m]) => ({ name, ...m }))];
   const wanted = list(env.SWEEP_FIXTURES);
   const runs = wanted ? runsAll.filter((r) => wanted.includes(r.name)) : runsAll;
   const displays = list(env.SWEEP_DISPLAYS) ?? Object.keys(DISPLAYS);
@@ -599,7 +702,7 @@ try {
     const browser = await chromium.launch();
     try {
       await selfTest(browser, runs[0], displays[0]);
-      console.log('Auto-contrôle : les invariants voient un « NaN », une carte vide et un débordement.');
+      console.log('Auto-contrôle : les invariants voient un « NaN », une carte vide et un débordement, dont le diagnostic discret ne cite aucun contenu.');
     } finally {
       await browser.close();
     }
