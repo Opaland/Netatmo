@@ -10,6 +10,9 @@
 //     in the middle without a hyphen (#384, #397: what the horizontal scroll does not see);
 //   - no value axis writing the same label twice (« 21, 21, 20, 20 », #398);
 //   - no category label of a horizontal bar chart drawn over its neighbour (#413);
+//   - the floors of the design system (v1.7, revue design v1.6): no text under --font-xs (#404),
+//     no control under --target-min (#405), no button outside the components (#402), one h1
+//     per screen, the page title, no h2 larger than it (#403);
 //   - axe: no serious or critical violation (WCAG 2.1 AA);
 //   - the view becomes ready (#view[data-ready], #260).
 // Then a control explorer: on each page, every checkbox, switch, segment, radio, chip and select
@@ -332,6 +335,65 @@ function pageChecks() {
         cut++;
         out.push({ kind: 'texte-coupe', detail: `« ${say(b)} »`, quiet: `${path(b.el)} dans ${path(c)}` });
       }
+    }
+  }
+  // v1.7 (revue design v1.6): the design system's floors, measured on what is painted. The two
+  // sizes are read from the tokens, so that they follow the system text size (200 %).
+  const tokenPx = (prop, css) => {
+    const probe = document.createElement('span');
+    probe.style.cssText = `position:absolute;visibility:hidden;display:block;${prop}:${css}`;
+    document.body.append(probe);
+    const px = prop === 'font-size' ? parseFloat(getComputedStyle(probe).fontSize) : probe.getBoundingClientRect().width;
+    probe.remove();
+    return px;
+  };
+  // #404: no text under --font-xs (13 px at 100 %): a <small> of the browser was 11.7 px. Left
+  // aside: the charts (their own labels) and the tab bar (#389).
+  {
+    const min = tokenPx('font-size', 'var(--font-xs)') - 0.3;
+    const walker = document.createTreeWalker(document.getElementById('app') ?? document.body, NodeFilter.SHOW_TEXT);
+    let small = 0;
+    for (let n = walker.nextNode(); n && small < 3; n = walker.nextNode()) {
+      const el = n.parentElement;
+      if (!el || !n.textContent.trim() || el.closest('.sr-only, .chart, svg, canvas, .tabs, details:not([open]) > :not(summary)') || !visible(el)) continue;
+      const fs = parseFloat(getComputedStyle(el).fontSize);
+      if (fs < min) {
+        small++;
+        out.push({ kind: 'texte-trop-petit', detail: `${fs.toFixed(1)} px : « ${n.textContent.trim().slice(0, 30)} »`, quiet: `${fs.toFixed(1)} px : ${path(el)}` });
+      }
+    }
+  }
+  // #405: every control is at least --target-min (44 px) high. Left aside: a button that is a word
+  // of a sentence (.link, .term: the inline exception of WCAG 2.5.8) and a slider (its label is).
+  {
+    const min = tokenPx('width', 'var(--target-min)') - 0.5;
+    let low = 0;
+    for (const el of document.querySelectorAll('#app :is(button, select, summary, a.btn, input:not([type=checkbox], [type=radio], [type=range], [type=hidden], [type=file]))')) {
+      if (low >= 3 || !visible(el) || el.matches('.link, .term') || el.closest('.sr-only')) continue;
+      const h = el.getBoundingClientRect().height;
+      if (h > 0 && h < min) {
+        low++;
+        out.push({ kind: 'cible-trop-petite', detail: `${Math.round(h)} px : ${path(el)} « ${el.textContent.trim().slice(0, 25)} »`, quiet: `${Math.round(h)} px : ${path(el)}` });
+      }
+    }
+  }
+  // #402: every button is one of the components of the design system (no native grey button, no
+  // look of its own): primary / secondary / tertiary, chip, segment, row, link or term in a
+  // sentence, icon, reveal, retry of a lazy card.
+  for (const el of document.querySelectorAll('#app button')) {
+    if (!visible(el) || el.closest('.sr-only')) continue;
+    if (!el.matches('.btn, .primary, .chip, .link, .term, .reveal, .row, .icon-btn, .seg > button, [role=radio][aria-checked]'))
+      out.push({ kind: 'bouton-hors-composant', detail: `${path(el)} « ${el.textContent.trim().slice(0, 25)} »`, quiet: path(el) });
+  }
+  // #403: one h1 per screen, the title of the page (not the name of the home, the same on every
+  // page), and when it is shown, no card title (h2) is larger.
+  {
+    const h1 = [...document.querySelectorAll('h1')];
+    if (h1.length !== 1) out.push({ kind: 'titres', detail: `${h1.length} titres h1`, quiet: `${h1.length} titres h1` });
+    else if (visible(h1[0]) && !h1[0].closest('.sr-only') && !h1[0].classList.contains('sr-only')) {
+      const size = parseFloat(getComputedStyle(h1[0]).fontSize);
+      const bigger = [...document.querySelectorAll('#app h2')].filter((h) => visible(h) && parseFloat(getComputedStyle(h).fontSize) > size + 0.1);
+      if (bigger.length) out.push({ kind: 'titres', detail: `h2 plus grand que le titre de la page : « ${bigger[0].textContent.trim().slice(0, 30)} »`, quiet: `h2 plus grand que h1 : ${path(bigger[0])}` });
     }
   }
   for (const card of document.querySelectorAll('#view .card')) {

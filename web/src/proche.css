@@ -11,13 +11,15 @@ body.simple-nav #view > .card,
 body.simple-nav #view > .simple-exit {
   margin-bottom: var(--space-3);
 }
-/* Long words are hyphenated (lang="fr"), never cut anywhere: titles are capped by the width so
-   that each of their words fits on a line (e2e/proche.mjs checks it at 360 px and 200 %). */
+/* #407: easy to read (FALC): a word is never cut at the end of a line, not even with a hyphen;
+   only a word wider than the whole line breaks (a name made of data). Titles are capped by the
+   width so that each of their words fits on a line (e2e/proche.mjs checks every word of the view
+   at 360 px and 200 %). */
 body.simple-nav #view .card {
-  hyphens: auto;
+  hyphens: manual;
   overflow-wrap: break-word;
 }
-body.simple-nav #view :is(h2, h3, .proche-strong, .page-title) {
+body.simple-nav #view :is(h1, h2, h3, .proche-strong, .page-title) {
   font-size: clamp(var(--font-sm), 9vw, var(--font-xl));
   hyphens: manual;
   overflow-wrap: normal;
@@ -130,7 +132,7 @@ main.onboarding {
 .onb-step > * {
   margin: 0;
   min-width: 0;
-  hyphens: auto;
+  hyphens: manual; /* #407: no hyphenation on the first launch either (FALC) */
   overflow-wrap: break-word;
 }
 .onb-steps {
@@ -212,7 +214,6 @@ main.onboarding {
   grid-template-columns: minmax(0, 1fr); /* #353: a long offer name does not widen the page at 360 px */
   gap: var(--space-1);
 }
-.onb-step .field select,
 .onb-step .field input {
   min-height: var(--target-min);
   max-width: 100%;

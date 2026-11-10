@@ -21,7 +21,7 @@ const demo = () => ds!.source === 'demo';
 
 /** Header of the first launch: its name and the way out (main.ts draws it instead of the tabs). */
 export const onboardingHeader = () =>
-  `<header class="top onboarding-top"><div class="title"><h1>Bienvenue</h1></div><button type="button" class="btn tertiary" data-onb-skip>Passer</button></header>`;
+  `<header class="top onboarding-top"><div class="title"><p class="home-name">Bienvenue</p></div><button type="button" class="btn tertiary" data-onb-skip>Passer</button></header>`;
 
 function steps(step: OnboardingStep) {
   const dots = Array.from({ length: STEP_COUNT }, (_, i) => `<i${i + 1 === step ? ' class="on"' : ''}></i>`).join('');
@@ -31,7 +31,7 @@ function steps(step: OnboardingStep) {
 /** Title of a screen: focused on arrival, with the progress read first (« Étape 2 sur 4 »). */
 function head(step: OnboardingStep, text: string) {
   return `${steps(step)}<p class="onb-progress" id="onb-progress">${stepLabel(step)}</p>
-  <h2 class="onb-hero" id="page-title" tabindex="-1" aria-describedby="onb-progress">${esc(text)}</h2>`;
+  <h1 class="onb-hero" id="page-title" tabindex="-1" aria-describedby="onb-progress">${esc(text)}</h1>`;
 }
 
 const next = (step: OnboardingStep, who: Who) => nextStep(step, who);

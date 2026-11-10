@@ -172,7 +172,7 @@ export function renderPieces(view: HTMLElement, o: PiecesOpts) {
     const sub = s === undefined ? 'heures creuses, heures de chauffe' : `${nf0.format(s * 100)} % en heures creuses`;
     return `<li><a class="row" href="#chauffe-eau"><span class="swatch" style="background:var(--usage-water)" aria-hidden="true"></span><span><span class="t">${esc(x.room.name)}</span><span class="s">${esc(sub)}</span></span><span class="v">${value(x)}</span><span class="chev" aria-hidden="true">›</span></a></li>`;
   });
-  view.innerHTML = html(`<h2 class="page-title" id="page-title" tabindex="-1">Pièces</h2>
+  view.innerHTML = html(`<h1 class="page-title" id="page-title" tabindex="-1">Pièces</h1>
   ${periodBar(seg('pieces', r.period, HOME_PERIODS, 'Période'), `${scopeTitle(r)} · coût, température et confort sur la période, trié par coût · froid : moyenne du jour sous ${fmtTemp(thr)}`)}
   ${heated.length ? `<ul class="list" aria-label="Pièces chauffées, de la plus chère à la moins chère">${heated.join('')}</ul>` : ''}
   ${water.length ? `<p class="section-title">Appareils</p><ul class="list" aria-label="Appareils">${water.join('')}</ul>` : ''}

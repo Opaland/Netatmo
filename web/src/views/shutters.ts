@@ -133,8 +133,8 @@ function draw(zone: HTMLElement) {
         : ''
     }
     <div class="rooms-actions">
-      <button type="button" data-shutters="export" ${notes.length ? '' : 'disabled'}>Exporter (CSV)</button>
-      <button type="button" data-shutters="pick">Importer un CSV</button>
+      <button type="button" class="btn secondary" data-shutters="export" ${notes.length ? '' : 'disabled'}>Exporter (CSV)</button>
+      <button type="button" class="btn secondary" data-shutters="pick">Importer un CSV</button>
       <input type="file" accept=".csv,text/csv,text/plain" data-shutters="import" hidden>
     </div>
     ${msg ? `<p class="hint" role="status">${esc(msg)}</p>` : ''}
@@ -193,7 +193,7 @@ async function drawComparison() {
         points: cmp.open.map((n) => [n.t, Math.round(n.kwh * 100) / 100, n.day]),
         fit: { slope: cmp.fit.slope, intercept: cmp.fit.intercept, from: Math.min(...xs), to: Math.min(15, Math.max(...xs), cmp.fit.balance ?? 15) },
       },
-      { name: 'Volets fermés', color: cssVar('--accent'), points: cmp.closed.map((n) => [n.t, Math.round(n.kwh * 100) / 100, n.day]) },
+      { name: 'Volets fermés', color: cssVar('--series-measure'), points: cmp.closed.map((n) => [n.t, Math.round(n.kwh * 100) / 100, n.day]) },
     ],
   });
 }

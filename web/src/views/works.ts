@@ -188,7 +188,7 @@ function drawCharts() {
   if (sig && c) {
     const sides: [string, Side | null, string][] = [
       ['Avant', c.r.before, referenceColor()],
-      ['Après', c.r.after, cssVar('--accent')],
+      ['Après', c.r.after, cssVar('--series-measure')],
     ];
     scatterChart(sig, {
       xName: 'Température extérieure moyenne (°C)',

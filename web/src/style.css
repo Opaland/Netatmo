@@ -32,14 +32,29 @@ select {
   color: inherit;
 }
 /* S-7.6: native fields take the app surface; #310: outline at 3:1, 44 px target. */
-input:where(:not([type='checkbox'], [type='radio'], [type='range'])),
-select {
+input:where(:not([type='checkbox'], [type='radio'], [type='range'])) {
   background-color: var(--surface-card);
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-sm);
   min-height: var(--target-min);
   padding: 0 var(--space-3);
   max-width: 100%;
+}
+/* #402: ONE look for every list of choices (period, year, offer, simulators, settings): the pill
+   with its arrow, 44 px. Defined here only: another rule may place a select (width, margin), never
+   restyle it (design-usage.test.ts). #319: never wider than its card (its longest option is cut). */
+select {
+  max-width: 100%;
+  min-height: var(--target-min);
+  text-overflow: ellipsis;
+  appearance: none;
+  padding: 0 30px 0 var(--space-3);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-full);
+  background: var(--surface-card)
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='3'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E")
+    no-repeat right 10px center;
+  font-size: var(--font-sm);
 }
 h1,
 h2,
@@ -59,6 +74,19 @@ h3 {
 }
 a {
   color: var(--accent-text);
+}
+/* #404: a note in small type never goes under the smallest size of the design system (13 px):
+   the browser default (« smaller », 11.7 px) did. sub / sup (T<sub>ext</sub>) too. */
+small,
+sub,
+sup {
+  font-size: var(--font-xs);
+}
+/* #405: the heading of a fold is a touch target too (« Méthode », a month of the incident log) */
+summary {
+  min-height: var(--target-min);
+  padding-block: var(--space-2);
+  cursor: pointer;
 }
 .muted {
   color: var(--text-muted);
@@ -130,9 +158,13 @@ html {
   gap: var(--space-2);
   margin-left: auto;
 }
-.top .title h1 {
+/* #403: the name of the home is the same on every page: not a heading (the page title is the one
+   h1, in --font-xl, larger than the card titles in --font-lg) */
+.top .title .home-name {
   margin: 0;
   font-size: var(--font-lg);
+  font-weight: 600;
+  line-height: 1.3;
   overflow-wrap: break-word;
 }
 .badge {
@@ -314,7 +346,7 @@ html {
   gap: var(--space-2);
   margin: 0 0 var(--space-3);
 }
-.subhead h2 {
+.subhead h1 {
   margin: 0;
   min-width: 0;
   overflow-wrap: anywhere;
@@ -334,11 +366,11 @@ html {
   margin: 0 0 var(--space-3);
 }
 .page-title:focus,
-.subhead h2:focus {
+.subhead h1:focus {
   outline: none;
 }
 .page-title:focus-visible,
-.subhead h2:focus-visible {
+.subhead h1:focus-visible {
   outline: 3px solid var(--focus, var(--accent));
   outline-offset: 2px;
 }
@@ -417,6 +449,27 @@ html {
 #view > .alert {
   margin-bottom: var(--space-3);
 }
+/* #408: a line of text stays readable on a wide screen (about 75 characters, WCAG 1.4.8): no
+   paragraph runs across the 1 100 px of the page. A list row keeps the whole width (its value on
+   the right). */
+#view :is(p, li:not(.list > li), dd) {
+  max-inline-size: 70ch;
+}
+/* #408: from 760 px (the one break point, where the tabs go up), the pages made of independent
+   cards (Compteur, Air et confort) lay them out in two columns, in their reading order (down the
+   first column, then the second); the period bar, a message or a heading spans both. */
+@media (min-width: 760px) {
+  #view:is([data-page='compteur'], [data-page='confort']) {
+    columns: 2;
+    column-gap: var(--space-4);
+  }
+  #view:is([data-page='compteur'], [data-page='confort']) > * {
+    break-inside: avoid;
+  }
+  #view:is([data-page='compteur'], [data-page='confort']) > :not(.card) {
+    column-span: all;
+  }
+}
 
 /* ---------------------------------------------------------------- filters, segments, chips */
 /* #319: a segment wraps instead of overflowing (200 % text, 360 px). */
@@ -433,9 +486,10 @@ html {
   flex: 1 1 auto;
   border: 0;
   background: none;
-  min-height: 38px;
+  /* #405: the most touched control of the app, at the 44 px of every touch target */
+  min-height: var(--target-min);
   padding: 0 var(--space-3);
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   font-size: var(--font-sm);
   color: var(--text);
   cursor: pointer;
@@ -504,13 +558,8 @@ html {
   gap: var(--space-2);
   margin-bottom: 6px;
 }
-.rooms-actions button {
+.rooms-actions .btn {
   flex: 1;
-  min-height: var(--target-min);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  background: var(--surface-card);
-  cursor: pointer;
 }
 .swatch {
   display: inline-block;
@@ -889,6 +938,7 @@ details.fold[open] > summary {
    a short word goes whole to the next line. Names and labels keep their words (no hyphens). */
 .card-head h2,
 .page-title,
+.subhead h1,
 .verdict-title,
 .kpi h3 {
   hyphens: auto;
@@ -920,19 +970,6 @@ details.fold[open] > summary {
   display: inline-block;
   max-width: 100%;
   min-width: 0;
-}
-.select select {
-  max-width: 100%;
-  text-overflow: ellipsis;
-  appearance: none;
-  padding: 0 30px 0 var(--space-3);
-  min-height: var(--target-min);
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius-full);
-  background: var(--surface-card)
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='3'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E")
-    no-repeat right 10px center;
-  font-size: var(--font-sm);
 }
 .period-total {
   margin: 0 0 var(--space-2);
@@ -1375,9 +1412,7 @@ fieldset.prices legend {
   padding: 6px 0;
   border-bottom: 1px solid var(--grid);
 }
-.contract-row input,
-.contract-row select,
-fieldset.prices select {
+.contract-row input {
   padding: 6px 8px;
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
@@ -1675,8 +1710,7 @@ fieldset.secrets input,
   font-size: var(--font-sm);
   color: var(--text-muted);
 }
-.money-field input,
-.money-field select {
+.money-field input {
   padding: 10px 12px;
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
@@ -1861,9 +1895,6 @@ code.hash {
   display: grid;
   gap: 8px;
 }
-.research-form .money-field select {
-  max-width: 100%;
-}
 .research-form h2 {
   margin: 0;
 }
@@ -1876,13 +1907,6 @@ code.hash {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-}
-.research-actions .small:not(.primary) {
-  padding: 8px 14px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  background: var(--surface-page);
-  color: var(--text);
 }
 
 /* ---------------------------------------------------------------- S-12.3 invitation */
@@ -1948,10 +1972,11 @@ code.hash {
   border-radius: var(--radius-full);
 }
 .gauge .fill {
-  background: var(--gauge-color, var(--accent));
+  /* #409: a measure on its own is ink (--series-measure); the accent is kept for actions */
+  background: var(--gauge-color, var(--series-measure));
 }
 .gauge .proj {
-  background: repeating-linear-gradient(135deg, var(--gauge-color, var(--accent)) 0 2px, transparent 2px 6px);
+  background: repeating-linear-gradient(135deg, var(--gauge-color, var(--series-measure)) 0 2px, transparent 2px 6px);
   opacity: 0.7;
 }
 .gauge .mark {

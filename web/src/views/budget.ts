@@ -81,7 +81,7 @@ function budgetCard(b: NonNullable<ReturnType<typeof yearBudget>>): string {
       max,
       projected: b.projected,
       expected: b.projected > b.budget ? b.budget : null,
-      color: b.over ? '--state-bad' : '--accent',
+      color: b.over ? '--state-bad' : '--series-measure',
       scale: [`${fmtEur(b.spent)} dépensés`, `fin d'année ≈ ${fmtEur(b.projected)}`],
     })}
     <p class="delta ${b.over ? 'up' : 'down'}"><b>${fmtEur(Math.abs(b.gap))} ${b.over ? 'au-dessus du budget' : 'de marge'}</b> <span class="vs">si l'hiver est normal</span></p>
@@ -115,7 +115,7 @@ function moneyCard(b: ReturnType<typeof yearBudget>): string {
     }. Projeté au 31 décembre : <strong>${fmtEur(b.projected)}</strong> pour un budget de ${fmtEur(b.budget)}, soit <strong class="${b.over ? 'ko-red' : ''}">${
       b.over ? `${fmtEur(b.gap)} au-dessus du budget` : `dans le budget (${fmtEur(-b.gap)} de marge)`
     }</strong>.</p>
-    <div class="share" aria-label="Part du budget déjà dépensée"><span style="flex:${share};background:var(--${b.over ? 'bad' : 'accent'})"></span><span style="flex:${100 - share};background:var(--usage-other)"></span></div>
+    <div class="share" aria-label="Part du budget déjà dépensée"><span style="flex:${share};background:var(--${b.over ? 'state-bad' : 'series-measure'})"></span><span style="flex:${100 - share};background:var(--usage-other)"></span></div>
     <p class="share-legend"><span>${nf0.format(share)} % du budget dépensé</span></p>`;
   } else {
     budgetHtml = '<p class="hint">Fixez un budget annuel pour le chauffage et l\'eau chaude : l\'écart projeté s\'affichera ici et dans le mode simple.</p>';

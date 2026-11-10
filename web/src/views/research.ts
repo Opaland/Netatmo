@@ -44,7 +44,7 @@ function form(): string {
     <p class="hint" id="research-status" role="status"></p>
     <div class="research-actions">
       <button type="button" class="primary small" id="research-go">Préparer et télécharger</button>
-      <button type="submit" class="small" id="research-close">Fermer</button>
+      <button type="submit" class="btn secondary" id="research-close">Fermer</button>
     </div>
   </form>`;
 }
