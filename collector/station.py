@@ -10,6 +10,12 @@ YYYY.station_h.enc.json, and daily aggregates (CO₂ of the night, hours humid /
 station.enc.json. S-1.21 (#215): one health reading per module and per night,
 station["health"][key][day] = [battery %, radio or Wi-Fi signal, answering 0/1], from the
 getstationsdata response already read (no extra call); firmware changes go to devices.enc.json.
+S-11.4 (#220): pressure of the main module, station["pressure"]["m0"][day] = [mean, min, max,
+trend vs the day before] (hPa), and, only with the repository variable STATION_NOISE=true, the
+noise of the main module kept as station["noise"]["m0"][day] = {"n": hours read, "loud": hours
+above NOISY_ABOVE}: never an hour of the day, the hourly noise is dropped at once.
+Anemometer and rain gauge (NAModule2 / NAModule3) are never asked a temperature (gap G4 of the
+data audit, #221): an error on them cannot stop the station.
 Formats: docs/api-notes.md, section « Station météo Netatmo ».
 """
 
@@ -53,6 +59,12 @@ COLD_BELOW = 19  # °C, strictly below (indoor modules only)
 # S-1.21: low battery and silent module thresholds (documented in docs/api-notes.md).
 LOW_BATTERY = 15  # %, strictly below
 SILENT_HOURS = 6  # last_seen older than this: the module no longer reports
+# S-11.4 (#220): modules without temperature (anemometer, rain gauge), and the noise threshold.
+NO_TEMPERATURE = ("NAModule2", "NAModule3")
+PRESSURE_TYPES = "pressure,min_pressure,max_pressure"
+# dB, hourly mean strictly above: a lively conversation or a loud television. Chosen by judgement
+# (no norm for a living room), only counts « noisy hours »; shown with its value in the app.
+NOISY_ABOVE = 55
 
 
 class StationError(SourceError):
@@ -71,8 +83,10 @@ class Station:
         seed_token: str,
         http=None,
         min_interval: float = 0.5,
+        noise: bool = False,
     ) -> None:
         self.store = store
+        self.noise = noise  # S-11.4: opt-in (STATION_NOISE), off by default
         self.client_id = client_id
         self.client_secret = client_secret
         self.seed_token = seed_token
@@ -220,6 +234,8 @@ class Station:
             begin = int((datetime.fromisoformat(begin_day).replace(tzinfo=zone) - timedelta(days=10)).timestamp())
             indoor = m["type"] in ("NAMain", "NAModule4")
             names[key] = {"name": m["name"], "type": m["type"], "indoor": indoor}
+            if m["type"] in NO_TEMPERATURE:  # G4 (#221): no temperature to ask a wind or rain gauge
+                continue
             types = "min_temp,max_temp,temperature,humidity" + (",co2" if indoor else "")
             for ts, cols in self._daily(m["id"], m["module"], types, begin, end):
                 tmin, tmax, tmean, hum = (list(cols) + [None] * 5)[:4]
@@ -243,11 +259,56 @@ class Station:
                     self.store.put("weather", "indoor", day, None, r(mean))
         self.store.set_top("station", "modules", names)
         self.health = store_health(self.store, modules, keys, tz)
+        for key, m in zip(keys, modules, strict=True):
+            if m["type"] == "NAMain":
+                self.collect_pressure(key, m, zone, first_day, end)
         self.collect_hourly(tz, modules)
         if outdoor_days:
             self.store.set_top("weather", "source", "netatmo")
         log.info("Station Netatmo : %d modules, %d jours de température extérieure", len(names), outdoor_days)
         return outdoor_days
+
+    # ------------------------------------------------------------ pressure (S-11.4, #220)
+    def collect_pressure(self, key: str, m: dict, zone: ZoneInfo, first_day: str, end: int) -> int:
+        """Daily mean / min / max pressure of the main module, and the trend (mean − mean of the
+        day before). Best effort: a refusal never stops the station (counts only in the log)."""
+        have = self.store.doc("station").get("pressure", {}).get(key) or {}
+        begin_day = max(have) if have else first_day  # first time: the whole history of the home
+        begin = int((datetime.fromisoformat(begin_day).replace(tzinfo=zone) - timedelta(days=10)).timestamp())
+        try:
+            rows = self._daily(m["id"], m["module"], PRESSURE_TYPES, begin, end)
+        except (StationError, httpx.HTTPError, FormatError) as err:
+            log.warning("Station Netatmo, pression indisponible : %s", type(err).__name__)
+            return 0
+        n = 0
+        for ts, cols in rows:
+            mean, lo, hi = (list(cols) + [None] * 3)[:3]
+            if mean is None:
+                continue
+            day = datetime.fromtimestamp(ts, zone).strftime("%Y-%m-%d")
+            r = lambda v: None if v is None else round(v, 1)  # noqa: E731
+            self.store.put("station", "pressure", key, day, [r(mean), r(lo), r(hi), None])
+            n += 1
+        pressure_trends(self.store, key)
+        return n
+
+    def collect_noise(self, key: str, m: dict, zone: ZoneInfo, now: int) -> int:
+        """S-11.4 (#220), opt-in: hourly noise of the main module, turned at once into a count of
+        noisy hours per day. Nothing hourly is kept. Re-reads the last 3 days (today is partial)."""
+        have = self.store.doc("station").get("noise", {}).get(key) or {}
+        begin = now - HOURLY_DAYS_BACKFILL * DAY
+        if have:
+            last = int(datetime.fromisoformat(max(have)).replace(tzinfo=zone).timestamp())
+            begin = max(begin, min(last, now - HOURLY_DAYS_SYNC * DAY))
+        try:
+            points = self._hourly_points(m["id"], m["module"], "noise", begin, now)
+        except (StationError, httpx.HTTPError, FormatError) as err:
+            log.warning("Station Netatmo, bruit indisponible : %s", type(err).__name__)
+            return 0
+        days = noisy_hours(points, zone)
+        for day, cell in days.items():
+            self.store.put("station", "noise", key, day, cell)
+        return len(days)
 
     # ------------------------------------------------------------ hourly readings
     def _hourly_points(self, device: str, module: str | None, types: str, begin: int, end: int) -> list:
@@ -287,6 +348,8 @@ class Station:
         now = int(now if now is not None else time.time())
         n = 0
         for key, m in zip(self.module_keys(modules), modules, strict=True):
+            if self.noise and m["type"] == "NAMain":
+                self.collect_noise(key, m, zone, now)
             types = HOURLY_TYPES.get(m["type"])
             if not types:  # wind, rain: no temperature
                 continue
@@ -309,6 +372,32 @@ class Station:
             aggregate_days(self.store, key, indoor, first, datetime.fromtimestamp(now, zone).date())
         log.info("Station Netatmo : %d relevés horaires", n)
         return n
+
+
+def pressure_trends(store: Store, key: str) -> None:
+    """Trend of each day: its mean minus the mean of the day before (None without it)."""
+    days = store.doc("station").get("pressure", {}).get(key) or {}
+    for day in sorted(days):
+        prev = days.get((date.fromisoformat(day) - timedelta(days=1)).isoformat())
+        v = days[day]
+        trend = None if not prev or prev[0] is None or v[0] is None else round(v[0] - prev[0], 1)
+        if len(v) < 4 or v[3] != trend:
+            store.put("station", "pressure", key, day, [*v[:3], trend])
+
+
+def noisy_hours(points: list, zone: ZoneInfo) -> dict[str, dict]:
+    """[(ts, [noise dB])] → {"YYYY-MM-DD" local: {"n": hours read, "loud": hours above NOISY_ABOVE}}."""
+    hours: dict[str, list[float]] = {}
+    for ts, cols in points:
+        v = cols[0] if cols else None
+        if isinstance(v, int | float) and not isinstance(v, bool):
+            hours.setdefault(datetime.fromtimestamp(ts, zone).strftime("%Y-%m-%dT%H"), []).append(float(v))
+    out: dict[str, dict] = {}
+    for hour, vals in hours.items():
+        cell = out.setdefault(hour[:10], {"n": 0, "loud": 0})
+        cell["n"] += 1
+        cell["loud"] += int(sum(vals) / len(vals) > NOISY_ABOVE)
+    return out
 
 
 def _num(v: object) -> float | None:

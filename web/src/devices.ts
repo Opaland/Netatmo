@@ -10,7 +10,8 @@ export interface DevicesDoc {
   modules?: Record<string, { type?: string; room?: string; setup?: string; fw?: string }>;
   reach?: Record<string, Record<string, number>>; // module -> day -> 1 answering / 0 not
   firmware?: Record<string, [string, string, string][]>; // module -> [day, from, to]
-  gateway?: { boots?: string[]; wifi?: Record<string, [number, number, number, number]> };
+  gateway?: { boots?: string[]; wifi?: Record<string, [number, number, number, number]>; offline?: string[] }; // #280: hours with every module out of reach
+  failures?: Record<string, string[]>; // #280: night -> sources whose collection failed
   tempo?: Record<string, string>; // Tempo day -> colour known by the gateway
 }
 
