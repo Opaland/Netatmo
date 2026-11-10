@@ -76,7 +76,7 @@ export function renderHome(view: HTMLElement, records: DayRecord[]) {
   ${verdictBlock(records, r, v, cmp)}
   ${tiles(records, last)}
   <div id="budget-zone"></div>
-  <div class="alerts" id="alerts">${offlineAlerts()}<div id="grid-zone"></div><div id="cold-alert-zone"></div></div>
+  <div class="alerts" id="alerts"><div id="grid-zone"></div><div id="cold-alert-zone"></div></div>
   ${countedCard(records, r)}
   ${chartCard(records, r)}
   ${ds!.insights ? '<section class="card insight" id="insight-card" aria-busy="true"><h2>Analyse du mois</h2></section>' : ''}`;
@@ -111,7 +111,7 @@ function explainLink(r: HomeRange): string {
   // #346: a radiator switched off for a stove: the fall comes from it, said in the link (#311: inline, the screen holds in three)
   const stove = [...stoppedIn(r.from, r.to), ...stoppedIn(minusYears(r.from), minusYears(r.to))].filter((x, k, a) => a.findIndex((y) => y.id === x.id) === k);
   const text = stove.length ? 'Pourquoi ? (poêle)' : 'Pourquoi ?'; // #311: short, the stove is named in the label and on the page
-  return ` <a class="link verdict-link" href="#${routeKey({ page: 'outil', tool: 'expliquer', month: ym })}" aria-label="${esc(`Pourquoi ? L’écart de ${monthLong(ym)} avec ${monthLong(before)} expliqué${stove.length ? `, dont le poêle (${stove.map((x) => x.name).join(', ')})` : ''}`)}">${esc(text)}</a>`;
+  return ` <a class="link verdict-link" href="#${routeKey({ page: 'outil', tool: 'expliquer', month: ym })}">${esc(text)}<span class="sr-only">${esc(` L’écart de ${monthLong(ym)} avec ${monthLong(before)} expliqué${stove.length ? `, dont le poêle (${stove.map((x) => x.name).join(', ')})` : ''}`)}</span></a>`;
 }
 
 
@@ -128,7 +128,7 @@ function verdictBlock(records: DayRecord[], r: HomeRange, v: Verdict | null, cmp
     return `<section class="verdict" aria-labelledby="verdict-title">
     <span class="verdict-icon" aria-hidden="true">·</span>
     <div><h2 class="verdict-title" id="verdict-title">${esc(spent.unit === '€' ? fmtEur(spent.value) : fmtKwh(spent.kwh))} ${esc(periodPhrase(r))}</h2>
-    <p class="verdict-sub">${what}. Pas encore d'année précédente sur ces dates : la comparaison viendra avec un an de données.</p>${leftNote(cmp.left)}</div>
+    <p class="verdict-sub">${what}. Pas encore d'année précédente sur ces dates : la comparaison viendra avec un an de données.${offlineNote()}</p>${leftNote(cmp.left)}</div>
   </section>`;
   }
   const compared = cmp.left.length ? money(cmp.records, r.from, r.to) : spent;
@@ -152,7 +152,7 @@ function verdictBlock(records: DayRecord[], r: HomeRange, v: Verdict | null, cmp
     <span class="verdict-icon" aria-hidden="true">${icon}</span>
     <div>
       <h2 class="verdict-title" id="verdict-title">${esc(verdictHeadline(m))}</h2>
-      <p class="verdict-sub">${what}, pour ${esc(fmtMoney(m.expected, m.unit))} attendus ${esc(ref)} (${esc(signedPct(m.pct))}).${explainLink(r)}</p>
+      <p class="verdict-sub">${what}, pour ${esc(fmtMoney(m.expected, m.unit))} attendus ${esc(ref)} (${esc(signedPct(m.pct))}).${offlineNote()}${explainLink(r)}</p>
       ${g}
       ${howDetails(
         'Comment c’est calculé',
@@ -266,11 +266,15 @@ function countedCard(records: DayRecord[], r: HomeRange): string {
 
 // ------------------------------------------------------------------ rooms offline (#346)
 /** One alert per room offline for 48 h or more: its days are missing, not 0. */
-function offlineAlerts(): string {
-  // #311: one compact line per room (the estimate is in « Ce qui a compté », the steps on the room page)
+/**
+ * #346: a room out of reach for 48 h or more, said where its absence matters — in the verdict,
+ * which leaves it out — with a link to what to do. Inline (#311: the screen holds in three).
+ */
+function offlineNote(): string {
   return offlineNow()
     .map(
-      (o) => `<div class="alert warn" role="note"><span class="ico" aria-hidden="true">!</span><div><p><b>${esc(`${o.name} hors ligne depuis le ${dayShort(o.run.from, o.run.from.slice(0, 4) !== lastDay().slice(0, 4))}`)}</b> <a class="link" href="#${routeKey({ page: 'piece', room: o.id })}">Que faire ?</a></p></div></div>`,
+      (o) =>
+        ` <span class="verdict-warn"><span aria-hidden="true">⚠ </span><b>${esc(`${o.name} hors ligne depuis le ${dayShort(o.run.from, o.run.from.slice(0, 4) !== lastDay().slice(0, 4))}`)}</b>, ${esc('non comptée')} (<a class="link" href="#${routeKey({ page: 'piece', room: o.id })}">que faire ?</a>).</span>`,
     )
     .join('');
 }

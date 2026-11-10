@@ -16,6 +16,7 @@ import {
 import { OFFERS, periodAt } from '../offers';
 import { contracts, esc, lastDay, longDate, table } from '../ui';
 import { fmt1 } from '../glossary';
+import { stoppedRooms } from './offline-rooms';
 
 export const roomLabel = (id?: string) => (id ? ((rawDataset() ?? ds!).meta.rooms.find((r) => r.id === id)?.name ?? 'pièce inconnue') : '—');
 /** #258: the shared one-decimal format (typographic minus). */
@@ -61,9 +62,12 @@ export function devicesQualityHtml(): string {
     out.push(`<h3>Coupures de courant probables</h3><p class="hint muted">La passerelle Intuis a redémarré ${days.length > 1 ? `ces ${days.length} jours` : 'ce jour'} : ${days.map((x) => esc(longDate(x))).join(', ')}. Un trou dans les courbes ces jours-là vient sans doute de là.</p>`);
   }
   const off = new Map<string, string[]>();
+  // #346: the days of a radiator switched off on purpose are expected, not « module hors ligne »
+  const stoppedFrom = new Map(stoppedRooms().map((s) => [s.room, s.from]));
   for (const [key, days] of Object.entries(doc?.reach ?? {})) {
     const room = doc?.modules?.[key]?.room;
-    const zero = Object.keys(days).filter((x) => days[x] === 0);
+    const from = room ? stoppedFrom.get(room) : undefined;
+    const zero = Object.keys(days).filter((x) => days[x] === 0 && !(from && x >= from));
     if (room && zero.length) off.set(room, [...(off.get(room) ?? []), ...zero]);
   }
   if (off.size) {
