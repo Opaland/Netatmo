@@ -96,7 +96,7 @@ try {
       const title = (await page.locator('#verdict-title').innerText()).trim();
       const said = (await page.locator('.verdict .verdict-sub').first().innerText()).replace(/\s+/g, ' ');
       const h = /^([\d\s  ]+)\s€ de (moins|plus) que d'habitude$/.exec(title);
-      const s = /^([\d\s  ]+) € \(([\d\s  ]+) kWh\) dépensés ⚠ hors Chambre enfant, hors ligne depuis le 5 nov\. \(que faire \?\), en novembre \(au 8\), pour ([\d\s  ]+) € attendus .*?\(([−+]?[\d\s  ]+) %\)/.exec(said);
+      const s = /^([\d\s  ]+)\s€ \(([\d\s  ]+)\skWh\) dépensés ⚠ hors Chambre enfant, hors ligne depuis le 5 nov\. \(que faire \?\), en novembre \(au 8\), pour ([\d\s  ]+)\s€ attendus .*?\(([−+]?[\d\s  ]+)\s%\)/.exec(said);
       check(h && s, `${name} : verdict illisible (« ${title} » / « ${said.slice(0, 200)} »)`);
       if (h && s) {
         const gap = num(h[1]) * (h[2] === 'moins' ? -1 : 1);

@@ -581,6 +581,8 @@ html {
      font) « 80 % / 20 % » wraps at its spaces instead of widening the page */
   body.is-report .kpis .kpi-value {
     white-space: normal;
+    /* #389: a number keeps its unit (non-breaking space): the compact size of the other tiles */
+    font-size: var(--font-kpi-compact);
   }
 }
 /* #384: with text at 200 % on a phone (tiles under 18rem), the amount goes under its label
@@ -739,11 +741,19 @@ details.fold[open] > summary {
   border-top: 1px solid var(--border);
 }
 .source-quality > summary {
-  display: grid;
-  grid-template-columns: auto auto minmax(0, 1fr) auto;
+  display: flex;
+  flex-wrap: wrap;
   align-items: baseline;
-  gap: var(--space-2);
+  gap: var(--space-1) var(--space-2);
   padding: var(--space-2) 0;
+}
+/* the name and its verdict take the line; with large text the percentage goes under, words whole */
+.source-quality > summary .sq-text {
+  flex: 1 1 12em;
+  min-width: 0;
+}
+.source-quality > summary .sq-pct {
+  margin-left: auto;
 }
 .source-quality > summary .swatch {
   margin: 0;

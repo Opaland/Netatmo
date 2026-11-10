@@ -212,8 +212,8 @@ try {
       check(!(await p.locator('#view[data-page^=bienvenue]').count()), 'démo : le premier lancement s’ouvre de lui-même');
       // #400: the figures of the full Accueil, to compare with the vue Proche below
       const num = (s) => Number(String(s).replace(/[\s  ]/g, '').replace('−', '-'));
-      const fullGap = /^([\d\s  ]+) € de (moins|plus)/.exec((await p.locator('#verdict-title').innerText()).trim());
-      const fullYoy = /([−+]?[\d\s  ]+) %\s*vs nov\./.exec(await p.locator('.home-tiles .kpi').first().innerText());
+      const fullGap = /^([\d\s  ]+)\s€ de (moins|plus)/.exec((await p.locator('#verdict-title').innerText()).trim());
+      const fullYoy = /([−+]?[\d\s  ]+)\s%\s*vs nov\./.exec(await p.locator('.home-tiles .kpi').first().innerText());
       const fullMonth = (await p.locator('.home-tiles .kpi .kpi-value').first().innerText()).trim();
       await p.evaluate(() => (location.hash = '#parametres-affichage'));
       await page(p, 'parametres-affichage');
@@ -227,8 +227,8 @@ try {
       // year), and the room out of reach named
       {
         const said = (await p.locator('#view').innerText()).replace(/\s+/g, ' ');
-        const gap = /Cela fait environ ([\d\s  ]+) € de (moins|plus)/.exec(said);
-        const yo = /C'est ([\d\s  ]+) % de (moins|plus) que l'an dernier/.exec(said);
+        const gap = /Cela fait environ ([\d\s  ]+)\s€ de (moins|plus)/.exec(said);
+        const yo = /C'est ([\d\s  ]+)\s% de (moins|plus) que l'an dernier/.exec(said);
         const month = (await p.locator('#view .proche-month .proche-big').innerText()).trim();
         check(fullGap && gap && num(gap[1]) === num(fullGap[1]) && gap[2] === fullGap[2], `vue Proche : écart « ${gap?.[0]} » ≠ Accueil « ${fullGap?.[0]} » (#400)`);
         check(fullYoy && yo && num(yo[1]) === Math.abs(num(fullYoy[1])) && (yo[2] === 'moins') === num(fullYoy[1]) < 0, `vue Proche : « ${yo?.[0]} » ≠ Accueil « ${fullYoy?.[0]} » (#400)`);
