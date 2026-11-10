@@ -8,7 +8,6 @@ import {
   co2Modules,
   coldWinterDays,
   dewPoint,
-  effectiveMapping,
   heatedModules,
   hoursBelow,
   indoorModules,
@@ -30,7 +29,7 @@ import {
 } from '../comfort';
 import { comboChart, cssVar, lineChart, seqRamp } from '../charts';
 import { type Station, loadStationHourly } from '../data';
-import { activeRooms, esc, lastDay, longDate, nf0, series, table, tableToggle, measureColor } from '../ui';
+import { activeRooms, esc, lastDay, longDate, moduleColor, nf0, series, stationMapping, table, tableToggle, measureColor } from '../ui';
 import { html } from '../trusted';
 import * as windows from './windows';
 import * as ha from './ha';
@@ -68,9 +67,7 @@ const verdictBox = (level: 'low' | 'mid' | 'high', title: string, sub = '') =>
 function heatingRooms() {
   return activeRooms().filter((r) => r.category === 'heating');
 }
-function mapping(st: Station | null) {
-  return st ? effectiveMapping(heatingRooms(), st.modules, state.roomModuleMap) : new Map<string, string>();
-}
+const mapping = stationMapping;
 /**
  * Name shown for a station module: the room it is linked to when the names differ (a module
  * « Cave » placed in « Chambre bleue » reads « Chambre bleue (module Cave) »), else its own name.
@@ -381,15 +378,14 @@ function drawCold(st: Station | null, map: Map<string, string>) {
   const thr = state.comfortThreshold;
   const last = lastDay();
   const d30 = days(addDays(last, -29), last);
-  const all = Object.keys(st.modules);
   const rooms = comfortRooms(st, map).filter((r) => r.source === 'station');
   // #306: one line per room (60 thin grouped bars were unreadable on a phone)
   lineChart(el, {
     labels: d30.map(dayLabel),
     series: rooms.map((r) => {
       const per = coldPerDay(st, r.module!, thr);
-      // identity follows the module (same colour as in Analyse › Station)
-      return { name: r.label, color: series(2 + all.indexOf(r.module!)), data: d30.map((d) => per?.get(d)?.cold ?? null) };
+      // #399: the colour follows the room (same as in Pièces and in Historique › Station météo)
+      return { name: r.label, color: moduleColor(st, r.module!), data: d30.map((d) => per?.get(d)?.cold ?? null) };
     }),
     price: null,
     unit: 'h',

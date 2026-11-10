@@ -31,7 +31,7 @@ import {
 } from '../piece';
 import { type Room30, tempDrops, unpack } from '../room30';
 import { html } from '../trusted';
-import { avgPrice, costOf, esc, fmtEur, fmtKwh, lastDay, nf0, offCol } from '../ui';
+import { avgPrice, costOf, esc, fmtEur, fmtKwh, lastDay, nf0, offCol, roomColor } from '../ui';
 import { ABSENCE_MODES, type RoomState, type StateCell, bits, modeLabel } from '../windows';
 import { lazyCard } from '../lazy';
 import { offlineText } from '../room-offline';
@@ -147,7 +147,7 @@ export function renderPieces(view: HTMLElement, o: PiecesOpts) {
         ? `${fmt1(t.mean)} °C · <span class="pill ${pill.level}">${esc(pill.text)}</span>`
         : '<span class="muted">pas de température relevée</span>';
     const tag = x.room.id === BEDROOMS_ID ? ' <span class="tag">regroupées</span>' : '';
-    return `<li><a class="row" href="#piece-${esc(encodeURIComponent(x.room.id))}" data-room-link="${esc(x.room.id)}"><span class="swatch" style="background:var(--usage-heating)" aria-hidden="true"></span><span><span class="t">${esc(x.room.name)}${tag}</span><span class="s">${sub}</span></span><span class="v">${value(x)}</span><span class="chev" aria-hidden="true">›</span></a></li>`;
+    return `<li><a class="row" href="#piece-${esc(encodeURIComponent(x.room.id))}" data-room-link="${esc(x.room.id)}"><span class="swatch" style="background:${esc(roomColor(x.room.id))}" aria-hidden="true"></span><span><span class="t">${esc(x.room.name)}${tag}</span><span class="s">${sub}</span></span><span class="v">${value(x)}</span><span class="chev" aria-hidden="true">›</span></a></li>`;
   });
   const shares = offPeakShares(ds!.tariffs, offCol()).perRoom;
   const water = byCost(rows.filter((x) => x.room.category === 'water_heater')).map((x) => {

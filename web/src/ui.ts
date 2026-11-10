@@ -8,6 +8,8 @@ import { type ContractPeriod, periodAt } from './offers';
 import { type HcHp, flatPrice, hcHp, manualHcHp, manualPriceAt } from './pricing';
 import { comparison, seg } from './components';
 import { NO_REFERENCE, dayLong, signedPct } from './glossary';
+import { effectiveMapping, isOutdoor as outdoorModule } from './comfort';
+import type { Station } from './data';
 import { tenant } from './tenant';
 
 export { esc };
@@ -216,6 +218,32 @@ export function roomColor(id: string) {
   if (id === OTHER) return cssVar('--usage-standby');
   return series(roomIndex(id));
 }
+/**
+ * Heated room → station module, as Air et confort shows it (suggestion by name, or the link saved
+ * by the user). One function for every view that colours or names a module by its room (#399).
+ */
+export function stationMapping(st: Station | null): Map<string, string> {
+  if (!st) return new Map();
+  const heating = activeRooms().filter((r) => r.category === 'heating');
+  return effectiveMapping(heating, st.modules, state.roomModuleMap);
+}
+/**
+ * #399: the colour of a station module follows its room, never its rank in the station: a module
+ * linked to a heated room wears that room's colour (Salon is the same in Pièces and in Station
+ * météo); the outdoor module the reference grey (drawn dashed by the caller, `isOutdoor`); an
+ * indoor module tied to no room (« Cave ») the palette colours after the rooms of the house.
+ */
+export function moduleColor(st: Station, k: string): string {
+  if (isOutdoor(st, k)) return referenceColor();
+  const map = stationMapping(st);
+  for (const [room, mod] of map) if (mod === k) return roomColor(room);
+  const linked = new Set(map.values());
+  const free = Object.keys(st.modules).filter((m) => !isOutdoor(st, m) && !linked.has(m));
+  const rooms = rawRooms().filter((r) => r.category === 'heating').length;
+  return series(rooms + Math.max(0, free.indexOf(k)));
+}
+/** The outdoor module (comfort.ts rule, read by key). */
+export const isOutdoor = (st: Station, k: string) => !!st.modules[k] && outdoorModule(st.modules[k]);
 export const OTHER = '__other__';
 export const roomGroup = (id: string) =>
   activeRooms().find((r) => r.id === id)?.category === 'water_heater' || shownRank(id) !== null ? id : OTHER;

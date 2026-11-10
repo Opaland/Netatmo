@@ -173,6 +173,26 @@ describe('room colours: they follow the room, never its rank', () => {
     expect(ui.roomColor('c')).toBe('--room-3');
   });
 
+  it('#399: a station module wears the colour of its room, never its rank in the station', () => {
+    const named = (id: string, name: string): Room => ({ ...room(id), name });
+    h.rooms = [named('r1', 'Salon'), named('r2', 'Chambre parentale'), named('r3', 'Bureau')];
+    setup({ state: { roomModuleMap: {} } });
+    const m = (name: string, type = 'NAModule4', indoor = true) => ({ name, type, indoor });
+    // station order: Cave, outdoor, Bureau, Salon — the ranks would give Salon a fourth colour
+    const st = { modules: { c: m('Cave'), x: m('Extérieur', 'NAModule1', false), b: m('Bureau'), s: m('Salon', 'NAMain') }, daily: {} } as never;
+    expect(ui.moduleColor(st, 's')).toBe(ui.roomColor('r1'));
+    expect(ui.moduleColor(st, 's')).toBe('--room-1');
+    expect(ui.moduleColor(st, 'b')).toBe('--room-3');
+    // outdoor: the reference grey, drawn dashed
+    expect(ui.isOutdoor(st, 'x')).toBe(true);
+    expect(ui.moduleColor(st, 'x')).toBe('--series-reference');
+    // a module tied to no room: the colours after the rooms of the house, never a room's
+    expect(ui.moduleColor(st, 'c')).toBe('--room-4');
+    // linked by hand to another room: follows that room
+    h.state = { ...(h.state as object), roomModuleMap: { r2: 'c' } };
+    expect(ui.moduleColor(st, 'c')).toBe('--room-2');
+  });
+
   it('#300: the latest year takes year-0, older ones the lighter steps of the ramp', () => {
     setup({ years: [2020, 2021, 2022, 2023, 2024, 2025] });
     expect(ui.yearColor(2025)).toBe('--year-0');
