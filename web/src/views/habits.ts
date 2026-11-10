@@ -19,12 +19,12 @@ import {
   NO_EDITS,
   type Period,
   absencePeriods,
-  dayKind,
   dayTypeCost,
   lowDays,
   mergeAbsences,
   signatureExpect,
   summarizeAbsence,
+  teleworkPlan,
   waterTalon,
   withModeAbsences,
 } from '../habits';
@@ -116,22 +116,25 @@ function teleworkCard(): string {
   if (!ds!.weather) {
     return `<section class="card" id="telework-card">${head}<p class="hint muted">Il faut la météo (prochaine collecte) pour comparer les jours à climat égal.</p></section>`;
   }
-  const kinds = tw.size ? (['telework', 'office', 'weekend'] as const) : (['weekday', 'weekend'] as const);
-  const res = dayTypeCost(perDay, ds!.weather, from, last, (d) => {
-    const k = dayKind(d, tw);
-    return tw.size ? k : k === 'weekend' ? 'weekend' : 'weekday';
-  });
-  const label: Record<string, string> = { telework: 'Jour de télétravail', office: 'Jour ouvré hors télétravail', weekday: 'Jour ouvré (lun.–ven.)', weekend: 'Jour de week-end' };
+  const plan = teleworkPlan(tw);
+  const kinds = plan.kinds;
+  const res = dayTypeCost(perDay, ds!.weather, from, last, plan.group);
+  const label: Record<string, string> = { telework: 'Jour de télétravail', office: 'Jour ouvré au bureau', weekday: 'Jour ouvré (lun.–ven.)', weekend: 'Jour de week-end' };
   if (!res || kinds.some((k) => !res.groups.has(k))) {
     return `<section class="card" id="telework-card">${head}<p class="hint muted">Pas assez de jours chauffés dans cette pièce sur 12 mois pour comparer (au moins 3 jours de chaque sorte, à plus de ${MIN_DJU} degrés-jours).</p></section>`;
   }
   const money = (k: number) => (price !== null ? `${(k * price).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €` : '—');
   const g = (k: string) => res.groups.get(k)!;
-  const [a, b] = tw.size ? ['telework', 'office'] : ['weekday', 'weekend'];
+  const [a, b] = plan.compare;
   const diff = g(a).kwh - g(b).kwh;
-  const sentence = tw.size
-    ? `Une journée de télétravail coûte <strong>${money(Math.abs(diff))} ${diff >= 0 ? 'de plus' : 'de moins'}</strong> qu'une journée au bureau pour chauffer « ${esc(name)} » (${diff >= 0 ? '+' : '−'}${fmtKwh(Math.abs(diff))}), à climat égal.`
-    : `Dans « ${esc(name)} », un jour ouvré coûte <strong>${money(g('weekday').kwh)}</strong> et un jour de week-end <strong>${money(g('weekend').kwh)}</strong>, à climat égal : écart de ${money(Math.abs(diff))} par jour. Cochez vos jours de télétravail pour isoler leur coût.`;
+  const more = diff >= 0 ? 'de plus' : 'de moins';
+  const delta = `(${diff >= 0 ? '+' : '−'}${fmtKwh(Math.abs(diff))})`;
+  const sentence =
+    b === 'office'
+      ? `Une journée de télétravail coûte <strong>${money(Math.abs(diff))} ${more}</strong> qu'une journée au bureau pour chauffer « ${esc(name)} » ${delta}, à climat égal.`
+      : a === 'telework'
+        ? `Tous vos jours ouvrés sont en télétravail : dans « ${esc(name)} », une journée de télétravail coûte <strong>${money(g('telework').kwh)}</strong> et un jour de week-end <strong>${money(g('weekend').kwh)}</strong>, à climat égal, soit ${money(Math.abs(diff))} ${more} ${delta}. Sans jour au bureau, le week-end sert de point de comparaison.`
+        : `Dans « ${esc(name)} », un jour ouvré coûte <strong>${money(g('weekday').kwh)}</strong> et un jour de week-end <strong>${money(g('weekend').kwh)}</strong>, à climat égal : écart de ${money(Math.abs(diff))} par jour. Cochez vos jours de télétravail pour isoler leur coût.`;
   return `<section class="card" id="telework-card">${head}
     <p>${sentence}</p>
     ${table(

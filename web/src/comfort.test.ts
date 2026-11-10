@@ -6,6 +6,7 @@ import {
   effectiveMapping,
   heatedModules,
   hoursBelow,
+  indoorModules,
   humidRuns,
   lastNights,
   nameSimilarity,
@@ -50,6 +51,10 @@ describe('modules', () => {
     expect(heatedModules(MODULES)).toEqual(['m0', 'm2']);
     expect(co2Modules(MODULES, { m0: {}, m2: {}, m3: {} })).toEqual(['m2', 'm0']);
     expect(co2Modules(MODULES, { m0: {} })).toEqual(['m0']);
+  });
+  it('offers every indoor module for a link, whatever its name, and counts a linked « Cave »', () => {
+    expect(indoorModules(MODULES)).toEqual(['m0', 'm2', 'm3']);
+    expect(co2Modules(MODULES, { m0: {}, m2: {}, m3: {} }, ['m3'])).toEqual(['m2', 'm0', 'm3']);
   });
 });
 
@@ -147,6 +152,14 @@ describe('room ↔ module mapping (S-3.8)', () => {
     ]);
     // a module that disappeared from the station is ignored
     expect(effectiveMapping(ROOMS, MODULES, { 'r-salon': 'm9' }).has('r-salon')).toBe(false);
+  });
+  it('keeps a room linked to a module of another name (« Chambre bleue » ↔ « Cave »), never to the outdoor one', () => {
+    const rooms = [...ROOMS, { id: 'r-bleue', name: 'Chambre bleue' }];
+    expect(suggestMapping(rooms, MODULES)['r-bleue']).toBeUndefined(); // no name in common: no suggestion
+    const m = effectiveMapping(rooms, MODULES, { 'r-bleue': 'm3' });
+    expect(m.get('r-bleue')).toBe('m3');
+    expect(m.get('r-salon')).toBe('m0'); // the others keep their suggestion
+    expect(effectiveMapping(rooms, MODULES, { 'r-bleue': 'm1' }).has('r-bleue')).toBe(false);
   });
 });
 
