@@ -8,12 +8,13 @@ import { type DayRecord, addDays, bucketKeys, bucketLabel, minusYears, pctChange
 import { activeRooms, datasetDoc, ds, onDatasetLoaded, rerender, state } from '../app';
 import { barChart, chartOf, cssVar, lineChart } from '../charts';
 import { effectiveMapping, isBedroom, lastNightDay, lastNights, nightVerdict, offsetStats, signed, summarizeNights } from '../comfort';
-import { alert, comparison, howDetails, legend, listRow, scheduleBand, tile } from '../components';
+import { alert, comparison, countedNote, howDetails, legend, listRow, periodBar, scheduleBand, seg, tile } from '../components';
 import { type Dataset, loadRoom30, loadRoomState } from '../data';
 import type { DatasetDoc } from '../loader';
 import { BEDROOMS_ID } from '../household';
-import { NO_REFERENCE, PERIOD, TEMP, dayLong, dayShort, fmt1, hourMin, hourRange, vsLabel } from '../glossary';
-import { offPeakShares } from '../analysis';
+import { NO_REFERENCE, TEMP, dayLong, dayShort, fmt1, fmtTemp, hourMin, hourRange, vsLabel } from '../glossary';
+import { HOME_PERIODS, type HomeRange, homePeriod, homeRange, scopeTitle } from '../home';
+import { daysBetween } from '../periods';
 import { bucketMarks } from '../periods';
 import {
   type ColdDay,
@@ -48,7 +49,14 @@ onDatasetLoaded(() => {
   airShown = false;
 });
 
-const DAYS = 30;
+/**
+ * #388: one period for Pièces and for the page of a room, chosen like the Accueil's (Mois · Saison ·
+ * 12 mois · Année) and said once at the top and under each card (« Compté : … »); « Maintenant »
+ * is apart. The half hours are loaded for the last 40 days only: the time at the requested
+ * temperature and the falls of temperature are said over the month, and only then.
+ */
+export const piecesRange = (last: string): HomeRange => homeRange(homePeriod(state.pieces), last);
+const HALF_HOURS = 40;
 const plural = (n: number, w: string) => `${n} ${w}${n > 1 ? 's' : ''}`;
 
 /** A document, redrawing the page shown once it arrives; undefined while loading, null when absent. */
@@ -106,6 +114,16 @@ function sumState(rs: RoomState, ids: string[], from: string, to: string, f: (c:
   }
   return any ? Math.round(s * 10) / 10 : null;
 }
+/** #388: share of the off-peak hours in the water heater's kWh over [from, to] (null: not split). */
+function offPeakShare(room: string, from: string, to: string): number | undefined {
+  const days = ds!.tariffs.get(room);
+  if (!days) return undefined;
+  const off = offCol();
+  let o = 0;
+  let t = 0;
+  for (const [d, v] of days) if (d >= from && d <= to) (o += v[off]), (t += v[0] + v[1] + v[2]);
+  return t > 0 ? o / t : undefined;
+}
 const h1 = (v: number) => `${fmt1(v).replace(/,0$/, '')} h`;
 
 // ------------------------------------------------------------------ Pièces
@@ -118,17 +136,17 @@ export interface PiecesOpts {
 
 export function renderPieces(view: HTMLElement, o: PiecesOpts) {
   const last = lastDay();
-  const yearStart = `${last.slice(0, 4)}-01-01`;
-  const from30 = addDays(last, -(DAYS - 1));
+  const r = piecesRange(last);
+  const { from, to } = r;
   const thr = state.comfortThreshold;
   const rs = doc(stateDoc, 'pieces');
-  const rows = activeRooms().map((r) => {
-    const mine = ds!.records.filter((x) => x.room === r.id);
+  const rows = activeRooms().map((room) => {
+    const mine = ds!.records.filter((x) => x.room === room.id);
     // #346: a room offline counts with its share estimated from the meter (« ≈ »), never 0 kWh
     // sorted on what was measured; the estimate is said under the name, never added in
-    const run = offlineRun(r.id, yearStart, last);
-    const est = run ? (offlineEstimate(r.id, yearStart, last) ?? 0) : 0;
-    return { room: r, kwh: total(mine, yearStart, last), eur: costOf(mine, yearStart, last), run, est };
+    const run = offlineRun(room.id, from, to);
+    const est = run ? (offlineEstimate(room.id, from, to) ?? 0) : 0;
+    return { room, kwh: total(mine, from, to), eur: costOf(mine, from, to), run, est };
   });
   const value = (x: { kwh: number; eur: number | null; run: unknown }) => {
     if (x.run && !x.kwh) return '—'; // nothing measured: not « 0 kWh »
@@ -136,10 +154,10 @@ export function renderPieces(view: HTMLElement, o: PiecesOpts) {
   };
   const heated = byCost(rows.filter((x) => x.room.category === 'heating')).map((x) => {
     const m = measured(x.room.id);
-    const t = meanIn(m.days, from30, last);
+    const t = meanIn(m.days, from, to);
     let cold = 0;
-    for (const [d, v] of m.days) if (d >= from30 && d <= last && v !== null && v < thr) cold++;
-    const open = rs ? sumState(rs, members(x.room.id), from30, last, (c) => c.open_window_h) : null;
+    for (const [d, v] of m.days) if (d >= from && d <= to && v !== null && v < thr) cold++;
+    const open = rs ? sumState(rs, members(x.room.id), from, to, (c) => c.open_window_h) : null;
     const pill = comfortPill(cold, open, thr);
     const sub = x.run
       ? `<span class="pill${x.run.stopped ? '' : ' warn'}">${esc(offlineText(x.run))}</span>${x.est ? ` · ≈ ${esc(fmtKwh(x.est))} estimés` : ''}`
@@ -149,14 +167,13 @@ export function renderPieces(view: HTMLElement, o: PiecesOpts) {
     const tag = x.room.id === BEDROOMS_ID ? ' <span class="tag">regroupées</span>' : '';
     return `<li><a class="row" href="#piece-${esc(encodeURIComponent(x.room.id))}" data-room-link="${esc(x.room.id)}"><span class="swatch" style="background:${esc(roomColor(x.room.id))}" aria-hidden="true"></span><span><span class="t">${esc(x.room.name)}${tag}</span><span class="s">${sub}</span></span><span class="v">${value(x)}</span><span class="chev" aria-hidden="true">›</span></a></li>`;
   });
-  const shares = offPeakShares(ds!.tariffs, offCol()).perRoom;
   const water = byCost(rows.filter((x) => x.room.category === 'water_heater')).map((x) => {
-    const s = shares.get(x.room.id);
+    const s = offPeakShare(x.room.id, from, to);
     const sub = s === undefined ? 'heures creuses, heures de chauffe' : `${nf0.format(s * 100)} % en heures creuses`;
     return `<li><a class="row" href="#chauffe-eau"><span class="swatch" style="background:var(--usage-water)" aria-hidden="true"></span><span><span class="t">${esc(x.room.name)}</span><span class="s">${esc(sub)}</span></span><span class="v">${value(x)}</span><span class="chev" aria-hidden="true">›</span></a></li>`;
   });
   view.innerHTML = html(`<h2 class="page-title" id="page-title" tabindex="-1">Pièces</h2>
-  <p class="card-sub">${esc(`${PERIOD.ytd} (au ${dayShort(last)}), trié par coût · température et confort : ${PERIOD['30d'].toLowerCase()}, seuil ${fmt1(thr)}\u00a0°C`)}</p>
+  ${periodBar(seg('pieces', r.period, HOME_PERIODS, 'Période'), `${scopeTitle(r)} · coût, température et confort sur la période, trié par coût · froid : moyenne du jour sous ${fmtTemp(thr)}`)}
   ${heated.length ? `<ul class="list" aria-label="Pièces chauffées, de la plus chère à la moins chère">${heated.join('')}</ul>` : ''}
   ${water.length ? `<p class="section-title">Appareils</p><ul class="list" aria-label="Appareils">${water.join('')}</ul>` : ''}
   <p class="section-title">Tout le logement</p>
@@ -172,8 +189,9 @@ export function renderPiece(view: HTMLElement, id: string) {
   const room = activeRooms().find((r) => r.id === id)!;
   const key = `piece-${encodeURIComponent(id)}`;
   const last = lastDay();
-  const from30 = addDays(last, -(DAYS - 1));
-  const yearStart = `${last.slice(0, 4)}-01-01`;
+  const r = piecesRange(last);
+  const { from, to } = r;
+  const counted = countedNote(esc(scopeTitle(r)));
   const thr = state.comfortThreshold;
   const heating = room.category === 'heating';
   const ids = members(id);
@@ -184,11 +202,11 @@ export function renderPiece(view: HTMLElement, id: string) {
   const m = measured(id);
   const setpoints = ds!.temps.get(id);
   const days: string[] = [];
-  for (let d = from30; d <= last; d = addDays(d, 1)) days.push(d);
+  for (let d = from; d <= to; d = addDays(d, 1)) days.push(d);
 
   const parts: string[] = [];
   // #346: a room without reading says so first, with its estimate from the meter
-  const run = offlineRun(id, minusYears(yearStart), last);
+  const run = offlineRun(id, minusYears(from), to);
   if (run?.stopped) {
     // switched off on purpose (⚙ Mon logement): expected, not a failure
     const st = run.stopped;
@@ -201,23 +219,26 @@ export function renderPiece(view: HTMLElement, id: string) {
       ),
     );
   } else if (run) {
-    const line = offlineLine(id, yearStart, last);
+    const line = offlineLine(id, from, to);
     parts.push(
       alert(
         run.ongoing ? 'warn' : 'info',
         `${room.name} : ${offlineText(run)}`,
         `${run.ongoing ? 'Le module n’envoie plus rien : les jours sans relevé ne sont pas à 0 kWh, ils manquent. ' : 'Les jours sans relevé manquent (ils ne sont pas à 0 kWh). '}${
-          line.includes('estimés') ? `Depuis le 1er janvier, ${line.split(' · ')[1]}. ` : ''
+          line.includes('estimés') ? `Sur la période, ${line.split(' · ')[1]}. ` : ''
         }Les comparaisons avec l’an dernier ne comptent pas cette pièce.${run.ongoing ? ' Hors ligne, le radiateur ne reçoit plus le planning ni le mode absence : vérifier son alimentation, le redémarrer, puis l’associer de nouveau dans l’application Intuis.' : ''}`,
       ),
     );
   }
   if (heating) parts.push(nowCard(room.name, ids, group, m, r30, rs, last));
-  parts.push(tilesRow(mine, m, r30, ids, yearStart, from30, last, heating));
-  if (heating && [...m.days].some(([d, v]) => d >= from30 && v !== null)) {
+  // #388: one period for everything below « Maintenant »
+  parts.push(periodBar(seg('pieces', r.period, HOME_PERIODS, 'Période'), scopeTitle(r)));
+  parts.push(tilesRow(mine, m, r30, ids, r, heating));
+  if (heating && [...m.days].some(([d, v]) => d >= from && d <= to && v !== null)) {
     parts.push(`<section class="card" id="piece-temp">
       <div class="card-head"><h2>Température</h2></div>
-      <p class="card-sub">${esc(`${PERIOD['30d']} · moyenne par jour, °C`)}</p>
+      ${counted}
+      <p class="card-sub">Moyenne par jour, °C.</p>
       ${legend([
         { label: `Mesurée (${sourceLabel(m.source)})`, color: '--series-measure' },
         { label: TEMP.setpointShort, color: '--accent', kind: 'line' },
@@ -225,12 +246,12 @@ export function renderPiece(view: HTMLElement, id: string) {
       ])}
       <div class="chart" id="piece-temp-chart" role="img" aria-label="${esc(room.name)} : température mesurée et ${esc(TEMP.setpoint)}, par jour"></div>
     </section>`);
-    parts.push(coldCard(m, setpoints, ids, group, rs, r30, from30, last, thr, days));
+    parts.push(coldCard(m, setpoints, ids, group, rs, r30, r, thr, days));
   }
   if (!state.simple) {
-    parts.push(consoCard(room.category, mine, yearStart, last));
-    if (heating) parts.push(airCard(id, room.name, from30, last));
-    if (heating) parts.push(radiatorCard(id, ids, rs, from30, last));
+    parts.push(consoCard(room.category, mine, r));
+    if (heating) parts.push(airCard(id, room.name, r));
+    if (heating) parts.push(radiatorCard(id, ids, rs, r));
   }
   parts.push(`<section class="card"><div class="card-head"><h2>Pour aller plus loin</h2></div><ul class="list">${[
     room.category === 'water_heater' ? listRow({ title: 'Chauffe-eau', sub: 'heures creuses, heures de chauffe, contacteur', href: '#chauffe-eau' }) : '',
@@ -242,7 +263,7 @@ export function renderPiece(view: HTMLElement, id: string) {
   const tempEl = document.getElementById('piece-temp-chart');
   if (tempEl) drawTemp(tempEl, room.name, m, setpoints, days, thr);
   const consoEl = document.getElementById('room-detail');
-  if (consoEl) drawConso(consoEl, room.category, mine, last);
+  if (consoEl) drawConso(consoEl, room.category, mine, r);
   if (document.getElementById('piece-surface')) {
     void lazyCard(
       () => import('./works'),
@@ -252,10 +273,10 @@ export function renderPiece(view: HTMLElement, id: string) {
         const m2 = displaySurfaces(ds!, works.surfaces)[id];
         const el = document.getElementById('piece-surface');
         if (!el) return;
-        const kwh = total(mine, addDays(last, -364), last);
+        const kwh = total(mine, from, to);
         el.outerHTML = html(
           m2
-            ? listRow({ title: 'Surface · par m²', sub: PERIOD['12m'], value: `${fmt1(m2).replace(/,0$/, '')} m² · ${nf0.format(kwh / m2)} kWh` })
+            ? listRow({ title: 'Surface · kWh par m²', sub: 'sur la période', value: `${fmt1(m2).replace(/,0$/, '')} m² · ${nf0.format(kwh / m2)}\u00a0kWh` })
             : listRow({ title: 'Surface', sub: 'à saisir dans ⚙ Mon logement, pour les kWh par m²', href: '#parametres-logement' }),
         );
       },
@@ -347,54 +368,56 @@ function tilesRow(
   m: ReturnType<typeof measured>,
   r30: Room30 | null | undefined,
   ids: string[],
-  yearStart: string,
-  from30: string,
-  last: string,
+  r: HomeRange,
   heating: boolean,
 ): string {
-  const kwh = total(mine, yearStart, last);
-  const eur = costOf(mine, yearStart, last);
-  const pFrom = minusYears(yearStart);
-  const pTo = minusYears(last);
+  const { from, to } = r;
+  const kwh = total(mine, from, to);
+  const eur = costOf(mine, from, to);
+  const pFrom = minusYears(from);
+  const pTo = minusYears(to);
   const before = total(mine, pFrom, pTo);
   const eurBefore = before > 0 ? costOf(mine, pFrom, pTo) : null;
   // #346: offline this year or the last one: measured days only, not compared
-  const run = offlineRun(mine[0]?.room ?? ids[0], pFrom, last);
+  const run = offlineRun(mine[0]?.room ?? ids[0], pFrom, to);
   const delta = !run && before > 0 ? (eur !== null && eurBefore ? pctChange(eur, eurBefore) : pctChange(kwh, before)) : null;
   const tiles = [
     tile({
-      label: run ? `${PERIOD.ytd}, jours mesurés` : PERIOD.ytd,
+      label: `${eur === null ? 'Consommation' : 'Coût'}${run ? ', jours mesurés' : ''}`,
       value: eur === null ? fmtKwh(kwh) : fmtEur(eur),
-      sub: `${eur === null ? '' : `${esc(fmtKwh(kwh))} · `}${comparison(delta, vsLabel(yearStart, last), { none: run ? `${offlineText(run)} : ${run.stopped ? 'changement de mode de chauffage' : 'non comparé'}` : NO_REFERENCE })}`,
+      sub: `${eur === null ? '' : `${esc(fmtKwh(kwh))} · `}${comparison(delta, vsLabel(from, to), { none: run ? `${offlineText(run)} : ${run.stopped ? 'changement de mode de chauffage' : 'non comparé'}` : NO_REFERENCE })}`,
       id: 'piece-cost',
     }),
   ];
   if (heating) {
-    const t = meanIn(m.days, from30, last);
-    const sp = meanIn([...(ds!.temps.get(ids.length === 1 ? ids[0] : BEDROOMS_ID) ?? [])].map(([d, v]) => [d, v[1]]), from30, last);
+    const t = meanIn(m.days, from, to);
+    const sp = meanIn([...(ds!.temps.get(ids.length === 1 ? ids[0] : BEDROOMS_ID) ?? [])].map(([d, v]) => [d, v[1]]), from, to);
     if (t)
       tiles.push(
         tile({
           label: 'Température moyenne',
           value: `${fmt1(t.mean)}\u00a0°C`,
-          sub: esc(`${PERIOD['30d'].toLowerCase()} · ${sourceLabel(m.source)}${sp ? ` · demandée ${fmt1(sp.mean)}\u00a0°C` : ''}`),
+          sub: esc(`${sourceLabel(m.source)}${sp ? ` · demandée ${fmtTemp(sp.mean)}` : ''}`),
           id: 'piece-mean',
         }),
       );
-    const at = r30 ? timeAtSetpoint(r30, ids, from30, last) : null;
+    // the half hours cover the last 40 days: said over the month only (#388)
+    const at = r30 && daysBetween(from, to) <= HALF_HOURS ? timeAtSetpoint(r30, ids, from, to) : null;
     if (at)
       tiles.push(
         tile({
           label: 'Temps à la consigne',
-          value: `${nf0.format(at.share * 100)} %`,
-          sub: esc(PERIOD['30d']),
+          value: `${nf0.format(at.share * 100)}\u00a0%`,
+          sub: 'part des heures',
           id: 'piece-at-setpoint',
         }),
       );
   }
   const note = tiles.some((t) => t.includes('piece-at-setpoint'))
     ? `<p class="hint muted" id="piece-at-setpoint-def">Temps à la consigne : part des heures où la pièce était à la température demandée aux radiateurs, à 0,5 °C près (hors hors-gel).</p>`
-    : '';
+    : heating && r30 && daysBetween(from, to) > HALF_HOURS
+      ? '<p class="hint muted">Temps à la consigne : sur la période « Mois » seulement (relevés à la demi-heure des 40 derniers jours).</p>'
+      : '';
   return `<section class="kpis" aria-label="Chiffres clés">${tiles.join('')}</section>${note}`;
 }
 
@@ -408,7 +431,7 @@ function drawTemp(el: HTMLElement, name: string, m: ReturnType<typeof measured>,
   const cold = meas.map((v) => (v !== null && v < thr ? v : null));
   const n = cold.filter((v) => v !== null).length;
   const axis = tempAxis([...meas, ...req]);
-  el.setAttribute('aria-label', `${name}, ${PERIOD['30d'].toLowerCase()} : ${n ? `${plural(n, 'jour')} sous ${fmt1(thr)}\u00a0°C` : `aucun jour sous ${fmt1(thr)}\u00a0°C`}`);
+  el.setAttribute('aria-label', `${name}, ${days.length > 1 ? `du ${dayShort(days[0])} au ${dayShort(days[days.length - 1])}` : dayShort(days[0] ?? '')} : ${n ? `${plural(n, 'jour')} sous ${fmt1(thr)}\u00a0°C` : `aucun jour sous ${fmt1(thr)}\u00a0°C`}`);
   const labels = days.map((d) => dayShort(d));
   lineChart(el, {
     labels,
@@ -449,18 +472,17 @@ function coldCard(
   group: boolean,
   rs: RoomState | null | undefined,
   r30: Room30 | null | undefined,
-  from30: string,
-  last: string,
+  r: HomeRange,
   thr: number,
   days: string[],
 ): string {
-  const head = (sub: string) => `<div class="card-head"><h2>Pourquoi il a fait froid</h2></div><p class="card-sub">${esc(sub)}</p>`;
+  const head = (sub: string) => `<div class="card-head"><h2>Pourquoi il a fait froid</h2></div>${countedNote(esc(scopeTitle(r)))}<p class="card-sub">${esc(sub)}</p>`;
   const rows = days.map((d) => ({ day: d, temp: m.days.get(d) ?? null, setpoint: sp?.get(d)?.[1] ?? null }));
   const n = rows.filter((r) => r.temp !== null && r.temp < thr).length;
-  const sub = `${n ? `${plural(n, 'jour')} sous ${fmt1(thr)}\u00a0°C` : `aucun jour sous ${fmt1(thr)}\u00a0°C`} · ${PERIOD['30d'].toLowerCase()}`;
+  const sub = n ? `${plural(n, 'jour')} sous ${fmtTemp(thr)}` : `aucun jour sous ${fmtTemp(thr)}`;
   if (!n) return `<section class="card" id="froid">${head(sub)}<p>La pièce n’a pas eu de journée froide : sa température moyenne est restée au-dessus de ${esc(fmt1(thr))}\u00a0°C chaque jour relevé.</p></section>`;
   if (rs === undefined || r30 === undefined) return `<section class="card" id="froid" aria-busy="true">${head(sub)}<p class="hint muted" role="status">Chargement de l’état des radiateurs…</p></section>`;
-  const drops = r30 ? tempDrops(new Map(ids.filter((i) => r30.has(i)).map((i) => [i, r30.get(i)!])), from30, last) : null;
+  const drops = r30 ? tempDrops(new Map(ids.filter((i) => r30.has(i)).map((i) => [i, r30.get(i)!])), r.from, r.to) : null;
   const dropOf = (d: string) => {
     for (const i of ids) {
       const x = drops?.get(i)?.get(d);
@@ -486,26 +508,29 @@ function coldCard(
   </section>`;
 }
 
-// ------------------------------------------------------------------ consumption over 12 months
-function consoCard(cat: string, mine: DayRecord[], yearStart: string, last: string): string {
-  const kwh = total(mine, yearStart, last);
-  const before = total(mine, minusYears(yearStart), minusYears(last));
-  const y = Number(last.slice(0, 4));
-  return `<section class="card">
-    <div class="card-head"><h2>Consommation</h2></div>
-    <p class="card-sub">${esc(`${PERIOD['12m']} · kWh par mois, comparé aux mêmes mois un an plus tôt`)}</p>
-    <p><b>${esc(fmtKwh(kwh))}</b> en ${y} au ${esc(dayShort(last))}${before > 0 ? `, contre ${esc(fmtKwh(before))} en ${y - 1} à la même date` : ''}.</p>
+// ------------------------------------------------------------------ consumption and cost (#388: over the period)
+function consoCard(cat: string, mine: DayRecord[], r: HomeRange): string {
+  const kwh = total(mine, r.from, r.to);
+  const eur = costOf(mine, r.from, r.to);
+  const before = total(mine, minusYears(r.from), minusYears(r.to));
+  const eurBefore = before > 0 ? costOf(mine, minusYears(r.from), minusYears(r.to)) : null;
+  const amount = (k: number, e: number | null) => (e === null ? esc(fmtKwh(k)) : `${esc(fmtEur(e))} (${esc(fmtKwh(k))})`);
+  return `<section class="card" id="piece-conso">
+    <div class="card-head"><h2>Consommation et coût</h2></div>
+    ${countedNote(`${esc(scopeTitle(r))} ; le graphique : kWh par mois, ${esc(r.period === 'month' ? 'les 12 derniers mois' : 'les mois de la période')}, comparés aux mêmes mois un an plus tôt`)}
+    <p><b>${amount(kwh, eur)}</b>${before > 0 ? `, contre ${amount(before, eurBefore)} un an plus tôt aux mêmes dates` : ''}.</p>
     <div class="chart" id="room-detail" role="img" aria-label="${esc(cat === 'water_heater' ? 'Chauffe-eau' : 'Chauffage de la pièce')}, kWh par mois"></div>
   </section>`;
 }
 
-function drawConso(el: HTMLElement, cat: string, mine: DayRecord[], last: string) {
-  // the 12 months ending with the month of the last day
-  const keys = bucketKeys(addDays(last, -400), last, 'month').slice(-12);
+function drawConso(el: HTMLElement, cat: string, mine: DayRecord[], r: HomeRange) {
+  // the months of the period (the month in its 12 months of context, as on Accueil)
+  const keys = bucketKeys(r.chartFrom, r.chartTo, 'month');
+  const last = r.to;
   const per = new Map<string, number>();
-  for (const r of mine) per.set(r.day.slice(0, 7), (per.get(r.day.slice(0, 7)) ?? 0) + r.kwh);
+  for (const x of mine) per.set(x.day.slice(0, 7), (per.get(x.day.slice(0, 7)) ?? 0) + x.kwh);
   const prevKey = (k: string) => `${Number(k.slice(0, 4)) - 1}${k.slice(4)}`;
-  const first = mine.reduce((a, r) => (r.day < a ? r.day : a), last);
+  const first = mine.reduce((a, x) => (x.day < a ? x.day : a), last);
   const marks = bucketMarks(keys, 'month', first, last);
   const labels = keys.map((k, i) => (i === 0 || k.endsWith('-01') ? bucketLabel(k, 'month') : bucketLabel(k, 'month').split(' ')[0]));
   const val = (k: string) => (per.has(k) ? Math.round(per.get(k)!) : null);
@@ -513,7 +538,7 @@ function drawConso(el: HTMLElement, cat: string, mine: DayRecord[], last: string
     labels,
     series: [
       {
-        name: '12 derniers mois',
+        name: 'Période',
         color: cssVar(cat === 'water_heater' ? '--usage-water' : '--usage-heating'),
         data: keys.map(val),
         raw: keys.map((k) => per.get(k) ?? null),
@@ -528,7 +553,7 @@ function drawConso(el: HTMLElement, cat: string, mine: DayRecord[], last: string
 }
 
 // ------------------------------------------------------------------ air
-function airCard(id: string, name: string, from30: string, last: string): string {
+function airCard(id: string, name: string, r: HomeRange): string {
   const st = ds!.station;
   if (!st) return '';
   const k = stationKey(id);
@@ -542,36 +567,36 @@ function airCard(id: string, name: string, from30: string, last: string): string
       <button type="button" class="btn secondary" data-piece="show-air">Afficher l’air de cette pièce</button>${foot}</section>`;
   const nightly = st.nightly?.[k];
   const lastNight = nightly ? lastNightDay(nightly) : null;
-  const verdict = nightly && lastNight ? nightVerdict(summarizeNights(lastNights(nightly, lastNight, 30))) : null;
-  const hum = meanIn(Object.entries(st.daily[k] ?? {}).map(([d, v]) => [d, v[3]]), from30, last);
+  // the nights of the period (22 h → 7 h), the last one at most the last night measured
+  const end = lastNight && lastNight < r.to ? lastNight : r.to;
+  const count = end >= r.from ? daysBetween(r.from, end) : 0;
+  const verdict = nightly && lastNight && count > 0 ? nightVerdict(summarizeNights(lastNights(nightly, end, count))) : null;
+  const hum = meanIn(Object.entries(st.daily[k] ?? {}).map(([d, v]) => [d, v[3]]), r.from, r.to);
   return `<section class="card" id="piece-air">${head}
-    <p class="card-sub">${esc(`CO₂ : 30 dernières nuits (22 h → 7 h) · humidité : ${PERIOD['30d'].toLowerCase()}`)}</p>
-    ${verdict ? `<p>CO₂ la nuit : ${esc(verdict.text)}</p>` : '<p class="hint muted">Pas encore de nuit relevée pour le CO₂.</p>'}
-    ${hum ? `<p>Humidité moyenne : <b>${nf0.format(hum.mean)} %</b>${hum.mean > 65 ? ' (élevée : aérer, surveiller la condensation)' : hum.mean < 35 ? ' (air sec)' : ''}.</p>` : ''}
+    ${countedNote(`${esc(scopeTitle(r))} ; CO₂ des nuits, de 22 h à 7 h`)}
+    ${verdict ? `<p>CO₂ la nuit : ${esc(verdict.text)}</p>` : '<p class="hint muted">Pas de nuit relevée pour le CO₂ sur la période.</p>'}
+    ${hum ? `<p>Humidité moyenne : <b>${nf0.format(hum.mean)}\u00a0%</b>${hum.mean > 65 ? ' (élevée : aérer, surveiller la condensation)' : hum.mean < 35 ? ' (air sec)' : ''}.</p>` : ''}
     ${foot}
   </section>`;
 }
 
 // ------------------------------------------------------------------ radiator
-function radiatorCard(id: string, ids: string[], rs: RoomState | null | undefined, from30: string, last: string): string {
+function radiatorCard(id: string, ids: string[], rs: RoomState | null | undefined, r: HomeRange): string {
   const rows: string[] = [];
   if (rs) {
-    const open = sumState(rs, ids, from30, last, (c) => c.open_window_h);
-    if (open !== null) rows.push(listRow({ title: 'Fenêtre ouverte', sub: PERIOD['30d'], value: h1(open) }));
-    const shed = sumState(rs, ids, addDays(last, -364), last, (c) => c.offload_h);
-    if (shed !== null) rows.push(listRow({ title: 'Délestage (radiateur coupé)', sub: PERIOD['12m'], value: h1(shed) }));
+    const open = sumState(rs, ids, r.from, r.to, (c) => c.open_window_h);
+    if (open !== null) rows.push(listRow({ title: 'Fenêtre ouverte', value: h1(open) }));
+    const shed = sumState(rs, ids, r.from, r.to, (c) => c.offload_h);
+    if (shed !== null) rows.push(listRow({ title: 'Délestage (radiateur coupé)', value: h1(shed) }));
   } else if (rs === undefined) rows.push('<li><div class="row"><span></span><span class="s" role="status">Chargement de l’état des radiateurs…</span><span></span><span></span></div></li>');
   const k = stationKey(id);
   const st = ds!.station;
   if (k && st) {
-    const o = offsetStats(ds!.temps.get(id), st.daily[k], addDays(last, -364), last);
-    if (o) {
-      const v = o.recent && o.recent.n >= 7 ? o.recent : { mean: o.mean, n: o.n };
-      rows.push(listRow({ title: 'Sonde du radiateur − station', sub: o.recent && o.recent.n >= 7 ? PERIOD['30d'] : 'jours de chauffe, 12 mois', value: `${signed(v.mean)}\u00a0°C` }));
-    }
+    const o = offsetStats(ds!.temps.get(id), st.daily[k], r.from, r.to);
+    if (o) rows.push(listRow({ title: 'Sonde du radiateur − station', sub: `${plural(o.n, 'jour')} de chauffe`, value: `${signed(o.mean)}\u00a0°C` }));
   }
   rows.push(`<li id="piece-surface"><div class="row"><span></span><span><span class="t">Surface</span><span class="s" role="status">…</span></span><span></span><span></span></div></li>`);
-  return `<section class="card" id="piece-radiator"><div class="card-head"><h2>Radiateur</h2></div><ul class="list">${rows.join('')}</ul></section>`;
+  return `<section class="card" id="piece-radiator"><div class="card-head"><h2>Radiateur</h2></div>${countedNote(esc(scopeTitle(r)))}<ul class="list">${rows.join('')}</ul></section>`;
 }
 
 // ------------------------------------------------------------------ events

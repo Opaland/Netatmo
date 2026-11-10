@@ -516,7 +516,7 @@ app.addEventListener('keydown', (e) => {
 
 // ------------------------------------------------------------------ swipe (S-7.11)
 /**
- * #348: the screens with one period (Accueil, Compteur and its detail pages, Historique) change
+ * #348: the screens with one period (Accueil, Pièces and a room, Compteur and its detail pages, Historique) change
  * it by a swipe on the header, the others change tab; the tab bar always changes tab. The
  * periods in the order of their control: swipe right for the next, longer one.
  */
@@ -524,6 +524,8 @@ function swipePeriod(route: Route): { list: [string, string][]; current: string;
   if (route.page === 'accueil') return { list: HOME_PERIODS, current: homePeriod(state.home), set: (v) => setState({ home: v as HomePeriod }) };
   if (route.page === 'compteur' || route.page === 'compteur-detail')
     return { list: HOME_PERIODS, current: homePeriod(state.meter), set: (v) => setState({ meter: v as HomePeriod }) };
+  if (route.page === 'pieces' || route.page === 'piece')
+    return { list: HOME_PERIODS, current: homePeriod(state.pieces), set: (v) => setState({ pieces: v as HomePeriod }) };
   if (route.page === 'historique') return { list: historyPeriods(), current: state.period, set: (v) => setState({ period: v }) };
   return null;
 }
