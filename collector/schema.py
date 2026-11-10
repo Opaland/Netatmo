@@ -186,6 +186,11 @@ OPEN_METEO_WIND = {
         "precipitation_sum": Optional([(int, float, type(None))]),
     }
 }
+# #356: PVGIS hourly series of one roof (seriescalc, 1 kWc): the power P of each UTC hour.
+PVGIS_SERIES = {
+    "inputs": {"meteo_data": Optional({"radiation_db": Optional(str)})},
+    "outputs": {"hourly": [{"time": str, "P": NUMBER}]},
+}
 
 # Shelly Cloud (S-1.17): legacy form API envelope, and the v2 list of device states.
 SHELLY_V1 = {"isok": bool, "data": Optional(AnyOf(dict, list, type(None))), "errors": Optional(AnyOf(dict, list))}

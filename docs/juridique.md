@@ -29,6 +29,7 @@ chaque service et on met à jour la date de lecture ci-dessous. Une date de plus
 | Netatmo Connect (station météo) | API officielle, application créée par le foyer sur dev.netatmo.com | [Guidelines](https://dev.netatmo.com/guideline) et [Legal](https://dev.netatmo.com/legal) de Netatmo Connect ; l'usage commercial demande un accord ([partnerships@netatmo.com](mailto:partnerships@netatmo.com)). Pages dynamiques : texte complet à relire en ligne | 9 nov. 2026 | Faible |
 | Conso API ([conso.boris.sh](https://conso.boris.sh)) → Enedis (Linky) | Service gratuit et open source qui relaie l'API Enedis réservée aux entreprises ; accord donné par le titulaire du contrat sur son compte Enedis | Pas de CGU publiées ; la page d'accueil indique : quotas Enedis partagés (5 requêtes/s, 10 000/h), blocage possible sans préavis en cas d'abus, aucune base de données (rien n'est stocké), serveurs européens, arrêt des anciennes API Enedis prévu vers mi-octobre 2026 | 9 nov. 2026 | Moyen |
 | [Open-Meteo](https://open-meteo.com/en/terms) (météo de la commune) | API gratuite, sans compte | Usage **non commercial** uniquement (la domotique personnelle est citée comme admise) ; moins de 10 000 appels par jour ; données sous licence **CC BY 4.0** (attribution) | 9 nov. 2026 | Faible |
+| [PVGIS](https://joint-research-centre.ec.europa.eu/photovoltaic-geographical-information-system-pvgis/getting-started-pvgis/api-non-interactive-service_en) (production solaire, facultatif, #356) | Outil gratuit de la Commission européenne (JRC), API sans compte | Usage libre ; réutilisation des données autorisée avec mention de la source (« PVGIS © Union européenne ») ; un nombre limité d'appels par seconde. Appelé seulement quand la localisation saisie change, un appel par toit, **coordonnées arrondies à environ 1 km** | 10 nov. 2026 | Faible |
 | CRE, via [data.gouv.fr](https://www.data.gouv.fr/datasets/historique-des-tarifs-reglementes-de-vente-delectricite-pour-les-consommateurs-residentiels) (tarifs réglementés) | Données publiques ouvertes | Licence indiquée sur la fiche du jeu de données (Licence Ouverte Etalab pour la plupart des jeux publics : **à confirmer sur la fiche**) | 9 nov. 2026 | Faible |
 | [api-couleur-tempo.fr](https://www.api-couleur-tempo.fr) (couleurs Tempo) | API gratuite, sans compte | Pas de conditions trouvées ; à défaut, la couleur Tempo manque et seul le comparateur Tempo est touché | 9 nov. 2026 | Moyen |
 | [Shelly Cloud](https://shelly-api-docs.shelly.cloud/cloud-control-api/) (prises, facultatif, S-1.17) | API officielle « Cloud Control », clé cloud du foyer (*Paramètres utilisateur* → *Clé d'autorisation cloud*) ; **deux points d'accès non documentés** pour lister les appareils (voir ci-dessous) | Documentation de l'API : ouverte à « tout utilisateur enregistré » pour **ses propres appareils**, 1 appel par seconde, clé à ne partager avec personne, serveur susceptible de changer. Pas de CGU propres à l'API ; conditions du compte Shelly acceptées dans l'application. Les conditions de l'[Integrator API](https://shelly-api-docs.shelly.cloud/integrator-api/terms-and-conditions) (offre réservée aux entreprises) **ne s'appliquent pas** ici | 9 nov. 2026 | Moyen |
@@ -164,6 +165,23 @@ toutes ouvertes.
 - La courbe de charge (demi-heures) n'est disponible que si le titulaire l'a activée chez Enedis ; elle
   est la donnée la plus révélatrice des habitudes du foyer et reste chiffrée comme le reste.
 
+### Localisation de la maison (#204, #356)
+
+- **Donnée** : la localisation saisie par le propriétaire (commune ou coordonnées, à la précision qu'il
+  choisit : environ 10 km, 1 km ou 100 m) et, pour chaque toit, l'orientation, la pente, la puissance
+  posable et les pertes. C'est la donnée la plus identifiante du projet : elle désigne le foyer.
+- **Où elle est gardée** : uniquement dans le **secret** GitHub `HOME_LOCATION_JSON` (chiffré dans le
+  navigateur, illisible ensuite, même par l'appli) et dans `solar.enc.json`, chiffré avec la phrase de
+  passe. Jamais dans une variable de dépôt en clair, une adresse, un journal de collecte, un export, le
+  rapport anonymisé ni les faits envoyés à l'IA ; sur l'appareil, le brouillon reste en mémoire.
+- **Minimisation** : PVGIS reçoit les coordonnées **arrondies à environ 1 km** (0,01°), quelle que
+  soit la précision gardée, avec l'orientation et la pente ; la production change peu sur cette
+  distance. Le collecteur enregistre les coordonnées auprès du masquage des journaux (`redact`) avant
+  tout appel, et ses erreurs ne citent que le code HTTP (leçon de #261). Aucune carte ni tuile n'est
+  chargée : la saisie se fait par les nombres.
+- **Effacement** : supprimer le secret dans GitHub (Settings → Secrets) ; le profil chiffré reste
+  jusqu'à la suppression de `solar.enc.json`.
+
 ## 5. Licences des données ouvertes et attribution
 
 - **Open-Meteo** : données sous CC BY 4.0, qui demande de citer la source. Open-Meteo est cité (avec
@@ -172,6 +190,8 @@ toutes ouvertes.
 - **CRE / data.gouv.fr** : jeux de données publics ; la source est citée dans le README et l'écran
   Paramètres. Licence à confirmer sur la fiche du jeu à chaque revue.
 - **api-couleur-tempo.fr** : service gratuit, source citée dans le README.
+- **PVGIS** : source citée dans le simulateur « Panneaux solaires » (« PVGIS © Union européenne ») et
+  dans la page « Cadre juridique » de l'application.
 - Le code de ce dépôt ne déclare pas encore de licence : sans licence, la réutilisation du code par
   d'autres n'est pas autorisée par défaut.
 

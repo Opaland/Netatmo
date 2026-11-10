@@ -24,6 +24,7 @@ import { STOP_REASONS, parseStopped } from './room-offline';
 import { METER_PAGES, SETTINGS, TOOLS, parseRoute, routeKey } from './router';
 import { lockNotice } from './session';
 import { readShellyPrefs } from './shelly-prefs';
+import { INPUT_FIELDS, MAX_ROOFS, parseLocation, parsePvgisFile, parseSolarDoc, parseSolarInputs } from './solar';
 import { type VoletsDoc, evenings, loadNotes, recentFailures, shutterNames, summarize } from './shutters';
 import { readMark } from './storage';
 import { parseTenant } from './tenant';
@@ -52,6 +53,7 @@ const KEYS = [
   'done', 'tip', 'on', 'leaseFrom', 'leaseTo', 'room', 'from', 'to', 'reason', 'label', 'names',
   'roles', 'amount', 'kwh', 'subscription', 'estimated', 'v', 'kdf', 'iter', 'salt', 'iv', 'ct',
   'at', 'source', 'minutes', '2026-01', '2025-12', 'r-salon',
+  'lat', 'lon', 'precision', 'commune', 'roofs', 'name', 'azimuth', 'tilt', 'kwc', 'loss', 'hours', '06-21', 'year', 'priceHp', 'batteryEfficiency',
   // the dangerous ones
   '__proto__', 'constructor', 'prototype', 'toString', 'hasOwnProperty', '',
 ];
@@ -386,6 +388,71 @@ describe('#359 fuzz : adresses, facture, CSV, enveloppes', () => {
       const fallback: object = { repli: true };
       const v = await loadNote<object>('fuzz', 'demo', key, () => ({ lu: true }), fallback);
       assert(v === fallback, 'une note forgée a été lue');
+    });
+  });
+});
+
+describe('#204 #356 fuzz : localisation et profil solaire', () => {
+  const roof = (r: Rng) => ({ name: anyValue(r), azimuth: pick(r, NUMBERS), tilt: pick(r, NUMBERS), kwc: pick(r, NUMBERS), loss: pick(r, NUMBERS) });
+  const CONTROL = /[\u0000-\u001f\u007f]/;
+  it('localisation : null, ou des coordonnées et des toits bornés, relus à l’identique', () => {
+    fuzz('parseLocation', (r) => {
+      const raw =
+        r() < 0.3
+          ? anyValue(r)
+          : {
+              v: r() < 0.8 ? 1 : anyValue(r),
+              lat: pick(r, NUMBERS),
+              lon: pick(r, NUMBERS),
+              precision: r() < 0.7 ? pick(r, [1, 2, 3]) : anyValue(r),
+              commune: r() < 0.5 ? pick(r, STRINGS) : anyValue(r),
+              roofs: r() < 0.8 ? Array.from({ length: Math.floor(r() * 8) }, () => roof(r)) : anyValue(r),
+            };
+      const l = parseLocation(raw);
+      notPolluted();
+      if (l === null) return;
+      assert(Math.abs(l.lat) <= 90 && Math.abs(l.lon) <= 180, 'coordonnées');
+      assert([1, 2, 3].includes(l.precision), 'précision');
+      assert(isStr(l.commune) && Array.from(l.commune).length <= 60 && !CONTROL.test(l.commune), 'commune');
+      assert(l.roofs.length >= 1 && l.roofs.length <= MAX_ROOFS, 'toits');
+      for (const t of l.roofs)
+        assert(t.name.length > 0 && !CONTROL.test(t.name) && t.azimuth >= 0 && t.azimuth < 360 && t.tilt >= 0 && t.tilt <= 90 && t.kwc > 0 && t.kwc <= 36 && t.loss >= 0 && t.loss <= 60, 'toit hors bornes');
+      assert(JSON.stringify(parseLocation(JSON.parse(JSON.stringify(l)))) === JSON.stringify(l), 'relecture différente');
+    });
+  });
+  it('document solaire déchiffré : null ou des heures bornées, jamais d’exception', () => {
+    fuzz('parseSolarDoc', (r) => {
+      const hours: Record<string, unknown> = {};
+      if (r() < 0.5)
+        for (let i = 0; i < 310; i++) hours[`${String(1 + (i % 12)).padStart(2, '0')}-${String(1 + Math.floor(i / 12)).padStart(2, '0')}`] = r() < 0.98 ? new Array(24).fill(pick(r, NUMBERS)) : anyValue(r);
+      const doc = parseSolarDoc(r() < 0.3 ? anyValue(r) : { source: pick(r, ['pvgis', 'import', 'demo', 'x', '__proto__']), year: anyValue(r), roofs: [{ name: anyValue(r), kwc: pick(r, NUMBERS), hours: r() < 0.7 ? hours : anyValue(r) }] });
+      notPolluted();
+      if (!doc) return;
+      for (const t of doc.roofs) for (const row of Object.values(t.hours)) assert(row.length === 24 && row.every((x) => Number.isFinite(x) && x >= 0 && x <= 1500), 'heure hors bornes');
+    });
+  });
+  it('fichier PVGIS : une erreur en français ou un profil fini, sans les coordonnées', () => {
+    fuzz('parsePvgisFile', (r) => {
+      const lines = Array.from({ length: Math.floor(r() * 30) }, () =>
+        r() < 0.5 ? `2023${pick(r, ['0101', '0229', '1301', '0621'])}:${pick(r, ['00', '12', '24', '99'])}10,${pick(r, NUMBERS)},0` : randomString(r),
+      );
+      const text = r() < 0.2 ? anyValue(r) : r() < 0.5 ? storedText(r) : ['Latitude (decimal degrees):\t45.76', `Nominal power of the PV system (c-Si) (kWp):\t${pick(r, NUMBERS)}`, ...lines].join('\n');
+      const out = parsePvgisFile(text);
+      notPolluted();
+      if ('error' in out) return assert(isStr(out.error) && out.error.length > 0, 'message');
+      assert(!JSON.stringify(out).includes('45.76'), 'coordonnée gardée');
+      for (const row of Object.values(out.roof.hours)) assert(row.every((x) => Number.isFinite(x) && x >= 0), 'heure');
+    });
+  });
+  it('hypothèses du simulateur : chaque champ null ou dans ses bornes', () => {
+    fuzz('parseSolarInputs', (r) => {
+      const v = parseSolarInputs(r() < 0.3 ? anyValue(r) : Object.fromEntries(INPUT_FIELDS.map(([k]) => [k, r() < 0.5 ? pick(r, NUMBERS) : anyValue(r)])));
+      notPolluted();
+      for (const [k, , min, max] of INPUT_FIELDS) {
+        const x = v[k];
+        assert(x === null || (Number.isFinite(x) && x >= min && x <= max), k);
+      }
+      assert(Object.keys(v).length === INPUT_FIELDS.length, 'clé en trop');
     });
   });
 });

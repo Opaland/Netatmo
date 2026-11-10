@@ -54,6 +54,14 @@ export const SERVICES: LegalService[] = [
     risk: 'faible',
   },
   {
+    name: 'PVGIS (Commission européenne)',
+    frame: 'Production solaire heure par heure (simulateur Panneaux solaires, facultatif), API gratuite sans compte, appelée par la collecte quand la localisation change.',
+    terms: 'Usage libre ; réutilisation autorisée avec mention de la source : « PVGIS © Union européenne ». Coordonnées envoyées arrondies à environ 1 km.',
+    url: 'https://joint-research-centre.ec.europa.eu/photovoltaic-geographical-information-system-pvgis/getting-started-pvgis/api-non-interactive-service_en',
+    read: '2026-11-10',
+    risk: 'faible',
+  },
+  {
     name: 'CRE (data.gouv.fr)',
     frame: 'Historique des tarifs réglementés, données publiques ouvertes.',
     terms: 'Licence indiquée sur la fiche du jeu de données (Licence Ouverte Etalab pour la plupart des jeux publics, à confirmer).',

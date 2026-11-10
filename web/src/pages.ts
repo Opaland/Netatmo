@@ -178,7 +178,7 @@ function renderExports(view: HTMLElement) {
 }
 
 /** #314: the « et si… » tools look like simulations (dashed cards, label, assumptions recalled). */
-const SIMULATORS = new Set<Tool>(['offres', 'voiture', 'consigne', 'pac', 'teletravail']);
+const SIMULATORS = new Set<Tool>(['offres', 'voiture', 'consigne', 'pac', 'teletravail', 'solaire']);
 
 // #337: « Expliquer un mois », loaded on demand
 let explain: typeof import('./views/explain') | null = null;
@@ -214,6 +214,12 @@ function drawTool(view: HTMLElement, t: Tool) {
   if (t === 'voiture') return compare.renderCompare(view, records, 'ev');
   if (t === 'facture') return overview.renderOverview(view, records, 'invoice');
   if (t === 'exports') return renderExports(view);
+  if (t === 'solaire') {
+    // #356: lazy chunk, with the Linky curve and the solar profile it loads
+    view.innerHTML = html`<div id="solar-zone" aria-busy="true"><p class="hint muted" role="status">Chargement du simulateur…</p></div>`;
+    void lazyCard(() => import('./views/solar'), (m) => m.mountSolar(document.getElementById('solar-zone')!), { zone: 'solar-zone', what: 'Panneaux solaires' });
+    return;
+  }
   if (t === 'plannings') {
     // #211: half hours of the rooms, loaded with the module (S-7.10)
     view.innerHTML = html`<div id="plannings-zone" aria-busy="true"><p class="hint muted" role="status">Chargement des relevés à la demi-heure…</p></div>`;
@@ -357,6 +363,11 @@ function renderSettingsPage(view: HTMLElement, route: Route) {
           ${list(activeRooms().map((r) => ({ title: r.name, sub: CATEGORY_LABEL[r.category], color: roomColor(r.id), href: `#${routeKey({ page: 'piece', room: r.id })}` })))}</section>`)),
         // #346: a radiator switched off on purpose (a stove…) is not « hors ligne »
         (el) => mountStopped(el, settings.currentRepo),
+        // #204: location and roofs (secret HOME_LOCATION_JSON), lazy
+        (el) => {
+          el.innerHTML = html`<section class="card" id="location-card" aria-busy="true"><p class="hint muted" role="status">Chargement…</p></section>`;
+          void lazyCard(() => import('./views/location'), (m) => m.mountLocation(document.getElementById('location-card'), settings.currentRepo), { zone: 'location-card', what: 'Localisation et toits' });
+        },
         (el) => analyse.renderAnalyse(el, records, 'travaux'),
         (el) =>
           (el.innerHTML = html(`<section class="card"><div class="card-head"><h2>Appareils saisis à la main</h2>${scopeTag('appareil')}</div>

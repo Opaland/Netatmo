@@ -413,7 +413,7 @@ comparateur d'offres, la simulation de recharge et le contrat partagé sont masq
 d'explication. Avec la date de début (et de fin) du bail, le **rapport anonymisé** couvre la seule
 période du bail, sans comparaison avec l'année d'avant.
 
-### Simulations : voiture électrique et pompe à chaleur
+### Simulations : voiture électrique, pompe à chaleur, panneaux solaires
 
 - **Voiture électrique** (onglet Comparer) : énergie rechargée par semaine, heure de début et puissance
   de charge ; coût par offre (Base, heures creuses, Tempo) avec et sans voiture sur 12 mois, et, avec
@@ -423,6 +423,18 @@ période du bail, sans comparaison avec l'année d'avant.
   (fourchette de COP saisonnier saisie, ou COP selon la température, valeurs indicatives à vérifier) et
   l'économie en kWh et en euros. C'est une estimation, pas une étude thermique : un conseiller
   [France Rénov'](https://france-renov.gouv.fr/) peut vérifier le projet.
+
+- **Panneaux solaires** (Outils › Simulateurs, #356) : la vraie courbe Linky à la demi-heure,
+  confrontée à un profil de production heure par heure (PVGIS, demandé par la collecte à partir de
+  la localisation et des toits saisis dans ⚙ Mon logement, ou fichier PVGIS importé) ; pour 3, 4,5
+  et 6 kWc : production, part autoconsommée, surplus, économie et retour, sans puis avec pilotage du
+  chauffe-eau et de la recharge, puis avec une batterie de 5 ou 10 kWh (le pilotage d'abord). Prix,
+  tarif de rachat, coûts et rendement sont saisis par vous et rappelés sous le résultat ; mention de
+  l'amiante des toits en fibro-ciment.
+- **Localisation de la maison** (⚙ Mon logement, #204) : commune ou coordonnées, à la précision
+  choisie, et chaque toit (orientation, pente, puissance, pertes). Gardée **seulement chiffrée** (secret
+  `HOME_LOCATION_JSON`, puis `solar.enc.json`) ; PVGIS la reçoit arrondie à environ 1 km ; jamais dans
+  un journal, une adresse ni un export ([`docs/juridique.md`](docs/juridique.md)).
 
 Chaque carte détaille sa méthode et ses hypothèses (« Comment c'est calculé »).
 
@@ -437,7 +449,7 @@ l'erreur est notée dans l'état des sources et le résumé de la collecte.
 
 Le résumé de chaque collecte donne aussi le **nombre d'appels et leur durée par source**. Chaque
 source a un plafond par collecte : Intuis 300 (3 000 pour la récupération de tout l'historique),
-station Netatmo 400, Linky 200, Open-Meteo 20, Shelly 30. Plafond atteint : la collecte s'arrête proprement
+station Netatmo 400, Linky 200, Open-Meteo 20, Shelly 30, PVGIS 8. Plafond atteint : la collecte s'arrête proprement
 pour cette source, garde ce qui a été récupéré et reprend la nuit suivante (une récupération
 d'historique interrompue continue d'elle-même). Pour changer un plafond, ajoutez une **variable**
 (onglet *Variables*, pas *Secrets*) `MAX_CALLS_INTUIS`, `MAX_CALLS_NETATMO`, `MAX_CALLS_LINKY` ou
