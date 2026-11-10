@@ -101,3 +101,12 @@ quand un outil la rend impossible à refaire.
   trois fois sur le dépôt frère Sentiers, `CLAUDE.md` §6quater).
 - **Conduite** : absorbée par `web/e2e/dist-a-jour.mjs`, chargé **dans** le processus des e2e
   (`node --import`, `startPreview`) — pas dans un crochet lancé avant (AGENTS.md §6).
+
+### A11 · 10/11/2026 — Une fausse horloge dans PATH n'était pas vue par `busybox sh` en CI (#200, PR #417)
+
+- **Ce qui s'est passé** : le test du script NAS des volets remplaçait `date` par un faux placé en
+  tête de PATH ; vert en local sous dash et busybox, rouge sur le runner sous busybox, dont le
+  shell y exécutait son propre applet `date` : le journal était daté du vrai jour.
+- **Conduite** : une dépendance de temps (ou de tout outil) d'un script shell s'injecte par une
+  variable que le script lit lui-même (`VOLETS_MAINTENANT`), pas par PATH ; un test qui tourne sous
+  plusieurs shells se lit d'abord sur le runner avant d'être cru.

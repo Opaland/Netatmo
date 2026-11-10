@@ -24,7 +24,7 @@ import { STOP_REASONS, parseStopped } from './room-offline';
 import { METER_PAGES, SETTINGS, TOOLS, parseRoute, routeKey } from './router';
 import { lockNotice } from './session';
 import { readShellyPrefs } from './shelly-prefs';
-import { loadNotes } from './shutters';
+import { type VoletsDoc, evenings, loadNotes, recentFailures, shutterNames, summarize } from './shutters';
 import { readMark } from './storage';
 import { parseTenant } from './tenant';
 
@@ -267,6 +267,39 @@ describe('#359 fuzz : préférences relues de cet appareil', () => {
       const days = loadNotes();
       assert(days.every((d) => DAY.test(d)), 'jour');
       assert(days.every((d, i) => i === 0 || days[i - 1] < d), 'ordre ou doublon');
+    });
+  });
+
+  it('relevé des volets (#200) : document déchiffré quelconque, jamais d\'exception', () => {
+    fuzz('volets', (r) => {
+      const day = () => pick(r, ['2026-01-01', '2026-01-02', '2026-01-03', '__proto__', 'x', ...STRINGS]);
+      const doc =
+        r() < 0.5
+          ? (anyValue(r) as VoletsDoc)
+          : ({
+              received: pick(r, ['2026-01-03', 5, null]),
+              shutters: r() < 0.5 ? anyValue(r) : { v0: { name: anyValue(r, 2) }, __proto__: { name: 'x' } },
+              days: Object.fromEntries(
+                Array.from({ length: 4 }, () => [
+                  day(),
+                  r() < 0.3
+                    ? anyValue(r)
+                    : { evening: anyValue(r, 2), err: anyValue(r, 2), shutters: { v0: { close: anyValue(r, 2), at22: anyValue(r, 2), mean: anyValue(r, 2) } } },
+                ]),
+              ),
+            } as unknown as VoletsDoc);
+      const ev = evenings(doc, ['2026-01-02']);
+      assert(ev.known === null || [...ev.known].every((d) => DAY.test(d)), 'soirs connus : des jours');
+      assert([...ev.closed].every((d) => DAY.test(d) && (ev.known === null || ev.known.has(d))), 'soirs fermés connus');
+      const names = shutterNames(doc);
+      assert([...names.values()].every((n) => isStr(n) && n.length > 0), 'noms');
+      for (const s of summarize(doc, '2026-01-03')) {
+        assert(s.close === null || (Number.isInteger(s.close) && s.close >= 0 && s.close < 1440), 'heure');
+        assert(s.mean === null || (s.mean >= 0 && s.mean <= 100), 'position');
+        assert(s.closedAt22 <= s.knownAt22 && s.knownAt22 <= s.days, 'décomptes');
+      }
+      assert(recentFailures(doc, '2026-01-03').every(([d, m]) => DAY.test(d) && isStr(m)), 'échecs');
+      notPolluted();
     });
   });
 

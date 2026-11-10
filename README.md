@@ -369,6 +369,13 @@ soirs volets fermés aux autres, chacun ramené à la température extérieure (
 l'intervalle d'incertitude à 95 %. C'est la mesure prévue par l'étude
 [volets Wiser](docs/etudes/volets-wiser.md) (S-9.0).
 
+**Relevé automatique** (facultatif, #200) : un NAS allumé chez vous lit la passerelle Wiser toutes les
+10 minutes (lecture seule, `scripts/nas/volets.sh`) et envoie chaque nuit le journal du jour, chiffré
+avec une clé publique, au workflow **Volets**, qui le vérifie et le range chiffré dans
+`data/volets.enc.json` (secret `VOLETS_PRIVATE_KEY`). Les soirs relevés à 22 h remplacent alors les
+notes ; un soir sans relevé ni note est laissé de côté. Installation pas à pas :
+[docs/etudes/volets-wiser.md](docs/etudes/volets-wiser.md#relevé-automatique-par-le-nas-200).
+
 ### Alertes
 
 Si la collecte nocturne échoue (mot de passe changé, serveur indisponible…), une *issue* GitHub

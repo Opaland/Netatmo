@@ -10,6 +10,7 @@ fixtures    Jeux de démo nommés (cas limites) pour les tests E2E, dans web/dis
 restore-backup FICHIER  Restaure dans data/ une sauvegarde chiffrée téléchargée depuis l'appli
 import-ha FICHIER  Verse un export Home Assistant (statistiques) dans l'archive chiffrée
 snapshot    Relevé horaire de l'état des pièces, chiffré dans un dossier (workflow « Relevé horaire »)
+volets      Verse un relevé des volets envoyé par le NAS (workflow « Volets », #200)
 """
 
 from __future__ import annotations
@@ -887,6 +888,34 @@ def cmd_fixtures(s: Settings, args: argparse.Namespace) -> None:
     print("Fixtures : " + ", ".join(build(Path(args.output), args.names)))
 
 
+def cmd_volets(s: Settings, args: argparse.Namespace) -> None:
+    """#200: one day of shutter readings sent by the NAS (workflow « Volets »)."""
+    from .volets import VoletsError, receive
+
+    s.require("passphrase")
+    secret = os.environ.get("VOLETS_PRIVATE_KEY", "")
+    redact.register(secret)
+    store = Store(s.data_dir, s.passphrase)
+    tz = store.meta.get("home", {}).get("timezone") or "Europe/Paris"
+    cert = Path(args.certificat) if args.certificat else None
+    try:
+        summary, rec = receive(
+            store,
+            os.environ.get("VOLETS_JOUR", ""),
+            os.environ.get("VOLETS_JOURNAL", ""),
+            os.environ.get("VOLETS_ERREUR", ""),
+            secret,
+            cert,
+            tz,
+        )
+    except VoletsError as err:
+        raise SystemExit(f"::error::Relevé des volets refusé, rien n'est enregistré : {err}") from err
+    print(summary)
+    # A failure reported by the NAS is saved, then made visible: the workflow fails after the commit.
+    if rec.get("err") and args.alerte:
+        Path(args.alerte).write_text(summary + "\n", encoding="utf-8")
+
+
 def main(argv: list[str] | None = None) -> None:
     p = argparse.ArgumentParser(
         prog="collector", description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
@@ -916,6 +945,9 @@ def main(argv: list[str] | None = None) -> None:
     for name in ("sync", "backfill"):
         sp = sub.add_parser(name)
         sp.add_argument("--days", type=int, default=35, help="jours re-téléchargés à chaque sync (défaut 35)")
+    vo = sub.add_parser("volets", help="verser un relevé des volets envoyé par le NAS (#200, workflow Volets)")
+    vo.add_argument("--certificat", default="scripts/nas/volets-certificat.pem", metavar="FICHIER")
+    vo.add_argument("--alerte", metavar="FICHIER", help="écrit ici le message quand le NAS signale un échec")
     sub.add_parser("verify")
     rk = sub.add_parser("rekey", help="changer la phrase de passe (NEW_DATA_PASSPHRASE)")
     rk.add_argument("--force", action="store_true")
@@ -963,6 +995,7 @@ def main(argv: list[str] | None = None) -> None:
         "restore-backup": cmd_restore_backup,
         "import-ha": cmd_import_ha,
         "snapshot": cmd_snapshot,
+        "volets": cmd_volets,
     }[args.cmd](s, args)
 
 

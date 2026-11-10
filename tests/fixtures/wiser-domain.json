@@ -1,0 +1,15 @@
+{"System":{"LocalDateAndTime":{"Year":2026,"Month":"November","Date":10},"HardwareGeneration":1,"ActiveSystemVersion":"4.14.15","EcoModeEnabled":false},
+ "Device":[
+  {"id":0,"NodeId":0,"ProductType":"Controller","Name":"Passerelle"},
+  {"id":11,"ProductType":"Shutter","Name":"Séjour \"sud\" \\","ModelIdentifier":"Unknown"},
+  {"id":12,"ProductType":"Shutter","Name":"Chambre; parents"},
+  {"id":13,"ProductType":"Shutter"},
+  {"id":20,"ProductType":"Light","Name":"Lampe"}
+ ],
+ "Room":[{"id":1,"Name":"Salon","ShutterIds":[1]}],
+ "Light":[{"id":5,"DeviceId":20,"CurrentState":"On","CurrentLevel":100}],
+ "Shutter":[
+  {"id":1,"DeviceId":11,"Name":"","CurrentLift":100,"TargetLift":100,"LiftMovement":"Stopped","ControlSource":"FromSchedule","DriveConfig":{"LiftOpenTime":20,"LiftCloseTime":21,"CurrentLift":7}},
+  {"id":2,"DeviceId":12,"CurrentLift":0,"LiftMovement":"Closing","ControlSource":"FromManualControl","ScheduleId":3},
+  {"id":3,"DeviceId":13,"CurrentLift":43.6,"LiftMovement":"Weird; `id`","ControlSource":"$(id)"}
+ ]}

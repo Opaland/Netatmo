@@ -88,7 +88,7 @@ const DESTINATIONS = {
   'outils-teletravail': ['#telework-card'],
   'outils-facture': ['#invoice-card #inv-add'],
   'outils-absences': ['#absence-card'],
-  'outils-volets': ['#shutters-card'],
+  'outils-volets': ['#shutters-card', '#shutters-auto table', 'text:Relevé automatique', '#shutters-result'],
   'outils-analyse': ['#insight-card .insight-usage'],
   'outils-questions': ['#questions-card [data-question]'],
   'outils-exports': ['#export', '[data-export-long=csv]', '[data-export-long=json]', '[data-research]', '#backup'],
