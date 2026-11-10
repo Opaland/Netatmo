@@ -124,9 +124,13 @@ function pageChecks() {
   }
   const wide = document.documentElement.scrollWidth - window.innerWidth;
   if (wide > 1) {
+    // the outermost boxes that stick out (not their children, nor what scrolls inside a box)
+    const scrolls = (el) => /(auto|scroll|hidden)/.test(getComputedStyle(el).overflowX);
+    const out_ = (el) => visible(el) && el.getBoundingClientRect().right > window.innerWidth + 1;
     const culprits = [...document.querySelectorAll('#app *')]
-      .filter((el) => visible(el) && el.getBoundingClientRect().right > window.innerWidth + 1)
-      .slice(-3)
+      .filter((el) => out_(el) && !(el.parentElement && el.parentElement !== document.getElementById('app') && out_(el.parentElement) && !scrolls(el.parentElement)))
+      .filter((el) => { for (let a = el.parentElement; a; a = a.parentElement) if (scrolls(a) && a.getBoundingClientRect().right <= window.innerWidth + 1) return false; return true; })
+      .slice(0, 3)
       .map((el) => `${el.tagName.toLowerCase()}${el.id ? `#${el.id}` : ''}${el.className && typeof el.className === 'string' ? `.${el.className.split(' ')[0]}` : ''}`);
     out.push({ kind: 'defilement-horizontal', detail: `${wide} px (${culprits.join(', ')})` });
   }
@@ -193,7 +197,10 @@ class Session {
   async load(hash = '') {
     if (SOURCE === 'data') await openData(this.page, base, env.DATA_PASSPHRASE, hash);
     else await openDemo(this.page, base, this.run.data, hash);
-    if (DISPLAYS[this.display].big) await this.page.addStyleTag({ content: 'html { font-size: 200% !important; }' });
+    // text at 200 %, in a wide system font (DejaVu Sans, Linux's and the CI's): the worst case
+    // everywhere, so that a page that fits here fits on the CI runner too
+    if (DISPLAYS[this.display].big)
+      await this.page.addStyleTag({ content: 'html { font-size: 200% !important; } html, body, button, input, select, textarea { font-family: "DejaVu Sans", system-ui, sans-serif !important; }' });
     await frames(this.page);
   }
   async close() {

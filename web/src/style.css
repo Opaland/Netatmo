@@ -547,6 +547,11 @@ code {
   body:not(.is-report) .kpis .kpi > :not(h3, .kpi-value) {
     grid-column: 1 / -1;
   }
+  /* #353: the report keeps its tiles side by side; with the text at 200 % (and a wider system
+     font) « 80 % / 20 % » wraps at its spaces instead of widening the page */
+  body.is-report .kpis .kpi-value {
+    white-space: normal;
+  }
 }
 .kpi,
 .card {
