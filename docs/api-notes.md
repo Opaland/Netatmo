@@ -357,6 +357,25 @@ les modules Intuis de `devices.enc.json` (`i0`…) et les prises Shelly (`p0`…
 - Chaque module reprend ses relevés quotidiens depuis **son** dernier jour (moins 10 jours) : un
   module retiré ne ramène pas les autres en arrière.
 
+Pression et bruit du module principal (S-11.4, #220), dans `station.enc.json` :
+
+```jsonc
+  // getmeasure 1day « pressure,min_pressure,max_pressure » du NAMain (pression ramenée au niveau de
+  // la mer) ; tendance = moyenne du jour − moyenne de la veille (null sans la veille).
+  "pressure": {"m0": {"YYYY-MM-DD": [moyenne hPa, min, max, tendance]}},
+  // Seulement avec la variable de dépôt STATION_NOISE=true : getmeasure 1hour « noise », réduit
+  // aussitôt en heures dont la moyenne dépasse 55 dB (NOISY_ABOVE). Jamais l'heure.
+  "noise":    {"m0": {"YYYY-MM-DD": {"n": 24, "loud": 3}}}
+```
+
+L'anémomètre (`NAModule2`) et le pluviomètre (`NAModule3`) ne reçoivent plus aucune demande de
+température (trou G4 de l'audit) : une erreur sur ces modules n'arrête plus la station. Le vent de
+la signature vient d'Open-Meteo (`weather.enc.json` : `"wind": {"YYYY-MM-DD": [moyenne km/h, rafale
+max km/h]}`, `"rain": {"YYYY-MM-DD": mm}`, `"wind_source": "open-meteo"`), dans les mêmes appels que
+les températures quand Open-Meteo les fournit, sinon dans deux appels à part (archive des jours
+manquants une fois, puis les 10 derniers jours). Un refus HTTP 400 des variables de vent redemande
+les températures seules.
+
 `YYYY.station_h.enc.json` (un par année, chargé à la demande ; années listées dans
 `meta.station_hourly_years`) :
 
@@ -427,10 +446,21 @@ relevé horaire (S-13.2) garde en plus, par liste blanche : `reachable`, `connec
   "firmware": {"i0": [["YYYY-MM-DD", "104", "105"]]},         // changements seulement, date de la collecte
   "gateway":  {"last": {"t": 1731130000, "boot": 1730000000},
                "boots": ["YYYY-MM-DDTHH:MM"],                 // démarrages, heure locale
-               "wifi": {"YYYY-MM-DD": [min, moyenne, max, n]}},
+               "wifi": {"YYYY-MM-DD": [min, moyenne, max, n]},
+               "offline": ["YYYY-MM-DDTHH"]},                 // #280 : heures où TOUS les modules étaient injoignables
+  "failures": {"YYYY-MM-DD": ["linky", "netatmo"]},           // #280 : sources en échec cette nuit-là (noms seulement)
   "tempo":    {"YYYY-MM-DD": "blue"}                          // couleur connue de la passerelle
 }
 ```
+
+**Journal des incidents (#280).** Une heure est « hors ligne » quand un relevé horaire (ou la lecture
+de nuit) voit au moins un module avec son état de liaison et que **tous** sont injoignables : la maison
+ne parle plus au nuage Intuis. L'appli (`web/src/incidents.ts`) recoupe : heures hors ligne suivies
+d'un redémarrage de la passerelle (au plus une heure après) = **coupure de courant** ; sans redémarrage
+= **coupure Internet** ; redémarrage seul = coupure de moins d'une heure. Durées à l'heure près
+(un relevé par heure). S'y ajoutent les modules injoignables (`reach`, sauf les radiateurs arrêtés
+volontairement, #346), les modules de la station muets et les piles faibles (`station.health`), et
+les collectes en échec (`failures`). Au plus 2 000 heures et 400 nuits gardées.
 
 ## Linky : heure du pic et index par cadran (#219, #277)
 

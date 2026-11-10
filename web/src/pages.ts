@@ -250,7 +250,7 @@ function renderEtat(view: HTMLElement) {
   void lazyCard(() => import('./views/etat'), (m) => m.mountEtat(document.getElementById('etat-bilan')), { zone: 'etat-bilan', what: 'Bilan des données' });
 }
 
-const SOURCE_NAME: Record<string, string> = {
+export const SOURCE_NAME: Record<string, string> = {
   intuis: 'Intuis',
   'open-meteo': 'météo',
   netatmo: 'station Netatmo',

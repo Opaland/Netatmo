@@ -123,7 +123,11 @@ def test_station_module_inserted_removed_and_back_keeps_every_key_and_history(tm
     # does not pull the others back (with the old rule, all would restart from d2 - 10 days).
     calls: list = []
     _collect(store, _station(radio, days, calls), d1)
-    begins = [int(r.url.params["date_begin"]) for r in calls if r.url.params.get("scale") == "1day"]
+    begins = [
+        int(r.url.params["date_begin"])
+        for r in calls
+        if r.url.params.get("scale") == "1day" and "pressure" not in r.url.params["type"]
+    ]
     assert len(begins) == 4 and min(begins) >= _noon(d3) - 11 * 86400
 
     # Back again later: it finds its own key and history.
@@ -149,7 +153,7 @@ def test_station_new_module_starts_from_the_first_day_of_the_home(tmp_path):
     begins = {
         r.url.params.get("module_id"): int(r.url.params["date_begin"])
         for r in calls
-        if r.url.params.get("scale") == "1day"
+        if r.url.params.get("scale") == "1day" and "pressure" not in r.url.params["type"]
     }
     assert begins[None] >= _noon(last) - 11 * 86400  # the main module resumes from its last day
     assert begins[OUT] <= _noon(first) - 9 * 86400  # the new one from the first day of the home

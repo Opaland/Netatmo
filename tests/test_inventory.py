@@ -395,7 +395,7 @@ def test_collection_inventories_the_station_with_its_own_access_token(tmp_path, 
     monkeypatch.setattr(
         "collector.station.httpx.Client", lambda **kw: real_client(transport=httpx.MockTransport(netatmo))
     )
-    monkeypatch.setattr("collector.station.Station.__init__.__defaults__", (None, 0.0))
+    monkeypatch.setattr("collector.station.Station.__init__.__defaults__", (None, 0.0, False))
     monkeypatch.setattr("collector.diagnose.inventory_station.__defaults__", (None, None, 0.0))
     monkeypatch.setenv("STATION_INVENTORY", "true")
     monkeypatch.delenv("ROOM_STATE_DIR", raising=False)
