@@ -415,6 +415,8 @@ function renderSettingsPage(view: HTMLElement, route: Route) {
           ${list(activeRooms().map((r) => ({ title: r.name, sub: CATEGORY_LABEL[r.category], color: roomColor(r.id), href: `#${routeKey({ page: 'piece', room: r.id })}` })))}</section>`)),
         // #346: a radiator switched off on purpose (a stove…) is not « hors ligne »
         (el) => mountStopped(el, settings.currentRepo),
+        // #366: the wood bought for the stove, turned into heat and euros
+        (el) => void lazyCard(() => import('./views/wood'), (m) => m.mountWood(el, settings.currentRepo), { zone: el, what: 'Poêle à bois' }),
         (el) => analyse.renderAnalyse(el, records, 'travaux'),
         (el) =>
           (el.innerHTML = html(`<section class="card"><div class="card-head"><h2>Appareils saisis à la main</h2>${scopeTag('appareil')}</div>

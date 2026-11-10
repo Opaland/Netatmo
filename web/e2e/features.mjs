@@ -67,7 +67,7 @@ async function go(page, key) {
  */
 const DESTINATIONS = {
   // #311: period, verdict and its gauge, 3 tiles, alerts, what counted, consumption and cold, AI summary
-  accueil: ['.periodbar [data-set=home]', '.periodbar .scope', '.verdict .gauge', '.home-tiles .kpi', '#grid-card .alert', '#counted-card .list .row', '#home-chart canvas', '#insight-card .md', 'a[href="#historique"]'],
+  accueil: ['.periodbar [data-set=home]', '.periodbar .scope', '.verdict .gauge', '.home-tiles .kpi', '#grid-card .alert', '#counted-card .list .row', 'text:Poêle à bois (Cuisine)', '#home-chart canvas', '#insight-card .md', 'a[href="#historique"]'],
   pieces: ['.rooms-picker', '#rooms-chart canvas', 'a[href="#confort"]', 'a[href="#chauffe-eau"]'],
   // #386: winter against winter and « en détail » on the tab, the rest in its sub-pages, each card saying what it counts
   // #394: the cut days of the incident log, said under « Consommation en détail » and in its chart's summary
@@ -101,7 +101,8 @@ const DESTINATIONS = {
   'outils-questions': ['#questions-card [data-question]'],
   'outils-exports': ['#export', '[data-export-long=csv]', '[data-export-long=json]', '[data-research]', '#backup'],
   'parametres-contrat': ['[data-pmode]', '#contract-share'],
-  'parametres-logement': ['#works-card [data-works-surface]', 'a[href="#compteur-autres"]'],
+  // #366: the stove's wood (demo: three purchases, two seasons), on Accueil too (winter against winter: e2e/expliquer.mjs)
+  'parametres-logement': ['#wood-card [aria-label="Bois par saison"] .row', '#wood-card #wood-add', '#works-card [data-works-surface]', 'a[href="#compteur-autres"]'],
   'parametres-sources': ['.status-list', '#gh-login', '#devices-card'],
   'parametres-objectifs': ['#money-card #budget-input', '#co2-input', '[data-threshold]', '#cold-card [data-cold-room]'],
   'parametres-affichage': ['[data-set=theme]', '[data-toggle=simple]', 'select[data-pin]', '[data-toggle=household]'],
