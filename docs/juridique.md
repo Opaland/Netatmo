@@ -141,6 +141,11 @@ toutes ouvertes.
     (heures par jour, avec l'accord du foyer) ; chambres regroupées comme ailleurs ; rien n'est
     envoyé à l'IA. Analyse d'impact courte (finalité, durée, qui voit quoi) :
     [api-notes.md](api-notes.md#données-doccupation--analyse-dimpact-courte-s-135) ;
+  - **station : pression et bruit** (S-11.4, #220) : la pression du module principal est gardée par
+    jour (moyenne, minimum, maximum, tendance), sans enjeu de vie privée ; le **bruit** du séjour
+    révèle l'occupation (soirées, télévision) : il n'est lu qu'avec la variable de dépôt
+    `STATION_NOISE` = `true` (accord du foyer), réduit aussitôt en **heures bruyantes par jour**
+    (au-dessus de 55 dB en moyenne horaire), jamais l'heure ; chiffré ; rien n'est envoyé à l'IA ;
   - **IA** : seuls des totaux mensuels partent chez Anthropic, les pièces et capteurs sous
     pseudonyme (« Pièce A », « Capteur B », S-5.7, `collector/insights.py` `pseudonyms()`), jamais
     leurs noms ; la correspondance reste dans les données chiffrées et l'application montre

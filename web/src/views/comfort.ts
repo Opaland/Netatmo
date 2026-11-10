@@ -35,6 +35,7 @@ import { html } from '../trusted';
 import * as windows from './windows';
 import * as ha from './ha';
 import { fmt1 as f1 } from '../glossary';
+import { pressureCard } from './pressure';
 
 // #247: station hourly readings of the dataset shown; `hourly` / `hourlyFailed` refreshed from it.
 const stationDoc = datasetDoc((d) => loadStationHourly(d));
@@ -91,6 +92,7 @@ export function renderComfort(view: HTMLElement) {
         : 'Aucune station Netatmo n\'est reliée : seules les températures mesurées par les radiateurs sont utilisées (moyennes par jour). Ajoutez la station dans Paramètres pour le CO₂ de la nuit et l\'humidité de la cave.'
     }</p>
   </section>
+  ${pressureCard(st, ds!, lastDay())}
   ${st ? co2Cards(st, map) : ''}
   ${st ? cellarCards(st, map) : ''}
   ${coldCard(st, map)}

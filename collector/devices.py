@@ -7,6 +7,9 @@
   saw them.
 - S-1.27 (#276): the Intuis gateway (NMG): restarts (power cuts) inferred from `uptime`, Wi-Fi
   strength per day. Fed by the hourly snapshots (collector/roomstate.py) and the nightly read.
+- S-1.31 (#280): the incident log. Hours when every module seen by Intuis was out of reach at
+  once (the home lost Internet, or the power: the app tells them apart with the restarts of the
+  gateway), and the sources whose collection failed, per night (names of sources only).
 - S-1.29 (#278): Tempo colour of the day known by the gateway (`therm_setpoint_day_color_type`),
   and the tariff seen by Intuis in the schedules of `homesdata` (kept in the encrypted meta).
 
@@ -23,7 +26,9 @@ devices.enc.json:
    "firmware": {"i0": [["YYYY-MM-DD", "104", "105"]]},          changes only
    "gateway":  {"last": {"t": epoch, "boot": epoch},             last observation
                 "boots": ["YYYY-MM-DDTHH:MM"],                   restarts, local time, newest last
-                "wifi": {"YYYY-MM-DD": [min, mean, max, n]}},
+                "wifi": {"YYYY-MM-DD": [min, mean, max, n]},
+                "offline": ["YYYY-MM-DDTHH"]},                 hours with every module out of reach
+   "failures": {"YYYY-MM-DD": ["linky", "netatmo"]},           sources that failed that night
    "tempo":    {"YYYY-MM-DD": "blue"}}          gateway colour per Tempo day (6 h → 6 h)
 
 Public log: counts and module types only, never an id, a name or a value.
@@ -44,6 +49,8 @@ SILENT_HOURS = 6  # a module whose last_seen is older is counted as not answerin
 BOOT_JUMP = 900  # s: the inferred start time moved forward more than this → a restart
 MAX_BOOTS = 200
 MAX_FIRMWARE_CHANGES = 20
+MAX_OFFLINE_HOURS = 2000  # about 3 months of hours out of reach: older ones are dropped
+MAX_FAILURE_DAYS = 400
 TEMPO_DAY_START = 6  # a Tempo day runs from 6:00 to 6:00 the next day
 _VERSION = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,23}")
 # Words of the public log and of the alert issue (types only, never a room).
@@ -140,6 +147,32 @@ def observe_gateway(store: Store, t: float, gw: dict, tz: str) -> int:
     return boots
 
 
+def observe_offline(store: Store, t: float, link: list[bool], tz: str) -> bool:
+    """#280: one observation of the links of the Intuis modules (True = out of reach). When there
+    is at least one and all are out of reach, the local hour is kept: the home was cut off (power
+    or Internet). Idempotent: an hour already kept is not added twice."""
+    if not link or not all(link):
+        return False
+    hour = datetime.fromtimestamp(t, ZoneInfo(tz)).strftime("%Y-%m-%dT%H")
+    g = store.doc(DOC).get("gateway") or {}
+    known = list(g.get("offline") or [])
+    if hour not in known:
+        store.put(DOC, "gateway", "offline", None, sorted([*known, hour])[-MAX_OFFLINE_HOURS:])
+    return True
+
+
+def note_failures(store: Store, state: dict[str, dict], now: str, tz: str) -> list[str]:
+    """#280: the sources whose last failure is this run (`now`, UTC ISO), under the local day."""
+    failed = sorted(name for name, st in state.items() if isinstance(st, dict) and st.get("error") == now)
+    if not failed:
+        return []
+    day = datetime.fromisoformat(now).astimezone(ZoneInfo(tz)).date().isoformat()
+    days = dict(store.doc(DOC).get("failures") or {})
+    days[day] = sorted({*days.get(day, []), *failed})
+    store.set_top(DOC, "failures", dict(sorted(days.items())[-MAX_FAILURE_DAYS:]))
+    return failed
+
+
 def boots_since(store: Store, days: int, now: float, tz: str) -> int:
     """Restarts recorded over the last `days` days (the first, pre-monitoring start excluded
     is not distinguishable here: it is counted when it falls in the window)."""
@@ -199,6 +232,7 @@ def collect_status(
     keys = module_keys(store, ids)
     counts = {"modules": 0, "unreachable": 0, "firmware": 0, "boots": 0, "alerts": []}
     by_type: dict[str, list[str]] = {}
+    links: list[bool] = []
     for mid in ids:
         key = keys[mid]
         d = declared.get(mid, {})
@@ -225,6 +259,8 @@ def collect_status(
         if ok is None:
             continue
         store.put(DOC, "reach", key, day, int(ok))
+        if not is_gateway(m):
+            links.append(m.get("reachable") is False)
         if not ok:
             counts["unreachable"] += 1
             reach = store.doc(DOC)["reach"][key]
@@ -233,6 +269,7 @@ def collect_status(
         n = len(starts)
         plural = "s" if n > 1 else ""
         counts["alerts"].append(f"{n} {label}{plural} injoignable{plural} depuis le {min(starts)}")
+    observe_offline(store, now, links, tz)  # #280: every module out of reach at once
     return counts
 
 

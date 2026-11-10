@@ -15,6 +15,7 @@ import { hour } from '../glossary';
 import { SUSPECT_RATIO } from '../reconstitute';
 import { uncertainDays } from './quality';
 import { drawSetpoint, setpointCard } from './setpoint';
+import { windBlock } from './windsig';
 import { drawWaterHeater, hcAlerts, waterHeaterCard } from './waterheater';
 import { html } from '../trusted';
 import { tenant, tenantNote } from '../tenant'; // S-12.6: works are the owner's business
@@ -114,6 +115,7 @@ export function renderAnalyse(view: HTMLElement, records: DayRecord[], part: Ana
     <p class="hint muted">Chaque point est un jour : consommation de chauffage selon la température extérieure moyenne${ds!.meta.weather_source === 'netatmo' ? ' (station Netatmo)' : ' (Open-Meteo)'}. La droite résume la saison : plus elle est <strong>pentue</strong>, plus la maison consomme par degré de froid ; là où elle touche zéro, c'est la température à partir de laquelle vous ne chauffez plus.</p>
     <div class="chart tall" id="sig-chart" role="img" aria-label="Signature énergétique"></div>
     <div id="sig-table"></div>
+    <div id="sig-wind-zone"></div>
   </section>
   <section class="card" id="indoor-sig" hidden></section>`
           : `<section class="card"><h2>Signature du logement</h2><p class="hint muted">Disponible dès que la collecte a récupéré la météo (prochaine collecte).</p></section>`,
@@ -187,6 +189,8 @@ export function renderAnalyse(view: HTMLElement, records: DayRecord[], part: Ana
       }),
     });
     document.getElementById('sig-table')!.innerHTML = html(signatureTable(sigs, cur, false));
+    // S-3.12 (#221): the wind and the rain, on the same days
+    document.getElementById('sig-wind-zone')!.innerHTML = html(windBlock(days, ds!.wind, ds!.rain, cur));
   }
   // calendar
   const perDay = new Map<string, number>();

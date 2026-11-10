@@ -14,7 +14,7 @@ from .devices import collect_status
 from .homeassistant import import_bytes
 from .model import HEATING, WATER_HEATER
 from .roomstate import merge_snapshots, snapshot
-from .station import aggregate_days
+from .station import NOISY_ABOVE, aggregate_days, pressure_trends
 from .storage import KeyMap, Store
 
 ROOMS = [
@@ -69,6 +69,43 @@ OFFLINE_EXTRA = 1.5
 COLD_SPELL = (date(2026, 1, 5), date(2026, 1, 18), 4.0)
 # #337: the parents' bedroom asked for 1 °C more for six weeks of the 2025-2026 winter (≈ +7 %).
 WARMER = ("r-ch1", date(2025, 12, 20), date(2026, 1, 31), 1.0)
+
+
+# #280: the home cut off (every radiator out of reach): hours before the two restarts of the gateway
+# (power cuts) and two evenings without Internet (no restart); sources failed some nights.
+CUT_HOURS = ((80, (1, 2)), (26, (13,)), (47, (8,)), (9, (19, 20, 21)))  # (days before today, hours)
+WIND_SEED = 222  # S-3.12: wind and rain stream of the demo (one where the rain shows no chance effect)
+FAILED_NIGHTS = ((12, ["linky"]), (33, ["netatmo"]))
+
+
+def _wind_day(rnd: random.Random, d: date, tmean: float, ratio: float | None) -> list:
+    """S-3.12 (#221): mean wind (km/h) and gust. Windier in winter; on heating days, the heating
+    above (below) what the cold explains comes with more (less) wind: the effect the app finds."""
+    cold = max(0.0, 15 - tmean) / 15
+    mean = 11 + 6 * cold + rnd.gauss(0, 3.5)
+    if ratio is not None:
+        mean += 160 * (ratio - 1)
+    mean = max(1.5, mean)
+    return [round(mean, 1), round(mean * rnd.uniform(1.6, 2.3))]
+
+
+def _station_v16(store: Store, today: date, start: date) -> None:
+    """S-11.4 (#220): pressure of the main module (every day) and, the opt-in being on in the demo,
+    its noisy hours per day over the last year (evenings, more at weekends)."""
+    rnd = random.Random(220)
+    p = 1016.0
+    d = start
+    while d < today:
+        p = 1016 + 0.82 * (p - 1016) + rnd.gauss(0, 4.2)
+        lo, hi = p - rnd.uniform(1, 4), p + rnd.uniform(1, 4)
+        store.put("station", "pressure", "m0", d.isoformat(), [round(p, 1), round(lo, 1), round(hi, 1), None])
+        if (today - d).days <= 365:
+            weekend = d.weekday() >= 5
+            loud = rnd.choice((0, 1, 1, 2, 2, 3)) + (rnd.choice((1, 2, 3)) if weekend else 0)
+            store.put("station", "noise", "m0", d.isoformat(), {"n": 24, "loud": loud})
+        d += timedelta(days=1)
+    pressure_trends(store, "m0")
+    assert NOISY_ABOVE  # the demo counts hours above the same threshold as the collection
 
 
 def is_lost(rid: str, d: date) -> bool:
@@ -385,6 +422,13 @@ def _devices(store: Store, today: date) -> None:
     for key, t, fw in station:
         store.put("devices", "modules", key, None, {"type": t, "fw": fw})
     store.put("devices", "firmware", "m0", None, [[(today - timedelta(days=52)).isoformat(), "178", "181"]])
+    cut = sorted(f"{(today - timedelta(days=back)).isoformat()}T{h:02d}" for back, hours in CUT_HOURS for h in hours)
+    store.put("devices", "gateway", "offline", None, cut)
+    store.set_top(
+        "devices",
+        "failures",
+        {(today - timedelta(days=b)).isoformat(): f for b, f in sorted(FAILED_NIGHTS, reverse=True)},
+    )
 
 
 # Intuis's view of the contract (#278): set to Base 9 kVA in the Intuis app while the shared contract
@@ -567,6 +611,7 @@ def generate(out_dir: Path, passphrase: str = "demo", start_year: int = 2022, to
     hourly_from = today - timedelta(days=365)
     curve_from = today - timedelta(days=CURVE_DAYS)
     rnd_curve = random.Random(30)  # separate stream as well
+    rnd_wind = random.Random(WIND_SEED)  # S-3.12: wind and rain, separate stream (the rest is unchanged)
     tariffs_from = date(2025, 1, 1)
     # The house gets a little better each year (réglages, isolation).
     efficiency = {y: 1.0 - 0.05 * (y - start_year) for y in range(start_year, today.year + 1)}
@@ -607,6 +652,7 @@ def generate(out_dir: Path, passphrase: str = "demo", start_year: int = 2022, to
         dju = max(0.0, 18 - tmean)
         weekend = d.weekday() >= 5
         day_total = 0.0
+        heat_num = heat_den = 0.0  # S-3.12: heating drawn vs what the cold alone asks (wind of the demo)
         hours_wh = [0.0] * 24  # heating + water heater per hour, for the load curve
         for rid, _name, cat, weight, setpoint in ROOMS:
             if cat == WATER_HEATER:
@@ -616,6 +662,7 @@ def generate(out_dir: Path, passphrase: str = "demo", start_year: int = 2022, to
                 if rid == "r-bureau" and weekend:
                     base *= 0.4
                 kwh = base * rnd.uniform(0.85, 1.15) if dju > 1.5 else 0.0
+                heat_num, heat_den = heat_num + kwh, heat_den + (base if dju > 1.5 else 0.0)
                 kwh *= 1 + 0.07 * warmer(rid, d)  # about 7 % per °C asked in more
                 if is_offline(rid, d):
                     kwh *= OFFLINE_EXTRA  # its last local setting, whatever the schedule or the absence
@@ -656,6 +703,12 @@ def generate(out_dir: Path, passphrase: str = "demo", start_year: int = 2022, to
                             store.put(f"{d.year}.hourly", "hourly", rid, key, v)
                         if seen:
                             hours_wh[h] += v
+        ratio = heat_num / heat_den if heat_den else None
+        store.put("weather", "wind", d.isoformat(), None, _wind_day(rnd_wind, d, tmean, ratio))
+        if rnd_wind.random() < 0.45:
+            store.put("weather", "rain", d.isoformat(), None, round(rnd_wind.expovariate(1 / 4.5), 1))
+        else:
+            store.put("weather", "rain", d.isoformat(), None, 0.0)
         if d >= date(start_year + 1, 1, 1):  # Linky history shorter than the radiators'
             other = 9500 + (1800 if weekend else 0) + 900 * math.cos((doy - 15) / 365 * 2 * math.pi) + rnd.gauss(0, 900)
             other = max(other, 7000)
@@ -681,7 +734,9 @@ def generate(out_dir: Path, passphrase: str = "demo", start_year: int = 2022, to
     _home_assistant(store, today, office)
     for key in ("m0", "m1", "m2", "m3"):
         aggregate_days(store, key, key != "m1", hourly_from, today)
+    _station_v16(store, today, date(start_year, 1, 1))
     store.set_top("weather", "source", "open-meteo")
+    store.set_top("weather", "wind_source", "open-meteo")
     store.set_top(
         "station",
         "modules",
