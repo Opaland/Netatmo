@@ -196,6 +196,9 @@ try {
       progress(`${name} : État des données`);
       await go(page, 'etat');
       await page.waitForSelector('#quality-sources', { timeout: 15000 });
+      // #387: the details are folded, one line per source and per year
+      await page.click('#quality-sources [data-source=heating] > summary');
+      await page.click('#quality-years > summary');
       const etat = await page.locator('#view').innerText();
       check(/Cuisine : radiateur arrêté volontairement depuis le 14 oct\. 2025 \(chauffée par un poêle à bois\) : pas de données attendues/.test(etat), `${name} : État des données sans « arrêté volontairement : pas de données attendues »`);
       check(!/muette depuis le 14 oct\. 2025/.test(etat), `${name} : État des données compte la Cuisine comme muette`);
@@ -203,7 +206,8 @@ try {
       const years = (await page.locator('#quality-years .year-verdict').allInnerTexts()).slice(0, 2).join(' ');
       check(/^2026/.test(years) && /2025/.test(years) && !/Cuisine/.test(years), `${name} : 2025 ou 2026 expliquée par la Cuisine arrêtée (« ${years.replace(/\s+/g, ' ').slice(0, 300)} »)`);
       // État des appareils: the kitchen radiator is switched off on purpose, not « injoignable »
-      await page.waitForSelector('#devices-card:not([hidden])', { timeout: 15000 });
+      await page.waitForSelector('#devices-card:not([hidden])', { state: 'attached', timeout: 15000 });
+      await page.click('#devices-fold > summary');
       const dev = await page.locator('#devices-card').innerText();
       check(/Radiateur arrêté volontairement : Cuisine, depuis le 14 octobre 2025 \(chauffée par un poêle à bois\)/.test(dev), `${name} : État des appareils sans « radiateur arrêté volontairement » (« ${dev.slice(0, 300)} »)`);
       check(/ne répond plus : radiateur \(Chambre enfant\)/.test(dev) && !/radiateur \(Cuisine\) depuis/.test(dev), `${name} : État des appareils dit la Cuisine injoignable (« ${dev.slice(0, 300)} »)`);

@@ -144,7 +144,7 @@ export function renderPieces(view: HTMLElement, o: PiecesOpts) {
     const sub = x.run
       ? `<span class="pill${x.run.stopped ? '' : ' warn'}">${esc(offlineText(x.run))}</span>${x.est ? ` · ≈ ${esc(fmtKwh(x.est))} estimés` : ''}`
       : t
-        ? `${fmt1(t.mean)} °C · <span class="pill ${pill.level}">${esc(pill.text)}</span>`
+        ? `${fmt1(t.mean)}\u00a0°C · <span class="pill ${pill.level}">${esc(pill.text)}</span>`
         : '<span class="muted">pas de température relevée</span>';
     const tag = x.room.id === BEDROOMS_ID ? ' <span class="tag">regroupées</span>' : '';
     return `<li><a class="row" href="#piece-${esc(encodeURIComponent(x.room.id))}" data-room-link="${esc(x.room.id)}"><span class="swatch" style="background:${esc(roomColor(x.room.id))}" aria-hidden="true"></span><span><span class="t">${esc(x.room.name)}${tag}</span><span class="s">${sub}</span></span><span class="v">${value(x)}</span><span class="chev" aria-hidden="true">›</span></a></li>`;
@@ -156,7 +156,7 @@ export function renderPieces(view: HTMLElement, o: PiecesOpts) {
     return `<li><a class="row" href="#chauffe-eau"><span class="swatch" style="background:var(--usage-water)" aria-hidden="true"></span><span><span class="t">${esc(x.room.name)}</span><span class="s">${esc(sub)}</span></span><span class="v">${value(x)}</span><span class="chev" aria-hidden="true">›</span></a></li>`;
   });
   view.innerHTML = html(`<h2 class="page-title" id="page-title" tabindex="-1">Pièces</h2>
-  <p class="card-sub">${esc(`${PERIOD.ytd} (au ${dayShort(last)}), trié par coût · température et confort : ${PERIOD['30d'].toLowerCase()}, seuil ${fmt1(thr)} °C`)}</p>
+  <p class="card-sub">${esc(`${PERIOD.ytd} (au ${dayShort(last)}), trié par coût · température et confort : ${PERIOD['30d'].toLowerCase()}, seuil ${fmt1(thr)}\u00a0°C`)}</p>
   ${heated.length ? `<ul class="list" aria-label="Pièces chauffées, de la plus chère à la moins chère">${heated.join('')}</ul>` : ''}
   ${water.length ? `<p class="section-title">Appareils</p><ul class="list" aria-label="Appareils">${water.join('')}</ul>` : ''}
   <p class="section-title">Tout le logement</p>
@@ -221,7 +221,7 @@ export function renderPiece(view: HTMLElement, id: string) {
       ${legend([
         { label: `Mesurée (${sourceLabel(m.source)})`, color: '--series-measure' },
         { label: TEMP.setpointShort, color: '--accent', kind: 'line' },
-        { label: `Jour sous ${fmt1(thr)} °C`, color: '--state-warn' },
+        { label: `Jour sous ${fmt1(thr)}\u00a0°C`, color: '--state-warn' },
       ])}
       <div class="chart" id="piece-temp-chart" role="img" aria-label="${esc(room.name)} : température mesurée et ${esc(TEMP.setpoint)}, par jour"></div>
     </section>`);
@@ -282,7 +282,7 @@ function nowCard(
   const range = (v: number[]) => {
     const lo = Math.min(...v);
     const hi = Math.max(...v);
-    return hi - lo < 0.05 ? `${fmt1(lo)} °C` : `${fmt1(lo)} à ${fmt1(hi)} °C`;
+    return hi - lo < 0.05 ? `${fmt1(lo)}\u00a0°C` : `${fmt1(lo)} à ${fmt1(hi)}\u00a0°C`;
   };
   let day = last;
   if (reading && reading.temps.length) {
@@ -304,12 +304,12 @@ function nowCard(
         slots: sched.slots,
         offPeak: off,
         now,
-        label: `Planning du ${dayLong(day, false)} : confort (${fmt1(sched.comfort)} °C) ${comfort.join(', ')}, économie (${fmt1(sched.eco)} °C) le reste du temps${
+        label: `Planning du ${dayLong(day, false)} : confort (${fmt1(sched.comfort)}\u00a0°C) ${comfort.join(', ')}, économie (${fmt1(sched.eco)}\u00a0°C) le reste du temps${
           off.length ? ` ; heures creuses ${off.map(([a, b]) => hourRange(a, b)).join(', ')}` : ''
         } ; trait : dernier relevé`,
       })}${legend([
-        { label: `Confort ${fmt1(sched.comfort)} °C`, color: '--usage-heating' },
-        { label: `Économie ${fmt1(sched.eco)} °C`, color: '--usage-other' },
+        { label: `Confort ${fmt1(sched.comfort)}\u00a0°C`, color: '--usage-heating' },
+        { label: `Économie ${fmt1(sched.eco)}\u00a0°C`, color: '--usage-other' },
         ...(off.length ? [{ label: 'Heures creuses', color: '--accent-text', kind: 'hatch' as const }] : []),
       ])}<p class="hint muted">Lu dans les températures demandées de la journée, demi-heure par demi-heure.</p>`;
     }
@@ -319,7 +319,7 @@ function nowCard(
     temp = v;
     when = `moyenne du ${dayShort(last)} (${sourceLabel(m.source)})`;
     const sp = ds!.temps.get(ids.length === 1 ? ids[0] : (group ? BEDROOMS_ID : ids[0]))?.get(last)?.[1];
-    if (sp !== null && sp !== undefined) facts.push([TEMP.setpointShort, `${fmt1(sp)} °C (moyenne du jour)`]);
+    if (sp !== null && sp !== undefined) facts.push([TEMP.setpointShort, `${fmt1(sp)}\u00a0°C (moyenne du jour)`]);
   }
   if (rs) {
     const c = ids.map((i) => rs.rooms?.[i]?.[day]).filter((x): x is StateCell => !!x);
@@ -376,8 +376,8 @@ function tilesRow(
       tiles.push(
         tile({
           label: 'Température moyenne',
-          value: `${fmt1(t.mean)} °C`,
-          sub: esc(`${PERIOD['30d'].toLowerCase()} · ${sourceLabel(m.source)}${sp ? ` · demandée ${fmt1(sp.mean)} °C` : ''}`),
+          value: `${fmt1(t.mean)}\u00a0°C`,
+          sub: esc(`${PERIOD['30d'].toLowerCase()} · ${sourceLabel(m.source)}${sp ? ` · demandée ${fmt1(sp.mean)}\u00a0°C` : ''}`),
           id: 'piece-mean',
         }),
       );
@@ -408,7 +408,7 @@ function drawTemp(el: HTMLElement, name: string, m: ReturnType<typeof measured>,
   const cold = meas.map((v) => (v !== null && v < thr ? v : null));
   const n = cold.filter((v) => v !== null).length;
   const axis = tempAxis([...meas, ...req]);
-  el.setAttribute('aria-label', `${name}, ${PERIOD['30d'].toLowerCase()} : ${n ? `${plural(n, 'jour')} sous ${fmt1(thr)} °C` : `aucun jour sous ${fmt1(thr)} °C`}`);
+  el.setAttribute('aria-label', `${name}, ${PERIOD['30d'].toLowerCase()} : ${n ? `${plural(n, 'jour')} sous ${fmt1(thr)}\u00a0°C` : `aucun jour sous ${fmt1(thr)}\u00a0°C`}`);
   const labels = days.map((d) => dayShort(d));
   lineChart(el, {
     labels,
@@ -430,7 +430,7 @@ function drawTemp(el: HTMLElement, name: string, m: ReturnType<typeof measured>,
       { lineStyle: { type: 'dashed' } },
       {
         type: 'scatter',
-        name: `Jour sous ${fmt1(thr)} °C`,
+        name: `Jour sous ${fmt1(thr)}\u00a0°C`,
         data: cold,
         symbolSize: 11,
         itemStyle: { color: cssVar('--state-warn'), borderColor: cssVar('--surface-card'), borderWidth: 2 },
@@ -457,8 +457,8 @@ function coldCard(
   const head = (sub: string) => `<div class="card-head"><h2>Pourquoi il a fait froid</h2></div><p class="card-sub">${esc(sub)}</p>`;
   const rows = days.map((d) => ({ day: d, temp: m.days.get(d) ?? null, setpoint: sp?.get(d)?.[1] ?? null }));
   const n = rows.filter((r) => r.temp !== null && r.temp < thr).length;
-  const sub = `${n ? `${plural(n, 'jour')} sous ${fmt1(thr)} °C` : `aucun jour sous ${fmt1(thr)} °C`} · ${PERIOD['30d'].toLowerCase()}`;
-  if (!n) return `<section class="card" id="froid">${head(sub)}<p>La pièce n’a pas eu de journée froide : sa température moyenne est restée au-dessus de ${esc(fmt1(thr))} °C chaque jour relevé.</p></section>`;
+  const sub = `${n ? `${plural(n, 'jour')} sous ${fmt1(thr)}\u00a0°C` : `aucun jour sous ${fmt1(thr)}\u00a0°C`} · ${PERIOD['30d'].toLowerCase()}`;
+  if (!n) return `<section class="card" id="froid">${head(sub)}<p>La pièce n’a pas eu de journée froide : sa température moyenne est restée au-dessus de ${esc(fmt1(thr))}\u00a0°C chaque jour relevé.</p></section>`;
   if (rs === undefined || r30 === undefined) return `<section class="card" id="froid" aria-busy="true">${head(sub)}<p class="hint muted" role="status">Chargement de l’état des radiateurs…</p></section>`;
   const drops = r30 ? tempDrops(new Map(ids.filter((i) => r30.has(i)).map((i) => [i, r30.get(i)!])), from30, last) : null;
   const dropOf = (d: string) => {
@@ -473,7 +473,7 @@ function coldCard(
   const items = shown.map((c) => {
     const reasons = c.reasons.filter((r) => rs || r.kind !== 'nodata');
     const text = reasons.length ? reasons.map((r) => reasonText(r, thr)).join(' ; ') : 'état des radiateurs non relevé';
-    return `<li><b>${esc(dayLong(c.day, false))}</b> (${esc(fmt1(c.temp))} °C) : ${esc(text)}${group && reasons.some((r) => r.kind !== 'none') ? ' <small class="muted">(une des chambres)</small>' : ''}.</li>`;
+    return `<li><b>${esc(dayLong(c.day, false))}</b> (${esc(fmt1(c.temp))}\u00a0°C) : ${esc(text)}${group && reasons.some((r) => r.kind !== 'none') ? ' <small class="muted">(une des chambres)</small>' : ''}.</li>`;
   });
   return `<section class="card" id="froid">${head(sub)}
     <ul class="cold-days">${items.join('')}</ul>
@@ -481,7 +481,7 @@ function coldCard(
     ${rs ? '' : '<p class="hint muted">L’état des radiateurs (fenêtre, délestage, mode) n’est pas relevé pour ce logement : seules la température demandée et les chutes brusques de température sont lues.</p>'}
     ${howDetails(
       'Comment c’est calculé',
-      `<p class="hint">Un jour est froid quand sa température moyenne (${esc(sourceLabel(m.source))}) est sous le seuil de ${esc(fmt1(thr))} °C, réglable dans ⚙ Paramètres → Objectifs et alertes. Pour chacun, l’application regarde l’état des radiateurs relevé chaque heure (fenêtre ouverte, délestage, mode absence ou hors-gel), la température demandée ce jour-là, et les chutes brusques de la température de la demi-heure (au moins 1,5 °C en une heure sans baisse de la consigne).</p>`,
+      `<p class="hint">Un jour est froid quand sa température moyenne (${esc(sourceLabel(m.source))}) est sous le seuil de ${esc(fmt1(thr))}\u00a0°C, réglable dans ⚙ Paramètres → Objectifs et alertes. Pour chacun, l’application regarde l’état des radiateurs relevé chaque heure (fenêtre ouverte, délestage, mode absence ou hors-gel), la température demandée ce jour-là, et les chutes brusques de la température de la demi-heure (au moins 1,5 °C en une heure sans baisse de la consigne).</p>`,
     )}
   </section>`;
 }
@@ -567,7 +567,7 @@ function radiatorCard(id: string, ids: string[], rs: RoomState | null | undefine
     const o = offsetStats(ds!.temps.get(id), st.daily[k], addDays(last, -364), last);
     if (o) {
       const v = o.recent && o.recent.n >= 7 ? o.recent : { mean: o.mean, n: o.n };
-      rows.push(listRow({ title: 'Sonde du radiateur − station', sub: o.recent && o.recent.n >= 7 ? PERIOD['30d'] : 'jours de chauffe, 12 mois', value: `${signed(v.mean)} °C` }));
+      rows.push(listRow({ title: 'Sonde du radiateur − station', sub: o.recent && o.recent.n >= 7 ? PERIOD['30d'] : 'jours de chauffe, 12 mois', value: `${signed(v.mean)}\u00a0°C` }));
     }
   }
   rows.push(`<li id="piece-surface"><div class="row"><span></span><span><span class="t">Surface</span><span class="s" role="status">…</span></span><span></span><span></span></div></li>`);

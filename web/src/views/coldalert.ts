@@ -54,9 +54,9 @@ function saveDraft(c: ColdConfig) {
 function describe(s: Sensor, c: ColdConfig): string {
   const r = coldStatus(s.means, c.threshold, c.days, lastDay());
   if (r.status === 'stale') return `<span class="muted">aucun relevé récent${r.lastDay ? ` (dernier le ${longDate(r.lastDay)})` : ''}</span>`;
-  const last = `${num1(r.lastMean!)} °C en moyenne le ${longDate(r.lastDay!)}`;
+  const last = `${num1(r.lastMean!)}\u00a0°C en moyenne le ${longDate(r.lastDay!)}`;
   return r.status === 'cold'
-    ? `<strong class="ko-red">sous ${num1(c.threshold)} °C depuis ${r.streak} jour${r.streak > 1 ? 's' : ''}</strong> (${last})`
+    ? `<strong class="ko-red">sous ${num1(c.threshold)}\u00a0°C depuis ${r.streak} jour${r.streak > 1 ? 's' : ''}</strong> (${last})`
     : `${r.streak ? `sous le seuil depuis ${r.streak} jour${r.streak > 1 ? 's' : ''}, ` : ''}${last}`;
 }
 
@@ -103,11 +103,11 @@ export function mountColdSettings(card: HTMLElement | null, repo: () => string, 
     ${alertHtml('warn', "<strong>Ce n'est pas un dispositif de sécurité.</strong> Avec une collecte par nuit, l'alerte peut arriver jusqu'à 24 h après la journée froide, davantage si la collecte échoue ou si une sonde ne remonte plus. Pour une personne fragile, gardez un autre moyen de contact.")}
     <p class="hint">${
       active
-        ? `<span class="badge">active</span> Enregistrée par la collecte : ${active.rooms.length} pièce${active.rooms.length > 1 ? 's' : ''}, seuil ${num1(active.threshold)} °C pendant ${active.days} jour${active.days > 1 ? 's' : ''}.`
+        ? `<span class="badge">active</span> Enregistrée par la collecte : ${active.rooms.length} pièce${active.rooms.length > 1 ? 's' : ''}, seuil ${num1(active.threshold)}\u00a0°C pendant ${active.days} jour${active.days > 1 ? 's' : ''}.`
         : '<span class="muted">Aucune alerte enregistrée par la collecte.</span>'
     }</p>
     <div class="sim-form">
-      <label>Seuil (moyenne du jour)<select id="cold-threshold">${COLD_THRESHOLDS.map((t) => `<option value="${t}" ${t === cfg.threshold ? 'selected' : ''}>${t} °C</option>`).join('')}</select></label>
+      <label>Seuil (moyenne du jour)<select id="cold-threshold">${COLD_THRESHOLDS.map((t) => `<option value="${t}" ${t === cfg.threshold ? 'selected' : ''}>${t}\u00a0°C</option>`).join('')}</select></label>
       <label>Pendant<select id="cold-days">${COLD_DAYS.map((d) => `<option value="${d}" ${d === cfg.days ? 'selected' : ''}>${d === 1 ? '1 jour (24 h)' : `${d} jours de suite`}</option>`).join('')}</select></label>
     </div>
     <fieldset class="sim-choices"><legend>Pièces suivies (${COLD_MAX_ROOMS} au plus)</legend>

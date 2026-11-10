@@ -11,7 +11,7 @@ import { type Verdict, projectYear } from '../analysis';
 import { activeRooms, ds, state } from '../app';
 import { barChart, cssVar } from '../charts';
 import { comparison, gauge, howDetails, legend, list, seg, tile } from '../components';
-import { CATEGORY, NO_REFERENCE, PERIOD, TEMP, dayShort, monthLong, rangeLabel, vsLabel } from '../glossary';
+import { CATEGORY, NO_REFERENCE, PERIOD, TEMP, dayShort, monthLong, rangeLabel, vsLabel, withUnit } from '../glossary';
 import {
   HOME_PERIODS,
   type HomeRange,
@@ -133,7 +133,7 @@ function verdictBlock(r: HomeRange, sc: Scope): string {
     expected: m.expected,
     projected: end,
     color: '--accent',
-    scale: [`0 ${m.unit}`, `attendu au ${dayShort(r.to)} : ${w.expectedAmount}`, ...(endTxt ? [endTxt] : [])],
+    scale: [withUnit('0', m.unit), `attendu au ${dayShort(r.to)} : ${w.expectedAmount}`, ...(endTxt ? [endTxt] : [])],
   });
   return `<section class="verdict verdict-${m.level}" aria-labelledby="verdict-title">
     <span class="verdict-icon" aria-hidden="true">${icon}</span>

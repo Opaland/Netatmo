@@ -78,7 +78,7 @@ const DESTINATIONS = {
   'compteur-heures-creuses': ['#offpeak-chart canvas', '#offpeak-card .counted', 'text:Heures pleines / creuses'],
   confort: ['#pressure-card table', 'text:bruyante', '#cold-chart canvas', '#windows-chart canvas', '#ha-card table', '#cellar-0 canvas', '#probe-0 canvas'],
   'chauffe-eau': ['#wh-month-chart canvas', '#contactor-line:not([hidden])'],
-  etat: ['#quality', '.status-list', '#devices-card [data-shelly-role]', '#quality-years .year-verdict', '#incidents .incident-list li', 'text:h sans Internet', 'text:coupure de courant', '#quality-sources [data-source=heating] .gaps li', '#quality-sources [data-source=station]', '#quality-fine [data-source=linky30]', '#quality-fine [data-source=room30]', 'text:Année par année'],
+  etat: ['#quality', '.status-list', '#devices-card a[href="#parametres-sources"]', '#quality-years .year-verdict', '#incidents .incident-list li', 'text:h sans Internet', 'text:coupure de courant', '#quality-sources [data-source=heating] .gaps li', '#quality-sources [data-source=station]', '#quality-fine [data-source=linky30]', '#quality-fine [data-source=room30]', 'text:Année par année'],
   rapport: ['.report .kpis', '#report-offers table'],
   'outils-offres': ['#offers-chart canvas'],
   'outils-voiture': ['#ev-card #ev-result table'],
@@ -94,7 +94,7 @@ const DESTINATIONS = {
   'outils-exports': ['#export', '[data-export-long=csv]', '[data-export-long=json]', '[data-research]', '#backup'],
   'parametres-contrat': ['[data-pmode]', '#contract-share'],
   'parametres-logement': ['#works-card [data-works-surface]', 'a[href="#compteur-autres"]'],
-  'parametres-sources': ['.status-list', '#gh-login', '#devices-card'],
+  'parametres-sources': ['.status-list', '#gh-login', '#devices-card [data-shelly-role]'],
   'parametres-objectifs': ['#money-card #budget-input', '#co2-input', '[data-threshold]', '#cold-card [data-cold-room]'],
   'parametres-affichage': ['[data-set=theme]', '[data-toggle=simple]', 'select[data-pin]', '[data-toggle=household]'],
   'parametres-foyer': ['#invite-open', '#tenant-card #tenant-on'],
@@ -304,6 +304,14 @@ try {
     await ready(page);
     await page.screenshot({ path: `${OUT}/${BROWSER}-iphone-${view}.png`, fullPage: true });
     await checkViolations(page, view);
+  }
+
+  // #387: État des données, a verdict per source and the detail folded, holds in 4 screens
+  progress('état des données');
+  {
+    await go(page, 'etat');
+    const [h, screenH] = await page.evaluate(() => [document.documentElement.scrollHeight, window.innerHeight]);
+    check(h <= 4 * screenH, `#387 : État des données fait ${h} px, plus de 4 écrans (${4 * screenH} px)`);
   }
 
   // #311 / #302: Accueil holds in 3 iPhone screens; one period for the screen, each comparison named
