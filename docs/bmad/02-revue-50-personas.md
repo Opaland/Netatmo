@@ -177,3 +177,37 @@ numérique, design system. Le verdict porte sur l'application v1.3.
 | 60 | Conducteur de voiture électrique | Énergie et climat | Savoir ce que la recharge coûterait selon l'offre et si le compteur tient | 👎 | Simulateur de recharge : kWh par semaine, plage horaire, effet sur l'offre et le pic |
 | 61 | Avocate en droit du numérique | Sécurité, vie privée, juridique | Que les données d'occupation soient traitées comme sensibles | 👎 | Minimisation (présence non conservée), regroupement des chambres, analyse d'impact courte |
 | 62 | Responsable de design system | UX et accessibilité | Des jetons et des composants communs plutôt que des styles vue par vue | 👎 | Inventaire des composants et jetons en v1.4, base du design system v1.6 |
+
+## 13. Personas ajoutés en fin de v1.6
+
+Ajoutés par la [revue de fin de v1.6](revues/v1.6.md) pour couvrir ce que la refonte et les retours du
+propriétaire ont fait apparaître : coût total avec un poêle, nouveaux usages électriques (photovoltaïque,
+climatisation, voiture électrique mesurée, tableaux), contrat de la PWA, lecture à 200 %, pièce hors
+ligne, exigence de test et installation pour un proche. Le panel passe à **72 personas**. Le verdict
+porte sur l'application v1.6 ; chaque persona a son issue (« Persona #N · … », jalon v1.6).
+
+| # | Persona | Famille | Besoin principal | Verdict v1.6 | Proposition concrète | Issue |
+|---|---|---|---|---|---|---|
+| 63 | Propriétaire d'un poêle à bois | Énergie et climat | Connaître le vrai coût du chauffage, bois compris, et ne pas lire une « économie » qui n'est qu'un transfert vers le poêle | 👎 | Stères achetés et prix saisis, coût total chauffage + bois sur l'Accueil | #373 |
+| 64 | Candidat au photovoltaïque sur abris de jardin | Énergie et climat | Savoir quelle puissance poser sur les abris, quelle part serait autoconsommée et si une batterie vaut la peine | ➖ | Simulateur « Et avec des panneaux ? » dans Outils, sur la courbe 30 min et l'ensoleillement du lieu | #374 |
+| 65 | Propriétaire d'une climatisation réversible non connectée | Énergie et climat | Voir ce que la clim coûte en été et en mi-saison, alors qu'aucune API ne la lit | ➖ | Une pince sur son circuit, rôle « climatisation » dans ⚙ Sources | #375 |
+| 66 | Électricien qui lit les tableaux électriques | Énergie et climat | Relier chaque circuit du tableau à ce qui est mesuré, et voir ce qui ne l'est pas | ➖ | Inventaire des tableaux et carte de couverture (mesuré, estimé, inconnu) | #376 |
+| 67 | Utilisateur qui ne veut aucun rechargement surprise (PWA) | UX et accessibilité | Que l'appli installée ne se recharge jamais d'elle-même, et pouvoir la remettre d'aplomb sans perdre sa clé | 👍 | Garder ce contrat : un test le tient (bandeau vu rouge avec skipWaiting) | #377 |
+| 68 | Personne qui lit à 200 % en contraste élevé sur un vieux téléphone | UX et accessibilité | Tout lire à 200 % de texte et en contraste élevé sur un écran de 360 px, sans mot coupé ni texte recouvert | 👎 | Pièces lisible à 200 %, et un invariant « textes qui se chevauchent » dans le balayage | #378 |
+| 69 | Propriétaire qui découvre une pièce « hors ligne » | Foyer et famille | Comprendre ce que la pièce muette change aux chiffres, et quoi faire | 👎 | Un seul périmètre écrit dans le verdict, la jauge et les tuiles | #379 |
+| 70 | Testeur QA exigeant (balayage e2e) | Développement, maintenance, exploitation | Que la CI attrape ce qu'un humain voit en ligne, sur toutes les pages et tous les cas limites | 👍 | Invariant de chevauchement, signal « prête » qui attend toutes les cartes, captures de référence régénérées | #380 |
+| 71 | Propriétaire d'une voiture électrique qui recharge en heures creuses | Énergie et climat | Voir la recharge réelle, son coût et si elle tombe bien en heures creuses, pas seulement une simulation | ➖ | Pince sur le circuit de la borne, recharge comptée par nuit et part en heures creuses | #381 |
+| 72 | Aidant qui installe la vue Proche à un parent | Foyer et famille | Installer en cinq minutes, sur le téléphone du parent, une vue simple qui ne se perd pas | 👍 | Journal des incidents lisible depuis la vue Proche | #382 |
+
+**Fiches.**
+
+- **63 · Propriétaire d'un poêle à bois** — Chauffe le séjour au bois l'hiver et a arrêté le radiateur de la cuisine ; achète ses stères à l'automne. Il lit l'Accueil et veut que « moins d'électricité » ne soit pas pris pour « moins cher ».
+- **64 · Candidat au photovoltaïque sur abris de jardin** — Deux abris de jardin orientés plein sud, une toiture libre ; il hésite entre 3 et 6 kWc et se demande si une batterie se rembourse avec un profil de consommation surtout hivernal.
+- **65 · Propriétaire d'une climatisation réversible non connectée** — Une clim réversible posée il y a deux ans, sans module connecté ; il sait qu'elle tourne l'été et en mi-saison, mais ne la voit nulle part dans l'appli.
+- **66 · Électricien qui lit les tableaux électriques** — Ouvre le tableau avant de conseiller : quel circuit porte quoi, lequel est mesuré par une pince, lequel ne l'est par rien. Lit les puissances en kVA et les délestages sans traduction.
+- **67 · Utilisateur qui ne veut aucun rechargement surprise (PWA)** — A installé l'appli sur l'écran d'accueil ; un rechargement au milieu d'une lecture, ou une page « rechargez » après une mise à jour, lui fait perdre confiance.
+- **68 · Personne qui lit à 200 % en contraste élevé sur un vieux téléphone** — Téléphone de cinq ans, texte du système à 200 %, contraste élevé. Ne fait pas défiler à l'horizontale et repère tout de suite un mot coupé ou un chiffre recouvert.
+- **69 · Propriétaire qui découvre une pièce « hors ligne »** — Ouvre l'appli un matin et lit « hors ligne depuis le 5 nov. » sur une chambre. Veut savoir si les chiffres de l'Accueil sont encore justes et ce qu'il doit faire.
+- **70 · Testeur QA exigeant (balayage e2e)** — Ne croit un test que s'il l'a vu rouge ; lance le balayage sur tous les jeux de données, compare la démo et le site publié, et lit chaque échec attendu.
+- **71 · Propriétaire d'une voiture électrique qui recharge en heures creuses** — Recharge sa voiture la nuit en heures creuses sur une prise renforcée ; veut le coût réel par mois et la preuve que la recharge ne déborde pas en heures pleines.
+- **72 · Aidant qui installe la vue Proche à un parent** — Installe l'appli sur le téléphone de sa mère : premier lancement, vue simple, invitation par QR ; veut que sa mère ne se perde jamais et qu'il sache si le logement reste froid.
