@@ -9,7 +9,7 @@ import { dayShort } from '../glossary';
 import { STOP_REASONS, type StopReason, type StoppedRoom, offlineText, parseStopped, stoppedJson } from '../room-offline';
 import { hasToken, putVariable } from '../settings';
 import { html } from '../trusted';
-import { esc, lastDay } from '../ui';
+import { esc, lastDay, roomColor } from '../ui';
 import { offlineInfo, setStoppedDraft, sharedStopped, stoppedDraft, stoppedRooms } from './offline-rooms';
 import '../simulators.css';
 
@@ -41,7 +41,7 @@ export function mountStopped(card: HTMLElement | null, repo: () => string) {
       list.length
         ? `<ul class="list" aria-label="Radiateurs arrêtés">${list
             .map(
-              (s) => `<li><div class="row"><span class="swatch" style="background:var(--usage-heating)" aria-hidden="true"></span><span><span class="t">${esc(nameOf(s.room))}</span><span class="s">${esc(
+              (s) => `<li><div class="row"><span class="swatch" style="background:${esc(roomColor(s.room))}" aria-hidden="true"></span><span><span class="t">${esc(nameOf(s.room))}</span><span class="s">${esc(
                 `${offlineText({ from: s.from, to: lastDay(), ongoing: true, stopped: s })}${s.label ? ` · ${s.label}` : ''}`,
               )}</span></span><span class="v"><button type="button" class="link" data-stop-remove="${esc(s.room)}">Retirer</button></span><span></span></div></li>`,
             )

@@ -45,9 +45,13 @@ export function createUpdater({ sw, onUpdate, reload, later = setTimeout }: Deps
     reloading = true;
     reload();
   };
+  // The worker of the first visit (none controlled the page at load). Its « installed » event can
+  // reach the page after clients.claim() already made it the controller (seen on WebKit under
+  // load in CI, PR #438): it must never read as a new version.
+  let first: unknown = null;
   const announce = (reg: SwRegistration) => {
     // a version waiting behind one in service; at the first visit there is nothing to replace
-    if (reg.waiting && sw.controller) onUpdate('waiting');
+    if (reg.waiting && sw.controller && reg.waiting !== first) onUpdate('waiting');
   };
   sw.addEventListener('controllerchange', () => {
     if (requested) return reloadOnce();
@@ -57,9 +61,12 @@ export function createUpdater({ sw, onUpdate, reload, later = setTimeout }: Deps
   });
   return {
     watch(reg: SwRegistration) {
+      // not controlled at load: the worker already there (installing or waiting) is the first one
+      if (!hadController) first = reg.installing ?? reg.waiting ?? null;
       announce(reg);
       reg.addEventListener('updatefound', () => {
         const next = reg.installing;
+        if (!hadController && first === null) first = next;
         next?.addEventListener('statechange', () => {
           if (next.state === 'installed') announce(reg);
         });

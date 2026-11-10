@@ -1,21 +1,68 @@
 # Historique des versions
 
-## v1.7 — en cours
+## v1.7 — en cours : finitions et données de la maison
 
-- Simulateur « Panneaux solaires » (Outils › Simulateurs) : courbe Linky à la demi-heure contre un
-  profil PVGIS, 3 / 4,5 / 6 kWc, pilotage du chauffe-eau et de la recharge, batterie 5 et 10 kWh,
-  hypothèses saisies par le propriétaire (#356).
-- Localisation de la maison et de ses toits, gardée seulement chiffrée, envoyée à PVGIS arrondie à
-  environ 1 km (#204).
-- Heures creuses : une seule source pour le simulateur solaire, la recharge du véhicule, les
-  plannings et le bandeau d'horaires : lues dans les relevés à la demi-heure, sinon saisies dans
-  ⚙ Mon contrat (plusieurs plages, à la minute, chiffrées sur l'appareil), sinon 22 h → 6 h dit
-  supposé ; une borne au milieu d'une demi-heure la compte au prorata des minutes (#428).
-- « Expliquer un mois » : le bois du poêle est compté sans les jours de coupure, comme
-  l'électricité, et la ligne « Compté : » le dit (#423).
-- Historique : la ligne « électricité + bois » d'« Hiver contre hiver » est repliée sous son écart
-  (énergie et euros), le détail par hiver à l'intérieur ; l'onglet tient en 4 écrans à 360 px, et
-  l'e2e le mesure à 360 × 800 en DejaVu Sans (#426).
+Version de finitions de la refonte v1.6 et de données de la maison, sans nouvel onglet (cadrage :
+recommandation de [`docs/bmad/revues/v1.6.md`](docs/bmad/revues/v1.6.md) § 9, validée par le
+propriétaire). Revue de fin de version par les **72 personas** et revue design des écrans nouveaux ou
+changés ; détail dans [`docs/bmad/revues/v1.7.md`](docs/bmad/revues/v1.7.md). **Clôture à valider par
+le propriétaire.**
+
+- **Lisibilité, suite de la v1.6**
+  - Historique en deux questions (« Hiver contre hiver », « Consommation en détail ») et six
+    sous-pages avec adresse (`#historique-annees`, `-changements`, `-froid`, `-jours`, `-calendrier`,
+    `-station`) ; plus de « DJU », « pente », « signature » ni « suspect » visibles (#386, #420) ;
+    une période et « Compté : » sous chaque carte, dates locales, couleurs de l'année dans la
+    légende, « An » seulement sur des années entières (#299, #300, #301, #306, #420). L'onglet tient
+    en 4 écrans à 360 px, mesuré à 360 × 800 en DejaVu Sans ; la ligne « électricité + bois »
+    d'« Hiver contre hiver » est repliée sous son écart (#426, #432).
+  - État des données : une ligne par source en tête (« complet depuis 2022 », « muet depuis
+    4 jours »), le détail replié, plus de formulaire dans la page, un seul bilan (13 → 3,3 écrans à
+    360 px) (#387, #419).
+  - Texte à 200 % : au-delà d'environ 120 %, la barre d'onglets montre les icônes et le libellé de
+    l'onglet actif en taille pleine ; espaces insécables entre un nombre et son unité (#389, #419).
+  - Pièces et page Pièce : un sélecteur de période partagé (Mois · Saison · 12 mois · Année),
+    « Compté : » sur chaque carte, le coût de la pièce sur sa page (#388, #425).
+- **Design system et langage** (constats de la revue design v1.6)
+  - Petits textes à 13 px au moins, segments et replis à 44 px, un seul style de sélecteur et de
+    bouton secondaire, un seul titre de page par écran, pas de césure dans la vue Proche, lignes de
+    70 caractères au plus et deux colonnes sur ordinateur, l'iris réservé aux actions (rampe d'encre
+    pour les cartes de chaleur) ; chaque règle tenue par le balayage ou un test (#402 à #405, #407 à
+    #409, #422).
+  - Avertissements de ⚙ Sources en alertes ambre avec un titre court ; « Eau chaude » pour l'usage
+    et « Chauffe-eau » pour l'appareil ; pluriels accordés par une seule fonction (appli et
+    collecteur) ; moins de termes techniques ; « Compté : » écrit par une seule fonction (#401, #406,
+    #427, #429).
+- **Incidents et poêle à bois**
+  - Coupures de courant et d'Internet marquées ⚡ / 🌐 dans « Consommation en détail », jamais
+    jugées « économes » (signature, jours inhabituels, absences), retirées des deux mois d'« Expliquer
+    un mois » (#394, #418).
+  - Poêle à bois : achats en stères (essence, humidité, prix) dans ⚙ Mon logement, chaleur par des
+    hypothèses affichées et modifiables (kWh par stère, rendement), répartie selon le froid ;
+    chauffage électricité + bois dans « Ce qui a compté » de l'Accueil, « Hiver contre hiver » et
+    « Expliquer un mois » (#366, #421) ; le bois sans les jours de coupure, comme l'électricité
+    (#423, #430).
+- **Photovoltaïque et heures creuses**
+  - Simulateur « Panneaux solaires » (Outils › Simulateurs) : courbe Linky à la demi-heure contre
+    un profil PVGIS, 3 / 4,5 / 6 kWc, pilotage du chauffe-eau et de la recharge, batterie 5 et
+    10 kWh, hypothèses saisies par le propriétaire (#356, #424).
+  - Localisation de la maison et de ses toits, gardée seulement chiffrée, envoyée à PVGIS arrondie
+    à environ 1 km (#204, #424).
+  - Heures creuses : une seule source pour le simulateur solaire, la recharge du véhicule, les
+    plannings et le bandeau d'horaires : lues dans les relevés à la demi-heure, sinon saisies dans
+    ⚙ Mon contrat (plusieurs plages, à la minute, chiffrées sur l'appareil), sinon 22 h → 6 h dit
+    supposé ; une borne au milieu d'une demi-heure la compte au prorata des minutes (#428, #431).
+- **Volets Wiser** (avance #200, en attente des vraies données du NAS) : relevé par un script du
+  NAS, journal chiffré envoyé par un workflow, soirs relevés dans l'appli à la place des notes
+  (#417).
+- **Revue de fin de version** : captures de référence régénérées ; radiateur arrêté à la couleur de
+  sa pièce (#436) ; « règle ADR-5 » retirée de ⚙ Sources (#437) ; plus de
+  bandeau « Nouvelle version disponible » à la première visite quand le premier service worker prend
+  la page avant son événement « installé » (vu en WebKit sur la CI).
+- **Reste ouvert** (raison dans chaque issue) : verdict de l'Accueil en électricité seule avec un
+  poêle (#433, bloquant) ; césure à 360 px (#434) et couleurs des heures pleines / creuses (#435),
+  en v1.8 ; volets (#200) en attente du NAS ; plan de la maison (#202) et pince (#281) à sortir du
+  jalon.
 
 ## v1.6 — novembre 2026 : refonte UX/UI, nouveau design system, écrans reconstruits
 

@@ -411,5 +411,5 @@ function iaRateLine() {
   const r = usefulRate(loadVotes(), localDay());
   return `<p class="hint muted">Analyse IA jugée utile sur cet appareil : ${
     r.rated ? `<strong>${r.useful} sur ${r.rated}</strong> analyse${r.rated > 1 ? 's' : ''} notée${r.rated > 1 ? 's' : ''} des 3 derniers mois` : 'aucune analyse notée sur les 3 derniers mois'
-  } (règle ADR-5 : la garder si elle est utile au moins 2 mois sur 3 ; notez-la dans Outils → Analyse du mois).</p>`;
+  } (elle est gardée si elle est utile au moins 2 mois sur 3 ; notez-la dans Outils → Analyse du mois).</p>`;
 }

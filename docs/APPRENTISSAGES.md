@@ -110,3 +110,15 @@ quand un outil la rend impossible à refaire.
 - **Conduite** : une dépendance de temps (ou de tout outil) d'un script shell s'injecte par une
   variable que le script lit lui-même (`VOLETS_MAINTENANT`), pas par PATH ; un test qui tourne sous
   plusieurs shells se lit d'abord sur le runner avant d'être cru.
+
+### A12 · 10/11/2026 — Un « Accueil trop long » en WebKit était un bandeau de service worker (PR #438)
+
+- **Ce qui s'est passé** : sur la CI, `e2e-webkit` a vu l'Accueil à 2 676 px et État à 2 727 px
+  (+232 px), deux fois de suite, puis vert à la relance ; l'hypothèse « une hauteur qui dépend de
+  l'heure » ne tenait pas (mêmes hauteurs à 14 h, 22 h 15 et 23 h 30, en UTC et heure de Paris). La
+  capture de l'artefact `captures-webkit` montrait le bandeau « Nouvelle version disponible » à la
+  première visite : l'événement « installed » du premier service worker arrivait après
+  `clients.claim()`, et la page le prenait pour une nouvelle version.
+- **Conduite** : un e2e qui échoue sur la CI seulement se lit d'abord sur sa **capture** (artefact),
+  avant toute hypothèse ; l'ordre des événements du service worker ne se suppose pas d'un moteur à
+  l'autre (`createUpdater` retient le premier worker, test « claim avant installed » vu rouge).
