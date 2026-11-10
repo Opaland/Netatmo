@@ -5,7 +5,7 @@
 // appliances): no heating below it. Pure functions, no DOM.
 import { type DayRecord, seasonOf } from './aggregate';
 import type { Weather } from './analysis';
-import { type StationModule, heatedModules, isOutdoor } from './comfort';
+import { type StationModule, heatedModules, indoorModules, isOutdoor } from './comfort';
 
 export const MIN_DAYS = 30;
 
@@ -75,10 +75,12 @@ export interface StationDaily {
  */
 export function indoorModule(st: StationDaily, mapping: Map<string, string>, records: DayRecord[]): string | null {
   const heated = heatedModules(st.modules);
-  if (!heated.length) return null;
+  // a module linked to a heated room counts, whatever its name (« Cave » in a bedroom)
+  const indoor = indoorModules(st.modules);
   const per = new Map<string, number>();
   for (const r of records) if (r.cat === 'heating' && mapping.has(r.room)) per.set(r.room, (per.get(r.room) ?? 0) + r.kwh);
-  const top = [...per].sort((a, b) => b[1] - a[1]).map(([room]) => mapping.get(room)!).find((k) => heated.includes(k));
+  const top = [...per].sort((a, b) => b[1] - a[1]).map(([room]) => mapping.get(room)!).find((k) => indoor.includes(k));
+  if (!top && !heated.length) return null;
   return top ?? heated.find((k) => st.modules[k].type === 'NAMain') ?? heated[0];
 }
 

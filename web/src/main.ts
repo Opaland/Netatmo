@@ -116,6 +116,8 @@ function render() {
   if (location.hash !== `#${key}`) history.replaceState({ depth: depth() }, '', `#${key}`);
   const changed = shownRoute !== null && shownRoute !== key;
   const focus = changed ? null : focusSelector(document.activeElement);
+  // a redraw of the same page (a segment, a filter, a setting) keeps the reader where they were
+  const keepY = shownRoute === key ? window.scrollY : null;
   const keepTab = changed && (document.activeElement as HTMLElement | null)?.closest?.('.tabs') ? focusSelector(document.activeElement) : null;
   disposeAll(app);
   const { meta } = ds;
@@ -134,7 +136,7 @@ function render() {
   if (route.page === 'piece' && tipPending(demo)) dismissTip(demo);
   if (route.page === 'bienvenue') {
     app.innerHTML = html`${onboardingHeader()}<main id="view" class="onboarding" data-page="${esc(key)}"></main>`;
-    return finishRender(route, key, changed, focus, null);
+    return finishRender(route, key, changed, focus, null, keepY);
   }
   app.innerHTML = html`
   <header class="top" data-swipe="${swipePeriod(route) ? 'period' : 'tab'}">
@@ -161,13 +163,44 @@ function render() {
   }
   ${tipHtml(route)}
   <main id="view" data-page="${esc(key)}"></main>`;
-  finishRender(route, key, changed, focus, keepTab);
+  finishRender(route, key, changed, focus, keepTab, keepY);
 }
 
-function finishRender(route: Route, key: string, changed: boolean, focus: string | null, keepTab: string | null) {
+/**
+ * Retours v1.6: the whole shell is drawn again on every change of state, which empties the page
+ * for a moment and sends the browser back to the top. Put the scroll position back, and hold it
+ * while the lazy cards and charts of the page fill in (they make the page tall again), until the
+ * reader scrolls or the view has settled.
+ */
+let releaseScroll: (() => void) | null = null;
+function holdScroll(y: number) {
+  releaseScroll?.();
+  window.scrollTo(0, y);
+  if (y <= 0) return;
+  let frame = 0;
+  const until = performance.now() + 3000;
+  const stop = () => {
+    cancelAnimationFrame(frame);
+    for (const t of ['wheel', 'touchstart', 'keydown', 'pointerdown'] as const) window.removeEventListener(t, stop, true);
+    releaseScroll = null;
+  };
+  for (const t of ['wheel', 'touchstart', 'keydown', 'pointerdown'] as const) window.addEventListener(t, stop, { capture: true, passive: true });
+  releaseScroll = stop;
+  const tick = () => {
+    if (Math.abs(window.scrollY - y) > 1) window.scrollTo(0, y);
+    const settled = document.querySelector('#view[data-ready]') && Math.abs(window.scrollY - y) <= 1;
+    if (settled || performance.now() > until) return stop();
+    frame = requestAnimationFrame(tick);
+  };
+  frame = requestAnimationFrame(tick);
+}
+
+function finishRender(route: Route, key: string, changed: boolean, focus: string | null, keepTab: string | null, keepY: number | null) {
   renderView(document.getElementById('view')!, route);
   shownRoute = key;
+  if (keepY !== null && !changed) holdScroll(keepY);
   if (changed) {
+    releaseScroll?.();
     window.scrollTo(0, 0);
     // a sub-page announces itself: its title takes the focus; a tab keeps it on the tab bar
     queueMicrotask(() => {
