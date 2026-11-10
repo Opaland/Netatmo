@@ -176,6 +176,46 @@ export function accentData(files: Record<string, string>): string[] {
   return found;
 }
 
+/** The text parts of the string literals of a module (the `${…}` of a template left out). */
+function texts(code: string): string[] {
+  const out: string[] = [];
+  for (const m of stripTs(code).matchAll(/(['"`])((?:(?!\1)[^\\\n]|\\.)*)\1/g)) {
+    let s = m[2];
+    // the strings inside a `${…}` are texts too (« ${low ? ' ⚠️' : ''} »)
+    for (let i = 0; i < 5 && s.includes('${'); i++) s = s.replace(/\$\{([^{}]*)\}/g, (_, inner: string) => (out.push(...texts(inner)), ' '));
+    out.push(s);
+  }
+  return out;
+}
+/**
+ * #401: a warning says so with the icon of alert() / alertHtml(), not with an emoji; #406: a count
+ * is agreed with its noun (plural() of glossary.ts), never « jour(s) ». In the texts of the views:
+ * `file: text`. Left aside: the inline mark of the verdict of Accueil (« ⚠ hors Chambre enfant »,
+ * hidden from assistive tech, #383) and the icons of the incident log (one per kind).
+ */
+const EMOJI_ALLOWED = [
+  { file: 'views/home.ts', literal: '<span aria-hidden="true">⚠ </span>' },
+  { file: 'incidents.ts', literal: '⚠' },
+  { file: 'incidents.ts', literal: '🔋' },
+];
+/** #427: « Compté : » is written by countedNote / countedInner / countedText (components.ts) only. */
+export function countedLiterals(files: Record<string, string>): string[] {
+  return Object.entries(files)
+    .filter(([file]) => !file.endsWith('.css') && file !== 'components.ts')
+    .flatMap(([file, text]) => texts(text).filter((t) => /Compté[\s\u00a0]*:/.test(t)).map((t) => `${file}: « ${t.trim().slice(0, 50)} »`));
+}
+export function wordingFaults(files: Record<string, string>): string[] {
+  const found: string[] = [];
+  for (const [file, text] of Object.entries(files)) {
+    if (file.endsWith('.css')) continue;
+    for (const t of texts(text)) {
+      for (const m of t.matchAll(/[\p{L}]{2,}\((?:s|x|es)\)/gu)) found.push(`${file}: « ${m[0]} »`);
+      if (/[⚠🔋❗]/u.test(t) && !EMOJI_ALLOWED.some((a) => file.endsWith(a.file) && t.includes(a.literal))) found.push(`${file}: émoji d'avertissement « ${t.trim().slice(0, 50)} »`);
+    }
+  }
+  return found;
+}
+
 const files = Object.fromEntries([...CSS, ...TS].map((f) => [f, read(f)]));
 
 describe('design system usage (#317)', () => {
@@ -192,6 +232,28 @@ describe('design system usage (#317)', () => {
 
   it('no old message or on / off class comes back', () => {
     expect(oldClassUses(files)).toEqual([]);
+  });
+
+  it('#401, #406: no warning emoji, no « word(s) » in the texts of the app', () => {
+    expect(wordingFaults(files)).toEqual([]);
+  });
+
+  it('#427: « Compté : » is written by the shared component only', () => {
+    expect(countedLiterals(files)).toEqual([]);
+    expect(files['components.ts']).toContain("const COUNTED = 'Compté :'");
+    expect(countedLiterals({ 'views/x.ts': 'const a = `<p class="counted"><span class="counted-k">Compté :</span> ${t}</p>`; // Compté : ok' })).toHaveLength(1);
+    expect(countedLiterals({ 'views/x.ts': "// « Compté : … » in a comment\nconst a = countedNote('x');" })).toEqual([]);
+  });
+
+  it('#406: one plural(), in glossary.ts (AGENTS.md §5)', () => {
+    const copies = Object.entries(files).filter(([f, t]) => f !== 'glossary.ts' && /\b(?:const|function)\s+plural\b/.test(stripTs(t)));
+    expect(copies.map(([f]) => f)).toEqual([]);
+  });
+
+  it('the wording guard sees what it guards', () => {
+    expect(wordingFaults({ 'views/x.ts': 'const a = `${n} jour(s) au-dessus`;' })).toEqual(['views/x.ts: « jour(s) »']);
+    expect(wordingFaults({ 'views/x.ts': "const a = `${h.low ? ' ⚠️' : ''}`;" })).toHaveLength(1);
+    expect(wordingFaults({ 'views/x.ts': 'const a = get(s); const b = `${xs.map((s) => esc(s)).join(\', \')}`;' })).toEqual([]);
   });
 
   it('#402: one look for every select, defined once (other rules only place it)', () => {

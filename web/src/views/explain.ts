@@ -3,7 +3,7 @@
 // the change drawn from 0 (no zoomed axis), the rooms, the rooms offline (#346), and how it is
 // computed. Loaded on demand (pages.ts); the computations are in explain.ts.
 import { activeRooms, ds } from '../app';
-import { alert, howDetails, list } from '../components';
+import { alert, howDetails, list, countedText } from '../components';
 import { type Explanation, STEP_LABEL, type Step, explainMonth, explainWood, explainSentence, explainableMonths, kwhSigned, stepNote } from '../explain';
 import { dayShort, monthLong, monthShort, rangeLabel, signedPct } from '../glossary';
 import { offlineText } from '../room-offline';
@@ -55,7 +55,7 @@ export function renderExplain(view: HTMLElement, asked?: string) {
   // #423: the wood on the same days as the electricity (the cuts left out of both)
   const w = woodSettings().purchases.length ? explainWood(woodDays(), e) : null;
   const wood = w && (w.now.kwh >= 1 || w.ref.kwh >= 1) ? w : null;
-  const counted = `Compté : ${e.basis === 'linky' ? 'tout le logement (compteur Linky)' : 'radiateurs et chauffe-eau (sans compteur Linky)'}, ${rangeLabel(e.from, e.to)}, comparé aux mêmes jours de ${monthLong(e.refFrom)}${cutScope(e, !!wood)}`;
+  const counted = countedText(`${e.basis === 'linky' ? 'tout le logement (compteur Linky)' : 'radiateurs et chauffe-eau (sans compteur Linky)'}, ${rangeLabel(e.from, e.to)}, comparé aux mêmes jours de ${monthLong(e.refFrom)}${cutScope(e, !!wood)}`);
   const up = e.delta >= 0;
   const head = Math.abs(e.pct) < 3 ? 'Comme l’an dernier' : `${kwhSigned(e.delta)} vs ${monthShort(e.refFrom)}`;
   view.innerHTML = html(`<div class="periodbar">${select}<p class="scope" aria-live="polite">${esc(counted)}</p></div>

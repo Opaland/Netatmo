@@ -86,7 +86,7 @@ export function waterHeaterCard(): string {
         hc.months
           .slice()
           .reverse()
-          .map((m) => [monthLabel(m.month), fmtKwh(m.off), fmtKwh(m.peak), `${pctTxt(m.share)}${belowThreshold(m.share, thr) ? ' ⚠' : ''}`]),
+          .map((m) => [monthLabel(m.month), fmtKwh(m.off), fmtKwh(m.peak), `${pctTxt(m.share)}${belowThreshold(m.share, thr) ? ' (bas)' : ''}`]),
       ),
     )}
     ${ds!.meta.has_roomstate ? '<p class="hint" id="contactor-line" hidden></p>' : ''}

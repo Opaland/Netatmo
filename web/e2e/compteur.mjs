@@ -126,7 +126,7 @@ try {
     });
     await openDemo(page);
     await go(page, 'compteur');
-    check(/Le filtre « Chauffe-eau » ne s'applique pas ici/.test(await page.locator('.periodbar .scope').innerText()), 'filtre Chauffe-eau non signalé sur le Compteur');
+    check(/Le filtre « Eau chaude » ne s'applique pas ici/.test(await page.locator('.periodbar .scope').innerText()), 'filtre Eau chaude non signalé sur le Compteur');
     await ctx.close();
   }
 

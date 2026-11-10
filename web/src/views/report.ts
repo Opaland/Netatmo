@@ -100,7 +100,7 @@ export function renderReport(view: HTMLElement) {
           : ''
       }
       <article class="kpi"><h3>Chauffage / chauffe-eau</h3><p class="kpi-value">${nf0.format((sum(yr, 'heating') / Math.max(tot, 1)) * 100)} % / ${nf0.format((sum(yr, 'water_heater') / Math.max(tot, 1)) * 100)} %</p><p class="kpi-sub">${fmtKwh(sum(yr, 'heating'))} · ${fmtKwh(sum(yr, 'water_heater'))}</p></article>
-      ${w && wPrev ? `<article class="kpi"><h3>Rigueur de l'hiver (DJU)</h3><p class="kpi-value">${nf0.format(w.dju)}</p><p class="kpi-sub">${delta(w.dju, wPrev.dju, "de froid vs l'hiver précédent")}</p></article>` : ''}
+      ${w && wPrev ? `<article class="kpi"><h3>Rigueur de l'hiver (degrés-jours)</h3><p class="kpi-value">${nf0.format(w.dju)}</p><p class="kpi-sub">${delta(w.dju, wPrev.dju, "de froid vs l'hiver précédent")}</p></article>` : ''}
     </div>
     <h3>Faits marquants</h3>
     <ul class="facts">

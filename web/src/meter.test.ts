@@ -47,8 +47,8 @@ describe('what a card counts (#301)', () => {
   });
   it('names the room filter that does not apply to the meter', () => {
     expect(filterNote({ cat: 'all', catLabel: '', rooms: 7, allRooms: 7 })).toBe('');
-    expect(filterNote({ cat: 'water_heater', catLabel: 'Chauffe-eau', rooms: 1, allRooms: 7 })).toBe(
-      "Le filtre « Chauffe-eau · 1 pièce sur 7 » ne s'applique pas ici : le compteur mesure tout le logement.",
+    expect(filterNote({ cat: 'water_heater', catLabel: 'Eau chaude', rooms: 1, allRooms: 7 })).toBe(
+      "Le filtre « Eau chaude · 1 pièce sur 7 » ne s'applique pas ici : le compteur mesure tout le logement.",
     );
   });
 });
