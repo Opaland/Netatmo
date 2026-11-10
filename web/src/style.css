@@ -475,6 +475,14 @@ html {
   vertical-align: baseline;
   flex: none;
 }
+/* #399: the outdoor module of the station, a dashed grey line in the chart, the same in its table. */
+.swatch.swatch-dashed {
+  width: 16px;
+  height: 0;
+  border-radius: 0;
+  border-top: 3px dashed;
+  vertical-align: middle;
+}
 .chips {
   display: flex;
   flex-wrap: wrap;
