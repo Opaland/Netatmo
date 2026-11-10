@@ -7,6 +7,8 @@
   hypothèses saisies par le propriétaire (#356).
 - Localisation de la maison et de ses toits, gardée seulement chiffrée, envoyée à PVGIS arrondie à
   environ 1 km (#204).
+- « Expliquer un mois » : le bois du poêle est compté sans les jours de coupure, comme
+  l'électricité, et la ligne « Compté : » le dit (#423).
 
 ## v1.6 — novembre 2026 : refonte UX/UI, nouveau design system, écrans reconstruits
 

@@ -182,7 +182,10 @@ try {
       await page.evaluate(() => (location.hash = '#outils-expliquer-2026-10'));
       await shown(page, 'outils-expliquer-2026-10');
       const oct = await page.locator('#view .periodbar .scope').innerText();
-      check(/sans le 14 oct\. \(coupure de courant\) ni le 31 oct\. \(coupure Internet\) : jours retirés des deux mois$/.test(oct), `${name} : octobre 2026 compte les jours de coupure (« ${oct} »)`);
+      check(/sans le 14 oct\. \(coupure de courant\) ni le 31 oct\. \(coupure Internet\) : jours retirés des deux mois/.test(oct), `${name} : octobre 2026 compte les jours de coupure (« ${oct} »)`);
+      // #423: the stove's wood skips the same days, and the line says so when the wood card is there
+      const woodShown = (await page.locator('#explain-wood').count()) > 0;
+      check(woodShown && /des deux mois, bois du poêle compris$/.test(oct), `${name} : octobre 2026, le bois compté les jours de coupure (« ${oct} »)`);
       check((await wide(page)) <= 1, `${name} : défilement horizontal sur octobre 2026 (${await wide(page)} px)`);
     }
 
