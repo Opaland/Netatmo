@@ -28,6 +28,7 @@ import {
   simWindow,
   yearlyPerKwc,
 } from '../solar';
+import { localDay } from '../glossary';
 import { html } from '../trusted';
 import { esc, fmtEur, hcHpAt, lastDay, longDate, nf0, table, tableToggle } from '../ui';
 import '../simulators.css';
@@ -222,7 +223,7 @@ function drawProfile(pz: HTMLElement, view: HTMLElement, d: NonNullable<typeof d
         importMsg = { ok: false, text: r.error };
         return draw(view, d);
       }
-      const doc: SolarDoc = { source: 'import', year: r.year, database: r.database, fetched: new Date().toISOString().slice(0, 10), location: null, roofs: [r.roof] };
+      const doc: SolarDoc = { source: 'import', year: r.year, database: r.database, fetched: localDay(), location: null, roofs: [r.roof] };
       const kept = await saveNote(IMPORT_NOTE, d.source, d.key, doc);
       importDoc.reset();
       useImport = true;
