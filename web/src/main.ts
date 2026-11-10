@@ -14,7 +14,7 @@ import { onceReady, track, viewRendered } from './ready';
 import { type Anchor, anchorOf, placeAnchor, scrolledAway } from './scroll-anchor';
 import { framedHtml, isFramed } from './frame';
 import { prefetchForOffline, unavailable, updateNetStatus } from './offline';
-import { PAGES, dataStatus } from './pages';
+import { PAGES, currentSelection, dataStatus, keptFilterHtml } from './pages';
 import { type Route, allowed, parentOf, parseRoute, routeKey, simpleTabs, tabOf, titleOf, visibleTabs } from './router';
 import { IdleLock, REMEMBER_DAYS, clearLockNotice, idleSince, lockNotice, markIdleLock } from './session';
 import { isIos, keyLoss, lossMessage, readMark, writeMark } from './storage';
@@ -114,6 +114,20 @@ function tipHtml(route: Route): string {
   return `<p class="onb-tip" role="note"><span>Touchez une pièce pour son détail.</span> <button type="button" class="btn tertiary" data-tip-ok>Compris</button></p>`;
 }
 
+/**
+ * #301: the selection (usage, rooms) found when the data opens was kept from the last visit: it is
+ * recalled above the pages until it is reset or kept. null: not known yet (data not opened).
+ */
+let keptFilter: boolean | null = null;
+onLock(() => (keptFilter = null));
+function keptFilterBanner(): string {
+  if (keptFilter === null) keptFilter = currentSelection() !== '';
+  if (!keptFilter || state.simple) return '';
+  const h = keptFilterHtml();
+  if (!h) keptFilter = false; // reset since: the recall is over
+  return h;
+}
+
 // ------------------------------------------------------------------ shell
 function render() {
   if (!ds) return;
@@ -172,6 +186,7 @@ function render() {
       : ''
   }
   ${tipHtml(route)}
+  ${keptFilterBanner()}
   <main id="view" data-page="${esc(key)}"></main>`;
   finishRender(route, key, changed, focus, keepTab, keepY);
 }
@@ -339,6 +354,12 @@ async function shellClick(el: HTMLElement, e: MouseEvent): Promise<boolean> {
   }
   if (el.dataset.filterReset !== undefined) {
     setState({ cat: 'all', rooms: null });
+    return true;
+  }
+  if (el.dataset.filterKeep !== undefined) {
+    keptFilter = false;
+    render();
+    app.querySelector<HTMLElement>('#page-title')?.focus();
     return true;
   }
   if (el.dataset.tipOk !== undefined) {

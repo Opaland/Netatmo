@@ -293,13 +293,15 @@ try {
         await go(page, 'compteur');
       }
       if (view === 'historique') {
-        // S-3.7: indoor − outdoor signature (lazy module)
+        // S-3.7: indoor − outdoor signature (lazy module), on its sub-page since #386
+        await go(page, 'historique-froid');
         try {
           await page.waitForSelector('#indoor-sig-chart canvas', { timeout: 15000 });
         } catch (err) {
           errors.push(`${name}/historique: signature intérieur − extérieur non rendue (${err})`);
         }
         // S-13.3: open windows as a possible explanation of the unusual days
+        await go(page, 'historique-jours');
         try {
           await page.waitForFunction(() => {
             const t = document.querySelector('#unusual-card')?.textContent ?? '';
@@ -308,6 +310,7 @@ try {
         } catch (err) {
           errors.push(`${name}/historique: explication des jours inhabituels absente (${err})`);
         }
+        await go(page, 'historique');
       }
       const charts = await page.locator('.chart canvas').count();
       if (!charts && !['outils', 'parametres'].includes(view)) errors.push(`${name}/${view}: aucun graphique rendu`);

@@ -12,6 +12,7 @@ import { uncertainDays } from './quality';
 import { html } from '../trusted';
 import { dayLong, seasonLabel } from '../glossary';
 import { alertHtml } from '../components';
+import { countedHtml } from './compare';
 
 
 export function renderIndoorSignature(card: HTMLElement, records: DayRecord[]) {
@@ -27,17 +28,17 @@ export function renderIndoorSignature(card: HTMLElement, records: DayRecord[]) {
   const latest = withDelta[withDelta.length - 1];
   const name = esc(st.modules[indoor].name);
   card.hidden = false;
-  card.innerHTML = html`<div class="card-head"><h2>Signature intérieur − extérieur <small class="muted">${name} − dehors</small></h2></div>
-    <p class="hint muted">Même nuage de jours, mais selon l'<strong>écart</strong> entre ${name} (station Netatmo) et l'extérieur. La <strong>pente</strong>
-    (kWh par degré d'écart) mesure les pertes du logement (isolation, renouvellement d'air), quel que soit le réglage du thermostat ;
-    le <strong>seuil</strong> est l'écart couvert par les apports gratuits (soleil, occupants, appareils) : en dessous, pas de chauffage.
-    Mêmes jours que la signature ci-dessus ; les valeurs sont dans son tableau.</p>
+  card.innerHTML = html`<div class="card-head"><h2>Chauffage selon l'écart dedans − dehors <small class="muted">${name} − dehors</small></h2><span class="card-period">${esc(seasonLabel(Number(latest?.season.slice(0, 4) ?? seasonOf(lastDay()).slice(0, 4))))}</span></div>
+    <p class="hint muted">Les mêmes jours, mais selon l'<strong>écart</strong> de température entre ${name} (station Netatmo) et dehors.
+    Les kWh de plus pour chaque degré d'écart disent ce que le logement perd (isolation, air renouvelé), quel que soit le réglage des radiateurs ;
+    l'écart à partir duquel on chauffe est celui que couvrent la chaleur gratuite (soleil, occupants, appareils) : en dessous, pas de chauffage.
+    Les valeurs sont dans le tableau de la carte ci-dessus.</p>
     ${
       latest
         ? `<div class="chart tall" id="indoor-sig-chart" role="img" aria-label="Chauffage selon l'écart intérieur − extérieur"></div>`
         : alertHtml('info', `Données insuffisantes : il faut au moins ${MIN_DAYS} jours de chauffage avec la température de ${name} et de l'extérieur dans une saison.`)
     }
-`;
+    ${countedHtml(true)}`;
   // #303: one table for both signatures (same days, same fit), under the outdoor chart
   const tbl = document.getElementById('sig-table');
   if (tbl) tbl.innerHTML = html(signatureTable(sigs, Number(seasonOf(lastDay()).slice(0, 4)), true));
@@ -51,7 +52,7 @@ export function renderIndoorSignature(card: HTMLElement, records: DayRecord[]) {
   scatterChart(document.getElementById('indoor-sig-chart')!, {
     xName: `Écart ${st.modules[indoor].name} − extérieur (°C)`,
     yName: 'kWh / jour',
-    slopeUnit: "kWh par °C d'écart",
+    slopeUnit: "kWh de plus par °C d'écart",
     series: [
       {
         name: seasonLabel(Number(latest.season.slice(0, 4))),

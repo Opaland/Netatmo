@@ -7,7 +7,7 @@ import { type ResolvedContract, resolveContract } from './contract';
 import { type ContractPeriod, periodAt } from './offers';
 import { type HcHp, flatPrice, hcHp, manualHcHp, manualPriceAt } from './pricing';
 import { comparison, seg } from './components';
-import { NO_REFERENCE, dayLong, signedPct } from './glossary';
+import { NO_REFERENCE, dayLong, localDay, signedPct } from './glossary';
 import { effectiveMapping, isOutdoor as outdoorModule } from './comfort';
 import type { Station } from './data';
 import { tenant } from './tenant';
@@ -47,7 +47,7 @@ export function tableToggle(content: string) {
 
 // ------------------------------------------------------------------ dates and filters
 export function lastDay(): string {
-  return ds!.meta.last_day ?? new Date().toISOString().slice(0, 10);
+  return ds!.meta.last_day ?? localDay();
 }
 export function firstDay(): string {
   return ds!.meta.first_day ?? lastDay();

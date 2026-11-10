@@ -18,8 +18,8 @@ describe('résumés par type de graphique (#305)', () => {
     expect(s).toContain('plus forte baisse : Salon −310 kWh');
     expect(s).toContain('plus forte hausse : Bureau +12 kWh');
   });
-  it('signature : jours et pente par saison', () => {
-    expect(slopeSummary([{ name: '2025–2026', days: 228, slope: -2.33, unit: 'kWh par °C' }])).toBe('2025–2026 : 228 jours, pente 2,3 kWh par °C');
+  it('chauffage selon le froid : jours et kWh par degré, sans le mot « pente » (#386)', () => {
+    expect(slopeSummary([{ name: '2025–2026', days: 228, slope: -2.33, unit: 'kWh de plus par °C de froid' }])).toBe('2025–2026 : 228 jours, 2,3 kWh de plus par °C de froid');
   });
   it('calendrier : total, moyenne et jour le plus consommateur', () => {
     const s = daysSummary(

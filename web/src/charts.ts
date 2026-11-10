@@ -385,7 +385,7 @@ function barRows(
   const zero = -opts.min;
   const legend =
     opts.legend && opts.legend.length > 1
-      ? `<p class="hbars-legend">${opts.legend.map((l) => `<span><i style="background-color:${escapeHtml(l.color)}"></i>${escapeHtml(l.name)}</span>`).join('')}</p>`
+      ? `<p class="hbars-legend">${opts.legend.map((l) => `<span><i style="background:${escapeHtml(l.color)}"></i>${escapeHtml(l.name)}</span>`).join('')}</p>`
       : '';
   const bar = (b: BarRow['bars'][number]) =>
     `<span class="hbar-bar"><span class="hbar-track"><i${b.alt ? ' class="alt"' : ''} style="left:${pct(b.value < 0 ? zero + b.value : zero)};width:${pct(Math.abs(b.value))};background-color:${escapeHtml(b.color)}"></i></span><span class="hbar-value${b.alt ? ' muted' : ''}">${escapeHtml(b.text)}</span></span>`;
@@ -665,6 +665,9 @@ export function lineChart(
   );
 }
 
+/** The distinct colours of a series coloured bar by bar, in order (its legend swatch, #300). */
+const spread = (colors: string[]) => [...new Set(colors)];
+
 export function hbarChart(
   el: HTMLElement,
   opts: { labels: string[]; series: Series[]; price: number | null; onClick?: (index: number) => void; unit?: string },
@@ -695,7 +698,7 @@ export function hbarChart(
           return { value: Math.max(0, v ?? 0), color: s.colors?.[i] ?? s.color, text: v == null ? '—' : nf0.format(v), alt: k > 0 };
         }),
       })),
-      { min: 0, max, valueWidth: '3.5em', legend: opts.series.map((s) => ({ name: s.name, color: s.color })), onClick: opts.onClick },
+      { min: 0, max, valueWidth: '3.5em', legend: opts.series.map((s) => ({ name: s.name, color: s.colors?.length ? `linear-gradient(90deg, ${spread(s.colors).join(', ')})` : s.color })), onClick: opts.onClick },
     );
     return;
   }
@@ -731,7 +734,11 @@ export function hbarChart(
         data: s.colors ? s.data.map((v, j) => ({ value: v, itemStyle: { color: s.colors![j] } })) : s.data,
         barMaxWidth: 18,
         barGap: '20%',
-        itemStyle: { color: s.color, borderRadius: [0, 4, 4, 0] },
+        // #300: a series coloured bar by bar (a room each) has a legend in all its colours, not a grey
+        itemStyle: {
+          color: s.colors?.length ? { type: 'linear' as const, x: 0, y: 0, x2: 1, y2: 0, colorStops: spread(s.colors).map((c, j, a) => ({ offset: a.length > 1 ? j / (a.length - 1) : 0, color: c })) } : s.color,
+          borderRadius: [0, 4, 4, 0],
+        },
         label:
           i === 0
             ? { show: true, position: 'right', color: cssVar('--text-muted'), formatter: (p: { value: number }) => nf0.format(p.value) }
@@ -893,8 +900,8 @@ export function scatterChart(el: HTMLElement, opts: { series: ScatterSeries[]; x
   // #305: days and slope of each season, read instead of the canvas
   label(
     el,
-    'Signature',
-    slopeSummary(opts.series.map((s) => ({ name: s.name, days: s.points.length, slope: s.fit?.slope ?? null, unit: opts.slopeUnit ?? 'kWh par °C' }))),
+    'Chauffage selon le froid',
+    slopeSummary(opts.series.map((s) => ({ name: s.name, days: s.points.length, slope: s.fit?.slope ?? null, unit: opts.slopeUnit ?? 'kWh de plus par °C de froid' }))),
   );
   const leg = legendLayout(
     opts.series.map((s) => s.name),
