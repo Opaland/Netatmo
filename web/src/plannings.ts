@@ -4,6 +4,7 @@
 // really warmed, what that cost in peak / off-peak hours, and whether starting earlier, in the
 // off-peak hours, would cost less. Read-only: nothing here, nor in the view, changes a radiator.
 // Pure functions, no DOM: unit-tested in plannings.test.ts.
+import { rangesFromR30, slotMask } from './offpeak';
 import { type Room30, SLOTS, unpack } from './room30';
 
 /** A rise of the requested temperature of at least this much starts a comfort slot (°C). */
@@ -17,19 +18,13 @@ const LIVING = 10;
 /** A comfort start reached in more than 2 h is late. */
 export const LATE_SLOTS = 4;
 
-/** Whether each half hour of the day is an off-peak one, read from where the energy went (HP or HC). Null without off-peak energy. */
+/**
+ * Whether each half hour of the day is an off-peak one, read from where the energy went (HP or HC):
+ * the shared reading of offpeak.ts (#428). Null without off-peak energy.
+ */
 export function offPeakMask(r30: Room30, from: string, to: string): boolean[] | null {
-  const hp = new Array<number>(SLOTS).fill(0);
-  const hc = new Array<number>(SLOTS).fill(0);
-  for (const days of r30.values()) {
-    for (const [d, cols] of days) {
-      if (d < from || d > to) continue;
-      unpack(cols[0]).forEach((v, i) => (hp[i] += v ?? 0));
-      unpack(cols[1]).forEach((v, i) => (hc[i] += v ?? 0));
-    }
-  }
-  const mask = hc.map((v, i) => v > 0 && v >= hp[i]);
-  return mask.some(Boolean) ? mask : null;
+  const ranges = rangesFromR30(r30, from, to);
+  return ranges ? slotMask(ranges) : null;
 }
 
 /** Days left out of the analysis (absences: the schedule did not run). */

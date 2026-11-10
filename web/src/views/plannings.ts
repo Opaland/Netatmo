@@ -11,7 +11,8 @@ import { homeAwayHours } from '../away';
 import { alert, card, legend, list, scheduleBand, tile } from '../components';
 import { loadRoom30, loadRoomState } from '../data';
 import { dayShort, fmt1, hourMin, hourRange } from '../glossary';
-import { offPeakRanges, scheduleOf } from '../piece';
+import { type HcRange, rangesFromR30, rangesText, slotMask, toHours } from '../offpeak';
+import { scheduleOf } from '../piece';
 import {
   LATE_SLOTS,
   REACHED_TOL,
@@ -21,7 +22,6 @@ import {
   ecoRate,
   energySplit,
   groupRises,
-  offPeakMask,
   rises,
   suggestShift,
   verdict,
@@ -89,8 +89,9 @@ function render(r30: Room30, away: Map<string, number>): string {
   if (!to) return card({ title: 'Mes plannings et les heures creuses', body: '<p class="hint">Pas encore de relevé à la demi-heure.</p>' });
   const from = addDays(to, -(DAYS - 1));
   const skip = new Set([...away].filter(([day, h]) => h >= 12 && day >= from && day <= to).map(([day]) => day));
-  const mask = offPeakMask(r30, from, to);
-  const off = offPeakRanges(r30, from, to);
+  // #428: the off-peak hours read in the half hours, shared with the simulators (offpeak.ts)
+  const off = rangesFromR30(r30, from, to) ?? [];
+  const mask = off.length ? slotMask(off) : null;
   const p = hcHpAt(to);
   const prices = mask && p && p.hp > p.hc ? { hp: p.hp, hc: p.hc } : null;
   const rooms = activeRooms().filter((r) => r.category === 'heating');
@@ -155,7 +156,7 @@ function render(r30: Room30, away: Map<string, number>): string {
 }
 
 /** The schedule of the most recent day with one, over the off-peak hours. */
-function band(r30: Room30, id: string, from: string, to: string, skip: Set<string>, off: [number, number][], name: string): string {
+function band(r30: Room30, id: string, from: string, to: string, skip: Set<string>, off: HcRange[], name: string): string {
   const days = [...(r30.get(id) ?? new Map()).keys()].filter((d) => d >= from && d <= to && !skip.has(d)).sort().reverse();
   for (const day of days) {
     const sched = scheduleOf(unpack(r30.get(id)!.get(day)![3]));
@@ -163,8 +164,8 @@ function band(r30: Room30, id: string, from: string, to: string, skip: Set<strin
     const comfort = sched.slots.filter((s) => s.kind === 'comfort').map((s) => hourRange(s.from, s.to));
     return `${scheduleBand({
       slots: sched.slots,
-      offPeak: off,
-      label: `${name}, planning du ${dayShort(day)} : confort (${fmt1(sched.comfort)} °C) ${comfort.join(', ')}, économie (${fmt1(sched.eco)} °C) le reste du temps${off.length ? ` ; heures creuses ${off.map(([a, b]) => hourRange(a, b)).join(', ')}` : ''}`,
+      offPeak: toHours(off),
+      label: `${name}, planning du ${dayShort(day)} : confort (${fmt1(sched.comfort)} °C) ${comfort.join(', ')}, économie (${fmt1(sched.eco)} °C) le reste du temps${off.length ? ` ; heures creuses ${rangesText(off)}` : ''}`,
     })}${legend([
       { label: `Confort ${fmt1(sched.comfort)} °C`, color: '--usage-heating' },
       { label: `Économie ${fmt1(sched.eco)} °C`, color: '--usage-other' },

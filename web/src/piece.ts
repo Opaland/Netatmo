@@ -107,39 +107,6 @@ export function modeText(s: Schedule, slot: number): string {
   return `${now[0].toUpperCase()}${now.slice(1)} jusqu’à ${hourMin(Math.floor(m.until), Math.round((m.until % 1) * 60))}, puis ${name(m.next)} ${temp(m.next)}`;
 }
 
-/**
- * Off-peak hours, read from where the energy of the half hours was counted (HP / HC columns) over
- * [from, to], every room: a half hour is off-peak when most of its energy went to HC. Ranges of
- * hours [from, to) (a range over midnight has to < from); none when HC is never or always used.
- */
-export function offPeakRanges(r30: Room30, from: string, to: string): [number, number][] {
-  const hp = new Array<number>(SLOTS).fill(0);
-  const hc = new Array<number>(SLOTS).fill(0);
-  for (const days of r30.values()) {
-    for (const [d, cols] of days) {
-      if (d < from || d > to) continue;
-      unpack(cols[0]).forEach((v, i) => (hp[i] += v ?? 0));
-      unpack(cols[1]).forEach((v, i) => (hc[i] += v ?? 0));
-    }
-  }
-  const off = hc.map((v, i) => v > 0 && v >= hp[i]);
-  const n = off.filter(Boolean).length;
-  if (!n || n === SLOTS) return [];
-  const ranges: [number, number][] = [];
-  for (let i = 0; i < SLOTS; i++) {
-    if (!off[i]) continue;
-    const last = ranges[ranges.length - 1];
-    if (last && last[1] === i / 2) last[1] = (i + 1) / 2;
-    else ranges.push([i / 2, (i + 1) / 2]);
-  }
-  // a range ending at midnight goes on with the one starting at 0 h
-  if (ranges.length > 1 && ranges[0][0] === 0 && ranges[ranges.length - 1][1] === 24) {
-    const end = ranges.shift()!;
-    ranges[ranges.length - 1][1] = end[1];
-  }
-  return ranges;
-}
-
 // ------------------------------------------------------------------ time at the requested temperature
 /** Setpoints below this are frost guard or « off »: not a temperature anyone asked to live in. */
 export const LIVING_SETPOINT = 10;

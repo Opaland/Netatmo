@@ -23,7 +23,7 @@ import {
 } from './solar';
 
 const TZ = 'Europe/Paris';
-const nightSlot = (i: number) => i >= 44 || i < 12; // 22 h → 6 h
+const nightSlot = Array.from({ length: 48 }, (_, i) => (i >= 44 || i < 12 ? 1 : 0)); // 22 h → 6 h
 const prices = { priceHp: 0.25, priceHc: 0.2, feedIn: 0.04, costPerKwc: 2000, batteryCostPerKwh: 500, batteryEfficiency: 0.9 };
 
 /** A typical year where every day has the same 24 UTC hours (Wh per kWc). */

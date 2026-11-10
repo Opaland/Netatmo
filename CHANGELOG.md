@@ -7,6 +7,10 @@
   hypothèses saisies par le propriétaire (#356).
 - Localisation de la maison et de ses toits, gardée seulement chiffrée, envoyée à PVGIS arrondie à
   environ 1 km (#204).
+- Heures creuses : une seule source pour le simulateur solaire, la recharge du véhicule, les
+  plannings et le bandeau d'horaires : lues dans les relevés à la demi-heure, sinon saisies dans
+  ⚙ Mon contrat (plusieurs plages, à la minute, chiffrées sur l'appareil), sinon 22 h → 6 h dit
+  supposé ; une borne au milieu d'une demi-heure la compte au prorata des minutes (#428).
 
 ## v1.6 — novembre 2026 : refonte UX/UI, nouveau design system, écrans reconstruits
 

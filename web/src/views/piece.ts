@@ -12,6 +12,7 @@ import { alert, comparison, countedNote, howDetails, legend, listRow, periodBar,
 import { type Dataset, loadRoom30, loadRoomState } from '../data';
 import type { DatasetDoc } from '../loader';
 import { BEDROOMS_ID } from '../household';
+import { rangesFromR30, rangesText, toHours } from '../offpeak';
 import { NO_REFERENCE, TEMP, dayLong, dayShort, fmt1, fmtTemp, hourMin, hourRange, vsLabel } from '../glossary';
 import { HOME_PERIODS, type HomeRange, homePeriod, homeRange, scopeTitle } from '../home';
 import { daysBetween } from '../periods';
@@ -24,7 +25,6 @@ import {
   lastReading,
   meanIn,
   modeText,
-  offPeakRanges,
   reasonText,
   scheduleOf,
   tempAxis,
@@ -318,15 +318,15 @@ function nowCard(
     else if (sched) facts.push(['Mode', modeText(sched, reading.slot)]);
     else if (sp && sp.some((v) => v !== null)) facts.push(['Mode', 'température demandée constante']);
     if (sched) {
-      const off = offPeakRanges(r30!, addDays(day, -6), day);
+      const off = rangesFromR30(r30!, addDays(day, -6), day) ?? []; // #428: the shared reading
       const comfort = sched.slots.filter((s) => s.kind === 'comfort').map((s) => hourRange(s.from, s.to));
       const now = reading.slot / 2 + 0.25;
       band = `<p class="section-title">Planning du ${esc(dayShort(day))}</p>${scheduleBand({
         slots: sched.slots,
-        offPeak: off,
+        offPeak: toHours(off),
         now,
         label: `Planning du ${dayLong(day, false)} : confort (${fmt1(sched.comfort)}\u00a0°C) ${comfort.join(', ')}, économie (${fmt1(sched.eco)}\u00a0°C) le reste du temps${
-          off.length ? ` ; heures creuses ${off.map(([a, b]) => hourRange(a, b)).join(', ')}` : ''
+          off.length ? ` ; heures creuses ${rangesText(off)}` : ''
         } ; trait : dernier relevé`,
       })}${legend([
         { label: `Confort ${fmt1(sched.comfort)}\u00a0°C`, color: '--usage-heating' },

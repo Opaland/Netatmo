@@ -404,8 +404,8 @@ export interface SimOptions {
   scenario: Scenario;
   /** Power of what piloting switches on (kW): the water heater, the car. */
   pilotKw: number;
-  /** Off-peak half hour (0–47) of the contract. */
-  offPeak: (slot: number) => boolean;
+  /** Share (0..1) of each half hour (0–47) that is off-peak in the contract (offpeak.ts, #428). */
+  offPeak: readonly number[];
   a: SolarAssumptions;
 }
 
@@ -435,7 +435,7 @@ export function simulate(w: Pick<SimWindow, 'days'>, o: SimOptions): SimResult {
     const prod = d.prod.map((p) => p * o.kwc);
     if (o.scenario.pilot && d.shiftable > 0 && halfMax > 0) {
       // only what the night really drew can be moved
-      const night = cons.reduce((s, x, i) => s + (o.offPeak(i) ? x : 0), 0);
+      const night = cons.reduce((s, x, i) => s + x * (o.offPeak[i] ?? 0), 0);
       let left = Math.min(d.shiftable, night);
       const want = left;
       for (let i = 0; i < 48 && left > 0; i++) {
@@ -447,12 +447,13 @@ export function simulate(w: Pick<SimWindow, 'days'>, o: SimOptions): SimResult {
       }
       const moved = want - left;
       if (moved > 0) {
-        for (let i = 0; i < 48; i++) if (o.offPeak(i) && night > 0) cons[i] -= (cons[i] * moved) / night;
+        if (night > 0) for (let i = 0; i < 48; i++) cons[i] -= (cons[i] * (o.offPeak[i] ?? 0) * moved) / night;
         r.moved += moved;
       }
     }
     for (let i = 0; i < 48; i++) {
-      const price = o.offPeak(i) ? o.a.priceHc : o.a.priceHp;
+      const f = o.offPeak[i] ?? 0;
+      const price = f * o.a.priceHc + (1 - f) * o.a.priceHp;
       before += d.wh[i] * price;
       r.boughtBefore += d.wh[i];
       let net = prod[i] - cons[i];
@@ -565,7 +566,7 @@ export const moneyMissing = (i: SolarInputs) => INPUT_FIELDS.filter(([k]) => MON
  * Every size × scenario over the window, scaled to one year (365 / days of the window). The car
  * charge typed is added to what piloting may move (it is supposed in the curve, at night).
  */
-export function runAll(w: SimWindow, i: SolarInputs, offPeak: (slot: number) => boolean, sizes = SIZES): SizeRows[] {
+export function runAll(w: SimWindow, i: SolarInputs, offPeak: readonly number[], sizes = SIZES): SizeRows[] {
   const evDay = i.evKwhWeek && i.evKw ? (i.evKwhWeek * 1000) / 7 : 0;
   const days = evDay ? w.days.map((d) => ({ ...d, shiftable: d.shiftable + evDay })) : w.days;
   const hasShiftable = days.some((d) => d.shiftable > 0);
