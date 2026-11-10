@@ -29,6 +29,7 @@ import * as rooms from './views/rooms';
 import * as settings from './views/settings';
 import { sharedOriginWarning } from './views/settings';
 import { renderAide } from './views/proche';
+import { mountStopped } from './views/stopped';
 import { onboardingHandlers, renderOnboarding } from './views/onboarding';
 
 export interface Page {
@@ -180,8 +181,24 @@ function renderExports(view: HTMLElement) {
 /** #314: the « et si… » tools look like simulations (dashed cards, label, assumptions recalled). */
 const SIMULATORS = new Set<Tool>(['offres', 'voiture', 'consigne', 'pac', 'teletravail']);
 
+// #337: « Expliquer un mois », loaded on demand
+let explain: typeof import('./views/explain') | null = null;
+function renderExplainTool(view: HTMLElement, month?: string) {
+  if (explain) return explain.renderExplain(view, month);
+  view.innerHTML = html('<p class="empty">Chargement…</p>');
+  void lazyCard(
+    () => import('./views/explain'),
+    (m) => {
+      explain = m;
+      if (view.isConnected) m.renderExplain(view, month);
+    },
+    { zone: view, what: 'Expliquer un mois' },
+  );
+}
+
 function renderTool(view: HTMLElement, route: Route) {
   if (route.page !== 'outil') return;
+  if (route.tool === 'expliquer') return renderExplainTool(view, route.month);
   drawTool(view, route.tool);
   if (SIMULATORS.has(route.tool)) {
     view.classList.add('sim-page');
@@ -209,6 +226,7 @@ function drawTool(view: HTMLElement, t: Tool) {
     void lazyCard(() => import('./views/questions'), (m) => m.mountQuestions(document.getElementById('questions-card')), { zone: 'questions-card', what: 'Questions types' });
     return;
   }
+  if (t === 'expliquer') return renderExplainTool(view);
   const part = ({ consigne: 'consigne', pac: 'pac', teletravail: 'teletravail', absences: 'absences', volets: 'volets', analyse: 'ia' } as const)[t];
   analyse.renderAnalyse(view, records, part);
 }
@@ -338,6 +356,8 @@ function renderSettingsPage(view: HTMLElement, route: Route) {
           (el.innerHTML = html(`<section class="card"><div class="card-head"><h2>Pièces</h2>${scopeTag('foyer')}</div>
           <p class="hint muted">Noms et catégories viennent d'Intuis (collecte). Liaison d'une pièce au module de la station : dans <a href="#confort">Air et confort</a>.</p>
           ${list(activeRooms().map((r) => ({ title: r.name, sub: CATEGORY_LABEL[r.category], color: roomColor(r.id), href: `#${routeKey({ page: 'piece', room: r.id })}` })))}</section>`)),
+        // #346: a radiator switched off on purpose (a stove…) is not « hors ligne »
+        (el) => mountStopped(el, settings.currentRepo),
         (el) => analyse.renderAnalyse(el, records, 'travaux'),
         (el) =>
           (el.innerHTML = html(`<section class="card"><div class="card-head"><h2>Appareils saisis à la main</h2>${scopeTag('appareil')}</div>
@@ -413,7 +433,7 @@ export const PAGES: Record<Route['page'], Page> = {
   compteur: { render: renderMeter },
   'compteur-detail': { render: renderMeter, handlers: [h(undefined, analyse.handleChange)] },
   outils: { render: renderOutils },
-  outil: { render: renderTool, handlers: [h(compare.handleClick, compare.handleChange), h(undefined, analyse.handleChange)], needsData: true },
+  outil: { render: renderTool, handlers: [h(compare.handleClick, compare.handleChange), h(undefined, analyse.handleChange), h(undefined, (t) => explain?.handleChange(t) ?? false)], needsData: true },
   etat: { render: renderEtat, handlers: [qualityHandlers] },
   rapport: { render: (v) => report.renderReport(v), handlers: [h(report.handleClick, report.handleChange)] },
   aide: { render: renderAide },

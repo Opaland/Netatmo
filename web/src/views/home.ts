@@ -11,7 +11,7 @@ import { type Verdict, projectYear, verdict } from '../analysis';
 import { activeRooms, ds, state } from '../app';
 import { barChart, cssVar } from '../charts';
 import { comparison, gauge, howDetails, legend, list, seg, tile } from '../components';
-import { CATEGORY, NO_REFERENCE, PERIOD, TEMP, dayShort, rangeLabel, signedPct, vsLabel } from '../glossary';
+import { CATEGORY, NO_REFERENCE, PERIOD, TEMP, dayShort, monthLong, rangeLabel, signedPct, vsLabel } from '../glossary';
 import {
   HOME_PERIODS,
   type HomeRange,
@@ -35,6 +35,8 @@ import { projectedCost } from '../synthese';
 import { html } from '../trusted';
 import { avgPrice, costAvailable, costOf, esc, firstDay, fmtEur, fmtKwh, lastDay, table, tableToggle } from '../ui';
 import { chartMarks, yoyGapNote } from './quality';
+import { comparableRecords, offlineEstimate, offlineLine, offlineNow, offlineRun, stoppedIn } from './offline-rooms';
+import { offlineText } from '../room-offline';
 
 const ord = (day: string) => (Number(day.slice(8, 10)) === 1 ? '1er' : String(Number(day.slice(8, 10))));
 const END_LABEL = { month: 'fin du mois', season: 'fin de saison', year: "fin d'année", '12m': '' } as const;
@@ -48,8 +50,9 @@ function money(records: DayRecord[], from: string, to: string): { value: number;
 const fmtMoney = (v: number, unit: '€' | 'kWh') => (unit === '€' ? fmtEur(v) : fmtKwh(v));
 
 /** Change vs the same days a year earlier, in euros when both are priced, else in kWh. */
-function yoy(records: DayRecord[], from: string, to: string): number | null {
-  if (!records.some((r) => r.day <= minusYears(to))) return null;
+function yoy(all: DayRecord[], from: string, to: string): number | null {
+  if (!all.some((r) => r.day <= minusYears(to))) return null;
+  const records = comparableRecords(all, from, to).records; // #346: a room no longer measured is not « en baisse »
   const now = money(records, from, to);
   const before = money(records, minusYears(from), minusYears(to));
   return now.unit === before.unit ? pctChange(now.value, before.value) : pctChange(now.kwh, before.kwh);
@@ -62,16 +65,18 @@ export function renderHome(view: HTMLElement, records: DayRecord[]) {
   const n = state.rooms ? state.rooms.length : all;
   const narrowed = state.cat !== 'all' || n !== all;
   const scope = `${scopeTitle(r)} · ${countedLine({ cat: state.cat, rooms: n, allRooms: all, euros: costAvailable() })}`;
-  const v = verdict(records, r.from, r.to, ds!.weather);
+  // #346: the verdict leaves out the rooms offline over the period or a year earlier
+  const cmp = comparableRecords(records, r.from, r.to);
+  const v = verdict(cmp.records, r.from, r.to, ds!.weather);
   view.innerHTML = html`
   <h2 class="sr-only" id="page-title" tabindex="-1">Accueil</h2>
   <div class="periodbar">${seg('home', r.period, HOME_PERIODS, 'Période')}<p class="scope" aria-live="polite">${esc(scope)}${
     narrowed ? ` <button type="button" class="link" data-filter-reset>Tout compter</button>` : ''
   }</p></div>
-  ${verdictBlock(records, r, v)}
+  ${verdictBlock(records, r, v, cmp)}
   ${tiles(records, last)}
   <div id="budget-zone"></div>
-  <div class="alerts" id="alerts"><div id="grid-zone"></div><div id="cold-alert-zone"></div></div>
+  <div class="alerts" id="alerts">${offlineAlerts()}<div id="grid-zone"></div><div id="cold-alert-zone"></div></div>
   ${countedCard(records, r)}
   ${chartCard(records, r)}
   ${ds!.insights ? '<section class="card insight" id="insight-card" aria-busy="true"><h2>Analyse du mois</h2></section>' : ''}`;
@@ -99,7 +104,23 @@ function projection(records: DayRecord[], r: HomeRange, v: Verdict | null, spent
   return spent.value + (spent.unit === '€' ? (price === null ? 0 : rest * price) : rest);
 }
 
-function verdictBlock(records: DayRecord[], r: HomeRange, v: Verdict | null): string {
+/** #337: « Pourquoi ? » under the verdict, to the explanation of the month shown. */
+function explainLink(r: HomeRange): string {
+  const ym = r.to.slice(0, 7);
+  const before = `${Number(ym.slice(0, 4)) - 1}${ym.slice(4)}`;
+  // #346: a radiator switched off for a stove: the fall comes from it, said in the link (#311: inline, the screen holds in three)
+  const stove = [...stoppedIn(r.from, r.to), ...stoppedIn(minusYears(r.from), minusYears(r.to))].filter((x, k, a) => a.findIndex((y) => y.id === x.id) === k);
+  const text = stove.length ? 'Pourquoi ? (poêle)' : 'Pourquoi ?'; // #311: short, the stove is named in the label and on the page
+  return ` <a class="link verdict-link" href="#${routeKey({ page: 'outil', tool: 'expliquer', month: ym })}" aria-label="${esc(`Pourquoi ? L’écart de ${monthLong(ym)} avec ${monthLong(before)} expliqué${stove.length ? `, dont le poêle (${stove.map((x) => x.name).join(', ')})` : ''}`)}">${esc(text)}</a>`;
+}
+
+
+/** #346: the rooms left out of the verdict, said under it. */
+function leftNote(left: string[]): string {
+  return left.length ? `<p class="verdict-sub muted">Sans ${esc(left.join(', '))} (hors ligne).</p>` : '';
+}
+
+function verdictBlock(records: DayRecord[], r: HomeRange, v: Verdict | null, cmp: { records: DayRecord[]; left: string[] }): string {
   const spent = money(records, r.from, r.to);
   const what = `${spent.unit === '€' ? `<b class="num">${esc(fmtEur(spent.value))}</b> (${esc(fmtKwh(spent.kwh))})` : `<b class="num">${esc(fmtKwh(spent.kwh))}</b>`} ${spent.unit === '€' ? 'dépensés' : 'consommés'} ${esc(periodPhrase(r))}`;
   const end = projection(records, r, v, spent);
@@ -107,10 +128,11 @@ function verdictBlock(records: DayRecord[], r: HomeRange, v: Verdict | null): st
     return `<section class="verdict" aria-labelledby="verdict-title">
     <span class="verdict-icon" aria-hidden="true">·</span>
     <div><h2 class="verdict-title" id="verdict-title">${esc(spent.unit === '€' ? fmtEur(spent.value) : fmtKwh(spent.kwh))} ${esc(periodPhrase(r))}</h2>
-    <p class="verdict-sub">${what}. Pas encore d'année précédente sur ces dates : la comparaison viendra avec un an de données.</p></div>
+    <p class="verdict-sub">${what}. Pas encore d'année précédente sur ces dates : la comparaison viendra avec un an de données.</p>${leftNote(cmp.left)}</div>
   </section>`;
   }
-  const m = moneyVerdict(v, spent.unit === '€' ? spent.value : null);
+  const compared = cmp.left.length ? money(cmp.records, r.from, r.to) : spent;
+  const m = moneyVerdict(v, compared.unit === '€' ? compared.value : null);
   const icon = Math.round(m.gap) <= -1 ? '▼' : Math.round(m.gap) >= 1 ? '▲' : '=';
   const ref = v.climate ? 'à météo comparable' : 'd’après les années passées';
   const max = Math.max(m.actual, m.expected, end ?? 0) || 1;
@@ -130,7 +152,7 @@ function verdictBlock(records: DayRecord[], r: HomeRange, v: Verdict | null): st
     <span class="verdict-icon" aria-hidden="true">${icon}</span>
     <div>
       <h2 class="verdict-title" id="verdict-title">${esc(verdictHeadline(m))}</h2>
-      <p class="verdict-sub">${what}, pour ${esc(fmtMoney(m.expected, m.unit))} attendus ${esc(ref)} (${esc(signedPct(m.pct))}).</p>
+      <p class="verdict-sub">${what}, pour ${esc(fmtMoney(m.expected, m.unit))} attendus ${esc(ref)} (${esc(signedPct(m.pct))}).${explainLink(r)}</p>
       ${g}
       ${howDetails(
         'Comment c’est calculé',
@@ -151,7 +173,7 @@ function tiles(records: DayRecord[], last: string): string {
   const year = Number(last.slice(0, 4));
   const mo = money(records, monthFrom, last);
   const yr = money(records, yearFrom, last);
-  const mv = verdict(records, monthFrom, last, ds!.weather);
+  const mv = verdict(comparableRecords(records, monthFrom, last).records, monthFrom, last, ds!.weather);
   const versus = (from: string, to: string) => {
     const p = yoy(records, from, to);
     return p === null ? `<span class="delta neutral">${NO_REFERENCE}</span>` : comparison(p, vsLabel(from, to)) + yoyGapNote(records, from, to);
@@ -194,35 +216,63 @@ function countedCard(records: DayRecord[], r: HomeRange): string {
   const rooms = activeRooms().filter((x) => byRoom.has(x.id));
   if (!rooms.length) return '';
   const euros = costAvailable();
-  const valueOf = (id: string, f: string, t: string) => (euros ? (costOf(byRoom.get(id)!, f, t) ?? 0) : total(byRoom.get(id)!, f, t));
+  const price = avgPrice(records) ?? 0;
+  // #346: a room offline counts with its share estimated from the meter, never as 0 or a fall
+  const measuredOf = (id: string, f: string, t: string) => (euros ? (costOf(byRoom.get(id)!, f, t) ?? 0) : total(byRoom.get(id)!, f, t));
+  const valueOf = (id: string, f: string, t: string) => measuredOf(id, f, t) + (offlineEstimate(id, f, t) ?? 0) * (euros ? price : 1);
   const rows = countedRows(
     rooms.map((x) => x.id),
     valueOf,
     r.from,
     r.to,
   );
-  if (!rows.length) return '';
+  // a room out of reach is said, never dropped; one switched off on purpose is said under the verdict
+  const silent = rooms.filter((x) => offlineRun(x.id, r.from, r.to) && !offlineRun(x.id, r.from, r.to)!.stopped && !rows.some((y) => y.id === x.id));
+  if (!rows.length && !silent.length) return '';
   const vs = vsLabel(r.from, r.to);
+  const off = (id: string) => offlineRun(id, r.from, r.to) ?? offlineRun(id, minusYears(r.from), minusYears(r.to));
   const cat = new Map(rooms.map((x) => [x.id, x]));
   return `<section class="card" id="counted-card" aria-labelledby="counted-title">
     <div class="card-head"><h2 id="counted-title">Ce qui a compté</h2><span class="sub muted">${esc(periodPhrase(r))} · part du total</span></div>
     ${list(
-      rows.slice(0, 3).map((x) => {
-        const room = cat.get(x.id)!;
-        const water = room.category === 'water_heater';
-        return {
-          title: room.name,
-          sub: changeText(x.change, vs),
-          value: euros ? fmtEur(x.value) : fmtKwh(x.value),
-          color: water ? '--usage-water' : '--usage-heating',
-          share: x.share,
+      [
+        ...rows.slice(0, 3).map((x) => {
+          const room = cat.get(x.id)!;
+          const water = room.category === 'water_heater';
+          const run = off(x.id);
+          const est = run ? offlineEstimate(x.id, r.from, r.to) : null; // « ≈ » before the value: estimated
+          return {
+            title: room.name,
+            sub: run ? offlineText(run, run.from.slice(0, 4) !== r.to.slice(0, 4)) : changeText(x.change, vs), // #311: short, one line
+            value: `${est !== null ? '≈ ' : ''}${euros ? fmtEur(x.value) : fmtKwh(x.value)}`,
+            color: water ? '--usage-water' : '--usage-heating',
+            share: x.share,
+            href: `#${routeKey({ page: 'piece', room: x.id })}`,
+          };
+        }),
+        ...silent.map((x) => ({
+          title: x.name,
+          sub: offlineLine(x.id, r.from, r.to),
+          value: '—',
+          color: x.category === 'water_heater' ? '--usage-water' : '--usage-heating',
           href: `#${routeKey({ page: 'piece', room: x.id })}`,
-        };
-      }),
+        })),
+      ],
       'Pièces qui ont le plus compté',
     )}
     <p class="card-foot"><a class="link" href="#pieces">Toutes les pièces${rows.length > 3 ? ` (${rows.length})` : ''}</a></p>
   </section>`;
+}
+
+// ------------------------------------------------------------------ rooms offline (#346)
+/** One alert per room offline for 48 h or more: its days are missing, not 0. */
+function offlineAlerts(): string {
+  // #311: one compact line per room (the estimate is in « Ce qui a compté », the steps on the room page)
+  return offlineNow()
+    .map(
+      (o) => `<div class="alert warn" role="note"><span class="ico" aria-hidden="true">!</span><div><p><b>${esc(`${o.name} hors ligne depuis le ${dayShort(o.run.from, o.run.from.slice(0, 4) !== lastDay().slice(0, 4))}`)}</b> <a class="link" href="#${routeKey({ page: 'piece', room: o.id })}">Que faire ?</a></p></div></div>`,
+    )
+    .join('');
 }
 
 // ------------------------------------------------------------------ consumption and cold

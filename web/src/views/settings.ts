@@ -30,6 +30,8 @@ import { tenant, tenantNote } from '../tenant';
 import { intuisContractLine } from './devices-quality';
 
 let settingsRepo = repoFromLocation() ?? 'Opaland/Netatmo';
+/** The repository the settings write to (#346: radiators switched off, ⚙ Mon logement). */
+export const currentRepo = () => settingsRepo;
 let configured: Set<string> | null = null;
 let settingsMsg: { ok: boolean; text: string } | null = null;
 
