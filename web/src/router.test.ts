@@ -55,6 +55,12 @@ describe('router (#308)', () => {
     expect(titleOf({ page: 'piece', room: 'r1' }, (id) => (id === 'r1' ? 'Salon' : id))).toBe('Salon');
     expect(titleOf({ page: 'parametres', section: 'contrat' })).toBe('Contrat et prix');
     expect(titleOf({ page: 'outil', tool: 'facture' })).toBe('Une facture');
+    // #337: a month to explain, in the address (link of Accueil, shareable)
+    expect(parseRoute('#outils-expliquer-2026-01')).toEqual({ page: 'outil', tool: 'expliquer', month: '2026-01' });
+    expect(routeKey({ page: 'outil', tool: 'expliquer', month: '2026-01' })).toBe('outils-expliquer-2026-01');
+    expect(parseRoute('#outils-expliquer')).toEqual({ page: 'outil', tool: 'expliquer' });
+    expect(parseRoute('#outils-expliquer-2026-13')).toBeNull();
+    expect(titleOf({ page: 'outil', tool: 'expliquer', month: '2026-01' })).toBe('Expliquer un mois');
     expect(titleOf({ page: 'compteur-detail', sub: 'heures-creuses' })).toBe('Heures pleines / creuses');
   });
 

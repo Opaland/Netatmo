@@ -155,6 +155,14 @@ export interface QualityInput {
   devices?: DevicesInfo;
   /** Day -> kWh the radiators recorded far too low (suspects, computed by reconstitute.ts). */
   suspects?: string[];
+  /** #346: radiators switched off on purpose (⚙ Mon logement): no data expected from `from` on. */
+  stopped?: { room: string; from: string; text: string }[];
+}
+
+/** Days a stopped room is not expected to send anything, up to `last`. */
+function stoppedDays(input: Pick<QualityInput, 'stopped' | 'last'>, room: string): string[] {
+  const s = input.stopped?.find((x) => x.room === room);
+  return s && s.from <= input.last ? days(s.from, input.last) : [];
 }
 
 const NOT_AT_INTUIS = 'Non chez Intuis (ni les jours ni le total du mois) ; une estimation à part reste possible (« Reconstituer », plus bas).';
@@ -170,6 +178,16 @@ function intuis(input: QualityInput, kind: 'heating' | 'water'): SourceQuality |
     if (!ids.has(r.room)) continue;
     (byRoom.get(r.room) ?? byRoom.set(r.room, new Set()).get(r.room)!).add(r.day);
     if (kind === 'water' && r.kwh === 0) (zeros.get(r.room) ?? zeros.set(r.room, []).get(r.room)!).push(r.day);
+  }
+  // #346: a radiator switched off on purpose sends nothing, as expected: not a missing day
+  const stoppedNotes: string[] = [];
+  for (const [room, set] of byRoom) {
+    const off = stoppedDays(input, room);
+    if (!off.length) continue;
+    const any = new Set(rawRecords(input.records).filter((r) => r.room !== room && ids.has(r.room)).map((r) => r.day));
+    for (const d of off) if (any.has(d)) set.add(d);
+    const s = input.stopped!.find((x) => x.room === room)!;
+    stoppedNotes.push(`${rooms.find((r) => r.id === room)?.name ?? room} : ${s.text} : pas de données attendues, ces jours ne comptent pas comme manquants.`);
   }
   if (!byRoom.size) return null;
   const name = (id: string) => rooms.find((r) => r.id === id)?.name ?? id;
@@ -264,7 +282,7 @@ function intuis(input: QualityInput, kind: 'heating' | 'water'): SourceQuality |
       });
     }
   }
-  const notes: string[] = [];
+  const notes: string[] = [...stoppedNotes];
   const est = cov.years.reduce((a, y) => a + y.estimated, 0);
   if (est) notes.push(`${est} jour${est > 1 ? 's' : ''} estimé${est > 1 ? 's' : ''} : Intuis a gardé le total du mois mais perdu le détail du jour ; le total du mois reste juste.`);
   return { id: kind, label, first: cov.first, last: input.last, years: cov.years, gaps: tidy(gaps, ['pièce', 'pièces']), scattered, notes };
@@ -557,10 +575,12 @@ export function yearVerdicts(r: QualityReport): YearVerdict[] {
 }
 
 /** This month so far, radiators: complete, estimated and incomplete days (a room without value). */
-export function monthStatus(input: Pick<QualityInput, 'last' | 'rooms' | 'records' | 'estimated'>): { expected: number; ok: number; estimated: number; missing: number } {
+export function monthStatus(input: Pick<QualityInput, 'last' | 'rooms' | 'records' | 'estimated' | 'stopped'>): { expected: number; ok: number; estimated: number; missing: number } {
   const from = `${input.last.slice(0, 8)}01`;
   const res = { expected: 0, ok: 0, estimated: 0, missing: 0 };
-  const heating = new Set(input.rooms.filter((x) => x.category === 'heating').map((x) => x.id));
+  // #346: a radiator switched off on purpose before the month is not expected
+  const off = new Set((input.stopped ?? []).filter((s) => s.from <= from).map((s) => s.room));
+  const heating = new Set(input.rooms.filter((x) => x.category === 'heating' && !off.has(x.id)).map((x) => x.id));
   const byDay = new Map<string, Set<string>>();
   for (const rec of rawRecords(input.records)) if (heating.has(rec.room) && rec.day >= from) (byDay.get(rec.day) ?? byDay.set(rec.day, new Set()).get(rec.day)!).add(rec.room);
   const active = new Set<string>();

@@ -100,6 +100,25 @@ describe('qualityReport: Intuis', () => {
     expect(g.cause).toMatch(/pièce muette depuis le 5 oct\. 2025 : module injoignable/);
   });
 
+  it('#346: a radiator switched off on purpose (a stove): no data expected, no gap, the year stays good', () => {
+    const silent = { b: new Set(span('2025-10-05', '2025-12-31')) };
+    const stopped = [{ room: 'b', from: '2025-10-05', text: 'radiateur arrêté volontairement depuis le 5 oct. 2025 (chauffée par un poêle)' }];
+    const input = base(recs('2025-01-01', '2025-12-31', silent), { last: '2025-12-31', devices: { offlineNow: [{ room: 'b', since: '2025-10-05' }] }, stopped });
+    const r = qualityReport(input);
+    const heating = r.sources.find((x) => x.id === 'heating')!;
+    expect(heating.gaps).toEqual([]);
+    expect(heating.years[0]).toMatchObject({ year: 2025, missing: 0, partial: 0 });
+    expect(heating.notes[0]).toBe('Chambre : radiateur arrêté volontairement depuis le 5 oct. 2025 (chauffée par un poêle) : pas de données attendues, ces jours ne comptent pas comme manquants.');
+    const v = yearVerdicts(r)[0];
+    expect(v.level).toBe('good');
+    expect(v.reasons.join(' ')).not.toMatch(/muette|injoignable/);
+    expect(monthStatus(input)).toMatchObject({ missing: 0, ok: 31 });
+    // without the setting: the room out of reach, the year to check
+    const without = qualityReport(base(recs('2025-01-01', '2025-12-31', silent), { last: '2025-12-31', devices: { offlineNow: [{ room: 'b', since: '2025-10-05' }] } }));
+    expect(yearVerdicts(without)[0].level).toBe('poor');
+    expect(monthStatus({ ...input, stopped: [] }).missing).toBe(31);
+  });
+
   it('water heater absent then set up again: « réinstallé », not an Intuis gap', () => {
     const gone = new Set(span('2023-09-01', '2024-12-10'));
     const r = qualityReport(base(recs('2023-01-01', '2024-12-31', { w: gone }), { devices: { waterSetup: ['2024-12-11'] } }));

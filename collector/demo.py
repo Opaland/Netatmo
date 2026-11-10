@@ -56,8 +56,37 @@ CONTRACT = [
 ]
 
 
+# #346: two rooms whose radiator sends nothing more to Intuis (no energy, temperature, half hours):
+# - the kitchen, switched off on purpose (like the owner's living room): a wood stove heats it, the
+#   meter sees nothing of it either; declared in STOPPED (meta.stopped_rooms, STOPPED_ROOMS_JSON);
+# - the kids' bedroom, out of reach for a few days without explanation: the meter still sees it,
+#   running on its last local setting (no schedule, no absence mode): the app warns after 48 h.
+STOPPED_ROOM = ("r-cuisine", date(2025, 10, 14))
+STOPPED = [{"room": "r-cuisine", "from": "2025-10-14", "reason": "poele", "label": "chauffée par un poêle à bois"}]
+OFFLINE_ROOM = ("r-ch2", date(2026, 11, 5))
+OFFLINE_EXTRA = 1.5
+# #337: a cold spell in January 2026 (°C below the drawn mean), applied after the draws.
+COLD_SPELL = (date(2026, 1, 5), date(2026, 1, 18), 4.0)
+# #337: the parents' bedroom asked for 1 °C more for six weeks of the 2025-2026 winter (≈ +7 %).
+WARMER = ("r-ch1", date(2025, 12, 20), date(2026, 1, 31), 1.0)
+
+
 def is_lost(rid: str, d: date) -> bool:
-    return any(a <= d <= b and (rooms is None or rid in rooms) for a, b, rooms in LOST)
+    return any(a <= d <= b and (rooms is None or rid in rooms) for a, b, rooms in LOST) or is_offline(rid, d)
+
+
+def is_offline(rid: str, d: date) -> bool:
+    """Nothing reaches Intuis from this room's radiator that day (switched off or out of reach)."""
+    return any(rid == r and d >= since for r, since in (OFFLINE_ROOM, STOPPED_ROOM))
+
+
+def is_stopped(rid: str, d: date) -> bool:
+    return rid == STOPPED_ROOM[0] and d >= STOPPED_ROOM[1]
+
+
+def warmer(rid: str, d: date) -> float:
+    """Setpoint raised (°C) that day in that room, 0 otherwise."""
+    return WARMER[3] if rid == WARMER[0] and WARMER[1] <= d <= WARMER[2] else 0.0
 
 
 KIDS_CO2 = [700, 780, 840, 890, 930, 960, 980, 900, 250, 80, 0, 0, 0, 0, 0, 0, 50, 80, 100, 120, 150, 300, 450, 600]
@@ -242,7 +271,9 @@ def _room_states(store: Store, today: date) -> dict[date, list[int]]:
                 heating = not window and rnd.random() < p
                 offload = heating and cold > 0.75 and 18 <= h <= 20 and rnd.random() < 0.3
                 modules.append(
-                    {"id": f"m-{rid}", "radiator_state": "heating" if heating else "idle", "offload": offload}
+                    {"id": f"m-{rid}"}  # an unreachable radiator reports no state (#346)
+                    if is_offline(rid, d)
+                    else {"id": f"m-{rid}", "radiator_state": "heating" if heating else "idle", "offload": offload}
                 )
             modules.append({"id": "m-r-ce", "contactor_mode": "off" if away else "auto"})
             ts = int(datetime(d.year, d.month, d.day, h, 23, tzinfo=tz).timestamp())
@@ -277,8 +308,10 @@ def _v15_snapshot(rnd: random.Random, back: int, h: int, ts: int, rooms: list, m
     for r in rooms:
         r["anticipating"] = not away and h in (5, 6) and r["id"] in ("r-salon", "r-sdb", "r-ch2") and rnd.random() < 0.8
         r["lowering"] = not away and (h >= 22 or h < 5) and r["id"] != "r-sdb"
+    day = datetime.fromtimestamp(ts, ZoneInfo("Europe/Paris")).date()
+    silent = {f"m-{r}" for r, _since in (OFFLINE_ROOM, STOPPED_ROOM) if is_offline(r, day)}
     for m in modules:
-        m["reachable"] = not (m["id"] == "m-r-ch2" and back == OFFLINE_BACK)
+        m["reachable"] = not (m["id"] == "m-r-ch2" and back == OFFLINE_BACK) and m["id"] not in silent
     start = GATEWAY_SINCE
     boot_ts = None
     for b_back, b_h, b_m in BOOTS_BACK:
@@ -330,7 +363,7 @@ def _devices(store: Store, today: date) -> None:
             {
                 "id": f"m-{r}",
                 "type": t,
-                "reachable": not (r == "r-ch2" and back == OFFLINE_BACK),
+                "reachable": not (r == "r-ch2" and back == OFFLINE_BACK) and not is_offline(r, d),
                 "firmware_revision": 104 if back > 18 else 106,
                 "last_seen": int(now) - 600,
             }
@@ -436,7 +469,8 @@ def _room30(store: Store, today: date, office: dict[date, list[int]]) -> None:
                     else:
                         cur += (sp[i] - cur) * inertia + rnd.gauss(0, 0.08)
                     t[i] = cur
-            room30.merge_day(store, rid, day, room30.to_days_from_columns(hp, hc, t, sp))
+            if not is_offline(rid, d):  # random draws above stay the same
+                room30.merge_day(store, rid, day, room30.to_days_from_columns(hp, hc, t, sp))
 
 
 HA_DAYS = 120
@@ -517,18 +551,18 @@ def _sources(today: date) -> dict:
         "releve-horaire": {"ok": ok, "note": "161 relevés sur 168 heures (7 derniers jours)"},
         "appareils": {
             "ok": ok,
-            "note": "8 modules, 0 module(s) injoignable(s), 0 mise(s) à jour de firmware détectée(s), "
+            "note": "8 modules, 2 module(s) injoignable(s), 0 mise(s) à jour de firmware détectée(s), "
             "passerelle redémarrée 0 fois (7 j)",
         },
         "ia": {"ok": ok},
     }
 
 
-def generate(out_dir: Path, passphrase: str = "demo", start_year: int = 2022) -> list[str]:
+def generate(out_dir: Path, passphrase: str = "demo", start_year: int = 2022, today: date | None = None) -> list[str]:
     rnd = random.Random(42)
     rnd_hours = random.Random(11)  # separate stream: the rest of the demo stays identical
     store = Store(out_dir, passphrase)
-    today = datetime.now(ZoneInfo("Europe/Paris")).date()
+    today = today or datetime.now(ZoneInfo("Europe/Paris")).date()  # --today: the same demo another day
     d = date(start_year, 1, 1)
     hourly_from = today - timedelta(days=365)
     curve_from = today - timedelta(days=CURVE_DAYS)
@@ -544,6 +578,8 @@ def generate(out_dir: Path, passphrase: str = "demo", start_year: int = 2022) ->
         season_key = d.year if d.month >= 7 else d.year - 1
         winter_noise.setdefault(season_key, rnd.uniform(-1.8, 1.8))
         tmean = 11.5 - 8.5 * math.cos((doy - 20) / 365 * 2 * math.pi) + winter_noise[season_key] + rnd.gauss(0, 2.2)
+        if COLD_SPELL[0] <= d <= COLD_SPELL[1]:
+            tmean -= COLD_SPELL[2]
         tmin, tmax = tmean - rnd.uniform(2.5, 5), tmean + rnd.uniform(2.5, 6)
         store.put("weather", "outdoor", d.isoformat(), None, [round(tmin, 1), round(tmax, 1), round(tmean, 1)])
         store.put("weather", "indoor", d.isoformat(), None, round(19.6 + rnd.gauss(0, 0.4), 1))
@@ -580,10 +616,14 @@ def generate(out_dir: Path, passphrase: str = "demo", start_year: int = 2022) ->
                 if rid == "r-bureau" and weekend:
                     base *= 0.4
                 kwh = base * rnd.uniform(0.85, 1.15) if dju > 1.5 else 0.0
-                if ABSENCE[1] <= (today - d).days <= ABSENCE[0]:
+                kwh *= 1 + 0.07 * warmer(rid, d)  # about 7 % per °C asked in more
+                if is_offline(rid, d):
+                    kwh *= OFFLINE_EXTRA  # its last local setting, whatever the schedule or the absence
+                elif ABSENCE[1] <= (today - d).days <= ABSENCE[0]:
                     kwh *= 0.15  # mode « absence » (S-13.4): radiators kept at a low setpoint
             wh = round(max(kwh, 0) * 1000, 1)
-            day_total += wh  # what the meter saw, whatever Intuis kept
+            seen = 0.0 if is_stopped(rid, d) else wh  # a stove heats the room: the meter sees nothing
+            day_total += seen  # what the meter saw, whatever Intuis kept
             lost = is_lost(rid, d)  # random draws stay the same: the rest of the demo is unchanged
             if cat == HEATING and d in SUSPECT:
                 wh = round(wh * SUSPECT[d], 1)
@@ -603,7 +643,8 @@ def generate(out_dir: Path, passphrase: str = "demo", start_year: int = 2022) ->
             if setpoint is not None:
                 measured = setpoint - (0.4 if dju > 12 else 0) + rnd.gauss(0, 0.3)
                 if not lost:
-                    store.put(str(d.year), "temps", rid, d.isoformat(), [round(measured, 1), setpoint])
+                    sp = setpoint + warmer(rid, d)
+                    store.put(str(d.year), "temps", rid, d.isoformat(), [round(measured + warmer(rid, d), 1), sp])
             if d >= hourly_from and wh:
                 shape = WATER_SHAPE if cat == WATER_HEATER else HEAT_SHAPE
                 s = sum(shape)
@@ -611,8 +652,10 @@ def generate(out_dir: Path, passphrase: str = "demo", start_year: int = 2022) ->
                     if w:
                         key = f"{d.isoformat()}T{h:02d}"
                         v = round(wh * w / s * rnd.uniform(0.8, 1.2), 1)
-                        store.put(f"{d.year}.hourly", "hourly", rid, key, v)
-                        hours_wh[h] += v
+                        if not is_offline(rid, d):  # the meter sees it, Intuis does not
+                            store.put(f"{d.year}.hourly", "hourly", rid, key, v)
+                        if seen:
+                            hours_wh[h] += v
         if d >= date(start_year + 1, 1, 1):  # Linky history shorter than the radiators'
             other = 9500 + (1800 if weekend else 0) + 900 * math.cos((doy - 15) / 365 * 2 * math.pi) + rnd.gauss(0, 900)
             other = max(other, 7000)
@@ -670,6 +713,7 @@ def generate(out_dir: Path, passphrase: str = "demo", start_year: int = 2022) ->
         "contract": CONTRACT,
         "intuis_contract": INTUIS_CONTRACT,
         "sources": _sources(today),
+        "stopped_rooms": STOPPED,
     }
     store.replace(
         "insights",

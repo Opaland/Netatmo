@@ -103,6 +103,8 @@ jobs:
           # S-12.1: contract shared between devices (not secret: a repository variable written by
           # Settings). Validated by the collector, stored in the encrypted meta, never printed.
           CONTRACT_JSON: ${{ vars.CONTRACT_JSON }}
+          # #346: radiators switched off on purpose (stove…), set from ⚙ Mon logement: no alert.
+          STOPPED_ROOMS_JSON: ${{ vars.STOPPED_ROOMS_JSON }}
           # S-12.5: prolonged cold alert (rooms and threshold, disabled when unset). Never printed:
           # the issue below only carries pseudonyms (Pièce A, B…), the log only counts.
           COLD_ALERT_JSON: ${{ vars.COLD_ALERT_JSON }}

@@ -948,15 +948,16 @@ export function areaChart(
  */
 export function waterfallChart(
   el: HTMLElement,
-  opts: { startLabel: string; endLabel: string; start: number; steps: { name: string; delta: number }[] },
+  opts: { startLabel: string; endLabel: string; start: number; steps: { name: string; delta: number }[]; keepOrder?: boolean; title?: string },
 ) {
   const chart = instance(el);
   const muted = cssVar('--text-muted');
   const end = opts.start + opts.steps.reduce((a, s) => a + s.delta, 0);
   const pctTxt = opts.start > 0 ? ` (${signedPct(((end - opts.start) / opts.start) * 100)})` : '';
   chartCaption(el, `${opts.startLabel} : ${fmtKwh(opts.start)} → ${opts.endLabel} : ${fmtKwh(end)}${pctTxt}`);
-  label(el, 'Évolution par pièce', changeSummary({ label: opts.startLabel, value: opts.start }, { label: opts.endLabel, value: end }, opts.steps));
-  const steps = opts.steps.slice().sort((a, b) => a.delta - b.delta);
+  label(el, opts.title ?? 'Évolution par pièce', changeSummary({ label: opts.startLabel, value: opts.start }, { label: opts.endLabel, value: end }, opts.steps));
+  // #337: the causes of « Expliquer un mois » keep their order (météo first), the rooms are sorted
+  const steps = opts.keepOrder ? opts.steps.slice() : opts.steps.slice().sort((a, b) => a.delta - b.delta);
   const signed = (v: number) => `${v > 0 ? '+' : v < 0 ? '−' : ''}${nf0.format(Math.abs(v))}`;
   const span = Math.max(1, ...steps.map((s) => Math.abs(s.delta)));
   // room for the value written past the end of the longest bar, on the side(s) used
