@@ -17,7 +17,7 @@ export interface LegalService {
   risk: Risk;
 }
 
-export const LEGAL_REVIEW = '2026-11-09';
+export const LEGAL_REVIEW = '2026-11-10';
 
 export const SERVICES: LegalService[] = [
   {
@@ -52,6 +52,14 @@ export const SERVICES: LegalService[] = [
     terms: 'Usage non commercial uniquement (domotique personnelle admise), moins de 10 000 appels par jour. Données sous licence CC BY 4.0 : « Météo : Open-Meteo.com ».',
     url: 'https://open-meteo.com/en/terms',
     read: '2026-11-09',
+    risk: 'faible',
+  },
+  {
+    name: 'PVGIS (Commission européenne)',
+    frame: 'Production solaire heure par heure (simulateur Panneaux solaires, facultatif), API gratuite sans compte, appelée par la collecte quand la localisation change.',
+    terms: 'Usage libre ; réutilisation autorisée avec mention de la source : « PVGIS © Union européenne ». Coordonnées envoyées arrondies à environ 1 km.',
+    url: 'https://joint-research-centre.ec.europa.eu/photovoltaic-geographical-information-system-pvgis/getting-started-pvgis/api-non-interactive-service_en',
+    read: '2026-11-10',
     risk: 'faible',
   },
   {

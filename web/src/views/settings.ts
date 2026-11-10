@@ -168,6 +168,7 @@ export function renderSettings(view: HTMLElement, section: SettingsSection) {
         ['Conso API (conso.boris.sh) → Enedis', 'Linky (si activé)', 'Votre jeton et votre PDL'],
         ['Shelly Cloud (*.shelly.cloud)', 'Compteurs des prises Shelly (si activé)', 'Votre clé cloud Shelly'],
         ['Open-Meteo', 'Météo de la commune', 'Coordonnées arrondies à ~1 km'],
+        ['PVGIS (Commission européenne)', 'Production solaire de vos toits (si localisation saisie)', 'Coordonnées arrondies à ~1 km, orientation et pente des toits'],
         ['Anthropic (Claude)', 'Analyse du mois (si activée)', 'Totaux mensuels, pièces sous pseudonyme (fenêtres ouvertes et boost : chambres regroupées)'],
         ['CRE, api-couleur-tempo.fr', 'Tarifs et couleurs Tempo publics', 'Rien de personnel'],
       ],

@@ -1,5 +1,13 @@
 # Historique des versions
 
+## v1.7 — en cours
+
+- Simulateur « Panneaux solaires » (Outils › Simulateurs) : courbe Linky à la demi-heure contre un
+  profil PVGIS, 3 / 4,5 / 6 kWc, pilotage du chauffe-eau et de la recharge, batterie 5 et 10 kWh,
+  hypothèses saisies par le propriétaire (#356).
+- Localisation de la maison et de ses toits, gardée seulement chiffrée, envoyée à PVGIS arrondie à
+  environ 1 km (#204).
+
 ## v1.6 — novembre 2026 : refonte UX/UI, nouveau design system, écrans reconstruits
 
 Version de refonte : nouvelle navigation, nouveau design system et **tous les écrans reconstruits**
