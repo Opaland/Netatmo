@@ -403,9 +403,12 @@ function probeCard(st: Station, map: Map<string, string>) {
     )}
     ${Object.keys(state.roomModuleMap).length ? '<p><button type="button" class="link" data-comfort="reset-map">Revenir aux suggestions</button></p>' : ''}
     ${linked
-      .map((r, i) => {
+      .map((r) => {
         const k = map.get(r.id)!;
         const o = offsetStats(ds!.temps.get(r.id), st.daily[k], from, last);
+        // #346: a room without heating days (radiator switched off, stove) has no chart: the
+        // charts are numbered among the rooms that have one (drawProbes does the same)
+        const i = linked.filter((x) => offsetStats(ds!.temps.get(x.id), st.daily[map.get(x.id)!], from, last)).indexOf(r);
         if (!o) return `<h3 class="sub-title">${esc(r.name)} ↔ ${esc(st.modules[k].name)}</h3><p class="hint muted">Pas de jour de chauffe (novembre à mars) avec les deux mesures sur les 12 derniers mois.</p>`;
         return `<h3 class="sub-title">${esc(r.name)} ↔ ${esc(st.modules[k].name)}</h3>
         <p>Écart moyen <strong>${signed(o.mean)} °C</strong> (radiateur − station) sur ${o.n} jours de chauffe, écart-type ${f1(o.sd)} °C : ${o.stable ? 'stable' : 'variable'}.</p>
@@ -432,7 +435,7 @@ function drawProbes(st: Station, map: Map<string, string>) {
   const from = addDays(minusYears(last), 1);
   const heat = days(from, last).filter((d) => seasonOf(d) !== null);
   heatingRooms()
-    .filter((r) => ds!.temps.has(r.id) && map.has(r.id))
+    .filter((r) => ds!.temps.has(r.id) && map.has(r.id) && offsetStats(ds!.temps.get(r.id), st.daily[map.get(r.id)!], from, last))
     .forEach((r, i) => {
       const el = document.getElementById(`probe-${i}`);
       if (!el) return;

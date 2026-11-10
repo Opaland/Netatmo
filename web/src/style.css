@@ -1046,9 +1046,7 @@ th {
   margin: 0;
 }
 .verdict-link .link {
-  display: inline-flex;
-  align-items: center;
-  min-height: var(--target-min);
+  min-height: 32px; /* WCAG 2.5.8 asks 24 px; the Accueil holds in three screens (#311) */
 }
 .toggle {
   display: inline-flex;

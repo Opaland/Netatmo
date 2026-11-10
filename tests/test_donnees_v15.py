@@ -540,9 +540,9 @@ def test_stopped_rooms_variable_and_no_alert_for_them(tmp_path):
 
 
 def test_demo_has_a_room_stopped_and_a_room_offline(tmp_path):
-    """#346 / #337: in the demo the living room radiator is switched off on purpose (a stove, in
-    meta.stopped_rooms: the meter sees nothing of it), the kitchen one answers no more without
-    explanation (the meter still sees it): only the kitchen raises the alert."""
+    """#346 / #337: in the demo the kitchen radiator is switched off on purpose (a stove, in
+    meta.stopped_rooms: the meter sees nothing of it), the kids' bedroom one answers no more without
+    explanation (the meter still sees it): only the bedroom raises the alert."""
     from collector.demo import OFFLINE_ROOM, STOPPED, STOPPED_ROOM, generate
 
     generate(tmp_path)

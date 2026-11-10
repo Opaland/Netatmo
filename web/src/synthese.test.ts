@@ -41,22 +41,22 @@ describe('#290: « 12 mois » is the same 365 days on the whole Synthèse', () =
     expect(twelveMonths(LAST)).toEqual(['2025-11-09', '2026-11-08']);
   });
 
-  it('nov. 2025 shows 485 kWh in the main chart and in the Linky card (634 before; 663 and 866 before the living room stove and the kitchen offline of the demo, #346)', () => {
+  it('nov. 2025 shows 581 kWh in the main chart and in the Linky card (758 before; 663 and 866 before the kitchen stove of the demo, #346)', () => {
     const [from, to] = twelveMonths(LAST);
     const main = aggregate(ds.records, from, to, 'month', (r) => r.cat);
     const i = main.keys.indexOf('2025-11');
     const mainNov = [...main.groups.values()].reduce((s, g) => s + (g[i] ?? 0), 0);
-    expect(Math.round(mainNov)).toBe(485);
+    expect(Math.round(mainNov)).toBe(581);
     const card = linkyMonths(ds.records, ds.linky, from, to);
     expect(card.keys).toHaveLength(13); // the partial November 2025 (9 → 30) first, as in the main chart
-    expect(Math.round(sumMonth(card, '2025-11'))).toBe(485);
+    expect(Math.round(sumMonth(card, '2025-11'))).toBe(581);
     expect(Math.round(all(card.heat))).toBe(Math.round(total(ds.records.filter((r) => r.cat === 'heating'), from, to)));
-    expect(Math.round(all(card.heat))).toBe(3218);
+    expect(Math.round(all(card.heat))).toBe(4935);
     expect(Math.round(all(card.water))).toBe(1518);
-    // the former window (from 1 November): 634 kWh and 3 331 kWh of heating
+    // the former window (from 1 November): 758 kWh and 5 077 kWh of heating
     const before = linkyMonths(ds.records, ds.linky, '2025-11-01', to);
-    expect(Math.round(sumMonth(before, '2025-11'))).toBe(634);
-    expect(Math.abs(all(before.heat) - 3331)).toBeLessThan(2); // the audit added the rounded bars
+    expect(Math.round(sumMonth(before, '2025-11'))).toBe(758);
+    expect(Math.abs(all(before.heat) - 5077)).toBeLessThan(2); // the audit added the rounded bars
   });
 
   it('the peak power chart covers the same 12 months as its sentence', () => {
@@ -70,7 +70,7 @@ describe('#290: « 12 mois » is the same 365 days on the whole Synthèse', () =
 describe('#291: the euros of a selection come from the selection', () => {
   const water = () => ds.records.filter((r: DayRecord) => r.cat === 'water_heater');
 
-  it('water heater: 1 518 kWh = 250 € and the projection no longer says 279 €', () => {
+  it('water heater: 1 518 kWh = 250 € and the projection no longer says 283 €', () => {
     const recs = water();
     const [from, to] = twelveMonths(LAST);
     expect(Math.round(total(recs, from, to))).toBe(1518);
@@ -78,7 +78,7 @@ describe('#291: the euros of a selection come from the selection', () => {
     const p = projectYear(recs, LAST)!;
     expect(Math.round(p.projected)).toBe(1520);
     // before: the whole home's average price
-    expect(Math.round(p.projected * avgPrice()!)).toBe(279);
+    expect(Math.round(p.projected * avgPrice()!)).toBe(283);
     // now: real cost so far + the rest at the water heater's own price (its off-peak kWh)
     expect(avgPrice(recs)!).toBeCloseTo(costOf(recs, from, to)! / total(recs, from, to), 10);
     const eur = projectedCost(costOf(recs, '2026-01-01', LAST), p.ytd, p.projected, avgPrice(recs))!;
@@ -86,10 +86,10 @@ describe('#291: the euros of a selection come from the selection', () => {
     expect(eur).toBeLessThan(260);
   });
 
-  it('without a filter, the year 2026 costs 642 € (energy only), the tooltip is an estimate (≈ 648 €)', () => {
-    expect(Math.round(total(ds.records, '2026-01-01', LAST))).toBe(3526);
-    expect(Math.round(costOf(ds.records, '2026-01-01', LAST)!)).toBe(642);
-    expect(Math.round(3526 * avgPrice(ds.records)!)).toBe(648);
+  it('without a filter, the year 2026 costs 891 € (energy only), the tooltip is an estimate (≈ 897 €)', () => {
+    expect(Math.round(total(ds.records, '2026-01-01', LAST))).toBe(4819);
+    expect(Math.round(costOf(ds.records, '2026-01-01', LAST)!)).toBe(891);
+    expect(Math.round(4819 * avgPrice(ds.records)!)).toBe(897);
   });
 });
 
@@ -97,7 +97,7 @@ describe('#292: what the euros cover', () => {
   it('Synthèse: energy only, no subscription, radiators and water heater', () => {
     expect(costScope('all')).toMatch(/hors abonnement, radiateurs et chauffe-eau \(pas tout le logement\)/);
     expect(costScope('water_heater')).toMatch(/chauffe-eau seul/);
-    // 885 € in Comparer and the report: the same energy plus the subscription
-    expect(Math.round(costOf(ds.records, '2026-01-01', LAST, true)!)).toBe(885);
+    // 1 133 € in Comparer and the report: the same energy plus the subscription
+    expect(Math.round(costOf(ds.records, '2026-01-01', LAST, true)!)).toBe(1133);
   });
 });

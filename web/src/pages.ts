@@ -215,6 +215,12 @@ function drawTool(view: HTMLElement, t: Tool) {
   if (t === 'voiture') return compare.renderCompare(view, records, 'ev');
   if (t === 'facture') return overview.renderOverview(view, records, 'invoice');
   if (t === 'exports') return renderExports(view);
+  if (t === 'plannings') {
+    // #211: half hours of the rooms, loaded with the module (S-7.10)
+    view.innerHTML = html`<div id="plannings-zone" aria-busy="true"><p class="hint muted" role="status">Chargement des relevés à la demi-heure…</p></div>`;
+    void lazyCard(() => import('./views/plannings'), (m) => m.mountPlannings(document.getElementById('plannings-zone')), { zone: 'plannings-zone', what: 'Mes plannings' });
+    return;
+  }
   if (t === 'questions') {
     view.innerHTML = html`<section class="card" id="questions-card" aria-busy="true"><h2>Questions types</h2></section>`;
     void lazyCard(() => import('./views/questions'), (m) => m.mountQuestions(document.getElementById('questions-card')), { zone: 'questions-card', what: 'Questions types' });

@@ -131,7 +131,7 @@ describe('a change of heating (a radiator switched off on purpose)', () => {
     const linky = new Map([...i.linky].map(([d, v]) => [d, d >= '2026-01-01' ? v - 0.25 * (18 - i.weather!.get(d)![2]) * 1.5 : v]));
     const e = explainMonth({ ...i, runs, linky, estimate: estimateOffline(i.records, runs, linky, i.weather) })!;
     const mode = e.steps.find((x) => x.key === 'mode')!;
-    expect(mode.label).toBe('Changement de mode de chauffage (poêle au Cuisine)');
+    expect(mode.label).toBe('Changement de mode de chauffage (poêle : Cuisine)');
     expect(mode.kwh).toBeCloseTo(-0.25 * 13 * 31, 6); // all of January 2025, not scaled by the weather
     expect(e.steps.find((x) => x.key === 'horsligne')).toBeUndefined();
     expect(step(e, 'consignes')).toBeCloseTo(0, 6);
@@ -139,12 +139,12 @@ describe('a change of heating (a radiator switched off on purpose)', () => {
     expect(sumSteps(e)).toBeCloseTo(e.delta, 6);
     expect(e.stopped.map((x) => x.text)).toEqual(['arrêté depuis le 1er janv. 2026 (poêle)']);
     expect(stepNote(e, mode)).toBe('radiateur arrêté depuis le 1er janv. 2026 (poêle) : chauffée par un poêle');
-    expect(explainSentence(e)).toMatch(/le poêle au Cuisine \(−101 kWh\)/);
+    expect(explainSentence(e)).toMatch(/le poêle \(Cuisine\) \(−101 kWh\)/);
   });
 });
 
 describe('on the demo: January 2026, the owner’s question', () => {
-  it('the stove in the living room, a colder month, the kitchen offline: the parts add up', async () => {
+  it('the stove in the kitchen, a colder month, 1 °C more in a bedroom: the parts add up', async () => {
     const ds = await demoDataset();
     const last = ds.meta.last_day!;
     const runs = applyStopped(offlineRuns(ds.records, ds.meta.rooms, last), parseStopped((ds.meta as { stopped_rooms?: unknown }).stopped_rooms));
@@ -152,15 +152,15 @@ describe('on the demo: January 2026, the owner’s question', () => {
     const e = explainMonth({ month: '2026-01', last, records: ds.records, rooms: ds.meta.rooms, weather: ds.weather, linky: ds.linky, temps: ds.temps, runs, estimate })!;
     expect(e.basis).toBe('linky');
     expect(sumSteps(e)).toBeCloseTo(e.delta, 6);
-    expect(step(e, 'mode')).toBeCloseTo(-366, 0); // all of the living room of January 2025
-    expect(e.steps.find((x) => x.key === 'mode')!.label).toBe('Changement de mode de chauffage (poêle au Salon)');
+    expect(step(e, 'mode')).toBeCloseTo(-170, 0); // all of the kitchen of January 2025
+    expect(e.steps.find((x) => x.key === 'mode')!.label).toBe('Changement de mode de chauffage (poêle : Cuisine)');
     expect(step(e, 'meteo')).toBeGreaterThan(30);
     expect(step(e, 'consignes')).toBeGreaterThan(5); // the parents' bedroom asked 1 °C more
-    expect(step(e, 'horsligne')).toBeGreaterThan(20);
-    expect(e.offline).toMatchObject([{ id: 'r-cuisine', since: '2025-12-01', ongoing: true }]);
-    expect(e.stopped.map((x) => x.id)).toEqual(['r-salon']);
+    expect(e.steps.find((x) => x.key === 'horsligne')).toBeUndefined(); // the bedroom went offline in November 2026
+    expect(e.stopped.map((x) => x.id)).toEqual(['r-cuisine']);
     const s = explainSentence(e, 0.2);
-    expect(s).toMatch(/^En janvier 2026, le logement a consommé \d+ kWh de moins qu’en janvier 2025 \(−\d+ %, ≈ \d+ €\)\. Surtout le poêle au Salon \(−366 kWh\)/);
-    expect(s).toMatch(/ ; en partie compensé par Cuisine hors ligne \(\+\d+ kWh, estimé\) et un mois plus froid \(\+\d+ kWh\)\.$/);
+    expect(s).toBe(
+      'En janvier 2026, le logement a consommé 162 kWh de moins qu’en janvier 2025 (−9 %, ≈ 32 €). Surtout le poêle (Cuisine) (−170 kWh) et les autres usages (−76 kWh) ; en partie compensé par un mois plus froid (+66 kWh).',
+    );
   });
 });

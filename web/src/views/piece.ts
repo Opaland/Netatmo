@@ -122,18 +122,17 @@ export function renderPieces(view: HTMLElement, o: PiecesOpts) {
   const from30 = addDays(last, -(DAYS - 1));
   const thr = state.comfortThreshold;
   const rs = doc(stateDoc, 'pieces');
-  const price = avgPrice() ?? 0;
   const rows = activeRooms().map((r) => {
     const mine = ds!.records.filter((x) => x.room === r.id);
     // #346: a room offline counts with its share estimated from the meter (« ≈ »), never 0 kWh
+    // sorted on what was measured; the estimate is said under the name, never added in
     const run = offlineRun(r.id, yearStart, last);
     const est = run ? (offlineEstimate(r.id, yearStart, last) ?? 0) : 0;
-    const eur = costOf(mine, yearStart, last);
-    return { room: r, kwh: total(mine, yearStart, last) + est, eur: eur === null ? null : eur + est * price, run, est };
+    return { room: r, kwh: total(mine, yearStart, last), eur: costOf(mine, yearStart, last), run, est };
   });
-  const value = (x: { kwh: number; eur: number | null; est: number }) => {
-    const about = x.est ? '≈ ' : '';
-    return x.eur === null ? esc(about + fmtKwh(x.kwh)) : `${esc(about + fmtEur(x.eur))}<span class="s">${esc(fmtKwh(x.kwh))}</span>`;
+  const value = (x: { kwh: number; eur: number | null; run: unknown }) => {
+    if (x.run && !x.kwh) return '—'; // nothing measured: not « 0 kWh »
+    return x.eur === null ? esc(fmtKwh(x.kwh)) : `${esc(fmtEur(x.eur))}<span class="s">${esc(fmtKwh(x.kwh))}</span>`;
   };
   const heated = byCost(rows.filter((x) => x.room.category === 'heating')).map((x) => {
     const m = measured(x.room.id);
@@ -143,7 +142,7 @@ export function renderPieces(view: HTMLElement, o: PiecesOpts) {
     const open = rs ? sumState(rs, members(x.room.id), from30, last, (c) => c.open_window_h) : null;
     const pill = comfortPill(cold, open, thr);
     const sub = x.run
-      ? `<span class="pill${x.run.stopped ? '' : ' warn'}">${esc(offlineText(x.run))}</span>${x.est ? ' · en partie estimé' : ''}`
+      ? `<span class="pill${x.run.stopped ? '' : ' warn'}">${esc(offlineText(x.run))}</span>${x.est ? ` · ≈ ${esc(fmtKwh(x.est))} estimés` : ''}`
       : t
         ? `${fmt1(t.mean)} °C · <span class="pill ${pill.level}">${esc(pill.text)}</span>`
         : '<span class="muted">pas de température relevée</span>';

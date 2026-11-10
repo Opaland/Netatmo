@@ -151,26 +151,26 @@ describe('radiators switched off on purpose (⚙ Mon logement)', () => {
   });
 });
 
-describe('on the demo: the living room stove and the kitchen offline', () => {
-  it('the living room is « arrêté (poêle) », the kitchen « hors ligne » and estimated from the meter', async () => {
+describe('on the demo: the kitchen stove and the kids’ bedroom offline', () => {
+  it('the kitchen is « arrêté (poêle) », the bedroom « hors ligne » and estimated from the meter', async () => {
     const ds = await demoDataset();
     const last = ds.meta.last_day!;
     const stopped = parseStopped((ds.meta as { stopped_rooms?: unknown }).stopped_rooms);
-    expect(stopped).toEqual([{ room: 'r-salon', from: '2025-10-14', reason: 'poele', label: 'chauffé par un poêle à granulés' }]);
+    expect(stopped).toEqual([{ room: 'r-cuisine', from: '2025-10-14', reason: 'poele', label: 'chauffée par un poêle à bois' }]);
     const runs = applyStopped(offlineRuns(ds.records, ds.meta.rooms, last), stopped);
-    const salon = runs.filter((r) => r.room === 'r-salon').at(-1)!;
-    expect(offlineText(salon)).toBe('arrêté depuis le 14 oct. 2025 (poêle)');
     const kitchen = runs.filter((r) => r.room === 'r-cuisine').at(-1)!;
-    expect(kitchen).toMatchObject({ from: '2025-12-01', to: last, ongoing: true });
-    expect(kitchen.stopped).toBeUndefined();
-    expect(offlineText(kitchen)).toBe('hors ligne depuis le 1er déc. 2025');
+    expect(offlineText(kitchen)).toBe('arrêté depuis le 14 oct. 2025 (poêle)');
+    const bedroom = runs.filter((r) => r.room === 'r-ch2').at(-1)!;
+    expect(bedroom).toMatchObject({ from: '2026-11-05', to: last, ongoing: true, days: 4 });
+    expect(bedroom.stopped).toBeUndefined();
+    expect(offlineText(bedroom)).toBe('hors ligne depuis le 5 nov. 2026');
     // the November 2024 gap of the demo (two rooms, 14 days) is found as well, over
     expect(runs.some((r) => r.room === 'r-salon' && r.from === '2024-11-04' && !r.ongoing && !r.stopped)).toBe(true);
     const est = estimateOffline(ds.records, runs, ds.linky, ds.weather);
-    expect(estimatedIn(est, 'r-salon', '2025-10-14', last)).toBeNull();
-    const jan = estimatedIn(est, 'r-cuisine', '2026-01-01', '2026-01-31')!;
-    // January 2025 measured 170 kWh; colder January 2026, 1.5 × on its last local setting
-    expect(jan).toBeGreaterThan(200);
-    expect(jan).toBeLessThan(320);
+    expect(estimatedIn(est, 'r-cuisine', '2025-10-14', last)).toBeNull();
+    const nov = estimatedIn(est, 'r-ch2', '2026-11-05', last)!;
+    // the bedroom used about 2-4 kWh a day in early November; on its last setting, a little more
+    expect(nov).toBeGreaterThan(4);
+    expect(nov).toBeLessThan(40);
   });
 });

@@ -114,7 +114,7 @@ function explainLink(r: HomeRange): string {
 /** #346: a room switched off on purpose stays compared: its fall is a change of heating, said so. */
 function stoveNote(r: HomeRange): string {
   const s = [...stoppedIn(r.from, r.to), ...stoppedIn(minusYears(r.from), minusYears(r.to))].filter((x, i, a) => a.findIndex((y) => y.id === x.id) === i);
-  return s.map((x) => (x.run.stopped!.reason === 'poele' ? ` ; ${x.name} chauffé au poêle depuis le ${dayShort(x.run.from, true)}` : ` ; ${x.name} : ${offlineText(x.run)}`)).join('');
+  return s.map((x) => (x.run.stopped!.reason === 'poele' ? ` ; ${x.name} au poêle depuis le ${dayShort(x.run.from, true)}` : ` ; ${x.name} : ${offlineText(x.run)}`)).join('');
 }
 
 /** #346: the rooms left out of the verdict, said under it. */
@@ -229,7 +229,8 @@ function countedCard(records: DayRecord[], r: HomeRange): string {
     r.from,
     r.to,
   );
-  const silent = rooms.filter((x) => offlineRun(x.id, r.from, r.to) && !rows.some((y) => y.id === x.id));
+  // a room out of reach is said, never dropped; one switched off on purpose is said under the verdict
+  const silent = rooms.filter((x) => offlineRun(x.id, r.from, r.to) && !offlineRun(x.id, r.from, r.to)!.stopped && !rows.some((y) => y.id === x.id));
   if (!rows.length && !silent.length) return '';
   const vs = vsLabel(r.from, r.to);
   const off = (id: string) => offlineRun(id, r.from, r.to) ?? offlineRun(id, minusYears(r.from), minusYears(r.to));
@@ -276,7 +277,8 @@ function offlineAlerts(): string {
         'warn',
         `${o.name} : ${offlineText(o.run)}`,
         '',
-        `<p>${esc(`Plus mesurée (pas 0 kWh)${est !== null ? ` : ≈ ${fmtKwh(est)} ce mois-ci d’après le compteur` : ''}.`)} <a class="link" href="#${routeKey({ page: 'piece', room: o.id })}">Que faire ?</a></p>`,
+        // the estimate is in « Ce qui a compté » (« ≈ ») and on the room page: kept short here (#311)
+        `<p>${esc(`Plus mesurée${est !== null ? ' (estimée)' : ''}, pas à 0.`)} <a class="link" href="#${routeKey({ page: 'piece', room: o.id })}">Que faire ?</a></p>`,
       );
     })
     .join('');

@@ -121,20 +121,20 @@ describe('on the demo (maquette accueil.html)', () => {
   beforeAll(async () => {
     ds = await demoDataset();
   });
-  it('the month: the kitchen offline is left out, the living room stove stays (#346)', () => {
+  it('the month: the kids’ bedroom offline is left out, the kitchen stove stays (#346)', () => {
     const records = ds.records.filter((r) => r.cat !== 'ignore');
     const r = homeRange('month', ds.meta.last_day!);
-    // all rooms: the living room (stove) and the kitchen (out of reach) send nothing
+    // all rooms: the kitchen (stove) and, these last days, the kids' bedroom (out of reach) send nothing
     const raw = verdict(records, r.from, r.to, ds.weather)!;
-    expect(Math.round(raw.actual)).toBe(105);
-    expect(Math.round(raw.pct)).toBe(-39);
-    // the living room is switched off on purpose (meta.stopped_rooms): a real fall, still compared;
-    // the kitchen is out of reach: left out of the comparison (what the Accueil verdict shows)
+    expect(Math.round(raw.actual)).toBe(138);
+    expect(Math.round(raw.pct)).toBe(-22);
+    // the kitchen is switched off on purpose (meta.stopped_rooms): a real fall, still compared;
+    // the bedroom is out of reach: left out of the comparison (what the Accueil verdict shows)
     const runs = applyStopped(offlineRuns(ds.records, ds.meta.rooms, ds.meta.last_day!), parseStopped((ds.meta as { stopped_rooms?: unknown }).stopped_rooms));
     const left = notComparable(runs, r.from, r.to);
-    expect([...left]).toEqual(['r-cuisine']);
+    expect([...left]).toEqual(['r-ch2']);
     const v = verdict(records.filter((x) => !left.has(x.room)), r.from, r.to, ds.weather)!;
-    expect(Math.round(v.actual)).toBe(105);
+    expect(Math.round(v.actual)).toBe(130);
     expect(Math.abs(v.pct)).toBeLessThan(Math.abs(raw.pct));
     expect(v.climate).toBe(true);
   });

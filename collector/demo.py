@@ -57,13 +57,13 @@ CONTRACT = [
 
 
 # #346: two rooms whose radiator sends nothing more to Intuis (no energy, temperature, half hours):
-# - the living room, switched off on purpose (like the owner's): a stove heats it, the meter sees
-#   nothing of it either; declared in STOPPED (meta.stopped_rooms, the STOPPED_ROOMS_JSON variable);
-# - the kitchen, out of reach without explanation: the meter still sees it, running on its last
-#   local setting (no schedule, no absence mode), about half more than before: the app warns.
-STOPPED_ROOM = ("r-salon", date(2025, 10, 14))
-STOPPED = [{"room": "r-salon", "from": "2025-10-14", "reason": "poele", "label": "chauffé par un poêle à granulés"}]
-OFFLINE_ROOM = ("r-cuisine", date(2025, 12, 1))
+# - the kitchen, switched off on purpose (like the owner's living room): a wood stove heats it, the
+#   meter sees nothing of it either; declared in STOPPED (meta.stopped_rooms, STOPPED_ROOMS_JSON);
+# - the kids' bedroom, out of reach for a few days without explanation: the meter still sees it,
+#   running on its last local setting (no schedule, no absence mode): the app warns after 48 h.
+STOPPED_ROOM = ("r-cuisine", date(2025, 10, 14))
+STOPPED = [{"room": "r-cuisine", "from": "2025-10-14", "reason": "poele", "label": "chauffée par un poêle à bois"}]
+OFFLINE_ROOM = ("r-ch2", date(2026, 11, 5))
 OFFLINE_EXTRA = 1.5
 # #337: a cold spell in January 2026 (°C below the drawn mean), applied after the draws.
 COLD_SPELL = (date(2026, 1, 5), date(2026, 1, 18), 4.0)
@@ -201,6 +201,22 @@ def _shelly(store: Store, today: date) -> None:
 ROOMSTATE_DAYS = 365
 # Demo absence (mode « absence » on every radiator, contactor off): a week, a month and a half ago.
 ABSENCE = (45, 39)  # days before today
+# S-13.7 (#210): the radiators switch to the absence mode about 12 h after the last presence
+# detected: the household left on the morning of the day before ABSENCE[0] (mode from 20 h) and
+# came back at 17 h on the last day. The energy of the demo keeps whole days (ABSENCE).
+AWAY_FROM_H = 20  # hour the mode started, the day before ABSENCE[0]
+AWAY_BACK_H = 17  # hour of the return, on ABSENCE[1]
+# A room alone in frost guard (not an absence of the home): the office, closed for a few days.
+OFFICE_HG = (120, 117)
+
+
+def away_mode(back: int, h: int) -> bool:
+    """Whether the absence mode is on at hour `h` of the day `back` days before today."""
+    if back == ABSENCE[0] + 1:
+        return h >= AWAY_FROM_H
+    if back == ABSENCE[1]:
+        return h < AWAY_BACK_H
+    return ABSENCE[1] < back <= ABSENCE[0]
 
 
 def _room_states(store: Store, today: date) -> dict[date, list[int]]:
@@ -239,7 +255,10 @@ def _room_states(store: Store, today: date) -> dict[date, list[int]]:
                     (rid == "r-sdb" and h == 7 and not weekend and rnd.random() < 0.5)
                     or (rid == "r-salon" and h == 20 and rnd.random() < 0.08)
                 )
-                mode = "away" if away else ("manual" if rid == "r-bureau" and weekend and h > 9 else "schedule")
+                manual = rid == "r-bureau" and weekend and h > 9
+                mode = "away" if away_mode(back, h) else ("manual" if manual else "schedule")
+                if rid == "r-bureau" and OFFICE_HG[1] <= back <= OFFICE_HG[0] and not away:
+                    mode = "hg"
                 rooms.append(
                     {
                         "id": rid,
@@ -401,6 +420,22 @@ ROOM30_DAYS = 42
 HC_SLOTS = set(range(0, 12)) | {44, 45, 46, 47}  # heures creuses 22 h → 6 h
 
 
+AWAY_SETPOINT = 16.0  # requested temperature of the absence mode (S-13.7)
+
+
+def _plan(rid: str, d: date):
+    """S-4.13 (#211): the weekly schedule of a room in the demo (comfort half hours) and how fast
+    its temperature follows the setpoint. Most rooms: comfort 7 h → 22 h, a warm-up in peak hours
+    just after the off-peak ones (the tool suggests starting earlier); the bathroom: a short
+    morning slot from 6 h it never quite reaches; the office: weekdays 8 h → 18 h, slow to warm."""
+    weekend = d.weekday() >= 5
+    if rid == "r-sdb":
+        return (lambda i: 12 <= i < 16 or 36 <= i < 44), 0.3
+    if rid == "r-bureau":
+        return (lambda i: not weekend and 16 <= i < 36), 0.18
+    return (lambda i: 14 <= i < 44), 0.35
+
+
 def _room30(store: Store, today: date, office: dict[date, list[int]]) -> None:
     """S-1.26: six weeks of per-room half hours, consistent with the hourly energy of the demo:
     each hour split in two, HP / HC by the clock, a setpoint lowered by 2 °C at night, the measured
@@ -426,12 +461,13 @@ def _room30(store: Store, today: date, office: dict[date, list[int]]) -> None:
                 elif rid == "r-ch1" and aired:
                     open_slots = {14, 15}
                 cur = setpoint - 1.5
+                comfort, inertia = _plan(rid, d)
                 for i in range(48):
-                    sp[i] = setpoint if 14 <= i < 44 else setpoint - 2
+                    sp[i] = AWAY_SETPOINT if away_mode(back, i // 2) else (setpoint if comfort(i) else setpoint - 2)
                     if i in open_slots:
                         cur -= rnd.uniform(1.2, 2.0)  # cold air: a fast fall the radiator cannot hold
                     else:
-                        cur += (sp[i] - cur) * 0.35 + rnd.gauss(0, 0.08)
+                        cur += (sp[i] - cur) * inertia + rnd.gauss(0, 0.08)
                     t[i] = cur
             if not is_offline(rid, d):  # random draws above stay the same
                 room30.merge_day(store, rid, day, room30.to_days_from_columns(hp, hc, t, sp))
