@@ -4,6 +4,7 @@ import { djuBetween, fitSeason, roomDeltas, signaturePoints } from '../analysis'
 import { ds, setState, state } from '../app';
 import { barChart } from '../charts';
 import { uncertainDays } from '../checks';
+import { cutDays } from './quality';
 import { WITH_SUBSCRIPTION } from '../synthese';
 import { bucketMarks, monthKeys, monthsCovered, shortDate, windowSuffix, yoyCaveat, yoyWindow } from '../periods';
 import { CO2_DEFAULT, CO2_SOURCE, co2Factor, fmtCo2, fmtFactor } from '../money';
@@ -45,7 +46,7 @@ export function renderReport(view: HTMLElement) {
   const win = yoyWindow(year, first, last);
   const cmpFrom = win?.from ?? from;
   const cmpTo = win?.to ?? end;
-  const caveat = yoyCaveat(win, uncertain, { toDate: false });
+  const caveat = yoyCaveat(win, uncertain, { toDate: false, cuts: cutDays() });
   const yr = all.filter((r) => r.day >= from && r.day <= end);
   const cmp = all.filter((r) => r.day >= cmpFrom && r.day <= cmpTo);
   const prev = win ? all.filter((r) => r.day >= win.prevFrom && r.day <= win.prevTo) : [];

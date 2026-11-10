@@ -76,6 +76,14 @@ describe('S-4.10 absences', () => {
     expect(absencePeriods(low)).toEqual([{ from: '2025-01-15', to: '2025-01-18' }]);
   });
 
+  it('#394: a day of cut is never « low »: the three empty days of a long power cut are no absence', () => {
+    const cut = new Set(['2025-01-16', '2025-01-17']);
+    const low = lowDays(recs, weather, new Map(), '2025-01-01', '2025-01-31', cut);
+    expect(low.has('2025-01-16')).toBe(false);
+    expect(low.get('2025-01-15')).toBe(true);
+    expect(absencePeriods(low)).toEqual([]);
+  });
+
   it('needs three days in a row', () => {
     const low = new Map([
       ['2025-01-01', true],

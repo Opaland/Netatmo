@@ -11,6 +11,7 @@ import { routeKey } from '../router';
 import { html } from '../trusted';
 import { avgPrice, costAvailable, esc, fmtKwh, lastDay, table, tableToggle } from '../ui';
 import { offlineInfo } from './offline-rooms';
+import { cutDays } from './quality';
 
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
@@ -40,6 +41,7 @@ export function renderExplain(view: HTMLElement, asked?: string) {
     temps: d.temps,
     runs: off.runs,
     estimate: off.estimate,
+    cuts: cutDays(),
   });
   const select = `<label class="select"><span>Mois expliqué</span> <select data-explain-month>${months
     .map((m) => `<option value="${m}"${m === month ? ' selected' : ''}>${esc(cap(monthLong(m)))}</option>`)
@@ -49,7 +51,7 @@ export function renderExplain(view: HTMLElement, asked?: string) {
     return;
   }
   const price = costAvailable() ? avgPrice(d.records) : null;
-  const counted = `Compté : ${e.basis === 'linky' ? 'tout le logement (compteur Linky)' : 'radiateurs et chauffe-eau (sans compteur Linky)'}, ${rangeLabel(e.from, e.to)}, comparé aux mêmes jours de ${monthLong(e.refFrom)}`;
+  const counted = `Compté : ${e.basis === 'linky' ? 'tout le logement (compteur Linky)' : 'radiateurs et chauffe-eau (sans compteur Linky)'}, ${rangeLabel(e.from, e.to)}, comparé aux mêmes jours de ${monthLong(e.refFrom)}${cutScope(e)}`;
   const up = e.delta >= 0;
   const head = Math.abs(e.pct) < 3 ? 'Comme l’an dernier' : `${kwhSigned(e.delta)} vs ${monthShort(e.refFrom)}`;
   view.innerHTML = html(`<div class="periodbar">${select}<p class="scope" aria-live="polite">${esc(counted)}</p></div>
@@ -80,6 +82,16 @@ export function renderExplain(view: HTMLElement, asked?: string) {
     ${howDetails('Le détail des parts', howText(e))}
     <p class="hint muted">Pour un autre mois : la liste ci-dessus. Pour le détail jour par jour : <a class="link" href="#historique">Historique</a>.</p>
   </section>`);
+}
+
+/** #394: « , sans le 14 oct. (coupure de courant), retiré des deux mois » — the days left out of both periods. */
+export function cutScope(e: Explanation): string {
+  if (!e.cuts.length) return '';
+  const what = (c: Explanation['cuts'][number]) =>
+    `le ${dayShort(c.day)} (coupure ${c.kind === 'power' ? 'de courant' : 'Internet'}${c.on === 'ref' ? ` en ${c.ref.slice(0, 4)}` : ''})`;
+  const list = e.cuts.map(what);
+  const joined = list.length > 1 ? `${list.slice(0, -1).join(', ')} ni ${list[list.length - 1]}` : list[0];
+  return `, sans ${joined} : ${e.cuts.length > 1 ? 'jours retirés' : 'jour retiré'} des deux mois`;
 }
 
 /** Short name of a part on the chart (the full one, with its note, is in the list under it). */
