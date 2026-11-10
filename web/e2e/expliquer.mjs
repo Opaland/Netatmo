@@ -85,13 +85,15 @@ try {
     // ---------------------------------------------------------------- Accueil: the room offline, the stove, the link under the verdict
     progress(`${name} : Accueil`);
     await go(page, 'accueil');
-    const alerts = await page.locator('#alerts').innerText();
-    check(/Chambre enfant hors ligne depuis le 5 nov\. Que faire \?/.test(alerts), `${name} : alerte « hors ligne » absente de l'Accueil (« ${alerts.slice(0, 200)} »)`);
-    check(!/Cuisine/.test(alerts), `${name} : alerte pour la Cuisine, arrêtée volontairement (« ${alerts.slice(0, 200)} »)`);
+    // the room out of reach is said in the verdict that leaves it out, with what to do (#346, #311)
+    const warn = (await page.locator('.verdict .verdict-warn').allInnerTexts()).join(' ');
+    check(/Chambre enfant hors ligne depuis le 5 nov\., non comptée \(que faire \?\)/.test(warn), `${name} : « hors ligne » absent du verdict (« ${warn} »)`);
+    check(!/Cuisine/.test(warn), `${name} : la Cuisine, arrêtée volontairement, signalée hors ligne (« ${warn} »)`);
+    check((await page.locator('.verdict .verdict-warn a[href="#piece-r-ch2"]').count()) === 1, `${name} : « que faire ? » ne mène pas à la Chambre enfant`);
     const link = page.locator('.verdict a.verdict-link[href^="#outils-expliquer-"]');
     check((await link.count()) === 1, `${name} : lien « Pourquoi ? » absent sous le verdict`);
     const sub = await page.locator('.verdict').innerText();
-    check(/Pourquoi \? \(poêle\)/.test(sub) && /dont le poêle \(Cuisine\)/.test((await link.getAttribute('aria-label')) ?? ''), `${name} : le verdict n'attribue pas la baisse au poêle (« ${sub.slice(0, 300)} »)`);
+    check(/Pourquoi \? \(poêle\)/.test(sub) && /dont le poêle \(Cuisine\)/.test((await link.textContent()) ?? ''), `${name} : le verdict n'attribue pas la baisse au poêle (« ${sub.slice(0, 300)} »)`);
     check((await wide(page)) <= 1, `${name} : défilement horizontal sur l'Accueil (${await wide(page)} px)`);
 
     // ---------------------------------------------------------------- the link opens the month shown
@@ -105,12 +107,33 @@ try {
     // ---------------------------------------------------------------- January 2026, the owner's question
     await page.selectOption('select[data-explain-month]', '2026-01');
     await shown(page, 'outils-expliquer-2026-01');
-    await page.waitForSelector('#explain-chart canvas', { timeout: 15000 }).catch(() => errors.push(`${name} : cascade absente`));
+    await page.waitForSelector('#explain-chart .cascade-row', { timeout: 15000 }).catch(() => errors.push(`${name} : cascade absente`));
+    // short names on the chart, and no text over another text or a bar (360 px, text at 200 % included)
+    const names = await page.locator('#explain-chart .cascade-label').allInnerTexts();
+    check(names.join('|') === 'Météo|Consignes|Poêle|Pièces|Eau chaude|Autres', `${name} : libellés de la cascade (${names.join(' | ')})`);
+    const clash = await page.evaluate(() => {
+      const boxes = [...document.querySelectorAll('#explain-chart .cascade-label, #explain-chart .cascade-value, #explain-chart .cascade-track i')].map((e) => {
+        const r = e.getBoundingClientRect();
+        return { what: `${e.className || e.tagName} « ${e.textContent} »`, l: r.left, r: r.right, t: r.top, b: r.bottom, text: e.tagName !== 'I' };
+      });
+      const out = [];
+      for (let i = 0; i < boxes.length; i++) {
+        const a = boxes[i];
+        if (a.text && (a.l < 0 || a.r > window.innerWidth)) out.push(`${a.what} hors de l'écran`);
+        for (let j = i + 1; j < boxes.length; j++) {
+          const b = boxes[j];
+          if (!a.text && !b.text) continue;
+          if (a.l < b.r - 0.5 && b.l < a.r - 0.5 && a.t < b.b - 0.5 && b.t < a.b - 0.5) out.push(`${a.what} sur ${b.what}`);
+        }
+      }
+      return out;
+    });
+    check(!clash.length, `${name} : cascade, textes superposés : ${clash.slice(0, 4).join(' ; ')}`);
     const sentence = await page.locator('#explain-sentence').innerText();
     check(/^En janvier 2026, le logement a consommé \d+ kWh de moins qu’en janvier 2025/.test(sentence), `${name} : phrase de synthèse inattendue (« ${sentence} »)`);
     check(/Surtout le poêle \(Cuisine\)/.test(sentence) && /plus froid/.test(sentence), `${name} : la synthèse ne cite ni le poêle ni la météo (« ${sentence} »)`);
     const steps = await page.locator('#explain-steps ul[aria-label="Écart par cause"] .row').allInnerTexts();
-    const want = ['Météo', 'Températures demandées', 'Changement de mode de chauffage (poêle : Cuisine)', 'Pièces', 'Eau chaude', 'Autres usages'];
+    const want = ['Météo', 'Températures demandées', 'Changement de mode de chauffage (poêle : Cuisine)', 'Pièces', 'Eau chaude', 'Autres usages']; // the full names, under the chart
     check(want.every((w, i) => steps[i]?.startsWith(w)), `${name} : parts de l'écart (${steps.map((s) => s.split('\n')[0]).join(' | ')})`);
     const scope = await page.locator('#view .periodbar .scope').innerText();
     check(/^Compté : tout le logement \(compteur Linky\), du 1er janv\. au 31 janv\. 2026, comparé aux mêmes jours de janvier 2025$/.test(scope), `${name} : ligne « Compté : » (« ${scope} »)`);
@@ -128,6 +151,13 @@ try {
     if (name === 'clair' || big) {
       await go(page, 'outils');
       check((await page.locator('#view a[href="#outils-expliquer"]').count()) === 1, `${name} : « Expliquer un mois » absent d'Outils`);
+      // Historique: a month opens its explanation
+      await go(page, 'historique');
+      const jan = page.locator('#explain-links a[href="#outils-expliquer-2026-01"]');
+      check((await jan.count()) === 1 && /Expliquer janv\. 2026 \(janvier 2026\)/.test((await jan.textContent()) ?? ''), `${name} : pas de lien « janv. 2026 » dans l'Historique`);
+      await jan.click();
+      await shown(page, 'outils-expliquer-2026-01');
+      check((await page.locator('select[data-explain-month]').inputValue()) === '2026-01', `${name} : l'Historique n'ouvre pas janvier 2026`);
       await go(page, 'pieces');
       const list = await page.locator('#view ul[aria-label^="Pièces chauffées"]').innerText();
       check(/Chambre enfant[\s\S]*hors ligne depuis le 5 nov\. 2026/.test(list), `${name} : Pièces ne dit pas que la Chambre enfant est hors ligne`);
@@ -154,6 +184,11 @@ try {
       // 2025 and 2026 (since the stove): never explained by the kitchen; 2024 has its own gap (two rooms)
       const years = (await page.locator('#quality-years .year-verdict').allInnerTexts()).slice(0, 2).join(' ');
       check(/^2026/.test(years) && /2025/.test(years) && !/Cuisine/.test(years), `${name} : 2025 ou 2026 expliquée par la Cuisine arrêtée (« ${years.replace(/\s+/g, ' ').slice(0, 300)} »)`);
+      // État des appareils: the kitchen radiator is switched off on purpose, not « injoignable »
+      await page.waitForSelector('#devices-card:not([hidden])', { timeout: 15000 });
+      const dev = await page.locator('#devices-card').innerText();
+      check(/Radiateur arrêté volontairement : Cuisine, depuis le 14 octobre 2025 \(chauffée par un poêle à bois\)/.test(dev), `${name} : État des appareils sans « radiateur arrêté volontairement » (« ${dev.slice(0, 300)} »)`);
+      check(/ne répond plus : radiateur \(Chambre enfant\)/.test(dev) && !/radiateur \(Cuisine\) depuis/.test(dev), `${name} : État des appareils dit la Cuisine injoignable (« ${dev.slice(0, 300)} »)`);
       check((await wide(page)) <= 1, `${name} : défilement horizontal sur État des données (${await wide(page)} px)`);
       await audit(page, `${name}/etat`, enhanced);
 
@@ -170,12 +205,12 @@ try {
         await page.click('#stop-add');
         await page.waitForSelector('#stopped-card [data-stop-remove="r-ch2"]', { timeout: 10000 });
         await go(page, 'accueil');
-        check(!/Chambre enfant hors ligne/.test(await page.locator('#alerts').innerText()), `${name} : alerte toujours là après « arrêté volontairement »`);
+        check(!/Chambre enfant hors ligne/.test(await page.locator('.verdict').innerText()), `${name} : alerte toujours là après « arrêté volontairement »`);
         await go(page, 'parametres-logement');
         await page.click('#stopped-card [data-stop-remove="r-ch2"]');
         await page.waitForSelector('#stopped-card #stop-room option[value="r-ch2"]', { state: 'attached', timeout: 10000 });
         await go(page, 'accueil');
-        check(/Chambre enfant hors ligne/.test(await page.locator('#alerts').innerText()), `${name} : alerte absente après avoir retiré la Chambre enfant`);
+        check(/Chambre enfant hors ligne/.test(await page.locator('.verdict').innerText()), `${name} : alerte absente après avoir retiré la Chambre enfant`);
       }
     }
     await ctx.close();

@@ -15,7 +15,8 @@ import {
 import { compareOffers, daySplits, djuBetween, monthlyDju, offPeakShares } from '../analysis';
 import { ds, setState, state } from '../app';
 import { type Series, barChart, chartCaption, cssVar, lineChart } from '../charts';
-import { SEASON_DEFINITION, dayLong, seasonLabel, signedPct } from '../glossary';
+import { SEASON_DEFINITION, dayLong, monthLong, monthShort, seasonLabel, signedPct } from '../glossary';
+import { routeKey } from '../router';
 import { uncertainDays } from '../checks';
 import { WITH_SUBSCRIPTION } from '../synthese';
 import { bucketMarks, monthKeys, shortDate, yoyCaveat, yoyWindow } from '../periods';
@@ -48,6 +49,24 @@ import { tenant, tenantNote } from '../tenant';
  * #308: « history » (Historique: years or seasons compared, annual totals), « offers » (Outils →
  * Quelle offre ?) or « ev » (Outils → Une voiture électrique).
  */
+/**
+ * #337: « Pourquoi ce mois ? » — each of the last 12 months that has the same month a year
+ * earlier opens « Expliquer un mois » on it (#outils-expliquer-AAAA-MM).
+ */
+export function explainLinks(records: DayRecord[], last: string): string {
+  const have = new Set(records.map((r) => r.day.slice(0, 7)));
+  const months: string[] = [];
+  for (let i = 0; i < 12; i++) {
+    const d = new Date(Date.UTC(Number(last.slice(0, 4)), Number(last.slice(5, 7)) - 1 - i, 1));
+    const ym = d.toISOString().slice(0, 7);
+    if (have.has(ym) && have.has(`${Number(ym.slice(0, 4)) - 1}${ym.slice(4)}`)) months.push(ym);
+  }
+  if (!months.length) return '';
+  return `<p class="hint explain-links" id="explain-links">Pourquoi un mois a changé ? ${months
+    .map((m) => `<a class="link" href="#${routeKey({ page: 'outil', tool: 'expliquer', month: m })}"><span class="sr-only">Expliquer </span>${esc(monthShort(m))}<span class="sr-only"> (${esc(monthLong(m))})</span></a>`)
+    .join(' · ')}</p>`;
+}
+
 export function renderCompare(view: HTMLElement, records: DayRecord[], part: 'history' | 'offers' | 'ev' = 'history') {
   if (part === 'offers') {
     view.innerHTML = html(comparatorCard() || '<section class="card"><p class="hint muted">Comparateur disponible avec les tarifs réglementés et les jours Tempo (prochaine collecte).</p></section>');
@@ -159,6 +178,7 @@ export function renderCompare(view: HTMLElement, records: DayRecord[], part: 'hi
     }</details>`
     }
     <div id="cmp-table"></div>
+    ${explainLinks(records, last)}
     <details class="table-details"><summary>Comment c'est calculé</summary><p class="hint muted">${
       mode === 'season'
         ? `Saison de chauffe : ${SEASON_DEFINITION}, pour comparer des hivers entiers. L'hiver en cours (pointillé) s'arrête au ${longDate(last)}.`

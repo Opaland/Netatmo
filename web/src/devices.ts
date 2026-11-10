@@ -62,6 +62,21 @@ export function offlineModules(doc: DevicesDoc | null | undefined): { key: strin
   return out;
 }
 
+/**
+ * #346: the modules not answering, split between the rooms whose radiator was switched off on
+ * purpose (⚙ Mon logement: a stove…), silent as expected, and the others (out of reach).
+ */
+export function splitStopped<T extends { room?: string }, S extends { room: string; from: string }>(mods: T[], stopped: S[]): { off: T[]; stopped: (T & { stop: S })[] } {
+  const by = new Map(stopped.map((s) => [s.room, s]));
+  const out: { off: T[]; stopped: (T & { stop: S })[] } = { off: [], stopped: [] };
+  for (const m of mods) {
+    const s = m.room ? by.get(m.room) : undefined;
+    if (s) out.stopped.push({ ...m, stop: s });
+    else out.off.push(m);
+  }
+  return out;
+}
+
 /** #214: days a room had a module not answering (nightly status, or offline hours of the snapshots). */
 export function offlineDays(doc: DevicesDoc | null | undefined, roomOffline?: Map<string, Set<string>>): Map<string, Set<string>> {
   const out = new Map<string, Set<string>>();

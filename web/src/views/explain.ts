@@ -3,7 +3,6 @@
 // the change drawn from 0 (no zoomed axis), the rooms, the rooms offline (#346), and how it is
 // computed. Loaded on demand (pages.ts); the computations are in explain.ts.
 import { activeRooms, ds } from '../app';
-import { waterfallChart } from '../charts';
 import { alert, howDetails, list } from '../components';
 import { type Explanation, STEP_LABEL, type Step, explainMonth, explainSentence, explainableMonths, kwhSigned, stepNote } from '../explain';
 import { dayShort, monthLong, monthShort, rangeLabel, signedPct } from '../glossary';
@@ -63,7 +62,7 @@ export function renderExplain(view: HTMLElement, asked?: string) {
   <section class="card" id="explain-steps" aria-labelledby="explain-steps-title">
     <div class="card-head"><h2 id="explain-steps-title">D’où vient l’écart</h2><span class="sub muted">kWh, de ${esc(monthShort(e.refFrom))} à ${esc(monthShort(e.from))}</span></div>
     <p class="card-sub">Chaque barre part de 0 : à droite ce qui a fait monter la consommation, à gauche ce qui l’a fait baisser. Les barres s’additionnent : ${esc(fmtKwh(e.ref))} ${esc(kwhSigned(e.delta).replace(/^([+−])/, '$1 '))} = ${esc(fmtKwh(e.now))}.</p>
-    <div class="chart" id="explain-chart" role="img" aria-label="Écart par cause, en kWh"></div>
+    ${cascade(e)}
     ${list(e.steps.map((s) => stepRow(e, s)), 'Écart par cause')}
     ${tableToggle(
       table(
@@ -81,16 +80,36 @@ export function renderExplain(view: HTMLElement, asked?: string) {
     ${howDetails('Le détail des parts', howText(e))}
     <p class="hint muted">Pour un autre mois : la liste ci-dessus. Pour le détail jour par jour : <a class="link" href="#historique">Historique</a>.</p>
   </section>`);
-  const el = document.getElementById('explain-chart');
-  if (el)
-    waterfallChart(el, {
-      startLabel: monthShort(e.refFrom),
-      endLabel: monthShort(e.from),
-      start: e.ref,
-      steps: e.steps.map((s) => ({ name: s.label + (s.estimated ? ' (estimée)' : ''), delta: s.kwh })),
-      keepOrder: true,
-      title: 'Écart par cause',
-    });
+}
+
+/** Short name of a part on the chart (the full one, with its note, is in the list under it). */
+export function shortLabel(e: Explanation, s: Step): string {
+  if (s.key === 'mode') return e.stopped.every((x) => x.stop.reason === 'poele') ? 'Poêle' : 'Arrêts';
+  return ({ meteo: 'Météo', consignes: 'Consignes', pieces: 'Pièces', horsligne: 'Hors ligne', eau: 'Eau chaude', autres: 'Autres' } as const)[s.key];
+}
+
+/**
+ * #337 « D'où vient l'écart » at 360 px (finitions): one row per part, three columns — short name,
+ * the bar from a 0 line shared by all rows, the signed value — so that no text can ride over
+ * another, whatever the length of a bar or the size of the text. Plain HTML (no chart library).
+ */
+function cascade(e: Explanation): string {
+  const up = Math.max(0, ...e.steps.map((s) => s.kwh));
+  const down = Math.max(0, ...e.steps.map((s) => -s.kwh));
+  const span = up + down || 1;
+  const zero = (down / span) * 100;
+  const pct = (v: number) => `${Math.round(v * 10) / 10}%`;
+  const label = `Écart par cause, en kWh. de ${fmtKwh(e.ref)} (${monthShort(e.refFrom)}) à ${fmtKwh(e.now)} (${monthShort(e.from)}) ; ${e.steps
+    .map((s) => `${shortLabel(e, s)} ${kwhSigned(s.kwh)}`)
+    .join(', ')}.`;
+  return `<p class="cascade-ends"><span>${esc(monthShort(e.refFrom))} : <b>${esc(fmtKwh(e.ref))}</b></span> <span aria-hidden="true">→</span> <span>${esc(monthShort(e.from))} : <b>${esc(fmtKwh(e.now))}</b> (${esc(signedPct(e.pct))})</span></p>
+  <div class="cascade" id="explain-chart" role="img" aria-label="${esc(label)}" style="--zero:${pct(zero)}">${e.steps
+    .map((s) => {
+      const w = (Math.abs(s.kwh) / span) * 100;
+      const left = s.kwh >= 0 ? zero : zero - w;
+      return `<div class="cascade-row" aria-hidden="true"><span class="cascade-label">${esc(shortLabel(e, s))}</span><span class="cascade-track"><i class="${s.kwh >= 0 ? 'up' : 'down'}" style="left:${pct(left)};width:${pct(w)}"></i></span><span class="cascade-value">${esc(kwhSigned(s.kwh))}</span></div>`;
+    })
+    .join('')}</div>`;
 }
 
 function stepRow(e: Explanation, s: Step) {

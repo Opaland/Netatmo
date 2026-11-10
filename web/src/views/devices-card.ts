@@ -4,12 +4,13 @@
 // #278 contract and Tempo colour seen by Intuis, #279 Shelly channels (names and roles).
 import { ds } from '../app';
 import { loadRoomState } from '../data';
-import { offlineModules, peakHours, restarts, roomStateHours, stationHealth, typeLabel, wifiSummary } from '../devices';
+import { offlineModules, peakHours, splitStopped, restarts, roomStateHours, stationHealth, typeLabel, wifiSummary } from '../devices';
 import { ROLE_LABEL, type ShellyRole, readShellyPrefs, writeShellyPrefs } from '../shelly-prefs';
 import { addDays } from '../aggregate';
 import { esc, lastDay, longDate, table } from '../ui';
 import { html } from '../trusted';
 import { f1, intuisContractLine, plural, roomLabel } from './devices-quality';
+import { stoppedRooms } from './offline-rooms';
 
 const stationName = (key: string) => ds!.station?.modules?.[key]?.name ?? key;
 
@@ -30,14 +31,22 @@ export function mountDevices(el: HTMLElement | null) {
   const doc = d.devices;
   const parts: string[] = [];
   // #214
-  const off = offlineModules(doc);
+  // #346: a radiator switched off on purpose (⚙ Mon logement) is silent as expected, not « injoignable »
+  const { off, stopped } = splitStopped(offlineModules(doc), stoppedRooms());
+  for (const m of stopped) {
+    parts.push(
+      `<p class="hint">${esc(typeLabel(m.type).charAt(0).toUpperCase() + typeLabel(m.type).slice(1))} arrêté volontairement : ${esc(roomLabel(m.room))}, depuis le ${esc(longDate(m.stop.from))}${
+        m.stop.label ? ` (${esc(m.stop.label)})` : ''
+      }. Il ne répond plus et c'est normal ; réglage dans <a class="link" href="#parametres-logement">Mon logement</a>.</p>`,
+    );
+  }
   if (off.length) {
     parts.push(
       `<p class="notice">⚠️ ${plural(off.length, 'module')} Intuis ne répond plus : ${off
         .map((m) => `${esc(typeLabel(m.type))} (${esc(roomLabel(m.room))}) depuis le ${esc(longDate(m.since))}`)
         .join(' ; ')}. Les jours concernés, la pièce peut afficher 0 kWh sans avoir rien consommé : ce sont des jours « module hors ligne ».</p>`,
     );
-  } else if (doc?.reach) parts.push('<p class="hint muted">✓ Tous les radiateurs, relais et le chauffe-eau répondaient lors de la dernière collecte.</p>');
+  } else if (doc?.reach && !stopped.length) parts.push('<p class="hint muted">✓ Tous les radiateurs, relais et le chauffe-eau répondaient lors de la dernière collecte.</p>');
   // #276
   const boots = restarts(doc, addDays(last, -30));
   const wifi = wifiSummary(doc, addDays(last, -30), last);

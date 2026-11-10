@@ -2082,3 +2082,77 @@ code.hash {
     border: 1px solid CanvasText;
   }
 }
+
+/* #337 « D'où vient l'écart » : short name | bar from a shared 0 line | value, nothing overlaps */
+.cascade-ends {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 var(--space-2);
+  margin: 0 0 var(--space-2);
+  font-size: var(--font-sm);
+}
+.cascade {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0 0 var(--space-3);
+}
+.cascade-row {
+  /* one line when it fits; with large text the name goes above its bar and value, never over them */
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-2);
+  font-size: var(--font-sm);
+}
+.cascade-label {
+  flex: 0 0 5.5em;
+}
+.cascade-track {
+  flex: 1 1 5em;
+}
+.cascade-value {
+  flex: 0 0 6.5em; /* the same on every row: the 0 line stays aligned from row to row */
+}
+.cascade-value {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.cascade-track {
+  position: relative;
+  height: 14px;
+}
+.cascade-track::before {
+  content: '';
+  position: absolute;
+  left: var(--zero);
+  top: -4px;
+  bottom: -4px;
+  border-left: 1px solid var(--border-strong);
+}
+.cascade-track i {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  min-width: 1px;
+  border-radius: 3px;
+}
+.cascade-track i.up {
+  background: var(--state-bad);
+}
+.cascade-track i.down {
+  background: var(--state-good);
+}
+@media (forced-colors: active) {
+  .cascade-track i {
+    background: CanvasText;
+  }
+}
+
+/* #346: a room out of reach, said in the verdict that leaves it out */
+.verdict-warn b {
+  color: var(--text);
+}
+.verdict-warn > span[aria-hidden] {
+  color: var(--state-warn);
+}
