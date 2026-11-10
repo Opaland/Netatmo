@@ -6,6 +6,7 @@ Keys and certificates are made on the fly for the tests: no real key, secret or 
 import base64
 import json
 import os
+import re
 import shutil
 import subprocess
 import threading
@@ -288,20 +289,20 @@ def test_commande_volets_journal_public_sans_nom_ni_valeur(tmp_path, pair, monke
 
 
 def test_workflow_volets_passe_les_entrees_par_l_environnement():
-    import yaml
-
-    wf = yaml.safe_load((ROOT / ".github" / "workflows" / "volets.yml").read_text())
-    steps = wf["jobs"]["volets"]["steps"]
-    for st in steps:
-        # an input expanded inside a script would be a command injection
-        assert "inputs." not in st.get("run", ""), st.get("name")
-        # secrets only where needed
-        if "secrets." in json.dumps(st.get("env", {})):
-            assert st.get("name") in {None, "Vérification et agrégation"} or st.get("id") == "check"
-    assert wf["permissions"] == {"contents": "read"}
-    assert wf["jobs"]["volets"]["permissions"] == {"contents": "write"}
-    pip = [st for st in steps if "pip install" in st.get("run", "")]
-    assert pip and "--require-hashes" in pip[0]["run"] and "env" not in pip[0]
+    """Read as text (PyYAML is not a dependency of the CI): every `inputs.` and `secrets.` sits on
+    an `env:` line, never inside a `run:` script, and the secrets only in two steps."""
+    text = (ROOT / ".github" / "workflows" / "volets.yml").read_text()
+    lines = [line for line in text.splitlines() if not line.lstrip().startswith("#")]
+    env_line = re.compile(r"^\s+[A-Z_]+: \$\{\{ (inputs|secrets)\.[A-Za-z_]+[^}]*\}\}$")
+    for line in lines:
+        if "inputs." in line and "description" not in line:
+            assert env_line.match(line), line
+    steps = re.split(r"\n      - ", "\n".join(lines))
+    with_secrets = [st for st in steps if "secrets." in st]
+    assert len(with_secrets) == 2 and "id: check" in with_secrets[0] and "collector volets" in with_secrets[1]
+    assert "permissions:\n  contents: read" in text and "    permissions:\n      contents: write" in text
+    pip = [st for st in steps if "pip install" in st]
+    assert len(pip) == 1 and "--require-hashes" in pip[0] and "env:" not in pip[0]
 
 
 # ------------------------------------------------------------------ the NAS script
@@ -343,7 +344,7 @@ def server():
 
 
 def nas(tmp_path, server, cert_pem=None):
-    """A NAS folder: the script, its configuration (600) and a fake clock."""
+    """A NAS folder: the script and its configuration (600)."""
     home = tmp_path / "nas"
     home.mkdir()
     shutil.copy(SCRIPT, home / "volets.sh")
@@ -356,18 +357,11 @@ def nas(tmp_path, server, cert_pem=None):
         f"GITHUB_API=http://127.0.0.1:{port}\n"
     )
     conf.chmod(0o600)
-    bin_ = home / "bin"
-    bin_.mkdir()
-    real = shutil.which("date")
-    (bin_ / "date").write_text(
-        f'#!/bin/sh\ncase "$*" in *-d*) exec {real} "$@" ;; esac\nexec {real} -d "@$FAKE_NOW" "$@"\n'
-    )
-    (bin_ / "date").chmod(0o755)
     return home
 
 
 def run(shell, home, cmd, now):
-    env = {**os.environ, "PATH": f"{home / 'bin'}:{os.environ['PATH']}", "FAKE_NOW": str(now), "TZ": TZ}
+    env = {**os.environ, "VOLETS_MAINTENANT": str(now), "TZ": TZ}
     return subprocess.run([*shell, str(home / "volets.sh"), cmd], env=env, capture_output=True, text=True, timeout=60)
 
 

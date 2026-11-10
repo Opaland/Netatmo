@@ -30,6 +30,16 @@ umask 077
 ici=$(cd "$(dirname "$0")" && pwd)
 CONF=${VOLETS_CONF:-$ici/volets.conf}
 
+# The clock. VOLETS_MAINTENANT (epoch seconds) replaces it in the tests only: a `date` placed
+# earlier in PATH is not enough, a busybox shell may run its own `date` applet.
+quand() {
+	if [ -n "${VOLETS_MAINTENANT:-}" ]; then
+		date -d "@$VOLETS_MAINTENANT" "$@"
+	else
+		date "$@"
+	fi
+}
+
 die() {
 	printf 'volets : %s\n' "$1" >&2
 	exit "${2:-1}"
@@ -190,9 +200,9 @@ nouveau_jour() {
 
 releve() {
 	charger_conf
-	maintenant=$(date +%s)
-	jour=$(date +%Y-%m-%d)
-	heure=$(date +%H)
+	maintenant=$(quand +%s)
+	jour=$(quand +%Y-%m-%d)
+	heure=$(quand +%H)
 	tmp="$DOSSIER/.reponse"
 	code=$(lire_passerelle "$tmp")
 	case $code in
@@ -297,18 +307,18 @@ envoyer_jour() {
 	rm -f "$corps"
 	if [ "$code" = 204 ]; then
 		: >"$DOSSIER/envoye-$j"
-		printf '%s envoi du %s : fait%s\n' "$(date '+%F %T')" "$j" "${err:+ (erreur signalée : $err)}" >>"$DOSSIER/volets.log"
+		printf '%s envoi du %s : fait%s\n' "$(quand '+%F %T')" "$j" "${err:+ (erreur signalée : $err)}" >>"$DOSSIER/volets.log"
 		return 0
 	fi
 	printf '%s envoi du %s : refusé par GitHub (HTTP %s), nouvel essai la nuit prochaine\n' \
-		"$(date '+%F %T')" "$j" "${code:-aucune réponse}" >>"$DOSSIER/volets.log"
+		"$(quand '+%F %T')" "$j" "${code:-aucune réponse}" >>"$DOSSIER/volets.log"
 	return 1
 }
 
 envoi() {
 	charger_conf
 	[ -n "$GITHUB_TOKEN" ] || die "GITHUB_TOKEN manquant dans $CONF"
-	auj=$(date +%Y-%m-%d)
+	auj=$(quand +%Y-%m-%d)
 	echec=0
 	fait=
 	# The last 7 finished days not sent yet (a night without network is caught up the next one).
@@ -321,7 +331,7 @@ envoi() {
 		done | sort -u | awk -v a="$auj" '$0 < a' | tail -n 7
 	)
 	# Yesterday is always sent, even with no journal at all (an error line rather than nothing).
-	hier=$(date -d "@$(($(date +%s) - 86400))" +%Y-%m-%d 2>/dev/null || date -d yesterday +%Y-%m-%d 2>/dev/null || true)
+	hier=$(date -d "@$(($(quand +%s) - 86400))" +%Y-%m-%d 2>/dev/null || true)
 	for j in $jours $hier; do
 		[ -f "$DOSSIER/envoye-$j" ] && continue
 		case " $fait " in *" $j "*) continue ;; esac
