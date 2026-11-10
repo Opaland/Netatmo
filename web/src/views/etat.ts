@@ -21,7 +21,7 @@ import {
   seenParts,
   yearVerdicts,
 } from '../data-quality';
-import { offlineDays, offlineModules, restarts, setupDates } from '../devices';
+import { offlineDays, offlineModules, restarts, setupDates, splitStopped } from '../devices';
 import { MONTHS_LONG, dayShort } from '../glossary';
 import { suspectDays } from '../reconstitute';
 import { html } from '../trusted';
@@ -47,7 +47,7 @@ function input(): QualityInput {
     station: d.station,
     devices: {
       offline: offlineDays(doc),
-      offlineNow: offlineModules(doc),
+      offlineNow: splitStopped(offlineModules(doc), stoppedRooms()).off,
       boots: restarts(doc).map((b) => b.slice(0, 10)),
       waterSetup: setupDates(doc)
         .filter((s) => s.type === 'NMW')
