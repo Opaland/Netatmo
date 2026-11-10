@@ -10,7 +10,7 @@ agents IA autour de rôles successifs, chacun produisant un artefact qui sert d'
 **Analyst** (brief) → **PM** (PRD) → **Architect** (architecture) → **PO / Scrum Master** (épopées et
 récits) → **Dev** → **QA**. Les artefacts sont versionnés avec le code et restent la source de vérité :
 un agent ou un humain qui reprend le projet part de ces fichiers, pas de l'historique d'une conversation.
-Ce dossier ajoute une revue par 50 personas pour mesurer les besoins avant de construire.
+Ce dossier ajoute une revue par 72 personas pour mesurer les besoins avant de construire.
 
 ## Fichiers
 

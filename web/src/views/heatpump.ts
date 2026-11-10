@@ -5,7 +5,7 @@ import { offPeakShares, signaturePoints } from '../analysis';
 import { activeRooms, ds } from '../app';
 import { referenceSeason } from '../checks';
 import { displayId } from '../household';
-import { COP_CURVE, type CopMode, simulateHeatPump } from '../heatpump';
+import { COP_CURVE, type CopMode, HP_DEFAULT, type HeatPumpInputs, parseHeatPumpInputs, simulateHeatPump } from '../heatpump';
 import { esc, fmtEur, fmtKwh, lastDay, nf0, offCol, table } from '../ui';
 import { currentHcHp } from './waterheater';
 import { html } from '../trusted';
@@ -15,12 +15,7 @@ import { fmt1 as num1 } from '../glossary';
 
 const LS = lsKey('heatpump');
 const FRANCE_RENOV = 'https://france-renov.gouv.fr/';
-interface Inputs {
-  mode: 'scop' | 'curve';
-  low: number;
-  high: number;
-  share: number; // 0..1
-}
+type Inputs = HeatPumpInputs;
 const SHARES: [number, string][] = [
   [1, 'tout le chauffage'],
   [0.75, 'les trois quarts'],
@@ -28,18 +23,10 @@ const SHARES: [number, string][] = [
 ];
 
 function load(): Inputs {
-  const def: Inputs = { mode: 'scop', low: 3, high: 4, share: 1 };
   try {
-    const o = JSON.parse(localStorage.getItem(LS) ?? '{}') as Partial<Inputs>;
-    const ok = (v: unknown) => typeof v === 'number' && v >= 1 && v <= 8;
-    return {
-      mode: o.mode === 'curve' ? 'curve' : 'scop',
-      low: ok(o.low) ? o.low! : def.low,
-      high: ok(o.high) ? o.high! : def.high,
-      share: SHARES.some(([s]) => s === o.share) ? o.share! : def.share,
-    };
+    return parseHeatPumpInputs(JSON.parse(localStorage.getItem(LS) ?? '{}'), SHARES.map(([s]) => s));
   } catch {
-    return def;
+    return { ...HP_DEFAULT };
   }
 }
 function save(v: Inputs) {

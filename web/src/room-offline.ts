@@ -58,7 +58,8 @@ export function parseStopped(v: unknown): StoppedRoom[] {
   const out = new Map<string, StoppedRoom>();
   for (const x of v as Partial<StoppedRoom>[]) {
     if (!x || typeof x.room !== 'string' || !x.room || x.room.length > 64 || typeof x.from !== 'string' || !DAY_RE.test(x.from)) continue;
-    const reason = (x.reason && x.reason in STOP_REASONS ? x.reason : 'autre') as StopReason;
+    // #359: own keys only (`in` also accepts « constructor », « __proto__ »…)
+    const reason = (typeof x.reason === 'string' && Object.hasOwn(STOP_REASONS, x.reason) ? x.reason : 'autre') as StopReason;
     out.set(x.room, { room: x.room, from: x.from, reason, label: typeof x.label === 'string' ? x.label.slice(0, 60) : '' });
   }
   return [...out.values()].sort((a, b) => (a.from < b.from ? -1 : a.from > b.from ? 1 : a.room.localeCompare(b.room)));

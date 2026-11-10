@@ -77,18 +77,21 @@ export function parseRoute(hash: string): Route | null {
   if (h === 'bienvenue') return { page: 'bienvenue', step: 1 };
   const b = /^bienvenue-([2-4])$/.exec(h);
   if (b) return { page: 'bienvenue', step: Number(b[1]) as OnboardingStep };
+  // #359: own keys only (`in` also accepts « constructor », « hasOwnProperty »…)
   let m = /^parametres-(.+)$/.exec(h);
-  if (m) return m[1] in SETTINGS ? { page: 'parametres', section: m[1] as SettingsPage } : null;
+  if (m) return Object.hasOwn(SETTINGS, m[1]) ? { page: 'parametres', section: m[1] as SettingsPage } : null;
   m = /^compteur-(.+)$/.exec(h);
-  if (m) return m[1] in METER_PAGES ? { page: 'compteur-detail', sub: m[1] as MeterPage } : null;
+  if (m) return Object.hasOwn(METER_PAGES, m[1]) ? { page: 'compteur-detail', sub: m[1] as MeterPage } : null;
   m = /^outils-expliquer-(\d{4}-(?:0[1-9]|1[0-2]))$/.exec(h); // #337: « expliquer » a month
   if (m) return { page: 'outil', tool: 'expliquer', month: m[1] };
   m = /^outils-(.+)$/.exec(h);
-  if (m) return m[1] in TOOLS ? { page: 'outil', tool: m[1] as Tool } : null;
+  if (m) return Object.hasOwn(TOOLS, m[1]) ? { page: 'outil', tool: m[1] as Tool } : null;
   m = /^piece-(.+)$/.exec(h);
   if (m) {
     try {
-      return { page: 'piece', room: decodeURIComponent(m[1]) };
+      const room = decodeURIComponent(m[1]);
+      encodeURIComponent(room); // #359: half a UTF-16 pair decodes but would make routeKey throw
+      return { page: 'piece', room };
     } catch {
       return null;
     }

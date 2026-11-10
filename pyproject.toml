@@ -22,6 +22,10 @@ target-version = "py312"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+# #363: the tests that call the real public sources (tests/test_sources_reelles.py) are excluded by
+# default; `pytest -m reseau` runs them (workflow « Sources publiques »).
+addopts = '-m "not reseau"'
+markers = ["reseau: appelle une vraie source publique sans clé (Open-Meteo, CRE, Tempo) ; hors CI bloquante"]
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "B", "UP", "SIM", "DTZ"]

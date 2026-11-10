@@ -336,6 +336,12 @@ donne l'état des pièces qu'en instantané. Pour en garder l'historique :
 La **présence** détectée par les radiateurs n'est jamais lue, sauf si vous ajoutez la variable
 `ROOM_STATE_PRESENCE` = `true` (avec l'accord du foyer) : seules des heures par jour sont alors
 gardées. Analyse d'impact courte dans [docs/api-notes.md](docs/api-notes.md#données-doccupation--analyse-dimpact-courte-s-135).
+
+De même, le **bruit** du séjour mesuré par la station Netatmo (S-11.4) n'est lu que si vous ajoutez la
+variable `STATION_NOISE` = `true` (avec l'accord du foyer) : la collecte n'en garde que le nombre
+d'heures bruyantes par jour (moyenne horaire au-dessus de 55 dB), jamais l'heure. La **pression** est
+gardée par jour sans réglage ; le **vent** et la **pluie** du jour viennent d'Open-Meteo (S-3.12) et
+s'ajoutent à la signature énergétique.
 ### Vue foyer : chambres regroupées
 
 Les consommations, profils horaires, températures et le CO₂ par chambre disent beaucoup des
@@ -522,7 +528,7 @@ docs/               notes sur l'API, étude de l'existant, feuille de route, rè
                     et Zigbee, module intérieur de la station, audit de tous les appareils et achats, origine dédiée)
   design/           inventaire de l'interface (couleurs, typographie, composants), base du design system
   revues-agents/    consignes des revues de code et design par agents (à chaque version)
-  bmad/             cadrage BMAD : brief, revue 50 personas, PRD, architecture, epics, QA
+  bmad/             cadrage BMAD : brief, revue des 72 personas, PRD, architecture, epics, QA
 .github/workflows/  CI, collecte quotidienne, déploiement GitHub Pages, revue par agents (à la demande)
 scripts/            outils ponctuels (jours Tempo, constats de revue → issues)
 ```

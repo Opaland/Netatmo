@@ -3,9 +3,11 @@
 // the axe audit. New scripts use it; the older ones move to it when they are touched.
 import { spawn } from 'node:child_process';
 import AxeBuilder from '@axe-core/playwright';
+import { assertFreshDist } from './dist-a-jour.mjs';
 
 /** Start `vite preview` on `port` (after `npm run build`); resolves with { base, stop }. */
 export async function startPreview(port) {
+  assertFreshDist(); // #361: never test an older build than the sources
   const busy = await fetch(`http://localhost:${port}/`).then(
     () => true,
     () => false,
