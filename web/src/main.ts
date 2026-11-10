@@ -6,7 +6,7 @@ import { toCsv } from './aggregate';
 import { type State, activeRooms, app, ds, onDatasetOpened, onLock, setDataset, setRenderer, setState, state } from './app';
 import { disposeAll } from './charts';
 import { BadEnvelope, WrongPassphrase } from './crypto';
-import { type Dataset, NoData, clearDataCaches, forgetKeys, load, recallKey } from './data';
+import { type Dataset, NoData, clearDataCaches, dataDir, forgetKeys, load, recallKey } from './data';
 import { type Ctl, cardHandlers, dispatch } from './events';
 import { lazyAction } from './lazy';
 import { clearMemo } from './memo';
@@ -291,7 +291,7 @@ async function shellClick(el: HTMLElement, e: MouseEvent): Promise<boolean> {
     el.textContent = 'Sauvegarde en cours…';
     try {
       const { downloadBackup } = await import('./backup');
-      const n = await downloadBackup(ds.source, ds.meta);
+      const n = await downloadBackup(dataDir(ds.source), ds.meta);
       el.textContent = `Sauvegarde téléchargée (${n} fichiers)`;
     } catch (err) {
       el.textContent = `Sauvegarde impossible : ${err instanceof Error ? err.message : err}`;

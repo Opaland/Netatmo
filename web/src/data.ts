@@ -16,6 +16,17 @@ import { track } from './ready';
 
 export type Source = 'data' | 'demo';
 
+/**
+ * #353: folder of a source. In the demo only, `?fixture=<name>` in the address opens a named
+ * test fixture (`demo-fixtures/<name>/`, made by `python -m collector fixtures` next to the build
+ * for the end-to-end tests, never deployed). Real data always come from `data/`.
+ */
+export function dataDir(source: Source, search: string = typeof location === 'undefined' ? '' : location.search): string {
+  if (source !== 'demo') return source;
+  const name = new URLSearchParams(search).get('fixture');
+  return name && /^[a-z0-9-]{1,40}$/.test(name) ? `demo-fixtures/${name}` : 'demo';
+}
+
 export interface Dataset {
   source: Source;
   key: CryptoKey;
@@ -103,7 +114,7 @@ async function getJson<T>(url: string): Promise<T> {
 
 async function optional<T>(source: Source, name: string, key: CryptoKey): Promise<T | null> {
   try {
-    return await decryptEnvelope<T>(await getJson<Envelope>(`${source}/${name}.enc.json`), key);
+    return await decryptEnvelope<T>(await getJson<Envelope>(`${dataDir(source)}/${name}.enc.json`), key);
   } catch (err) {
     if (err instanceof NoData) return null;
     throw err;
@@ -111,13 +122,13 @@ async function optional<T>(source: Source, name: string, key: CryptoKey): Promis
 }
 
 export async function keyInfo(source: Source): Promise<KeyInfo> {
-  return getJson<KeyInfo>(`${source}/keyinfo.json`);
+  return getJson<KeyInfo>(`${dataDir(source)}/keyinfo.json`);
 }
 
 export async function unlock(source: Source, passphrase: string): Promise<CryptoKey> {
   const key = await deriveKey(passphrase, await keyInfo(source));
   // Validate immediately so a typo is reported on the unlock screen.
-  await decryptEnvelope(await getJson<Envelope>(`${source}/meta.enc.json`), key);
+  await decryptEnvelope(await getJson<Envelope>(`${dataDir(source)}/meta.enc.json`), key);
   return key;
 }
 
@@ -130,11 +141,11 @@ const toMap2 = <V>(o: Record<string, Record<string, V>> | undefined, into: Map<s
 };
 
 export async function load(source: Source, key: CryptoKey): Promise<Dataset> {
-  const meta = await decryptEnvelope<Meta>(await getJson<Envelope>(`${source}/meta.enc.json`), key);
+  const meta = await decryptEnvelope<Meta>(await getJson<Envelope>(`${dataDir(source)}/meta.enc.json`), key);
   const [years, weatherDoc, linkyDoc, insights, trve, station, offers, tempo, shelly, devices] = await Promise.all([
     Promise.all(
       meta.years.map(async (y) => {
-        const doc = await decryptEnvelope<YearDoc>(await getJson<Envelope>(`${source}/${y}.enc.json`), key);
+        const doc = await decryptEnvelope<YearDoc>(await getJson<Envelope>(`${dataDir(source)}/${y}.enc.json`), key);
         return [String(y), doc] as const;
       }),
     ),

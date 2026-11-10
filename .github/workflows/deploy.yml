@@ -84,6 +84,37 @@ jobs:
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
+    outputs:
+      url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - id: deployment
         uses: actions/deploy-pages@v5
+
+  # #353: the site just deployed, in the demo: every page at 360 px and 1280 px, text at 200 %
+  # and dark, with the invariants of web/e2e/sweep.mjs (no console error, no horizontal scroll,
+  # no « NaN » / « undefined »…, no empty card, axe). Demo data only: no secret here.
+  smoke:
+    needs: deploy
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - name: Smoke test du site en ligne (démo)
+        env:
+          SWEEP_BASE: ${{ needs.deploy.outputs.url }}
+          SWEEP_EXPLORE: "0"
+        run: node e2e/sweep.mjs
