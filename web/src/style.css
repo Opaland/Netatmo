@@ -565,6 +565,20 @@ html {
     white-space: normal;
   }
 }
+/* #384: with text at 200 % on a phone (tiles under 18rem), the amount goes under its label
+   instead of squeezing it until a word breaks (« Fin d'anné / e »). */
+.kpis {
+  container-type: inline-size;
+}
+@container (max-width: 18rem) {
+  body:not(.is-report) .kpis .kpi {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  body:not(.is-report) .kpis .kpi-value {
+    grid-column: 1;
+    grid-row: 2;
+  }
+}
 .kpi,
 .card {
   background: var(--surface-card);
@@ -1020,11 +1034,13 @@ th {
 }
 
 /* ---------------------------------------------------------------- v1.1 */
+/* #384: icon beside the text while the text has 12rem (192 px at normal size); with text at
+   200 % on a phone, the icon goes above it rather than squeezing a word in two (« habit / ude »). */
 .verdict {
-  display: grid;
-  grid-template-columns: auto 1fr;
+  display: flex;
+  flex-wrap: wrap;
   gap: var(--space-3);
-  align-items: start;
+  align-items: flex-start;
   padding: var(--space-4);
   margin-bottom: var(--space-4);
   border-radius: var(--radius-lg);
@@ -1033,8 +1049,12 @@ th {
   box-shadow: var(--shadow-1);
 }
 .verdict > div {
+  flex: 1 1 12rem;
   min-width: 0;
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
+}
+.verdict > .verdict-icon {
+  flex: none;
 }
 .verdict-icon {
   display: grid;
@@ -1791,10 +1811,14 @@ code.hash {
 :is(a, button).row {
   cursor: pointer;
 }
+/* #384: a name breaks between syllables (lang="fr"), never in the middle of a short word
+   (« Salo / n »): the column of the name is not squeezed below its words (break-word, not
+   anywhere), the amount goes under it when the row is narrow (below). */
 .row .t {
   display: block;
   font-weight: 600;
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
+  hyphens: auto;
 }
 .row .s {
   display: block;
@@ -1808,6 +1832,26 @@ code.hash {
 }
 .row .chev {
   color: var(--text-muted);
+}
+/* #384: a narrow list (under 18rem: 288 px at normal size, so never at 360 px with normal text;
+   576 px with text at 200 %): the amount under the name, left-aligned, the chevron on the right
+   of both lines; the name keeps the width of the row. */
+.list {
+  container-type: inline-size;
+}
+@container (max-width: 18rem) {
+  .row {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+  }
+  .row > .v {
+    grid-column: 2;
+    grid-row: 2;
+    text-align: left;
+  }
+  .row > :last-child:not(.v) {
+    grid-column: 3;
+    grid-row: 1 / span 2;
+  }
 }
 /* Switch: a checkbox with role="switch" (change event unchanged). */
 .switch {
@@ -2094,6 +2138,11 @@ code.hash {
 }
 .row .v .s {
   font-weight: 400;
+}
+/* #384: the state of a row (« hors ligne depuis le 5 nov. 2026 ») wraps inside the column of the
+   name: kept on one line, it ran over the amount at 360 px and out of the card at 200 %. */
+.row .pill {
+  white-space: normal;
 }
 .cold-days {
   margin: 0;

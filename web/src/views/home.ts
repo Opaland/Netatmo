@@ -11,7 +11,7 @@ import { type Verdict, projectYear, verdict } from '../analysis';
 import { activeRooms, ds, state } from '../app';
 import { barChart, cssVar } from '../charts';
 import { comparison, gauge, howDetails, legend, list, seg, tile } from '../components';
-import { CATEGORY, NO_REFERENCE, PERIOD, TEMP, dayShort, monthLong, rangeLabel, signedPct, vsLabel } from '../glossary';
+import { CATEGORY, NO_REFERENCE, PERIOD, TEMP, dayShort, monthLong, rangeLabel, vsLabel } from '../glossary';
 import {
   HOME_PERIODS,
   type HomeRange,
@@ -27,7 +27,9 @@ import {
   periodPhrase,
   restOfPeriod,
   scopeTitle,
-  verdictHeadline,
+  leftOut,
+  verdictWords,
+  writtenGap,
 } from '../home';
 import { lazyCard } from '../lazy';
 import { routeKey } from '../router';
@@ -73,7 +75,7 @@ export function renderHome(view: HTMLElement, records: DayRecord[]) {
   <div class="periodbar">${seg('home', r.period, HOME_PERIODS, 'Période')}<p class="scope" aria-live="polite">${esc(scope)}${
     narrowed ? ` <button type="button" class="link" data-filter-reset>Tout compter</button>` : ''
   }</p></div>
-  ${verdictBlock(records, r, v, cmp)}
+  ${verdictBlock(r, v, cmp)}
   ${tiles(records, last)}
   <div id="budget-zone"></div>
   <div class="alerts" id="alerts"><div id="grid-zone"></div><div id="cold-alert-zone"></div></div>
@@ -115,30 +117,35 @@ function explainLink(r: HomeRange): string {
 }
 
 
-/** #346: the rooms left out of the verdict, said under it. */
-function leftNote(left: string[]): string {
-  return left.length ? `<p class="verdict-sub muted">Sans ${esc(left.join(', '))} (hors ligne).</p>` : '';
-}
-
-function verdictBlock(records: DayRecord[], r: HomeRange, v: Verdict | null, cmp: { records: DayRecord[]; left: string[] }): string {
+/**
+ * #383: one scope for the whole verdict — title, sentence, gauge, % and projection: the rooms
+ * left out of the comparison (offline over the period or a year earlier, #346) are left out of
+ * every figure, and named in the sentence (« hors Chambre enfant, hors ligne »).
+ */
+function verdictBlock(r: HomeRange, v: Verdict | null, cmp: { records: DayRecord[]; left: string[] }): string {
+  const records = cmp.records;
   const spent = money(records, r.from, r.to);
-  const what = `${spent.unit === '€' ? `<b class="num">${esc(fmtEur(spent.value))}</b> (${esc(fmtKwh(spent.kwh))})` : `<b class="num">${esc(fmtKwh(spent.kwh))}</b>`} ${spent.unit === '€' ? 'dépensés' : 'consommés'} ${esc(periodPhrase(r))}`;
   const end = projection(records, r, v, spent);
   if (!v) {
+    const out = leftOut(cmp.left);
+    const amount = spent.unit === '€' ? fmtEur(spent.value) : fmtKwh(spent.kwh);
+    const what = `<b class="num">${esc(amount)}</b>${spent.unit === '€' ? ` (${esc(fmtKwh(spent.kwh))})` : ''} ${spent.unit === '€' ? 'dépensés' : 'consommés'}${out ? ` ${esc(out)},` : ''} ${esc(periodPhrase(r))}`;
     return `<section class="verdict" aria-labelledby="verdict-title">
     <span class="verdict-icon" aria-hidden="true">·</span>
-    <div><h2 class="verdict-title" id="verdict-title">${esc(spent.unit === '€' ? fmtEur(spent.value) : fmtKwh(spent.kwh))} ${esc(periodPhrase(r))}</h2>
-    <p class="verdict-sub">${what}. Pas encore d'année précédente sur ces dates : la comparaison viendra avec un an de données.${offlineNote()}</p>${leftNote(cmp.left)}</div>
+    <div><h2 class="verdict-title" id="verdict-title">${esc(amount)} ${esc(periodPhrase(r))}</h2>
+    <p class="verdict-sub">${what}. Pas encore d'année précédente sur ces dates : la comparaison viendra avec un an de données.${offlineNote()}</p></div>
   </section>`;
   }
-  const compared = cmp.left.length ? money(cmp.records, r.from, r.to) : spent;
-  const m = moneyVerdict(v, compared.unit === '€' ? compared.value : null);
-  const icon = Math.round(m.gap) <= -1 ? '▼' : Math.round(m.gap) >= 1 ? '▲' : '=';
+  const m = moneyVerdict(v, spent.unit === '€' ? spent.value : null);
+  const gap = writtenGap(m);
+  const icon = gap < 0 ? '▼' : gap > 0 ? '▲' : '=';
   const ref = v.climate ? 'à météo comparable' : 'd’après les années passées';
   const max = Math.max(m.actual, m.expected, end ?? 0) || 1;
   const endTxt = end !== null && END_LABEL[r.period] ? `${END_LABEL[r.period]} ≈ ${fmtMoney(end, m.unit)}` : '';
+  const w = verdictWords(m, cmp.left, periodPhrase(r), ref);
+  const out = leftOut(cmp.left);
   const g = gauge({
-    label: `${scopeTitle(r)} : ${fmtMoney(m.actual, m.unit)} ${m.unit === '€' ? 'dépensés' : 'consommés'}, ${fmtMoney(m.expected, m.unit)} attendus à cette date${
+    label: `${scopeTitle(r)}${out ? `, ${out}` : ''} : ${w.spent} ${m.unit === '€' ? 'dépensés' : 'consommés'}, ${w.expectedAmount} attendus à cette date${
       endTxt ? `, environ ${fmtMoney(end!, m.unit)} prévus à la ${END_LABEL[r.period]}` : ''
     }`,
     value: m.actual,
@@ -146,13 +153,13 @@ function verdictBlock(records: DayRecord[], r: HomeRange, v: Verdict | null, cmp
     expected: m.expected,
     projected: end,
     color: '--accent',
-    scale: [`0 ${m.unit}`, `attendu au ${dayShort(r.to)} : ${fmtMoney(m.expected, m.unit)}`, ...(endTxt ? [endTxt] : [])],
+    scale: [`0 ${m.unit}`, `attendu au ${dayShort(r.to)} : ${w.expectedAmount}`, ...(endTxt ? [endTxt] : [])],
   });
   return `<section class="verdict verdict-${m.level}" aria-labelledby="verdict-title">
     <span class="verdict-icon" aria-hidden="true">${icon}</span>
     <div>
-      <h2 class="verdict-title" id="verdict-title">${esc(verdictHeadline(m))}</h2>
-      <p class="verdict-sub">${what}, pour ${esc(fmtMoney(m.expected, m.unit))} attendus ${esc(ref)} (${esc(signedPct(m.pct))}).${offlineNote()}${explainLink(r)}</p>
+      <h2 class="verdict-title" id="verdict-title">${esc(w.headline)}</h2>
+      <p class="verdict-sub"><b class="num">${esc(w.spent)}</b> ${esc(w.spentRest)}, pour ${esc(w.expected)}.${offlineNote()}${explainLink(r)}</p>
       ${g}
       ${howDetails(
         'Comment c’est calculé',
@@ -171,9 +178,12 @@ function tiles(records: DayRecord[], last: string): string {
   const monthFrom = `${last.slice(0, 8)}01`;
   const yearFrom = `${last.slice(0, 4)}-01-01`;
   const year = Number(last.slice(0, 4));
-  const mo = money(records, monthFrom, last);
+  // #383: the month tile over the scope of its comparisons (and of the verdict on « Mois »)
+  const mcmp = comparableRecords(records, monthFrom, last);
+  const mo = money(mcmp.records, monthFrom, last);
   const yr = money(records, yearFrom, last);
-  const mv = verdict(comparableRecords(records, monthFrom, last).records, monthFrom, last, ds!.weather);
+  const mv = verdict(mcmp.records, monthFrom, last, ds!.weather);
+  const mOut = leftOut(mcmp.left);
   const versus = (from: string, to: string) => {
     const p = yoy(records, from, to);
     return p === null ? `<span class="delta neutral">${NO_REFERENCE}</span>` : comparison(p, vsLabel(from, to)) + yoyGapNote(records, from, to);
@@ -194,7 +204,7 @@ function tiles(records: DayRecord[], last: string): string {
     ${tile({
       label: `${PERIOD.month}, au ${ord(last)}`,
       value: fmtMoney(mo.value, mo.unit),
-      sub: `${versus(monthFrom, last)}${mv ? `<br>${comparison(mv.pct, expectedLabel(mv.climate))}` : ''}`,
+      sub: `${versus(monthFrom, last)}${mv ? `<br>${comparison(mv.pct, expectedLabel(mv.climate))}` : ''}${mOut ? `<br><span class="muted">${esc(mOut)}</span>` : ''}`,
     })}
     ${tile({ label: PERIOD.ytd, value: fmtMoney(yr.value, yr.unit), sub: versus(yearFrom, last) })}
     ${

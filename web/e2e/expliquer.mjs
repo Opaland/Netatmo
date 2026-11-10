@@ -89,6 +89,23 @@ try {
     const warn = (await page.locator('.verdict .verdict-warn').allInnerTexts()).join(' ');
     check(/Chambre enfant hors ligne depuis le 5 nov\., non comptée \(que faire \?\)/.test(warn), `${name} : « hors ligne » absent du verdict (« ${warn} »)`);
     check(!/Cuisine/.test(warn), `${name} : la Cuisine, arrêtée volontairement, signalée hors ligne (« ${warn} »)`);
+    // #383: the figures of the verdict add up, over one scope said in the sentence
+    {
+      const num = (s) => Number(s.replace(/[\s  ]/g, '').replace('−', '-'));
+      const title = (await page.locator('#verdict-title').innerText()).trim();
+      const said = (await page.locator('.verdict .verdict-sub').first().innerText()).replace(/\s+/g, ' ');
+      const h = /^([\d\s  ]+) € de (moins|plus) que d'habitude$/.exec(title);
+      const s = /^([\d\s  ]+) € \(([\d\s  ]+) kWh\) dépensés hors Chambre enfant, hors ligne, en novembre \(au 8\), pour ([\d\s  ]+) € attendus .*?\(([−+]?[\d\s  ]+) %\)/.exec(said);
+      check(h && s, `${name} : verdict illisible (« ${title} » / « ${said.slice(0, 200)} »)`);
+      if (h && s) {
+        const gap = num(h[1]) * (h[2] === 'moins' ? -1 : 1);
+        const [spent, expected, pct] = [num(s[1]), num(s[3]), num(s[4])];
+        check(gap === spent - expected, `${name} : « ${title} » mais ${spent} € pour ${expected} € (#383)`);
+        const lo = Math.floor(((spent - 0.5) / (expected + 0.5) - 1) * 100);
+        const hi = Math.ceil(((spent + 0.5) / (expected - 0.5) - 1) * 100);
+        check(pct >= lo && pct <= hi, `${name} : ${pct} % pour ${spent} € sur ${expected} € (#383)`);
+      }
+    }
     check((await page.locator('.verdict .verdict-warn a[href="#piece-r-ch2"]').count()) === 1, `${name} : « que faire ? » ne mène pas à la Chambre enfant`);
     const link = page.locator('.verdict a.verdict-link[href^="#outils-expliquer-"]');
     check((await link.count()) === 1, `${name} : lien « Pourquoi ? » absent sous le verdict`);

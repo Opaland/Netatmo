@@ -142,45 +142,48 @@ function pageChecks() {
       if (v && bad.test(v)) out.push({ kind: 'texte-interdit', detail: `${a}="${v.slice(0, 80)}"` });
     }
   }
+  // #353 (smoke test on real data): a diagnosis WITHOUT content, printed in the quiet mode — the
+  // overflow in px and the path of what sticks out as tag.classe, with only the classes the app's
+  // own style sheets define (a class made of data is dropped), never a text, an id nor an
+  // attribute value. Shared by the overflow and the overlapping texts (#384).
+  let known = null;
+  const seg = (el) => {
+    if (!known) {
+      known = new Set();
+      for (const sheet of document.styleSheets) {
+        let rules;
+        try {
+          rules = sheet.cssRules;
+        } catch {
+          continue;
+        }
+        const walk = (list) => {
+          for (const r of list) {
+            if (r.selectorText) for (const m of r.selectorText.matchAll(/\.(-?[_a-zA-Z][\w-]*)/g)) known.add(m[1]);
+            if (r.cssRules) walk(r.cssRules);
+          }
+        };
+        walk(rules);
+      }
+    }
+    const cls = [...el.classList].find((c) => known.has(c));
+    return `${el.tagName.toLowerCase()}${cls ? `.${cls}` : ''}`;
+  };
+  const path = (el) => {
+    const parts = [];
+    for (let a = el; a && a.id !== 'view' && a.id !== 'app' && a !== document.body; a = a.parentElement) parts.unshift(seg(a));
+    return parts.length > 6 ? `… > ${parts.slice(-6).join(' > ')}` : parts.join(' > ');
+  };
+  const scrolls = (el) => /(auto|scroll|hidden)/.test(getComputedStyle(el).overflowX);
   const wide = document.documentElement.scrollWidth - window.innerWidth;
   if (wide > 1) {
     // the outermost boxes that stick out (not their children, nor what scrolls inside a box)
-    const scrolls = (el) => /(auto|scroll|hidden)/.test(getComputedStyle(el).overflowX);
     const out_ = (el) => visible(el) && el.getBoundingClientRect().right > window.innerWidth + 1;
     const culprits = [...document.querySelectorAll('#app *')]
       .filter((el) => out_(el) && !(el.parentElement && el.parentElement !== document.getElementById('app') && out_(el.parentElement) && !scrolls(el.parentElement)))
       .filter((el) => { for (let a = el.parentElement; a; a = a.parentElement) if (scrolls(a) && a.getBoundingClientRect().right <= window.innerWidth + 1) return false; return true; })
       .slice(0, 3)
       .map((el) => `${el.tagName.toLowerCase()}${el.id ? `#${el.id}` : ''}${el.className && typeof el.className === 'string' ? `.${el.className.split(' ')[0]}` : ''}`);
-    // #353 (smoke test on real data): a diagnosis WITHOUT content, printed in the quiet mode —
-    // the overflow in px and the path of what sticks out as tag.classe, with only the classes the
-    // app's own style sheets define (a class made of data is dropped), never a text, an id nor an
-    // attribute value.
-    const known = new Set();
-    for (const sheet of document.styleSheets) {
-      let rules;
-      try {
-        rules = sheet.cssRules;
-      } catch {
-        continue;
-      }
-      const walk = (list) => {
-        for (const r of list) {
-          if (r.selectorText) for (const m of r.selectorText.matchAll(/\.(-?[_a-zA-Z][\w-]*)/g)) known.add(m[1]);
-          if (r.cssRules) walk(r.cssRules);
-        }
-      };
-      walk(rules);
-    }
-    const seg = (el) => {
-      const cls = [...el.classList].find((c) => known.has(c));
-      return `${el.tagName.toLowerCase()}${cls ? `.${cls}` : ''}`;
-    };
-    const path = (el) => {
-      const parts = [];
-      for (let a = el; a && a.id !== 'view' && a.id !== 'app' && a !== document.body; a = a.parentElement) parts.unshift(seg(a));
-      return parts.length > 6 ? `… > ${parts.slice(-6).join(' > ')}` : parts.join(' > ');
-    };
     const outer = [...document.querySelectorAll('#app *')]
       .filter((el) => out_(el) && !(el.parentElement && el.parentElement !== document.getElementById('app') && out_(el.parentElement) && !scrolls(el.parentElement)))
       .filter((el) => { for (let a = el.parentElement; a; a = a.parentElement) if (scrolls(a) && a.getBoundingClientRect().right <= window.innerWidth + 1) return false; return true; })
@@ -211,6 +214,108 @@ function pageChecks() {
     ];
     const quiet = `${wide} px : ${parts.join(' ; ') || 'élément non trouvé'}`;
     out.push({ kind: 'defilement-horizontal', detail: `${wide} px (${[...culprits, ...words.map((el) => `texte de ${seg(el)}`)].join(', ')})`, quiet });
+  }
+  // #384: a text painted over another, or cut by the edge of the box that holds it (a card, a
+  // list: overflow hidden), the two defects the horizontal scroll cannot see (a pill over the
+  // amount of its row at 360 px, out of its card at 200 %). Every visible text node of the view,
+  // line by line (the rectangles of a range). Left aside, on purpose: the charts (their own
+  // labels), what is visually hidden (.sr-only), what sticks (a sticky bar over the page
+  // scrolled) and a text cut with an ellipsis; [data-overlap-ok] marks a wanted overlap.
+  {
+    const range = document.createRange();
+    const memo = new Map();
+    const style = (el) => memo.get(el) ?? (memo.set(el, getComputedStyle(el)), memo.get(el));
+    const sticks = (el) => { for (let a = el; a && a !== document.body; a = a.parentElement) if (/sticky|fixed/.test(style(a).position)) return true; return false; };
+    const clipper = (el) => {
+      for (let a = el.parentElement; a && a !== document.body; a = a.parentElement) {
+        const s = style(a);
+        if (/auto|scroll/.test(s.overflowX + s.overflowY)) return null; // reachable by scrolling
+        if (/hidden|clip/.test(s.overflowX + s.overflowY)) return a;
+      }
+      return null;
+    };
+    // the part of a line actually painted: cut by every box that clips (overflow other than
+    // visible: a card, a list, a table scrolled inside its frame, a visually hidden legend)
+    const painted = (el, r) => {
+      let [l, t, rt, b] = [r.left, r.top, r.right, r.bottom];
+      for (let a = el; a && a !== document.body; a = a.parentElement) {
+        const s = style(a);
+        if (s.overflowX === 'visible' && s.overflowY === 'visible') continue;
+        const k = a.getBoundingClientRect();
+        [l, t, rt, b] = [Math.max(l, k.left), Math.max(t, k.top), Math.min(rt, k.right), Math.min(b, k.bottom)];
+      }
+      return rt - l > 2 && b - t > 2 ? { left: l, top: t, right: rt, bottom: b, height: b - t } : null;
+    };
+    const hidden = (el) => { for (let a = el; a && a !== document.body; a = a.parentElement) if (style(a).clip !== 'auto' || style(a).clipPath !== 'none') return true; return false; };
+    const ellipsis = (el) => { for (let a = el; a && a !== document.body; a = a.parentElement) if (style(a).textOverflow === 'ellipsis') return true; return false; };
+    const boxes = [];
+    const view = document.getElementById('view') ?? document.body;
+    const walker = document.createTreeWalker(view, NodeFilter.SHOW_TEXT);
+    for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+      const el = n.parentElement;
+      if (!el || !n.textContent.trim() || el.closest('.sr-only, .chart, svg, [data-overlap-ok]') || !visible(el) || sticks(el) || hidden(el)) continue;
+      // the content of a closed <details> keeps its boxes in Chromium: not painted all the same
+      if (el.checkVisibility ? !el.checkVisibility({ contentVisibilityAuto: true, opacityProperty: true, visibilityProperty: true }) : Number(style(el).opacity) === 0) continue;
+      if (el.closest('details:not([open])') && !el.closest('summary')) continue;
+      range.selectNodeContents(n);
+      for (const raw of range.getClientRects()) {
+        const r = raw.width > 2 && raw.height > 2 ? painted(el, raw) : null;
+        if (r) boxes.push({ el, n, r, raw });
+      }
+    }
+    const say = (b) => b.n.textContent.trim().replace(/\s+/g, ' ').slice(0, 40);
+    // two texts over each other: more than 2 px across and a quarter of the shorter line high
+    boxes.sort((a, b) => a.r.top - b.r.top);
+    let overlaps = 0;
+    for (let i = 0; i < boxes.length && overlaps < 3; i++) {
+      const a = boxes[i];
+      for (let j = i + 1; j < boxes.length && boxes[j].r.top < a.r.bottom && overlaps < 3; j++) {
+        const b = boxes[j];
+        if (b.n === a.n) continue;
+        const w = Math.min(a.r.right, b.r.right) - Math.max(a.r.left, b.r.left);
+        const h = Math.min(a.r.bottom, b.r.bottom) - Math.max(a.r.top, b.r.top);
+        if (w > 2 && h > Math.min(a.r.height, b.r.height) / 4) {
+          overlaps++;
+          out.push({ kind: 'textes-recouverts', detail: `« ${say(a)} » / « ${say(b)} »`, quiet: `${path(a.el)} / ${path(b.el)}` });
+        }
+      }
+    }
+    // a short word broken in the middle (« Salo / n »): a column squeezed until overflow-wrap
+    // breaks anywhere. Code and identifiers (« onError ») break where they must.
+    let broken = 0;
+    for (const n of new Set(boxes.map((b) => b.n))) {
+      if (broken >= 3) break;
+      if (n.parentElement.closest('code, pre, kbd, samp')) continue;
+      for (const m of n.textContent.matchAll(/(?<![\p{L}\d_])\p{L}{2,12}(?![\p{L}\d_])/gu)) {
+        if (/\p{Ll}\p{Lu}/u.test(m[0])) continue;
+        range.setStart(n, m.index);
+        range.setEnd(n, m.index + m[0].length);
+        const parts = [...range.getClientRects()].filter((r) => r.width > 0);
+        const lines = new Set(parts.map((r) => Math.round(r.top)));
+        // a word wider than its whole card (« Consommation » at 200 %) cannot but break: a defect
+        // only when it would fit the card, i.e. a column squeezed narrower than its words
+        const box = n.parentElement.closest('.card, .list, .verdict, .kpi, .alert') ?? view;
+        const bs = style(box);
+        const room = box.clientWidth - parseFloat(bs.paddingLeft) - parseFloat(bs.paddingRight);
+        if (lines.size > 1 && parts.reduce((w, r) => w + r.width, 0) <= room) {
+          broken++;
+          out.push({ kind: 'mot-coupe', detail: `« ${m[0]} »`, quiet: path(n.parentElement) });
+          break;
+        }
+      }
+    }
+    // a text cut by the edge of the box that clips it
+    let cut = 0;
+    for (const b of boxes) {
+      if (cut >= 3) break;
+      const c = clipper(b.el);
+      if (!c || ellipsis(b.el)) continue;
+      const k = c.getBoundingClientRect();
+      if (b.raw.right > k.right + 1 || b.raw.left < k.left - 1 || b.raw.bottom > k.bottom + 1) {
+        cut++;
+        out.push({ kind: 'texte-coupe', detail: `« ${say(b)} »`, quiet: `${path(b.el)} dans ${path(c)}` });
+      }
+    }
   }
   for (const card of document.querySelectorAll('#view .card')) {
     if (!visible(card)) continue;
@@ -619,10 +724,24 @@ async function selfTest(browser, run, display) {
       word.textContent = 'secretmot42'.repeat(40);
       word.style.overflowWrap = 'normal'; // the page breaks long words (#view): this one must stick out
       view.append(word);
+      // #384: a text painted over another, and a text cut by the box that clips it
+      const over = document.createElement('p');
+      over.style.position = 'relative';
+      over.append(Object.assign(document.createElement('span'), { textContent: 'secret-dessous-42' }));
+      const top = Object.assign(document.createElement('span'), { textContent: 'secret-dessus-42' });
+      Object.assign(top.style, { position: 'absolute', left: '4px', top: '0' });
+      over.append(top);
+      view.append(over);
+      const clip = document.createElement('div');
+      Object.assign(clip.style, { overflow: 'hidden', width: '60px' });
+      clip.append(Object.assign(document.createElement('span'), { textContent: 'secret-coupé-42 secret-coupé-42' }));
+      clip.firstChild.style.whiteSpace = 'nowrap';
+      view.append(clip);
     });
     const found = await s.page.evaluate(pageChecks);
     const kinds = found.map((f) => f.kind);
-    const missing = ['texte-interdit', 'carte-vide', 'defilement-horizontal'].filter((k) => !kinds.includes(k));
+    const missing = ['texte-interdit', 'carte-vide', 'defilement-horizontal', 'textes-recouverts', 'texte-coupe'].filter((k) => !kinds.includes(k));
+    if (found.some((f) => /recouverts|coupe/.test(f.kind) && /secret/i.test(f.quiet ?? ''))) throw new Error('auto-contrôle : le diagnostic discret d’un texte recouvert cite un contenu');
     if (missing.length) throw new Error(`auto-contrôle : invariants muets (${missing.join(', ')})`);
     const quiet = found.find((f) => f.kind === 'defilement-horizontal').quiet ?? '';
     if (!/^\d+ px : div\.card > span/.test(quiet) || !quiet.includes('texte trop long dans : p.hint') || /secret/i.test(quiet))

@@ -14,6 +14,8 @@ import {
   expectedLabel,
   homePeriod,
   homeRange,
+  type MoneyVerdict,
+  leftOut,
   moneyVerdict,
   monthTick,
   monthlyOutdoor,
@@ -21,6 +23,7 @@ import {
   restOfPeriod,
   scopeTitle,
   verdictHeadline,
+  verdictWords,
 } from './home';
 
 const LAST = '2026-11-08';
@@ -137,5 +140,80 @@ describe('on the demo (maquette accueil.html)', () => {
     expect(Math.round(v.actual)).toBe(130);
     expect(Math.abs(v.pct)).toBeLessThan(Math.abs(raw.pct));
     expect(v.climate).toBe(true);
+  });
+});
+
+// #383: the figures written in the verdict add up, whatever the rooms left out. The amounts are
+// read back from the words, as a reader would redo the sum by hand.
+describe('verdict words: one scope, figures that add up (#383)', () => {
+  const num = (s: string) => Number(s.replace(/[\s  ]/g, '').replace('−', '-').replace(',', '.'));
+  const figure = (s: string) => num(s.replace(/€|kWh/g, ''));
+  /** Checks headline, spent, expected and % written against each other; returns the figures. */
+  function written(m: MoneyVerdict, left: string[]) {
+    const w = verdictWords(m, left, 'en novembre (au 8)', 'à météo comparable');
+    const spent = figure(w.spent);
+    const expected = figure(w.expectedAmount);
+    expect(w.expected.startsWith(`${w.expectedAmount} attendus`)).toBe(true);
+    const pct = num(/\(([−+]?[\d\s  ]+) %\)$/.exec(w.expected)![1]);
+    const h = /^([\d\s  ]+) (?:€|kWh) de (moins|plus) que d'habitude$/.exec(w.headline);
+    if (!h) expect(w.headline).toBe("Comme d'habitude");
+    const gap = h ? num(h[1]) * (h[2] === 'moins' ? -1 : 1) : 0;
+    // the gap written is the difference of the two amounts written
+    expect(gap).toBe(spent - expected);
+    // the % written is the one of the two amounts written (within their rounding to the unit)
+    const lo = ((spent - 0.5) / (expected + 0.5) - 1) * 100;
+    const hi = ((spent + 0.5) / Math.max(0.5, expected - 0.5) - 1) * 100;
+    expect(pct).toBeGreaterThanOrEqual(Math.floor(lo));
+    expect(pct).toBeLessThanOrEqual(Math.ceil(hi));
+    // the rooms left out are named in the sentence of the amount spent
+    for (const name of left) expect(w.spentRest).toContain(name);
+    expect(w.spentRest.includes('hors ligne')).toBe(left.length > 0);
+    return { w, spent, expected, pct, gap };
+  }
+  const PRICE = 0.1952;
+  let ds: Dataset;
+  let runs: ReturnType<typeof applyStopped>;
+  beforeAll(async () => {
+    ds = await demoDataset();
+    runs = applyStopped(offlineRuns(ds.records, ds.meta.rooms, ds.meta.last_day!), parseStopped((ds.meta as { stopped_rooms?: unknown }).stopped_rooms));
+  });
+  /** The verdict of the Accueil over the month to `to`: the rooms not comparable left out of every figure. */
+  function onDemo(to: string) {
+    const r = homeRange('month', to);
+    const left = notComparable(runs, r.from, r.to);
+    const records = ds.records.filter((x) => x.cat !== 'ignore' && !left.has(x.room));
+    const v = verdict(records, r.from, r.to, ds.weather)!;
+    const kwh = records.reduce((s, x) => s + (x.day >= r.from && x.day <= r.to ? x.kwh : 0), 0);
+    const names = [...left].map((id) => ds.meta.rooms.find((x) => x.id === id)!.name);
+    return { m: moneyVerdict(v, kwh * PRICE), names, v };
+  }
+
+  it('a room offline (the demo month): left out of every figure, and named', () => {
+    const { m, names, v } = onDemo(LAST);
+    expect(names).toEqual(['Chambre enfant']);
+    const f = written(m, names);
+    expect(f.w.spentRest).toBe('(130 kWh) dépensés hors Chambre enfant, hors ligne, en novembre (au 8)');
+    expect(Math.round(v.actual)).toBe(130);
+    expect(f.gap).toBeLessThan(0);
+  });
+  it('a room switched off on purpose (the kitchen, October): compared, nothing left out', () => {
+    const { m, names } = onDemo('2026-10-31');
+    expect(names).toEqual([]);
+    expect(written(m, names).w.spentRest).not.toMatch(/hors/);
+  });
+  it('no room left out, in euros and in kWh, above and under the reference', () => {
+    for (const v of [
+      { level: 'normal' as const, pct: -7.6, actual: 170, expected: 184, climate: true },
+      { level: 'high' as const, pct: 21.5, actual: 243, expected: 200, climate: false },
+      { level: 'normal' as const, pct: 0.2, actual: 184.3, expected: 184, climate: true },
+      { level: 'low' as const, pct: -16.6, actual: 24.6, expected: 29.5, climate: true },
+      { level: 'low' as const, pct: -17.6, actual: 24.4, expected: 29.6, climate: true }, // 24 and 30 written: 6, not 5.2 rounded
+    ]) {
+      for (const cost of [null, v.actual * PRICE, v.actual * 0.31]) written(moneyVerdict(v, cost), []);
+    }
+  });
+  it('several rooms left out are listed « A, B et C »', () => {
+    expect(leftOut(['A', 'B', 'C'])).toBe('hors A, B et C, hors ligne');
+    expect(leftOut([])).toBe('');
   });
 });
