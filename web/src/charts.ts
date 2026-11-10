@@ -265,8 +265,51 @@ export function niceCeil(v: number): number {
   return Math.ceil(v / half) * half;
 }
 
-/** Number formatter of a value axis: one decimal under 10 (« 0,5 »), none above. */
-const tickFmt = (v: number) => minus((v !== 0 && Math.abs(v) < 10 && v % 1 ? nf1 : nf0).format(v));
+/**
+ * #398: decimals a tick needs to be written exactly — 20 → 0, 19,5 → 1, 0,25 → 2 (at most 3).
+ * Every tick of a value axis is a multiple of its step, so a tick shows the precision of the step
+ * wherever it is not on a coarser multiple, and two different ticks never read the same (the old
+ * « one decimal under 10 » wrote 19,5 and 20,5 as « 20 » and « 21 »: « 21, 21, 20, 20 »).
+ * ECharts gives a formatter the value, not the step: the precision is read on the value.
+ */
+export function tickDecimals(v: number): number {
+  for (let d = 0; d < 3; d++) {
+    const x = v * 10 ** d;
+    if (Math.abs(x - Math.round(x)) < 1e-6) return d;
+  }
+  return 3;
+}
+const nfd = [0, 1, 2, 3].map((d) => new Intl.NumberFormat('fr-FR', { minimumFractionDigits: d, maximumFractionDigits: d }));
+/** Label of a value-axis tick (every value axis of every chart): « 19,5 », « 1 500 », « −0,2 ». */
+export const tickFmt = (v: number) => minus(nfd[tickDecimals(v)].format(v));
+/**
+ * The tick formatter of one value axis of one chart. It also notes, for the sweep (e2e/sweep.mjs,
+ * invariant « etiquettes-axe-en-double »), the labels it wrote for two different values in its
+ * last drawing: `data-axis-dup-<axis>` on the chart element, absent when every label differs.
+ * Values with more than two decimals (an axis pointer, not a tick) are not noted.
+ */
+function axisFmt(el: HTMLElement, axis: string, suffix = '') {
+  let seen: Map<string, Set<number>> | null = null;
+  return (v: number) => {
+    const label = tickFmt(v);
+    if (tickDecimals(v) < 3) {
+      if (!seen) {
+        const batch = (seen = new Map());
+        // one drawing calls the formatter for every tick in a row: read them once it is done
+        queueMicrotask(() => {
+          const dup = [...batch].filter(([, vals]) => vals.size > 1).map(([l]) => l);
+          if (dup.length) el.setAttribute(`data-axis-dup-${axis}`, dup.join(' | '));
+          else el.removeAttribute(`data-axis-dup-${axis}`);
+          if (seen === batch) seen = null;
+        });
+      }
+      const vals = seen.get(label) ?? new Set<number>();
+      vals.add(Math.round(v * 1e6) / 1e6);
+      seen.set(label, vals);
+    }
+    return suffix ? `${label} ${suffix}` : label;
+  };
+}
 /** Typographic minus (« −15 € », never « -15 € »), § 7.2. */
 const minus = (s: string) => s.replace(/^-/, '−');
 
@@ -293,7 +336,7 @@ function axes(labels: string[], el: HTMLElement, unit: string, legendH: number, 
       nameGap: 8,
       nameTextStyle: { align: 'left' as const, color: cssVar('--text-muted'), fontSize: axisPx() },
       splitNumber: splitCount(el.clientHeight || 300, 60),
-      axisLabel: { formatter: tickFmt },
+      axisLabel: { formatter: axisFmt(el, 'y') },
     },
   };
 }
@@ -380,7 +423,7 @@ export function barChart(
                 type: 'value' as const,
                 scale: true,
                 splitLine: { show: false },
-                axisLabel: { formatter: (v: number) => `${nf0.format(v)} ${line.unit}` },
+                axisLabel: { formatter: axisFmt(el, 'y2', line.unit) },
               },
             ],
           }
@@ -548,7 +591,7 @@ export function hbarChart(
         nameGap: 6,
         nameTextStyle: { color: cssVar('--text-muted'), fontSize: axisPx(), verticalAlign: 'top', padding: [8, 0, 0, 0] },
         splitNumber: Math.min(3, splitCount(width - 180)),
-        axisLabel: { hideOverlap: true, formatter: (v: number) => nf0.format(v) },
+        axisLabel: { hideOverlap: true, formatter: axisFmt(el, 'x') },
       },
       series: opts.series.map((s, i) => ({
         type: 'bar',
@@ -633,7 +676,7 @@ export function comboChart(
       axisPointer: { link: [{ xAxisIndex: 'all' }] },
       xAxis: [xAx(0), xAx(1)],
       yAxis: [
-        { type: 'value', gridIndex: 0, max: opts.barMax, minInterval: 1, splitNumber: 2, ...yName(opts.barUnit), axisLabel: { formatter: tickFmt } },
+        { type: 'value', gridIndex: 0, max: opts.barMax, minInterval: 1, splitNumber: 2, ...yName(opts.barUnit), axisLabel: { formatter: axisFmt(el, 'y') } },
         {
           type: 'value',
           gridIndex: 1,
@@ -641,7 +684,7 @@ export function comboChart(
           splitNumber: 3,
           max: markMax,
           ...yName(opts.lineUnit),
-          axisLabel: { formatter: tickFmt },
+          axisLabel: { formatter: axisFmt(el, 'y2') },
         },
       ],
       legend: leg.option,
@@ -749,7 +792,7 @@ export function scatterChart(el: HTMLElement, opts: { series: ScatterSeries[]; x
         scale: true,
         axisLine: { onZero: false, lineStyle: { color: cssVar('--border') } },
         splitLine: { lineStyle: { color: grid } },
-        axisLabel: { color: muted, hideOverlap: true },
+        axisLabel: { color: muted, hideOverlap: true, formatter: axisFmt(el, 'x') },
       },
       yAxis: {
         type: 'value',
@@ -759,7 +802,7 @@ export function scatterChart(el: HTMLElement, opts: { series: ScatterSeries[]; x
         min: 0,
         nameTextStyle: { color: muted, fontSize: axisPx() },
         splitLine: { lineStyle: { color: grid } },
-        axisLabel: { color: muted },
+        axisLabel: { color: muted, formatter: axisFmt(el, 'y') },
       },
       series: opts.series.flatMap((s) => [
         {

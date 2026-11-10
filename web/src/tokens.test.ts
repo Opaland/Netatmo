@@ -103,6 +103,24 @@ function contrast(a: string, b: string): number {
   return (l1 + 0.05) / (l2 + 0.05);
 }
 
+/** CIE76 colour difference ΔE*ab (sRGB → XYZ D65 → L*a*b*), as the design review measures it. */
+function deltaE(a: string, b: string): number {
+  const lab = (hex: string) => {
+    const h = hex.replace('#', '');
+    const [r, g, bl] = [0, 2, 4].map((i) => {
+      const c = parseInt(h.slice(i, i + 2), 16) / 255;
+      return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+    });
+    const f = (v: number) => (v > 216 / 24389 ? Math.cbrt(v) : ((24389 / 27) * v + 16) / 116);
+    const x = f((0.4124 * r + 0.3576 * g + 0.1805 * bl) / 0.95047);
+    const y = f(0.2126 * r + 0.7152 * g + 0.0722 * bl);
+    const z = f((0.0193 * r + 0.1192 * g + 0.9505 * bl) / 1.08883);
+    return [116 * y - 16, 500 * (x - y), 200 * (y - z)];
+  };
+  const [p, q] = [lab(a), lab(b)];
+  return Math.hypot(p[0] - q[0], p[1] - q[1], p[2] - q[2]);
+}
+
 const THEMES: [string, Env][] = [
   ['clair', { dark: false, contrast: false }],
   ['sombre (système)', { dark: true, contrast: false }],
@@ -178,6 +196,28 @@ describe('jetons du design system (#310)', () => {
       expect(contrast(resolve(t, '--year-0'), resolve(t, '--year-1'))).toBeGreaterThanOrEqual(3);
     });
   }
+  // #399: in dark, gold and brown were 9 apart (two bedrooms of the same beige). Every pair of
+  // rooms, and every room against the two usages, at least 20 apart (CIE76 ΔE*ab), in each theme.
+  for (const [name, env] of THEMES) {
+    it(`${name} : couleurs de pièces à ΔE ≥ 20 deux à deux et des usages`, () => {
+      const t = tokens(env);
+      const rooms = Array.from({ length: 8 }, (_, i) => `--room-${i + 1}`);
+      const fails: string[] = [];
+      let lowest = Infinity;
+      for (const [i, a] of rooms.entries())
+        for (const b of [...rooms.slice(i + 1), '--usage-heating', '--usage-water']) {
+          const d = deltaE(resolve(t, a), resolve(t, b));
+          lowest = Math.min(lowest, d);
+          if (d < 20) fails.push(`${a} / ${b} : ΔE ${d.toFixed(1)}`);
+        }
+      report.push(`${name} : pièces à ΔE ≥ ${lowest.toFixed(1)}`);
+      expect(fails).toEqual([]);
+    });
+  }
+  it('ΔE*ab : valeurs de référence', () => {
+    expect(deltaE('#ffffff', '#000000')).toBeCloseTo(100, 0);
+    expect(deltaE('#cbb99f', '#dbb594')).toBeLessThan(10); // ancien or / brun du sombre
+  });
   it('les couleurs de pièces sont distinctes entre elles et des usages', () => {
     const t = tokens(THEMES[0][1]);
     const all = [...GRAPHIC.slice(-8), '--usage-heating', '--usage-water', '--year-0'].map((g) => resolve(t, g).toLowerCase());

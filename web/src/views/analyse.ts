@@ -10,7 +10,7 @@ import { lazyCard } from '../lazy';
 import { unavailable } from '../offline';
 import { TEMP, dayLong, dayShort, seasonLabel } from '../glossary';
 import { weeklyMeans } from '../chart-theme';
-import { activeRooms, catColor, esc, fmt1, roomName, fmtKwh, lastDay, longDate, seasonStyle, seg, series, table, measureColor, referenceColor } from '../ui';
+import { activeRooms, catColor, esc, fmt1, isOutdoor, moduleColor, roomName, fmtKwh, lastDay, longDate, seasonStyle, seg, table, measureColor, referenceColor } from '../ui';
 import { hour } from '../glossary';
 import { SUSPECT_RATIO } from '../reconstitute';
 import { uncertainDays } from './quality';
@@ -300,8 +300,8 @@ function drawStation() {
   const days: string[] = [];
   for (let d = from; d <= last; d = addDays(d, 1)) days.push(d);
   const keys = Object.keys(st.modules).filter((k) => state.stationMetric !== 'co2' || st.modules[k].indoor);
-  // identity follows the module (its order in the station), never its rank
-  const color = (k: string) => (st.modules[k].type === 'NAModule1' ? cssVar('--text-muted') : series(2 + Object.keys(st.modules).indexOf(k)));
+  // #399: the colour follows the room the module is linked to (as in Pièces), the outdoor one dashed grey
+  const color = (k: string) => moduleColor(st, k);
   // #306: 365 noisy daily values per module → one mean per week (« sem. du 3 nov. »)
   const week = weeklyMeans(
     days,
@@ -309,7 +309,7 @@ function drawStation() {
   );
   lineChart(el, {
     labels: week.labels.map((d) => `sem. du ${dayShort(d, true)}`),
-    series: keys.map((k, i) => ({ name: st.modules[k].name, color: color(k), data: week.data[i] })),
+    series: keys.map((k, i) => ({ name: st.modules[k].name, color: color(k), dashed: isOutdoor(st, k), data: week.data[i] })),
     price: null,
     unit,
     mark: state.stationMetric === 'co2' ? { value: 1000, label: '1 000 ppm' } : state.stationMetric === 'hum' ? { value: 65, label: '65 %' } : undefined,
@@ -332,7 +332,9 @@ function drawStation() {
   document.getElementById('station-table')!.innerHTML = html(table(
     ['Module', `Hiver ${lastSeason - 1}–${lastSeason}`, `Hiver ${lastSeason}–${lastSeason + 1}`, ...(comfort ? [`Jours ${thrLabel}, 12 mois`] : [])],
     keys.map((k) => [
-      `<span class="swatch" style="background:${color(k)}"></span>${esc(st.modules[k].name)}`,
+      isOutdoor(st, k)
+        ? `<span class="swatch swatch-dashed" style="border-color:${color(k)}"></span>${esc(st.modules[k].name)}`
+        : `<span class="swatch" style="background:${color(k)}"></span>${esc(st.modules[k].name)}`,
       fmt(seasonAvg(k, lastSeason - 1)),
       fmt(seasonAvg(k, lastSeason)),
       ...(comfort ? [st.modules[k].indoor || state.stationMetric === 'hum' ? daysAbove(st.daily[k] ?? {}, col, thr, from, last) : '—'] : []),

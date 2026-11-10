@@ -6,6 +6,7 @@
 //   - no horizontal scroll;
 //   - no « NaN », « undefined », « Infinity », « Invalid Date », « null » visible (text or label);
 //   - no card (nor chart) left empty without a message;
+//   - no value axis writing the same label twice (« 21, 21, 20, 20 », #398);
 //   - axe: no serious or critical violation (WCAG 2.1 AA);
 //   - the view becomes ready (#view[data-ready], #260).
 // Then a control explorer: on each page, every checkbox, switch, segment, radio, chip and select
@@ -222,6 +223,10 @@ function pageChecks() {
   for (const chart of document.querySelectorAll('#view .chart')) {
     if (!visible(chart)) continue;
     if (!chart.querySelector('canvas, svg') && !chart.textContent.trim()) out.push({ kind: 'graphique-vide', detail: chart.id || '(sans id)' });
+    // #398: an axis that writes the same label for two values (« 21, 21, 20, 20 »), noted by
+    // charts.ts (axisFmt) on the chart element: the canvas has no text to read
+    for (const a of chart.getAttributeNames().filter((n) => n.startsWith('data-axis-dup-')))
+      out.push({ kind: 'etiquettes-axe-en-double', detail: `${chart.id || '(sans id)'} : « ${chart.getAttribute(a)} »`, quiet: `${chart.id || '(sans id)'}, axe ${a.slice(14)}` });
   }
   return out;
 }
@@ -578,7 +583,8 @@ async function exploreJob(browser, job) {
 // ------------------------------------------------------------------ self-test
 /**
  * A sweep that cannot fail proves nothing: on one page, a card « NaN », an empty card and a
- * too wide block are slipped in, and the invariants must see all three before anything else runs.
+ * too wide block are slipped in (and a chart whose axis repeats a label, #398), and the invariants
+ * must see all four before anything else runs.
  * The too wide block carries a text, an id, a class and attribute values: the quiet diagnosis of
  * the overflow (printed on real data) must name its path and none of them.
  */
@@ -619,10 +625,17 @@ async function selfTest(browser, run, display) {
       word.textContent = 'secretmot42'.repeat(40);
       word.style.overflowWrap = 'normal'; // the page breaks long words (#view): this one must stick out
       view.append(word);
+      // #398: a chart whose axis wrote « 20 » for two values (as charts.ts notes it)
+      const chart = document.createElement('div');
+      chart.className = 'chart';
+      chart.id = 'auto-controle-axe';
+      chart.append(document.createElement('canvas'));
+      chart.setAttribute('data-axis-dup-y', '20');
+      view.append(chart);
     });
     const found = await s.page.evaluate(pageChecks);
     const kinds = found.map((f) => f.kind);
-    const missing = ['texte-interdit', 'carte-vide', 'defilement-horizontal'].filter((k) => !kinds.includes(k));
+    const missing = ['texte-interdit', 'carte-vide', 'defilement-horizontal', 'etiquettes-axe-en-double'].filter((k) => !kinds.includes(k));
     if (missing.length) throw new Error(`auto-contrôle : invariants muets (${missing.join(', ')})`);
     const quiet = found.find((f) => f.kind === 'defilement-horizontal').quiet ?? '';
     if (!/^\d+ px : div\.card > span/.test(quiet) || !quiet.includes('texte trop long dans : p.hint') || /secret/i.test(quiet))
@@ -702,7 +715,7 @@ try {
     const browser = await chromium.launch();
     try {
       await selfTest(browser, runs[0], displays[0]);
-      console.log('Auto-contrôle : les invariants voient un « NaN », une carte vide et un débordement, dont le diagnostic discret ne cite aucun contenu.');
+      console.log('Auto-contrôle : les invariants voient un « NaN », une carte vide, un débordement, dont le diagnostic discret ne cite aucun contenu, et un axe aux étiquettes en double.');
     } finally {
       await browser.close();
     }
