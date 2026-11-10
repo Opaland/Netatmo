@@ -520,7 +520,7 @@ function drawConso(el: HTMLElement, cat: string, mine: DayRecord[], last: string
         notes: marks.map((x) => x.note),
         marks: marks.map((x) => x.partial),
       },
-      { name: 'Un an plus tôt', color: cssVar('--usage-other'), data: keys.map((k) => val(prevKey(k))) },
+      { name: 'Un an plus tôt', color: cssVar('--usage-other'), data: keys.map((k) => val(prevKey(k))), lastYear: true },
     ],
     stacked: false,
     price: avgPrice(),

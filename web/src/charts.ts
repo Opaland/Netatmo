@@ -21,6 +21,7 @@ import { dayLong, signedPct } from './glossary';
 import { type Measure, changeSummary, daysSummary, gridSummary, rankSummary, slopeSummary, summarize } from './summary';
 import { html, node } from './trusted';
 import { track } from './ready';
+import { CHART_DEFAULT, type ChartPrefs, keepLastYear, movingAverage, SMOOTH_DAYS, smoothable, zeroAxis } from './chart-prefs';
 
 // #227: ECharts lives in its own chunk (./echarts-lib), loaded on the first chart drawn — or
 // earlier, when the browser is idle — so the entry chunk stays light for the lock screen.
@@ -62,7 +63,13 @@ export interface Series {
   dashed?: boolean;
   /** Lines: stroke width in px (default 2, 3 for the emphasized one). */
   width?: number;
+  /** #20: the same period a year before (« Un an plus tôt »), hidden by the chart settings. */
+  lastYear?: boolean;
 }
+
+// #20: « Réglages du graphique » of this device (chart-prefs.ts), set by main.ts before each render
+let prefs: ChartPrefs = CHART_DEFAULT;
+export const useChartPrefs = (p: ChartPrefs) => void (prefs = p);
 
 export const cssVar = (name: string) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 
@@ -179,9 +186,33 @@ export function chartOf(el: HTMLElement): ChartHandle {
   };
 }
 
+/** Sliders, the icon of « Réglages du graphique ». */
+const SLIDERS =
+  '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></svg>';
+
+/**
+ * #20: the button that opens the « Réglages du graphique » sheet (chart-sheet.ts), written once
+ * under every chart of the app; the sheet is common to all of them.
+ */
+function settingsButton(el: HTMLElement) {
+  const next = el.nextElementSibling;
+  if (next instanceof HTMLElement && next.dataset.chartSettings !== undefined) return;
+  const b = document.createElement('button');
+  b.type = 'button';
+  b.className = 'btn tertiary chart-settings';
+  b.dataset.chartSettings = el.id || '';
+  b.setAttribute('aria-haspopup', 'dialog');
+  // a short visible label, so that it shares the line of « Voir les valeurs » (the Accueil holds
+  // in 3 phone screens, #311); the full name for assistive tech (it contains the visible word)
+  b.setAttribute('aria-label', 'Réglages du graphique');
+  b.innerHTML = html(`${SLIDERS}<span>Réglages</span>`);
+  el.after(b);
+}
+
 function instance(el: HTMLElement): ChartHandle {
   // S-7.6: a chart with a summary can be reached with the keyboard, which reads that summary.
   if (el.getAttribute('role') === 'img' && !el.hasAttribute('tabindex')) el.tabIndex = 0;
+  if (el.isConnected) settingsButton(el);
   return chartOf(el);
 }
 
@@ -470,6 +501,7 @@ export function barChart(
           },
         }))
       : s.data;
+  opts = { ...opts, series: keepLastYear(opts.series, prefs) };
   const n = opts.series.length;
   const unit = opts.unit ?? 'kWh';
   const chart = instance(el);
@@ -576,7 +608,11 @@ export function lineChart(
 ) {
   const chart = instance(el);
   const unit = opts.unit ?? 'kWh';
-  describe(el, opts.labels, opts.series, unit);
+  const shown = keepLastYear(opts.series, prefs);
+  describe(el, opts.labels, shown, unit);
+  // #20: day-by-day curves smoothed when asked (the summary above keeps the raw values)
+  const smooth = smoothable(prefs, opts.labels.length);
+  opts = { ...opts, series: smooth ? shown.map((s) => ({ ...s, name: `${s.name} (moyenne sur ${SMOOTH_DAYS} jours)`, data: movingAverage(s.data) })) : shown };
   // #304: end labels only when they do not overlap nor eat the plot, else a wrapping legend
   const px = axisPx();
   const width = el.clientWidth || 360;
@@ -590,7 +626,9 @@ export function lineChart(
     el,
     true,
   );
-  const ax = axes(opts.labels, el, unit, leg.height, { zero: opts.scale === undefined ? undefined : !opts.scale, ends: room });
+  const own = opts.min !== undefined || opts.max !== undefined;
+  const zero = zeroAxis(prefs, opts.scale === undefined ? zeroBased(unit) : !opts.scale, own);
+  const ax = axes(opts.labels, el, unit, leg.height, { zero, ends: room });
   const yAxis = { ...ax.yAxis, ...(opts.min !== undefined ? { min: opts.min } : {}), ...(opts.max !== undefined ? { max: opts.max } : {}) };
   chart.setOption(
     {
@@ -601,7 +639,8 @@ export function lineChart(
       tooltip: tooltip(opts.price, false, unit, opts.series),
       series: opts.series.map((s, i) => {
         // #304: a point for each value of a short series and for a value isolated between gaps
-        const pts = pointsToShow(s.data);
+        // #20: or on every value, when asked in the chart settings
+        const pts = prefs.points ? s.data.map((v) => v !== null) : pointsToShow(s.data);
         const any = pts.some(Boolean);
         return {
           type: 'line',
@@ -773,7 +812,7 @@ export function comboChart(
         {
           type: 'value',
           gridIndex: 1,
-          scale: !zeroBased(opts.lineUnit),
+          scale: !zeroAxis(prefs, zeroBased(opts.lineUnit), false),
           splitNumber: 3,
           max: markMax,
           ...yName(opts.lineUnit),
@@ -809,7 +848,7 @@ export function comboChart(
           itemStyle: { color: s.color, borderRadius: [3, 3, 0, 0] },
         })),
         ...opts.lines.map((s, i) => {
-          const pts = pointsToShow(s.data);
+          const pts = prefs.points ? s.data.map((v) => v !== null) : pointsToShow(s.data);
           return {
             type: 'line',
             name: s.name,
