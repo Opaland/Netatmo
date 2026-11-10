@@ -82,7 +82,7 @@ export function anonReportHtml(r: AnonReport): string {
       </div>
     </div>
     <p class="hint muted no-print">À remettre à un tiers (chauffagiste, conseiller, futur occupant${lease ? ', bailleur' : ''}) : ni nom de logement, ni adresse, ni coordonnées, ni identifiant, ni nom de pièce, ni donnée horaire, ni relevé de la station météo. Dans la boîte d'impression, décochez « En-têtes et pieds de page » si l'adresse du site s'y affiche.</p>
-    <h1 class="report-title">${lease ? 'Bilan énergie de la période du bail' : `Bilan énergie ${r.year}`} — logement chauffé à l'électricité</h1>
+    <h2 class="report-title">${lease ? 'Bilan énergie de la période du bail' : `Bilan énergie ${r.year}`} — logement chauffé à l'électricité</h2>
     <p><strong>Période</strong> : du ${longDate(r.from)} au ${longDate(r.to)} (${daysBetween(r.from, r.to)} jours)${
       lease ? ', <strong>période du bail uniquement</strong> : aucun jour avant ou après n\'est compté.' : `, comparée aux mêmes jours de ${r.year - 1}.`
     }</p>

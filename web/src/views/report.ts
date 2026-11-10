@@ -85,11 +85,11 @@ export function renderReport(view: HTMLElement) {
           .map((y) => `<option value="${y}" ${y === year ? 'selected' : ''}>${y}</option>`)
           .join('')}</select></label>
         <button type="button" class="primary small" id="print">Imprimer / PDF</button>
-        <button type="button" class="small" id="report-anon" data-year-anon="${year}">Rapport anonymisé</button>
+        <button type="button" class="btn secondary" id="report-anon" data-year-anon="${year}">Rapport anonymisé</button>
         
       </div>
     </div>
-    <h1 class="report-title">${esc(ds!.meta.home.name)} — bilan énergie ${year}${end < `${year}-12-31` ? ` <small>(au ${longDate(end)})</small>` : ''}</h1>
+    <h2 class="report-title">${esc(ds!.meta.home.name)} — bilan énergie ${year}${end < `${year}-12-31` ? ` <small>(au ${longDate(end)})</small>` : ''}</h2>
     <div class="kpis">
       <article class="kpi"><h3>Consommation</h3><p class="kpi-value">${fmtKwh(tot)}</p><p class="kpi-sub">${win ? delta(sum(cmp), sum(prev), `vs ${year - 1}${fullYear ? '' : ' à date'}`) : delta(tot, 0)}${caveatHtml}</p></article>
       ${

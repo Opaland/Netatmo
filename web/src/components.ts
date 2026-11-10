@@ -81,7 +81,7 @@ export interface GaugeOpts {
   expected?: number | null;
   /** Hatched projection up to the end of the period. */
   projected?: number | null;
-  /** Token or colour of the fill (default: accent). */
+  /** Token or colour of the fill (default: --series-measure, #409: the accent is for actions). */
   color?: string;
   /** Texts under the track, left to right. */
   scale?: string[];
@@ -116,7 +116,7 @@ export function listRow(o: RowOpts): string {
   const a = o.href ? attrs({ href: o.href }) : o.attrs ? ` type="button"${attrs(o.attrs)}` : '';
   return `<li><${tag} class="row"${a}>${o.color ? `<span class="swatch" style="background:${color(o.color)}" aria-hidden="true"></span>` : '<span></span>'}<span><span class="t">${esc(o.title)}</span>${
     o.sub ? `<span class="s">${esc(o.sub)}</span>` : ''
-  }${o.share !== undefined ? shareBar(o.share, o.color ?? '--accent') : ''}</span><span class="v">${esc(o.value ?? '')}</span>${
+  }${o.share !== undefined ? shareBar(o.share, o.color ?? '--series-measure') : ''}</span><span class="v">${esc(o.value ?? '')}</span>${
     tag === 'div' ? '<span></span>' : '<span class="chev" aria-hidden="true">›</span>'
   }</${tag}></li>`;
 }

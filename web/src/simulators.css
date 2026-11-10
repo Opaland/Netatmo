@@ -12,14 +12,16 @@
   color: var(--text-muted);
   min-width: 0;
 }
-.sim-form input,
-.sim-form select {
+.sim-form input {
   padding: 8px 10px;
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-md);
   background: var(--surface-card);
   color: var(--text);
   font: inherit;
+}
+.sim-form input,
+.sim-form select {
   width: 100%;
   min-width: 0;
   box-sizing: border-box;
