@@ -64,6 +64,7 @@ jobs:
       - run: npm run e2e:expliquer # v1.6 #337, #346 : expliquer un mois, pièce hors ligne (axe, 360 px 200 %)
       - run: npm run e2e:retours # v1.6 retours : module « Cave » liable à une chambre, télétravail 0 à 5 jours
       - run: npm run e2e:plannings # v1.6 #211, #210 : plannings et heures creuses, absences reconstituées (axe, 200 %)
+      - run: npm run e2e:pwa # v1.6 #357 : nouvelle version en attente + bandeau, deux onglets, « Recharger l'application », Installer, hors ligne
       - uses: actions/upload-artifact@v4
         if: always()
         with:

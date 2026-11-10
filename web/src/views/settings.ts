@@ -24,6 +24,7 @@ import { localDateTime } from '../glossary';
 import { html } from '../trusted';
 import { lazyAction, lazyCard } from '../lazy';
 import { showBuild } from '../build';
+import { handleAppClick, mountAppCard } from './app-card';
 import { loadVotes, usefulRate } from '../insight';
 import { tenant, tenantNote } from '../tenant';
 import { intuisContractLine } from './devices-quality';
@@ -191,13 +192,15 @@ export function renderSettings(view: HTMLElement, section: SettingsSection) {
     foyer: `${inviteCard}
   <section class="card" id="tenant-card" hidden></section>${msg}`,
     objectifs: '<section class="card" id="cold-card" hidden></section>',
-    apropos: `${publicCard}
+    apropos: `<section class="card app-card" id="app-card" aria-labelledby="app-card-title"></section>
+  ${publicCard}
   <section class="card" id="build-info" aria-live="polite"></section>
   ${legalCard}`,
   };
   view.innerHTML = html(body[section]);
   const has = (id: string) => !!document.getElementById(id);
   if (has('build-info')) void showBuild(document.getElementById('build-info'));
+  if (has('app-card')) void mountAppCard(document.getElementById('app-card')); // #357
   // S-12.6 tenant mode, S-12.5 prolonged cold alert: lazy modules
   if (has('tenant-card')) void lazyCard(() => import('./tenant-card'), (x) => x.mountTenant(document.getElementById('tenant-card')), { zone: 'tenant-card', what: 'Mode locataire' });
   if (has('devices-card')) void lazyCard(() => import('./devices-card'), (x) => x.mountDevices(document.getElementById('devices-card')), { zone: 'devices-card', what: 'État des appareils' });
@@ -335,6 +338,7 @@ export function handleKeydown(e: KeyboardEvent) {
 
 /** Forget the token, run the collection. Returns true when the click belonged to this view. */
 export function handleClick(btn: HTMLElement): boolean {
+  if (handleAppClick(btn)) return true; // #357: install, « Recharger l'application »
   if (btn.id === 'gh-login-btn') {
     login(btn.closest('#gh-login')!);
     return true;

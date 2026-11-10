@@ -1,5 +1,6 @@
 import { defineConfig } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
+import { MANIFEST } from './src/manifest';
 
 // #229: <compte>.github.io is one origin for every Pages site of the account, and the Cache API
 // is per origin. The runtime caches carry the repository name (GitHub Actions sets
@@ -18,31 +19,20 @@ export default defineConfig({
   },
   plugins: [
     VitePWA({
-      registerType: 'autoUpdate',
+      // #357 (decision of 10/11/2026): a new version waits until « Recharger » is touched in the
+      // banner (src/pwa.ts), which sends SKIP_WAITING to the waiting worker. #334 forced
+      // skipWaiting instead: the open page then ran its old JavaScript under a new worker whose
+      // precache no longer had the old hashed chunks (lazy cards failed). The way out of a stuck
+      // version that #334 was after is the button (it activates the waiting worker, every tab
+      // included), and the check on coming back to the foreground (src/pwa.ts).
+      registerType: 'prompt',
       injectRegister: false,
       includeAssets: ['icons/*.svg', 'icons/apple-touch-icon.png'],
-      manifest: {
-        name: 'Historique énergie — Intuitiv',
-        short_name: 'Énergie',
-        description: 'Consommation des radiateurs et du chauffe-eau, sur plusieurs années.',
-        lang: 'fr',
-        start_url: './',
-        scope: './',
-        display: 'standalone',
-        background_color: '#f4f3f0',
-        theme_color: '#c2410c',
-        icons: [
-          { src: 'icons/icon-192.png', sizes: '192x192', type: 'image/png' },
-          { src: 'icons/icon-512.png', sizes: '512x512', type: 'image/png' },
-          { src: 'icons/maskable-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
-        ],
-      },
+      manifest: MANIFEST, // src/manifest.ts (#357: id, shortcuts, theme colour of the tokens)
       workbox: {
-        // #334: vite-plugin-pwa sets these for autoUpdate only when it injects the registration
-        // itself; with injectRegister: false (main.ts registers), a new version stayed « waiting »
-        // as long as one tab or installed window was open, a reload did not help, and the device
-        // kept running the old version (and its old storage names) for days.
-        skipWaiting: true,
+        // No skipWaiting (see registerType above). clientsClaim only acts on pages that have no
+        // worker yet, i.e. the first visit: it makes that page work offline without a reload. A
+        // page already controlled switches worker when the waiting one is activated anyway.
         clientsClaim: true,
         globPatterns: ['**/*.{js,css,html,svg,png}'],
         // Encrypted data: try the network first (fresh nightly data), fall back to cache offline.

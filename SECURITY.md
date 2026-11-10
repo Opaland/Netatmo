@@ -1,0 +1,59 @@
+# Signaler une faille
+
+Ce dépôt est public, et l'application protège des données de consommation d'un foyer : chiffrées
+(AES-256-GCM, clé dérivée de la phrase de passe), déchiffrées seulement dans le navigateur. Une
+faille a donc du poids ici, même sans serveur ni compte.
+
+## Comment la signaler
+
+Par le **signalement privé de GitHub** : onglet **Security** du dépôt, puis
+**Report a vulnerability**. Seul le mainteneur (@Opaland) lit ce que vous y écrivez.
+
+Tant que ce bouton n'apparaît pas (son activation est un réglage du dépôt, fait par le mainteneur),
+ouvrez une issue qui demande **seulement** un moyen de contact privé, sans aucun détail sur la faille.
+
+**Ne publiez jamais** dans une issue, une PR, un commentaire ou un journal : preuve de concept,
+étapes pour reproduire, adresse de page piégée, phrase de passe, jeton, extrait de données
+déchiffrées.
+
+## Délais
+
+Projet personnel, maintenu sur le temps libre : un accusé de réception est visé sous une semaine,
+puis un correctif selon la gravité (une fuite de données en clair ou de secrets passe avant tout le
+reste). Aucun délai n'est garanti ; vous serez tenu au courant dans le signalement privé, et cité
+dans la PR du correctif si vous le souhaitez.
+
+## Périmètre
+
+- **L'application** (`web/`) : déchiffrement local, clé « Rester connecté » (IndexedDB), notes
+  chiffrées (localStorage), service worker et ses caches, politique de sécurité du contenu (CSP) et
+  Trusted Types, appels à l'API GitHub depuis ⚙ Paramètres.
+- **Le collecteur** (`collector/`) : appels à Intuis, Netatmo, Conso API, Shelly, Open-Meteo,
+  Anthropic ; chiffrement avant commit ; journaux publics de GitHub Actions.
+- **Les workflows** (`.github/workflows/`) : permissions, secrets, déploiement Pages et attestation
+  de provenance.
+- **Le chiffrement des données** (`data/*.enc.json`) : format d'enveloppe, dérivation de la clé.
+
+Hors périmètre : les services tiers eux-mêmes (Intuis, Netatmo, Enedis, GitHub…), et le partage
+de l'origine `<compte>.github.io` entre les sites Pages d'un même compte, déjà documenté (README,
+section Sécurité ; [`docs/etudes/origine-dediee.md`](docs/etudes/origine-dediee.md)).
+
+## Ce qui est déjà vérifié
+
+Chaque point est tenu par un test qui échoue s'il est cassé :
+
+- **Trusted Types** : tout HTML passe par la politique `energie`, le balisage exécutable est refusé,
+  seul le service worker du site est accepté comme script — `web/src/trusted.test.ts` ; toute
+  violation de la CSP pendant le parcours de la démo fait échouer `web/e2e/demo.mjs`.
+- **Anti-clickjacking** : dans le cadre d'une autre page, aucun écran — `web/src/frame.test.ts`.
+- **Enveloppes chiffrées** : format inconnu ou dérivation faible refusés avant tout calcul (#236) —
+  `web/src/aggregate.test.ts`, `tests/test_collector.py`.
+- **Journaux publics** : aucune valeur, aucun nom, aucun identifiant, aucun secret, même quand toutes
+  les sources échouent — `tests/test_fuites.py`.
+- **IA** : pièces et capteurs envoyés sous pseudonyme, jamais leurs noms —
+  `tests/test_collector.py` (`test_insights_never_send_room_or_module_names`).
+- **Noms rangés sous le chemin de l'application** sur une origine partagée (#229) —
+  `web/src/scope.test.ts`.
+- **« Recharger l'application »** n'efface ni la clé mémorisée, ni les notes, ni les données
+  chiffrées gardées hors ligne, ni les caches d'un autre site du compte (#357) —
+  `web/src/pwa.test.ts`, `web/e2e/pwa.mjs`.

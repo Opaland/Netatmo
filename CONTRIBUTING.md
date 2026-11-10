@@ -81,7 +81,8 @@ Non négociables (détails dans [`docs/PROJET.md`](docs/PROJET.md#7-règles-de-s
   de valeurs ni d'identifiants.
 - **Tests sans réseau** : toute API est simulée (voir `tests/`).
 - **IA** : seuls des agrégats mensuels sont envoyés, et l'application montre exactement quoi.
-- Une faille de sécurité se signale en privé au mainteneur, jamais dans une issue publique.
+- Une faille de sécurité se signale en privé au mainteneur, jamais dans une issue publique : comment,
+  et ce qui est déjà vérifié, dans [`SECURITY.md`](SECURITY.md).
 
 ## 5. Cadre juridique
 
