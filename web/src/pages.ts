@@ -250,7 +250,7 @@ function renderEtat(view: HTMLElement) {
     : '';
   stack(view, `${head}<div id="etat-bilan" aria-busy="true"><p class="hint muted" role="status">Bilan des données : calcul…</p></div>`, [
     (el) => settings.renderSettings(el, 'etat'),
-    (el) => (el.innerHTML = html(qualityCard(false) || '<section class="card"><p class="hint">Tous les mois sont complets : aucun jour estimé ni perdu.</p></section>')),
+    (el) => (el.innerHTML = html(qualityCard(false))),
   ]);
   void lazyCard(() => import('./views/etat'), (m) => m.mountEtat(document.getElementById('etat-bilan')), { zone: 'etat-bilan', what: 'Bilan des données' });
 }

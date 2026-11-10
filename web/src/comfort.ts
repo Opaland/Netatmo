@@ -364,24 +364,24 @@ export function offsetAdvice(o: OffsetStats, target = 19): string[] {
   const out: string[] = [];
   if (o.recent && o.recent.n >= 15 && Math.abs(o.recent.mean) > 1.5)
     out.push(
-      `Sonde à vérifier : sur les 30 derniers jours, le radiateur et la station diffèrent de ${signed(o.recent.mean)} °C en moyenne (plus de 1,5 °C). Radiateur près d'une fenêtre, d'une source de chaleur, ou station mal placée ?`,
+      `Sonde à vérifier : sur les 30 derniers jours, le radiateur et la station diffèrent de ${signed(o.recent.mean)}\u00a0°C en moyenne (plus de 1,5 °C). Radiateur près d'une fenêtre, d'une source de chaleur, ou station mal placée ?`,
     );
   if (o.n < MIN_DAYS) {
     out.push(`Pas encore assez de jours de chauffe communs (${o.n}) pour juger l'écart.`);
     return out;
   }
   if (!o.stable) {
-    out.push(`L'écart varie trop (d'un mois à l'autre ou d'un jour à l'autre, écart-type ${f1(o.sd)} °C) pour suggérer un décalage de consigne.`);
+    out.push(`L'écart varie trop (d'un mois à l'autre ou d'un jour à l'autre, écart-type ${f1(o.sd)}\u00a0°C) pour suggérer un décalage de consigne.`);
     return out;
   }
   if (Math.abs(o.mean) < 0.3) {
-    out.push(`Écart stable et faible (${signed(o.mean)} °C) : la sonde du radiateur reflète bien la pièce.`);
+    out.push(`Écart stable et faible (${signed(o.mean)}\u00a0°C) : la sonde du radiateur reflète bien la pièce.`);
     return out;
   }
   const warmer = o.mean > 0;
   out.push(
-    `Écart stable : la sonde du radiateur lit ${signed(o.mean)} °C par rapport à la station (${warmer ? 'plus chaud' : 'plus froid'}). Pour obtenir ${target} °C à la station, il faudrait régler la consigne vers ${f1(target + o.mean)} °C${
-      o.setpoint !== null ? ` ; avec la consigne moyenne actuelle (${f1(o.setpoint)} °C), la station lit environ ${f1(o.setpoint - o.mean)} °C` : ''
+    `Écart stable : la sonde du radiateur lit ${signed(o.mean)}\u00a0°C par rapport à la station (${warmer ? 'plus chaud' : 'plus froid'}). Pour obtenir ${target}\u00a0°C à la station, il faudrait régler la consigne vers ${f1(target + o.mean)}\u00a0°C${
+      o.setpoint !== null ? ` ; avec la consigne moyenne actuelle (${f1(o.setpoint)}\u00a0°C), la station lit environ ${f1(o.setpoint - o.mean)}\u00a0°C` : ''
     }. Suggestion seulement : l'application ne pilote pas les radiateurs.`,
   );
   return out;

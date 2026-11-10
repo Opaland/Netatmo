@@ -81,9 +81,9 @@ describe('money.ts (#358)', () => {
   });
 
   it('CO₂ : une décimale sous 10 kg, en tonnes dès 1 000 kg', () => {
-    expect(fmtCo2(5.2)).toBe('5,2 kg CO₂e');
-    expect(fmtCo2(10.4)).toBe('10 kg CO₂e');
-    expect(fmtCo2(1000)).toBe('1 t CO₂e');
+    expect(fmtCo2(5.2)).toBe('5,2 kg CO₂e');
+    expect(fmtCo2(10.4)).toBe('10 kg CO₂e');
+    expect(fmtCo2(1000)).toBe('1 t CO₂e');
     expect(fmtFactor(0.052)).toBe('0,052 kg CO₂e/kWh');
     expect(fmtFactor(0.0521)).toBe('0,0521 kg CO₂e/kWh');
   });

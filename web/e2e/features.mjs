@@ -79,7 +79,7 @@ const DESTINATIONS = {
   'compteur-heures-creuses': ['#offpeak-chart canvas', '#offpeak-card .counted', 'text:Heures pleines / creuses'],
   confort: ['#pressure-card table', 'text:bruyante', '#cold-chart canvas', '#windows-chart canvas', '#ha-card table', '#cellar-0 canvas', '#probe-0 canvas'],
   'chauffe-eau': ['#wh-month-chart canvas', '#contactor-line:not([hidden])'],
-  etat: ['#quality', '.status-list', '#devices-card [data-shelly-role]', '#quality-years .year-verdict', '#incidents .incident-list li', 'text:h sans Internet', 'text:coupure de courant', '#quality-sources [data-source=heating] .gaps li', '#quality-sources [data-source=station]', '#quality-fine [data-source=linky30]', '#quality-fine [data-source=room30]', 'text:Année par année'],
+  etat: ['#quality', '.status-list', '#devices-card a[href="#parametres-sources"]', '#quality-years .year-verdict', '#incidents .incident-list li', 'text:h sans Internet', 'text:coupure de courant', '#quality-sources [data-source=heating] .gaps li', '#quality-sources [data-source=station]', '#quality-fine [data-source=linky30]', '#quality-fine [data-source=room30]', 'text:Année par année'],
   rapport: ['.report .kpis', '#report-offers table'],
   'outils-offres': ['#offers-chart canvas'],
   'outils-voiture': ['#ev-card #ev-result table'],
@@ -98,7 +98,7 @@ const DESTINATIONS = {
   'parametres-contrat': ['[data-pmode]', '#contract-share'],
   // #366: the stove's wood (demo: three purchases, two seasons), on Accueil too (winter against winter: e2e/expliquer.mjs)
   'parametres-logement': ['#wood-card [aria-label="Bois par saison"] .row', '#wood-card #wood-add', '#works-card [data-works-surface]', 'a[href="#compteur-autres"]', '#location-card #loc-edit', 'text:Commune d'],
-  'parametres-sources': ['.status-list', '#gh-login', '#devices-card'],
+  'parametres-sources': ['.status-list', '#gh-login', '#devices-card [data-shelly-role]'],
   'parametres-objectifs': ['#money-card #budget-input', '#co2-input', '[data-threshold]', '#cold-card [data-cold-room]'],
   'parametres-affichage': ['[data-set=theme]', '[data-toggle=simple]', 'select[data-pin]', '[data-toggle=household]'],
   'parametres-foyer': ['#invite-open', '#tenant-card #tenant-on'],
@@ -310,6 +310,14 @@ try {
     await checkViolations(page, view);
   }
 
+  // #387: État des données, a verdict per source and the detail folded, holds in 4 screens
+  progress('état des données');
+  {
+    await go(page, 'etat');
+    const [h, screenH] = await page.evaluate(() => [document.documentElement.scrollHeight, window.innerHeight]);
+    check(h <= 4 * screenH, `#387 : État des données fait ${h} px, plus de 4 écrans (${4 * screenH} px)`);
+  }
+
   // #311 / #302: Accueil holds in 3 iPhone screens; one period for the screen, each comparison named
   progress('accueil');
   {
@@ -347,7 +355,7 @@ try {
     await page.click('[data-set=compareMode][data-value=season]');
     await ready(page);
     check((await page.locator('[data-season]', { hasText: 'en cours' }).count()) === 1, '#298 : pas de puce pour la saison en cours');
-    check(/\(en cours\) : total [\d\s  ]+ kWh/.test((await label()) ?? ''), '#298 : saison en cours absente du graphique');
+    check(/\(en cours\) : total [\d\s  ]+\skWh/.test((await label()) ?? ''), '#298 : saison en cours absente du graphique');
     // maquette « Historique » : hiver contre hiver, deux hivers complets chiffrés, à climat égal, l'hiver en cours en pointillé
     check((await page.locator('#cmp-card .season-tiles .kpi').count()) === 2, 'Historique : les deux hivers complets ne sont pas chiffrés');
     check(/à climat égal/.test(await page.locator('#cmp-card').innerText()), 'Historique : pas de comparaison « à climat égal »');

@@ -75,10 +75,10 @@ describe('verdict in euros (#302: one named reference)', () => {
     const m = moneyVerdict(v, 32);
     expect(m.unit).toBe('€');
     expect(m.expected).toBeCloseTo((184 * 32) / 170, 6);
-    expect(verdictHeadline(m)).toBe("3 € de moins que d'habitude");
+    expect(verdictHeadline(m)).toBe("3 € de moins que d'habitude");
   });
   it('stays in kWh without prices, says « comme d’habitude » under one unit', () => {
-    expect(verdictHeadline(moneyVerdict(v, null))).toBe("14 kWh de moins que d'habitude");
+    expect(verdictHeadline(moneyVerdict(v, null))).toBe("14 kWh de moins que d'habitude");
     expect(verdictHeadline(moneyVerdict({ ...v, actual: 184.3 }, null))).toBe("Comme d'habitude");
     expect(verdictHeadline(moneyVerdict({ ...v, actual: 200 }, 40))).toMatch(/de plus que d'habitude$/);
   });
@@ -104,7 +104,7 @@ describe('projection and what counted', () => {
     expect(rows[0].share).toBe(75);
     expect(rows[0].change).toBeNull();
     expect(rows[1].change).toBe(-50);
-    expect(changeText(-50, 'vs 2025 à date')).toBe('−50 % vs 2025 à date');
+    expect(changeText(-50, 'vs 2025 à date')).toBe('−50 % vs 2025 à date');
     expect(changeText(null, 'vs 2025')).toMatch(/pas de comparaison/);
   });
   it('monthly outdoor mean, the axis ticks', () => {
@@ -154,8 +154,8 @@ describe('verdict words: one scope, figures that add up (#383)', () => {
     const spent = figure(w.spent);
     const expected = figure(w.expectedAmount);
     expect(w.expected.startsWith(`${w.expectedAmount} attendus`)).toBe(true);
-    const pct = num(/\(([−+]?[\d\s  ]+) %\)$/.exec(w.expected)![1]);
-    const h = /^([\d\s  ]+) (?:€|kWh) de (moins|plus) que d'habitude$/.exec(w.headline);
+    const pct = num(/\(([−+]?[\d\s  ]+)\s%\)$/.exec(w.expected)![1]);
+    const h = /^([\d\s  ]+)\s(?:€|kWh) de (moins|plus) que d'habitude$/.exec(w.headline);
     if (!h) expect(w.headline).toBe("Comme d'habitude");
     const gap = h ? num(h[1]) * (h[2] === 'moins' ? -1 : 1) : 0;
     // the gap written is the difference of the two amounts written
@@ -192,7 +192,7 @@ describe('verdict words: one scope, figures that add up (#383)', () => {
     const { m, names, v } = onDemo(LAST);
     expect(names).toEqual(['Chambre enfant']);
     const f = written(m, names);
-    expect(f.w.spentRest).toBe('(130 kWh) dépensés hors Chambre enfant, hors ligne, en novembre (au 8)');
+    expect(f.w.spentRest).toBe('(130 kWh) dépensés hors Chambre enfant, hors ligne, en novembre (au 8)');
     expect(Math.round(v.actual)).toBe(130);
     expect(f.gap).toBeLessThan(0);
   });

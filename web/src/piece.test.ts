@@ -53,12 +53,12 @@ describe('page Pièce : maintenant (#313)', () => {
   it('says the mode and until when, the night going on to the morning', () => {
     const s = scheduleOf(SP)!;
     expect(modeAt(s, 30)).toEqual({ kind: 'comfort', until: 22, next: 'eco' });
-    expect(modeText(s, 30)).toBe('Confort jusqu’à 22 h, puis économie 18,0 °C');
+    expect(modeText(s, 30)).toBe('Confort jusqu’à 22 h, puis économie 18,0 °C');
     // 23 h: eco until 7 h the next morning
     expect(modeAt(s, 46)).toEqual({ kind: 'eco', until: 7, next: 'comfort' });
-    expect(modeText(s, 46)).toBe('Économie jusqu’à 7 h, puis confort 20,0 °C');
+    expect(modeText(s, 46)).toBe('Économie jusqu’à 7 h, puis confort 20,0 °C');
     const half = scheduleOf(SP.map((v, i) => (i === 14 ? 18 : v)))!;
-    expect(modeText(half, 2)).toBe('Économie jusqu’à 7 h 30, puis confort 20,0 °C');
+    expect(modeText(half, 2)).toBe('Économie jusqu’à 7 h 30, puis confort 20,0 °C');
   });
 
   it('finds the off-peak hours from the HC column, over midnight', () => {
@@ -122,8 +122,8 @@ describe('Pourquoi il a fait froid (#313)', () => {
     expect(reasonText({ kind: 'window', hours: 4 }, 19)).toBe('fenêtre ouverte 4 h');
     expect(reasonText({ kind: 'offload', hours: 2 }, 19)).toBe('radiateur coupé 2 h (délestage)');
     expect(reasonText({ kind: 'mode', mode: 'hg', hours: 20 }, 19)).toBe('mode hors-gel 20 h');
-    expect(reasonText({ kind: 'drop', at: '07:30', fall: 1.8 }, 19)).toBe('chute de 1,8 °C vers 7 h 30 (fenêtre ou porte ouverte ?)');
-    expect(reasonText({ kind: 'setpoint', value: 17 }, 19)).toBe('température demandée de 17,0 °C, sous le seuil de 19,0 °C');
+    expect(reasonText({ kind: 'drop', at: '07:30', fall: 1.8 }, 19)).toBe('chute de 1,8 °C vers 7 h 30 (fenêtre ou porte ouverte ?)');
+    expect(reasonText({ kind: 'setpoint', value: 17 }, 19)).toBe('température demandée de 17,0 °C, sous le seuil de 19,0 °C');
     expect(reasonText({ kind: 'none' }, 19)).toMatch(/pas d’explication/);
   });
 });
@@ -141,7 +141,7 @@ describe('liste Pièces (#313)', () => {
   });
 
   it('gives a comfort pill', () => {
-    expect(comfortPill(2, 10, 19)).toEqual({ level: 'warn', text: '2 j sous 19,0 °C' });
+    expect(comfortPill(2, 10, 19)).toEqual({ level: 'warn', text: '2 j sous 19,0 °C' });
     expect(comfortPill(0, 6.2, 19)).toEqual({ level: 'warn', text: 'fenêtre 6 h' });
     expect(comfortPill(0, 1, 19)).toEqual({ level: 'ok', text: 'confort' });
     expect(comfortPill(0, null, 19)).toEqual({ level: 'ok', text: 'confort' });

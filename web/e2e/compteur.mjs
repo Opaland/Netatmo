@@ -80,7 +80,7 @@ try {
       check(/12 derniers mois/.test(await page.locator(`#${id} .card-period`).innerText()), `#${id} : période absente`);
     }
     const share = await page.locator('#share-card .share').getAttribute('aria-label');
-    const pct = [...share.matchAll(/(\d+) %/g)].map((m) => Number(m[1]));
+    const pct = [...share.matchAll(/(\d+)\s%/g)].map((m) => Number(m[1]));
     check(pct.length === 3 && pct.reduce((a, b) => a + b) === 100, `part des usages : ${share}`);
     check(/kVA/.test(await page.locator('#power-card .big').innerText()), 'puissance maximale absente');
     check(await page.locator('#power-card .gauge').count(), 'puissance : jauge souscrits / utilisés absente');

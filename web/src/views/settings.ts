@@ -85,10 +85,7 @@ export function renderSettings(view: HTMLElement, section: SettingsSection) {
     </fieldset>`,
   ).join('');
   const demo = ds!.source === 'demo';
-  const statusCard = `
-  <section class="card">
-    <div class="card-head"><h2>État des sources</h2>${scopeTag('foyer')}</div>
-    <ul class="status-list">
+  const statusList = `<ul class="status-list">
       ${status(true, 'Radiateurs et chauffe-eau Intuis', 'intuis')}
       ${status(!!m.weather_source, `Météo (${m.weather_source === 'netatmo' ? 'station Netatmo' : 'Open-Meteo'})`, m.weather_source === 'netatmo' ? 'netatmo' : 'open-meteo', false)}
       ${status(!!(m as { has_station?: boolean }).has_station, 'Station Netatmo, tous les modules', 'netatmo')}${noteLine(src.netatmo)}
@@ -100,8 +97,14 @@ export function renderSettings(view: HTMLElement, section: SettingsSection) {
       ${status(!!m.has_roomstate, `Relevé horaire de l'état des pièces${src['releve-horaire']?.note ? ` (${esc(src['releve-horaire'].note)})` : ''}`, 'releve-horaire', false)}
     </ul>
     ${iaRateLine()}
-    <p class="hint muted">Dernière collecte : ${m.updated ? esc(localDateTime(m.updated)) : '—'}.</p>
-  </section>`;
+    <p class="hint muted">Dernière collecte : ${m.updated ? esc(localDateTime(m.updated)) : '—'}.</p>`;
+  const statusCard = `<section class="card"><div class="card-head"><h2>État des sources</h2>${scopeTag('foyer')}</div>${statusList}</section>`;
+  // #387: État des données is a reading page: the sources and the devices are folded under one
+  // line each, and the forms (Shelly clamps) stay in ⚙ Sources de données.
+  const failing = Object.values(src).filter((x) => x?.error && (!x.ok || x.error > x.ok)).length;
+  const statusFold = `<details class="card fold" id="sources-fold"><summary><h2>État des sources</h2> <span class="fold-sub">${
+    failing ? `${failing} en échec` : 'toutes répondent'
+  }</span></summary>${statusList}</details>`;
   const loginCard = `<section class="card">
     <div class="card-head"><h2>1. Autoriser l'application à écrire vos secrets</h2>${scopeTag('foyer')}</div>
     <p class="hint muted">Créez un <a href="${TOKEN_HELP_URL}" target="_blank" rel="noopener">jeton GitHub « fine-grained »</a> :
@@ -191,7 +194,7 @@ export function renderSettings(view: HTMLElement, section: SettingsSection) {
   <section class="card"><div class="card-head"><h2>Home Assistant, liaison des pièces</h2></div>
     <p class="hint muted">L'état des capteurs Home Assistant importés et l'accord fenêtre / radiateur se lisent dans <a href="#confort">Pièces → Air et confort</a>, comme la liaison entre pièces et modules de la station.</p></section>
   ${loginCard}${demo ? '' : secretsCard + collectCard}${msg}`,
-    etat: `${statusCard}<section class="card" id="devices-card" hidden></section>`,
+    etat: `${statusFold}<details class="card fold" id="devices-fold"><summary><h2>État des appareils</h2> <span class="fold-sub">modules, piles, passerelle</span></summary><div id="devices-card" data-reading hidden></div></details>`,
     contrat: `${tenant().on ? tenantNote('Le contrat partagé est masqué') : contractSection()}${demo || hasToken() ? '' : '<p class="hint muted">Pour partager le contrat, connectez-vous à GitHub dans <a href="#parametres-sources">Sources de données</a>.</p>'}${msg}`,
     foyer: `${inviteCard}
   <section class="card" id="tenant-card" hidden></section>${msg}`,

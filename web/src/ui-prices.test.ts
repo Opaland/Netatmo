@@ -90,8 +90,8 @@ describe('costs computed once per render (#256)', () => {
     setup({ mode: 'manual', prices: { ...NO_PRICES, base: 0.2 } });
     const first = costOf(records, '2025-01-01', '2025-01-10');
     expect(first).toBeCloseTo(20, 10);
-    expect(eurOf(records, '2025-01-01', '2025-01-10')).toBe('20 €');
-    expect(eurOf(records, '2025-01-01', '2025-01-10')).toBe('20 €');
+    expect(eurOf(records, '2025-01-01', '2025-01-10')).toBe('20 €');
+    expect(eurOf(records, '2025-01-01', '2025-01-10')).toBe('20 €');
     expect(h.energyCost).toBe(1);
     (h.state as { prices: Prices }).prices = { ...NO_PRICES, base: 0.3 };
     expect(costOf(records, '2025-01-01', '2025-01-10')).toBeCloseTo(30, 10);
