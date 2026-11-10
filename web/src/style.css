@@ -1634,6 +1634,15 @@ code.hash {
   margin: 0 0 var(--space-1) auto;
   font-size: var(--font-sm);
 }
+/* on the line of the « Voir les valeurs » fold that follows the chart (no extra line: the Accueil
+   holds in 3 phone screens, #311); the open table goes under both */
+.chart-settings:has(+ .table-details) {
+  float: right;
+  margin: 0 0 0 var(--space-2);
+}
+.chart-settings + .table-details > :not(summary) {
+  clear: both;
+}
 .sheet {
   box-sizing: border-box;
   width: 100%;
