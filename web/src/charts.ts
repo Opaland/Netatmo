@@ -19,7 +19,7 @@ import {
 } from './chart-theme';
 import { dayLong, signedPct } from './glossary';
 import { type Measure, changeSummary, daysSummary, gridSummary, rankSummary, slopeSummary, summarize } from './summary';
-import { node } from './trusted';
+import { html, node } from './trusted';
 import { track } from './ready';
 
 // #227: ECharts lives in its own chunk (./echarts-lib), loaded on the first chart drawn — or
@@ -155,11 +155,13 @@ function real(el: HTMLElement, l: Lib): ECharts {
 
 /** Runs f on the element's chart now if ECharts is there, else in call order once it has loaded. */
 function run(el: HTMLElement, f: (c: ECharts) => void) {
+  // #413: a chart drawn in HTML rows meanwhile is not redrawn on a canvas
+  if (el.hasAttribute('data-rows')) return;
   if (lib) return f(real(el, lib));
   loadCharts().then(
     (l) => {
       // the view was replaced meanwhile: nothing to draw
-      if (el.isConnected) f(real(el, l));
+      if (el.isConnected && !el.hasAttribute('data-rows')) f(real(el, l));
     },
     (e: unknown) => {
       loading = null;
@@ -322,6 +324,63 @@ function noteOverlap(el: HTMLElement, overlaps: string[]) {
 }
 /** Width of the category labels of a horizontal bar chart (they wrap inside it). */
 const hLabelWidth = (width: number) => Math.round(Math.min(140, width * 0.32));
+
+/** #413: one row of a horizontal bar chart drawn in HTML: a name, then one bar per series. */
+interface BarRow {
+  label: string;
+  bars: { value: number; color: string; text: string; alt?: boolean }[];
+}
+
+/**
+ * #413: a horizontal bar chart drawn in HTML rows — the name above its bar(s), the value at the
+ * end, as the cascade of « Expliquer un mois » (#369) — when its canvas labels would not fit
+ * (text 200 %, narrow screen: « Chauffe-eau » drawn over « Chambre parentale »). The names wrap
+ * like any text, never over each other, and the sweep reads them in the DOM. `min` < 0 for a
+ * chart on both sides of 0; `valueWidth`: the same value column on every row, so 0 stays aligned.
+ * The rows are hidden from screen readers: the element's summary (role="img") reads them.
+ */
+function barRows(
+  el: HTMLElement,
+  rows: BarRow[],
+  opts: { min: number; max: number; valueWidth: string; legend?: { name: string; color: string }[]; onClick?: (index: number) => void },
+) {
+  lib?.getInstanceByDom(el)?.dispose();
+  el.setAttribute('data-rows', '');
+  el.removeAttribute('data-axis-overlap-y');
+  if (el.dataset.canvasHeight === undefined) el.dataset.canvasHeight = el.style.height;
+  el.style.height = 'auto';
+  const span = opts.max - opts.min || 1;
+  const pct = (v: number) => `${Math.max(0, Math.min(100, (v / span) * 100)).toFixed(2)}%`;
+  const zero = -opts.min;
+  const legend =
+    opts.legend && opts.legend.length > 1
+      ? `<p class="hbars-legend">${opts.legend.map((l) => `<span><i style="background-color:${escapeHtml(l.color)}"></i>${escapeHtml(l.name)}</span>`).join('')}</p>`
+      : '';
+  const bar = (b: BarRow['bars'][number]) =>
+    `<span class="hbar-bar"><span class="hbar-track"><i${b.alt ? ' class="alt"' : ''} style="left:${pct(b.value < 0 ? zero + b.value : zero)};width:${pct(Math.abs(b.value))};background-color:${escapeHtml(b.color)}"></i></span><span class="hbar-value${b.alt ? ' muted' : ''}">${escapeHtml(b.text)}</span></span>`;
+  el.innerHTML = html(
+    `<div class="hbars" aria-hidden="true" style="--zero:${pct(zero)};--value-w:${opts.valueWidth}">${legend}${rows
+      .map((r, i) => `<div class="hbar-row${opts.onClick ? ' hbar-link' : ''}" data-index="${i}"><span class="hbar-label">${escapeHtml(r.label)}</span>${r.bars.map(bar).join('')}</div>`)
+      .join('')}</div>`,
+  );
+  el.onclick = opts.onClick
+    ? (e) => {
+        const row = (e.target as Element).closest<HTMLElement>('.hbar-row');
+        if (row) opts.onClick!(Number(row.dataset.index));
+      }
+    : null;
+}
+
+/** #413: back to the canvas after HTML rows (the same element redrawn wider or in smaller text). */
+function canvasMode(el: HTMLElement) {
+  if (!el.hasAttribute('data-rows')) return;
+  el.removeAttribute('data-rows');
+  el.onclick = null;
+  el.replaceChildren();
+  el.style.height = el.dataset.canvasHeight ?? '';
+  delete el.dataset.canvasHeight;
+}
+
 /** Typographic minus (« −15 € », never « -15 € »), § 7.2. */
 const minus = (s: string) => s.replace(/^-/, '−');
 
@@ -581,9 +640,27 @@ export function hbarChart(
     el,
   );
   const top = Math.max(8, leg.height + 4);
+  canvasMode(el);
   // plot height: the grid less the value axis written under it (labels and unit, one line)
   const plot = (el.clientHeight || 220) - top - 4 - (axisPx() + 16);
-  noteOverlap(el, categoryLabels(opts.labels, { labelWidth: hLabelWidth(width), plot, px: axisPx() }).overlaps);
+  const fit = categoryLabels(opts.labels, { labelWidth: hLabelWidth(width), plot, px: axisPx() });
+  if (fit.overlaps.length || fit.broken.length) {
+    // #413: the names do not fit beside their bars: one row per name, the name above
+    const max = Math.max(1, ...opts.series.flatMap((s) => s.data.map((v) => v ?? 0)));
+    barRows(
+      el,
+      opts.labels.map((l, i) => ({
+        label: l,
+        bars: opts.series.map((s, k) => {
+          const v = s.data[i];
+          return { value: Math.max(0, v ?? 0), color: s.colors?.[i] ?? s.color, text: v == null ? '—' : nf0.format(v), alt: k > 0 };
+        }),
+      })),
+      { min: 0, max, valueWidth: '3.5em', legend: opts.series.map((s) => ({ name: s.name, color: s.color })), onClick: opts.onClick },
+    );
+    return;
+  }
+  noteOverlap(el, fit.overlaps);
   chart.setOption(
     {
       animationDuration: 300,
@@ -1023,8 +1100,22 @@ export function waterfallChart(
   const maxDown = Math.max(0, ...steps.map((s) => -s.delta));
   const width = el.clientWidth || 360;
   const height = Math.max(160, steps.length * 34 + 60);
+  canvasMode(el);
+  const fit = categoryLabels(
+    steps.map((s) => s.name),
+    { labelWidth: hLabelWidth(width), plot: height - 16, px: axisPx() },
+  );
+  if (fit.overlaps.length || fit.broken.length) {
+    // #413: the names do not fit beside their bars: one row per room, the name above
+    barRows(
+      el,
+      steps.map((s) => ({ label: s.name, bars: [{ value: s.delta, color: cssVar(s.delta > 0 ? '--state-bad' : '--state-good'), text: `${signed(Math.round(s.delta))} kWh` }] })),
+      { min: -maxDown, max: maxUp, valueWidth: '6.5em' },
+    );
+    return;
+  }
   el.style.height = `${height}px`;
-  noteOverlap(el, categoryLabels(steps.map((s) => s.name), { labelWidth: hLabelWidth(width), plot: height - 16, px: axisPx() }).overlaps);
+  noteOverlap(el, fit.overlaps);
   chart.setOption(
     {
       animationDuration: 300,
