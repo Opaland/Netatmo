@@ -231,7 +231,7 @@ function cellarCards(st: Station, map: Map<string, string>) {
       return `<section class="card">
       <h2>Humidité — ${esc(name)} <small class="muted">90 derniers jours</small></h2>
       ${verdictBox(level, esc(title), sub)}
-      <p class="hint muted">Le <strong>point de rosée</strong> est la température à laquelle l'humidité de l'air se condense. Il est calculé ici par la formule de Magnus à partir des moyennes du jour (température et humidité). Plus il est proche de la température de la cave, plus les surfaces froides se mouillent. Repères : au-delà de ${HUMID_HOURS}\u00a0% d'humidité les moisissures peuvent se développer ; au-delà de ${HUMID_DAYS}\u00a0% plus de 7 jours d'affilée, le risque est installé (seuils indicatifs, à confirmer).</p>
+      <p class="hint muted">Le <strong>point de rosée</strong> est la température à laquelle l'humidité de l'air se condense. Il est calculé ici à partir des moyennes du jour (température et humidité). Plus il est proche de la température de la cave, plus les surfaces froides se mouillent. Repères : au-delà de ${HUMID_HOURS}\u00a0% d'humidité les moisissures peuvent se développer ; au-delà de ${HUMID_DAYS}\u00a0% plus de 7 jours d'affilée, le risque est installé (seuils indicatifs, à confirmer).</p>
       <div class="chart" id="cellar-${i}" role="img" aria-label="Humidité et point de rosée, ${esc(name)}"></div>
       ${tableToggle(
         table(
@@ -418,7 +418,7 @@ function probeCard(st: Station, map: Map<string, string>) {
       const o = offsetStats(ds!.temps.get(r.id), st.daily[k], from, last);
       if (!o) return `${pair(r, k)}<p class="hint muted">Pas de jour de chauffe (novembre à mars) avec les deux mesures sur les 12 derniers mois.</p>`;
       return `${pair(r, k)}
-        <p>Écart moyen <strong>${signed(o.mean)}\u00a0°C</strong> : la sonde du radiateur lit ${o.mean >= 0 ? 'plus chaud' : 'plus froid'} que la station, sur ${o.n} jours de chauffe (écart-type ${f1(o.sd)}\u00a0°C : ${o.stable ? 'stable' : 'variable'}).</p>
+        <p>Écart moyen <strong>${signed(o.mean)}\u00a0°C</strong> : la sonde du radiateur lit ${o.mean >= 0 ? 'plus chaud' : 'plus froid'} que la station, sur ${o.n} jours de chauffe ; d'un jour à l'autre, l'écart ${o.stable ? 'reste stable' : 'varie'} (±\u00a0${f1(o.sd)}\u00a0°C).</p>
         ${offsetAdvice(o, state.comfortThreshold)
           .map((p) => `<p class="hint">${esc(p)}</p>`)
           .join('')}

@@ -170,7 +170,7 @@ export function standbyYear(watts: number, price: number | null): { kwh: number;
 
 /**
  * #301: the room filters of Accueil or Pièces do not apply to the meter; said once on the tab
- * when one is on (« Le filtre « Chauffe-eau · 2 pièces sur 7 » ne s'applique pas ici… »).
+ * when one is on (« Le filtre « Eau chaude · 2 pièces sur 7 » ne s'applique pas ici… »).
  */
 export function filterNote(o: { cat: string; catLabel: string; rooms: number; allRooms: number }): string {
   const parts = [o.cat === 'all' ? '' : o.catLabel, o.rooms < o.allRooms ? `${o.rooms} pièce${o.rooms > 1 ? 's' : ''} sur ${o.allRooms}` : ''].filter(Boolean);

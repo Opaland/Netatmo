@@ -24,7 +24,7 @@ import {
   yearVerdicts,
 } from '../data-quality';
 import { offlineDays, offlineModules, restarts, setupDates, splitStopped } from '../devices';
-import { MONTHS_LONG, dayShort, withUnit } from '../glossary';
+import { MONTHS_LONG, dayShort, plural, withUnit } from '../glossary';
 import { suspectDays } from '../reconstitute';
 import { html } from '../trusted';
 import { esc } from '../ui';
@@ -33,7 +33,6 @@ import { incidentsCard } from './incidents';
 import { SOURCE_NAME } from '../pages';
 
 const pct = (v: number | null) => (v === null ? '—' : withUnit(String(Math.floor(v * 100)), '%'));
-const plural = (n: number, w: string) => `${n} ${w}${n > 1 ? 's' : ''}`;
 
 function input(): QualityInput {
   const d = rawDataset() ?? ds!;

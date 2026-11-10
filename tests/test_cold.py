@@ -84,4 +84,14 @@ def test_log_line_gives_counts_only():
 
     assert _cold_label(None, {}) == "Alerte froid : désactivée"
     line = _cold_label({"threshold": 14, "days": 1, "rooms": ["100"]}, {"suivies": 1, "froides": 1, "sans_mesure": 0})
-    assert line == "Alerte froid : 1 pièce(s) suivie(s), 1 sous le seuil, 0 sans mesure récente"
+    assert line == "Alerte froid : 1 pièce suivie, 1 sous le seuil, 0 sans mesure récente"
+
+
+def test_nombre_agrees_the_noun():
+    """#406: a count agreed with its noun, the French way (plural from 2), never « (s) »."""
+    from collector.texte import nombre
+
+    assert nombre(0, "module") == "0 module"
+    assert nombre(1, "module") == "1 module"
+    assert nombre(2, "module") == "2 modules"
+    assert nombre(3, "mise à jour détectée", "mises à jour détectées") == "3 mises à jour détectées"

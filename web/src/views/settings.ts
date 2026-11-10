@@ -20,7 +20,7 @@ import {
   invalidFields,
 } from '../settings';
 import { contractInfo, esc, longDate, table } from '../ui';
-import { localDateTime, localDay } from '../glossary';
+import { agreePlurals, localDateTime, localDay } from '../glossary';
 import { html } from '../trusted';
 import { lazyAction, lazyCard } from '../lazy';
 import { showBuild } from '../build';
@@ -56,7 +56,7 @@ export function renderSettings(view: HTMLElement, section: SettingsSection) {
     const e = expiryInfo(s, today);
     if (!e) return '';
     const when = e.date ? `expiration ${e.estimated ? 'estimée ' : ''}le ${longDate(e.date)}` : 'expiration inconnue';
-    return ` <span class="${e.renew ? 'ko-red' : 'muted'}">· ${when}${e.renew ? ' — <strong>⚠️ à renouveler</strong>' : ''}</span>`;
+    return ` <span class="${e.renew ? 'ko-red' : 'muted'}">· ${when}${e.renew ? ' — <strong>à renouveler</strong>' : ''}</span>`;
   };
   const when = (iso?: string) => (iso ? localDateTime(iso) : '');
   const status = (on: boolean, label: string, key?: string, withExpiry = true) => {
@@ -67,7 +67,7 @@ export function renderSettings(view: HTMLElement, section: SettingsSection) {
       : s?.ok
         ? `<span class="muted">dernier succès le ${when(s.ok)}</span>`
         : `<span class="muted">${on ? 'actif' : 'non configuré'}</span>`;
-    return `<li><span class="${failing ? 'ko-red' : on ? 'pill ok' : 'muted'}" aria-hidden="true">${failing ? '⚠️' : on ? '✓' : '○'}</span> ${label} ${detail}${withExpiry ? expiry(s) : ''}</li>`;
+    return `<li><span class="${failing ? 'ko-red' : on ? 'pill ok' : 'muted'}" aria-hidden="true">${failing ? '!' : on ? '✓' : '○'}</span> ${label} ${detail}${withExpiry ? expiry(s) : ''}</li>`;
   };
   const groups = GROUPS.map(
     (g) => `<fieldset class="secrets" data-group="${g.id}"><legend>${esc(g.title)}</legend>
@@ -93,8 +93,8 @@ export function renderSettings(view: HTMLElement, section: SettingsSection) {
       ${status(!!(m as { has_shelly?: boolean }).has_shelly || !!src.shelly, 'Prises Shelly', 'shelly')}${noteLine(src.shelly)}
       ${src['home-assistant'] ? status(true, 'Home Assistant (import manuel)', 'home-assistant', false) : ''}
       ${status(!!ds!.insights, 'Analyse IA mensuelle', 'ia')}
-      ${src.appareils ? status(true, `État des appareils Intuis${src.appareils.note ? ` (${esc(src.appareils.note)})` : ''}`, 'appareils', false) : ''}
-      ${status(!!m.has_roomstate, `Relevé horaire de l'état des pièces${src['releve-horaire']?.note ? ` (${esc(src['releve-horaire'].note)})` : ''}`, 'releve-horaire', false)}
+      ${src.appareils ? status(true, `État des appareils Intuis${src.appareils.note ? ` (${esc(agreePlurals(src.appareils.note))})` : ''}`, 'appareils', false) : ''}
+      ${status(!!m.has_roomstate, `Relevé horaire de l'état des pièces${src['releve-horaire']?.note ? ` (${esc(agreePlurals(src['releve-horaire'].note))})` : ''}`, 'releve-horaire', false)}
     </ul>
     ${iaRateLine()}
     <p class="hint muted">Dernière collecte : ${m.updated ? esc(localDateTime(m.updated)) : '—'}.</p>`;
@@ -218,7 +218,7 @@ export function renderSettings(view: HTMLElement, section: SettingsSection) {
 
 /** Informative note of a source (counts only, written by the collector), e.g. plugs without a counter. */
 function noteLine(s?: SourceStatus) {
-  return s?.note && !(s.error && (!s.ok || s.error > s.ok)) ? `<li class="hint muted">${esc(s.note)}</li>` : '';
+  return s?.note && !(s.error && (!s.ok || s.error > s.ok)) ? `<li class="hint muted">${esc(agreePlurals(s.note))}</li>` : '';
 }
 
 /** S-12.1: the contract used on this device, and the button that shares it with the others. */
@@ -302,7 +302,7 @@ function login(group: Element) {
   setToken(data.token ?? '');
   void settingsAction(async () => {
     configured = await listSecrets(settingsRepo);
-    return `Connecté à ${settingsRepo} : ${configured.size} secret(s) déjà enregistré(s).`;
+    return `Connecté à ${settingsRepo} : ${configured.size > 1 ? `${configured.size} secrets déjà enregistrés` : `${configured.size} secret déjà enregistré`}.`;
   });
 }
 
@@ -333,7 +333,7 @@ function saveSecrets(group: Element) {
   void settingsAction(async () => {
     for (const [k, v] of entries) await putSecret(settingsRepo, k, v);
     configured = await listSecrets(settingsRepo);
-    return `${entries.length} secret(s) chiffré(s) et enregistré(s) : ${entries.map(([k]) => k).join(', ')}.`;
+    return `${entries.length > 1 ? `${entries.length} secrets chiffrés et enregistrés` : `${entries.length} secret chiffré et enregistré`} : ${entries.map(([k]) => k).join(', ')}.`;
   });
 }
 

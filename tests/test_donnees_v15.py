@@ -221,7 +221,7 @@ def test_nightly_sync_reads_status_once_and_reports_counts_only(tmp_path, monkey
     out = capsys.readouterr().out
     after = Store(tmp_path / "data", "pw")
     note = after.meta["sources"]["appareils"]["note"]
-    assert "1 module(s) injoignable(s)" in note
+    assert "1 module injoignable" in note
     assert after.meta["intuis_contract"]["tariff_option"] == "peak_and_off_peak"
     assert alert.read_text().startswith("- 1 radiateur injoignable depuis le ")
     text = summary.read_text() + out + alert.read_text()
@@ -300,7 +300,7 @@ def test_station_health_battery_signal_and_low_battery_warning(tmp_path):
     assert health["m1"]["2025-01-10"] == [12, 70, 1]
     assert counts == {"low_battery": 1, "silent": 0, "firmware": 0}
     note = health_note(counts)
-    assert note == "pile faible : 1 module(s)"
+    assert note == "pile faible : 1 module"
     for leak in ("Jardin", "70:ee", "02:00"):
         assert leak not in note
     # Next night: the outdoor module is silent for 7 h and got a new firmware.

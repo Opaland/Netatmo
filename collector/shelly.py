@@ -50,6 +50,7 @@ from .errors import SourceError, raise_for_status
 from .http import Paced
 from .schema import FormatError
 from .storage import KeyMap, Store
+from .texte import nombre
 
 log = logging.getLogger(__name__)
 
@@ -352,7 +353,11 @@ def note(counts: dict[str, int]) -> str | None:
     if not counts["plugs"]:
         parts.append("aucune prise avec mesure d'énergie dans ce compte Shelly")
     if counts["unusable"]:
-        parts.append(f"{counts['unusable']} prise(s) sans compteur d'énergie : non exploitable(s) sans hub")
+        n = counts["unusable"]
+        usable = "non exploitables" if n > 1 else "non exploitable"
+        parts.append(f"{nombre(n, 'prise')} sans compteur d'énergie : {usable} sans hub")
     if counts["offline"]:
-        parts.append(f"{counts['offline']} prise(s) hors ligne, rattrapée(s) à la prochaine collecte")
+        n = counts["offline"]
+        caught = "rattrapées" if n > 1 else "rattrapée"
+        parts.append(f"{nombre(n, 'prise')} hors ligne, {caught} à la prochaine collecte")
     return " ; ".join(parts) or None

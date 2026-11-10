@@ -249,7 +249,7 @@ function onChange(zone: HTMLElement, t: HTMLInputElement) {
   } else if (t.dataset.shutters === 'import' && t.files?.[0]) {
     void t.files[0].text().then((text) => {
       const days = parseNotesCsv(text);
-      update(zone, [...notes, ...days], days.length ? `${days.length} soir(s) importé(s).` : 'Aucune date trouvée dans ce fichier.');
+      update(zone, [...notes, ...days], days.length ? `${days.length > 1 ? `${days.length} soirs importés` : `${days.length} soir importé`}.` : 'Aucune date trouvée dans ce fichier.');
     });
   }
 }

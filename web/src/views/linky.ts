@@ -14,7 +14,7 @@ import { memo } from '../memo';
 import { type Coverage, coverage, coveredText, standbyYear } from '../meter';
 import { periodAt } from '../offers';
 import { term } from '../plain';
-import { countedNote } from '../components';
+import { countedNote, countedInner } from '../components';
 import { html } from '../trusted';
 import { activeRooms, catColor, contracts, esc, flatPriceAt, fmtEur, longDate, measureColor, nf0 } from '../ui';
 
@@ -224,9 +224,9 @@ function drawTypical(v: Loaded, cov: Coverage) {
   const n = typ.days[group];
   const what = group === 'weekday' ? 'jours de semaine' : 'jours de week-end';
   document.getElementById('curve-counted')!.innerHTML = html(
-    `<span class="counted-k">Compté :</span> la courbe par demi-heure du compteur, tout le logement, ${esc(coveredText(cov))}, dont ${n} ${what}.${
+    countedInner(`la courbe par demi-heure du compteur, tout le logement, ${esc(coveredText(cov))}, dont ${n} ${what}.${
       heat || water ? ' Chauffage et eau chaude : ce que mesurent les radiateurs et le chauffe-eau ; autres usages : le reste.' : ''
-    }`,
+    }`),
   );
   const vals = total.map((x, i) => [x, i] as const).filter(([x]) => x !== null) as [number, number][];
   const summary = document.getElementById('curve-summary')!;
