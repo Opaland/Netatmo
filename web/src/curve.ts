@@ -40,7 +40,7 @@ function offsetMin(tz: string, ms: number): number {
 }
 
 /** UTC instant of local midnight starting `day` in `tz`. */
-function localMidnight(tz: string, day: string): number {
+export function localMidnight(tz: string, day: string): number {
   const naive = Date.parse(`${day}T00:00:00Z`);
   let t = naive - offsetMin(tz, naive) * 60000;
   t = naive - offsetMin(tz, t) * 60000;

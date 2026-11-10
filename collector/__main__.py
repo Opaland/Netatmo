@@ -493,6 +493,26 @@ def _linky_index(s: Settings, store: Store, tz: str, first: str) -> None:
         _warn(f"Index Linky par cadran non relevés : {redact.safe_message(err)}")
 
 
+def _solar(store: Store, sources: Sources) -> None:
+    """#204 + #356: the solar profile of the location typed in the app (secret HOME_LOCATION_JSON).
+    Never fatal; nothing of the location is ever printed (collector/solar.py registers it with
+    redact before anything else, and its errors carry no value)."""
+    from .solar import LocationError, PvgisError, collect
+
+    raw = os.environ.get("HOME_LOCATION_JSON", "").strip()
+    if not raw:
+        return
+    try:
+        sources.ok("pvgis", collect(store, raw))
+    except LocationError as err:
+        # the reason is a fixed text of the code (never a value of the secret)
+        sources.failed("pvgis", f"localisation ignorée ({err})")
+        _warn(f"Secret HOME_LOCATION_JSON ignoré ({err}) : pas de profil solaire")
+    except (PvgisError, FormatError, CallCapReached) as err:
+        sources.error("pvgis", err)
+        _warn(f"Profil solaire PVGIS non mis à jour : {redact.safe_message(err)}")
+
+
 def _shelly(s: Settings, store: Store, tz: str, sources: Sources) -> None:
     """S-1.17: one counter reading per Shelly plug. Never fatal."""
     from .shelly import ShellyError, collect, note
@@ -538,6 +558,7 @@ def cmd_sync(s: Settings, args: argparse.Namespace, backfill: bool = False) -> N
         _linky(s, store, home.timezone, sources)
     if s.shelly_auth_key and s.shelly_server:
         _shelly(s, store, home.timezone, sources)
+    _solar(store, sources)
     rs_rows = _room_states(s, store, syncer, sources)
     dev_rows, dev_alerts = _devices(store, syncer, sources)
     rs_rows += dev_rows
@@ -559,6 +580,8 @@ def cmd_sync(s: Settings, args: argparse.Namespace, backfill: bool = False) -> N
         extra["has_ha"] = True
     if store.doc("station").get("daily"):
         extra["has_station"] = True
+    if store.doc("solar").get("roofs"):
+        extra["has_solar"] = True  # #356: the profile itself stays in solar.enc.json
     if os.environ.get("ANTHROPIC_API_KEY"):
         from .insights import generate
 

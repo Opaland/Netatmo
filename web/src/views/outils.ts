@@ -41,6 +41,7 @@ export function renderOutils(view: HTMLElement, status: Freshness & { label: str
       ...(t ? [] : [row('voiture', 'recharge, offre, dépassement de puissance')]),
       row('pac', 'économie estimée selon le COP'),
       row('teletravail', 'coût d’une journée au bureau chauffé'),
+      ...(t ? [] : [row('solaire', 'production, autoconsommation, pilotage ou batterie, sur votre courbe Linky')]),
     ],
     'Simulateurs',
   )}

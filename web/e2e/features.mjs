@@ -91,6 +91,8 @@ const DESTINATIONS = {
   'outils-offres': ['#offers-chart canvas'],
   'outils-voiture': ['#ev-card #ev-result table'],
   'outils-pac': ['#hp-card #hp-result table'],
+  // #356: production profile, result per size (prices of the contract offered), amiante, hypotheses
+  'outils-solaire': ['#solar-card #solar-profile strong', '#solar-result h3', '#solar-result .list .row', '.sim-note', 'text:amiante', 'text:Hypothèses de ce résultat', 'text:pilotage avant la batterie'],
   outils: ['a[href="#etat"] .swatch', 'a[href="#outils-offres"] .s', 'a[href="#parametres-securite"]', 'text:Sauvegarde chiffrée'],
   'outils-consigne': ['#setpoint-card #sp-result', '.sim-note', 'text:Simulation'],
   'outils-teletravail': ['#telework-card'],
@@ -102,7 +104,7 @@ const DESTINATIONS = {
   'outils-exports': ['#export', '[data-export-long=csv]', '[data-export-long=json]', '[data-research]', '#backup'],
   'parametres-contrat': ['[data-pmode]', '#contract-share'],
   // #366: the stove's wood (demo: three purchases, two seasons), on Accueil too (winter against winter: e2e/expliquer.mjs)
-  'parametres-logement': ['#wood-card [aria-label="Bois par saison"] .row', '#wood-card #wood-add', '#works-card [data-works-surface]', 'a[href="#compteur-autres"]'],
+  'parametres-logement': ['#wood-card [aria-label="Bois par saison"] .row', '#wood-card #wood-add', '#works-card [data-works-surface]', 'a[href="#compteur-autres"]', '#location-card #loc-edit', 'text:Commune d'],
   'parametres-sources': ['.status-list', '#gh-login', '#devices-card [data-shelly-role]'],
   'parametres-objectifs': ['#money-card #budget-input', '#co2-input', '[data-threshold]', '#cold-card [data-cold-room]'],
   'parametres-affichage': ['[data-set=theme]', '[data-toggle=simple]', 'select[data-pin]', '[data-toggle=household]'],

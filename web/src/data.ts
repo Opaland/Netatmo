@@ -354,6 +354,10 @@ export function loadVolets(ds: Dataset): Promise<import('./shutters').VoletsDoc 
   return once(caches.volets, ds, 'volets', () => optional<import('./shutters').VoletsDoc>(ds.source, 'volets', ds.key));
 }
 
+/** #204 + #356: solar.enc.json (location and production profile), null without one. Not
+ * cached here: the views keep it with datasetDoc, forgotten on lock. */
+export const loadSolarDoc = (ds: Dataset): Promise<unknown> => ((ds.meta as { has_solar?: boolean }).has_solar ? optional<unknown>(ds.source, 'solar', ds.key) : Promise.resolve(null));
+
 /** Linky 30-min load curve (S-1.11), one document per year, loaded on demand, once per dataset
  * (the curve card and the breakdown card both need it). */
 export function loadCurve(ds: Dataset): Promise<Map<string, number>> {

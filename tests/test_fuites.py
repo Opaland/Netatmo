@@ -29,6 +29,18 @@ ROOMS = {"100": "1234500100", "200": "1234500200", "300": "1234500300"}
 ROOM_NAMES = {"Salon": "Salon Zorglub", "Chambre": "Chambre Zorglub"}
 MODULES = {"gw": "70:ee:50:aa:bb:cc", "m1": "09:00:00:aa:bb:01", "m4": "09:00:00:aa:bb:04"}
 PRM = "12345678901234"
+# #204: the exact location typed in the app (secret HOME_LOCATION_JSON), other than Intuis'.
+SOLAR_LAT, SOLAR_LON = 47.31234, 5.04321
+LOCATION = json.dumps(
+    {
+        "v": 1,
+        "lat": SOLAR_LAT,
+        "lon": SOLAR_LON,
+        "precision": 3,
+        "commune": "Zorglubville",
+        "roofs": [{"name": "Abri", "azimuth": 180, "tilt": 15, "kwc": 3, "loss": 14}],
+    }
+)
 SECRETS = {
     "INTUIS_USERNAME": "zorglub@example.org",
     "INTUIS_PASSWORD": "PASS-XYZ-987",
@@ -41,6 +53,7 @@ SECRETS = {
     "ENEDIS_PRM": PRM,
     "SHELLY_AUTH_KEY": "SHELLYKEY-777",
     "SHELLY_SERVER": "shelly-1-eu.shelly.cloud",
+    "HOME_LOCATION_JSON": LOCATION,
 }
 ACCESS = "INTUIS-ACCESS-TOK"
 MARKER = "SECRET-BODY-123"
@@ -59,6 +72,11 @@ FORBIDDEN = [
     "2.346",
     "2.3456",
     "latitude=",
+    "47.31",
+    "47.312",
+    "5.04",
+    "5.043",
+    "Zorglubville",
     "longitude=",
     HOME_ID,
     OTHER_HOME_ID,
@@ -120,6 +138,9 @@ def router(intuis_measures_ok: bool = True):
             return _json_or_text(500)
         if host.endswith("shelly.cloud"):
             return _json_or_text(503, text=True)
+        if host == "re.jrc.ec.europa.eu":
+            # #204: an error that echoes the query, coordinates included
+            return httpx.Response(429, json={"message": f"{MARKER} lat={SOLAR_LAT}&lon={SOLAR_LON}"})
         return httpx.Response(404)
 
     return handler
@@ -176,6 +197,7 @@ def test_collection_with_every_source_failing_leaks_nothing(tmp_path, monkeypatc
     assert "Shelly : interface/device/list → HTTP 503" in out or "Shelly : device/all_status → HTTP 503" in out
     assert "Station Netatmo : /oauth2/token → HTTP 400 (requête refusée, invalid_grant)" in out
     assert "Plusieurs maisons trouvées (2)" in out
+    assert "PVGIS : /api/v5_3/seriescalc → HTTP 429 (trop de requêtes)" in out
     # The encrypted meta keeps the same safe messages.
     sources = Store(tmp_path / "data", "pw").meta["sources"]
     assert_clean(json.dumps(sources), "sources")

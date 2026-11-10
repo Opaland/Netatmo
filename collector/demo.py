@@ -656,6 +656,68 @@ def _sources(today: date) -> dict:
     }
 
 
+# #204 + #356: a fictitious location (no real home: a point in a field, rounded to ≈ 1 km) and
+# two garden-shed roofs, with a production profile computed here (no PVGIS call): sun height
+# from the date and the hour, a clear-sky model and a cloudiness drawn per day.
+SOLAR_LOCATION = {
+    "v": 1,
+    "lat": 46.0,
+    "lon": 4.5,
+    "precision": 2,
+    "commune": "Commune d'exemple",
+    "roofs": [
+        {"name": "Abri 6 × 4 m", "azimuth": 160, "tilt": 15, "kwc": 3.6, "loss": 14},
+        {"name": "Abri 3 × 3 m", "azimuth": 220, "tilt": 15, "kwc": 1.3, "loss": 16},
+    ],
+}
+
+
+def _solar_hours(rnd: random.Random, roof: dict, year: int = 2023) -> dict[str, list[float]]:
+    lat, lon = math.radians(SOLAR_LOCATION["lat"]), SOLAR_LOCATION["lon"]
+    tilt, az = math.radians(roof["tilt"]), math.radians(roof["azimuth"])
+    keep = 1 - roof["loss"] / 100
+    out: dict[str, list[float]] = {}
+    d = date(year, 1, 1)
+    while d.year == year:
+        doy = d.timetuple().tm_yday
+        decl = math.radians(23.44) * math.sin(2 * math.pi * (284 + doy) / 365)
+        clouds = min(1.0, max(0.15, rnd.betavariate(3, 1.2) + 0.1 * math.sin(2 * math.pi * (doy - 80) / 365)))
+        row = []
+        for h in range(24):
+            solar_hour = h + 0.5 + lon / 15  # UTC hour → solar time
+            ha = math.radians(15 * (solar_hour - 12))
+            sin_el = math.sin(lat) * math.sin(decl) + math.cos(lat) * math.cos(decl) * math.cos(ha)
+            if sin_el <= 0.02:
+                row.append(0.0)
+                continue
+            el = math.asin(sin_el)
+            sun_az = math.atan2(math.sin(ha), math.cos(ha) * math.sin(lat) - math.tan(decl) * math.cos(lat)) + math.pi
+            cos_i = math.sin(el) * math.cos(tilt) + math.cos(el) * math.sin(tilt) * math.cos(sun_az - az)
+            beam = 1050 * 0.72 ** (1 / sin_el) ** 0.678 * max(0.0, cos_i)
+            diffuse = 120 * sin_el * (1 + math.cos(tilt)) / 2
+            row.append(round(min(1000.0, (beam * clouds + diffuse) * keep), 1))
+        out[d.strftime("%m-%d")] = row
+        d += timedelta(days=1)
+    return out
+
+
+def _solar(store: Store, today: date) -> None:
+    rnd = random.Random(356)  # separate stream: the rest of the demo stays identical
+    store.replace(
+        "solar",
+        {
+            "source": "demo",
+            "database": "profil fictif de démonstration",
+            "year": 2023,
+            "fetched": today.isoformat(),
+            "location": SOLAR_LOCATION,
+            "roofs": [
+                {"name": r["name"], "kwc": r["kwc"], "hours": _solar_hours(rnd, r)} for r in SOLAR_LOCATION["roofs"]
+            ],
+        },
+    )
+
+
 def generate(out_dir: Path, passphrase: str = "demo", start_year: int = 2022, today: date | None = None) -> list[str]:
     rnd = random.Random(42)
     rnd_hours = random.Random(11)  # separate stream: the rest of the demo stays identical
@@ -786,6 +848,7 @@ def generate(out_dir: Path, passphrase: str = "demo", start_year: int = 2022, to
     _linky_v15(store, today)
     _room30(store, today, office)
     _home_assistant(store, today, office)
+    _solar(store, today)
     for key in ("m0", "m1", "m2", "m3"):
         aggregate_days(store, key, key != "m1", hourly_from, today)
     _station_v16(store, today, date(start_year, 1, 1))
@@ -818,6 +881,7 @@ def generate(out_dir: Path, passphrase: str = "demo", start_year: int = 2022, to
         "has_shelly": True,
         "has_roomstate": True,
         "has_ha": True,
+        "has_solar": True,
         "weather_source": "open-meteo",
         "contract": CONTRACT,
         "intuis_contract": INTUIS_CONTRACT,
