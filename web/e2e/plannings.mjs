@@ -30,8 +30,8 @@ const errors = [];
 const check = (ok, msg) => ok || errors.push(msg);
 const t0 = Date.now();
 const progress = (s) => console.log(`[${Math.round((Date.now() - t0) / 1000)} s] plannings ${s}`);
-const PAGES = ['outils-plannings', 'outils-absences', 'historique'];
-const WAIT = { 'outils-plannings': '#plannings-summary', 'outils-absences': '#absence-card', historique: '#hist-absences' };
+const PAGES = ['outils-plannings', 'outils-absences', 'historique-calendrier'];
+const WAIT = { 'outils-plannings': '#plannings-summary', 'outils-absences': '#absence-card', 'historique-calendrier': '#hist-absences' };
 
 async function waitForServer() {
   for (let i = 0; i < 50; i++) {
@@ -116,8 +116,8 @@ try {
     await page.locator('#absence-card [data-absence-earlier]').first().click(); // back as seen by the radiators
     await page.waitForFunction(() => !/Début avancé de 12 h/.test(document.querySelector('#absence-card')?.textContent ?? ''), null, { timeout: 10000 }).catch(() => errors.push('absences : la correction ne s’annule pas'));
 
-    // ------------------------------------------------------------ Historique: absences next to the comparisons
-    await go(page, 'historique');
+    // ------------------------------------------------------------ Historique: absences next to the calendar (#386)
+    await go(page, 'historique-calendrier');
     const hist = await text(page, '#hist-absences');
     check(/\d+ jours? d'absence l'hiver 2026–2027/.test(hist), `Historique : jours d’absence de l’hiver absents → ${hist.slice(0, 300)}`);
     check(await page.locator('#hist-absences a[href="#outils-absences"]').count(), 'Historique : pas de lien vers le détail des absences');

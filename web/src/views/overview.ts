@@ -8,30 +8,19 @@ import {
   aggregate,
   bucketLabel,
   minusYears,
-  total,
   totalsBy,
 } from '../aggregate';
 import { ds, setState, state } from '../app';
 import { type Series, barChart } from '../charts';
-import { OTHER, activeRooms, avgPrice, catColor, delta, esc, eurOf, firstDay, fmtKwh, lastDay, longDate, nf0, roomColor, roomGroup, roomName, seg, table, tableToggle } from '../ui';
-import { NO_REFERENCE, PERIOD, vsLabel } from '../glossary';
-import { chartMarks, cutDays, cutDaysIn, uncertainDays, yoyGapNote } from './quality';
+import { OTHER, activeRooms, avgPrice, catColor, esc, eurOf, firstDay, fmtKwh, lastDay, nf0, roomColor, roomGroup, roomName, seg, table, tableToggle } from '../ui';
+import { rangeLabel } from '../glossary';
+import { yearGranularityAllowed } from '../history';
+import { countedHtml } from './compare';
+import { chartMarks, cutDays, cutDaysIn, uncertainDays } from './quality';
 import { cutText } from '../periods';
 import { html } from '../trusted';
 import { lazyCard } from '../lazy';
-import { ENERGY_ONLY, costScope } from '../synthese';
-
-function kpi(label: string, from: string, to: string, records: DayRecord[], cls = '') {
-  const now = total(records, from, to);
-  const before = total(records, minusYears(from), minusYears(to));
-  const hasBefore = records.some((r) => r.day <= minusYears(to));
-  const eur = eurOf(records, from, to);
-  return `<article class="kpi${cls}">
-    <h3>${esc(label)}</h3>
-    <p class="kpi-value">${fmtKwh(now)}</p>
-    <p class="kpi-sub">${eur ? `${eur} · ` : ''}${hasBefore ? delta(now, before, vsLabel(from, to)) + yoyGapNote(records, from, to) : `<span class="delta neutral">${NO_REFERENCE}</span>`}</p>
-  </article>`;
-}
+import { ENERGY_ONLY, EUROS_NOTE } from '../synthese';
 
 /** The periods of « Consommation en détail », shortest first (its menu, and the swipe of main.ts). */
 export function historyPeriods(): [string, string][] {
@@ -56,26 +45,25 @@ function periodRange(): [string, string] {
 
 /**
  * #308 / #311: the v1.5 « Synthèse » cards, spread over the new pages: « explore » (Historique:
- * « Consommation en détail », any period, usage, granularity, by usage or by room, the values),
- * « twelve » (the 12-month tile, Historique) and « invoice » (Outils → Une facture). Accueil
- * (verdict, tiles, budget, alerts…) is views/home.ts; the quality card, État des données (pages.ts).
+ * « Consommation en détail », any period, usage, granularity, by usage or by room, the values)
+ * and « invoice » (Outils → Une facture). Accueil (verdict, tiles, budget, alerts…) is
+ * views/home.ts; the quality card, État des données (pages.ts). #386: the 12-month tile left
+ * Historique (a third period on the screen; Accueil has « 12 mois »).
  */
-export type OverviewPart = 'explore' | 'twelve' | 'invoice';
+export type OverviewPart = 'explore' | 'invoice';
 
 export function renderOverview(view: HTMLElement, records: DayRecord[], part: OverviewPart = 'explore') {
-  const last = lastDay();
-  if (part !== 'explore') {
-    const body =
-      part === 'twelve'
-        ? `<section class="kpis kpis-one">${kpi(PERIOD['12m'], addDays(minusYears(last), 1), last, records)}</section>`
-        : '<div id="invoice-zone"></div>';
-    view.innerHTML = html(body);
+  if (part === 'invoice') {
+    view.innerHTML = html('<div id="invoice-zone"></div>');
     // S-2.3: reconcile with an invoice (lazy module)
-    if (part === 'invoice') void lazyCard(() => import('./invoice'), (m) => m.fillInvoice(), { zone: 'invoice-zone', what: 'Facture' });
+    void lazyCard(() => import('./invoice'), (m) => m.fillInvoice(), { zone: 'invoice-zone', what: 'Facture' });
     return;
   }
   const [from, to] = periodRange();
   const split = state.split;
+  // #306: « An » only over whole years; over a sliding window the months are shown instead
+  const yearOk = yearGranularityAllowed(state.period);
+  const gran = state.gran === 'year' && !yearOk ? 'month' : state.gran;
   const byCat = totalsBy(records, from, to, (r) => r.cat);
   const periodTotal = [...byCat.values()].reduce((a, b) => a + b, 0);
   const periodOptions = historyPeriods();
@@ -86,17 +74,17 @@ export function renderOverview(view: HTMLElement, records: DayRecord[], part: Ov
   view.innerHTML = html`
   <section class="card" id="explore-card">
     <div class="card-head">
-      <h2>Consommation en détail <small class="muted">kWh</small></h2>
+      <h2>Consommation en détail <small class="muted">kWh</small></h2><span class="card-period">${esc(rangeLabel(from, to))}</span>
       <div class="controls">
         <label class="select"><span class="sr-only">Période</span><select data-set="period">${periodOptions
           .map(([v, l]) => `<option value="${v}" ${state.period === v ? 'selected' : ''}>${l}</option>`)
           .join('')}</select></label>
         ${seg('cat', state.cat, [['all', 'Tout'], ['heating', 'Chauffage'], ['water_heater', 'Chauffe-eau']], 'Usage')}
-        ${seg('gran', state.gran, [['day', 'Jour'], ['week', 'Semaine'], ['month', 'Mois'], ['year', 'An']], 'Granularité')}
+        ${seg('gran', gran, [['day', 'Jour'], ['week', 'Semaine'], ['month', 'Mois'], ...(yearOk ? [['year', 'An'] as [string, string]] : [])], 'Granularité')}
         ${seg('split', split, [['category', 'Par usage'], ['room', 'Par pièce']], 'Détail')}
       </div>
     </div>
-    <p class="period-total"><strong>${fmtKwh(periodTotal)}</strong> ${periodEur ? `· ${periodEur} ${ENERGY_ONLY} ` : ''}du ${longDate(from)} au ${longDate(to)}${estimatedNote(records, from, to)}</p>
+    <p class="period-total"><strong>${fmtKwh(periodTotal)}</strong> ${periodEur ? `· ${periodEur} ${ENERGY_ONLY}` : ''}${estimatedNote(records, from, to)}</p>
     ${
       shares.length > 1
         ? `<div class="share" aria-hidden="true">${shares
@@ -108,10 +96,10 @@ export function renderOverview(view: HTMLElement, records: DayRecord[], part: Ov
     }
     <div class="chart" id="main-chart" role="img" aria-label="Consommation par période"></div>
     <div id="main-table"></div>
-    ${periodEur ? `<p class="hint muted cost-scope">${esc(costScope(state.cat))}</p>` : ''}
+    ${countedHtml(false, periodEur ? EUROS_NOTE : '')}
   </section>`;
 
-  const set = aggregate(records, from, to, state.gran, split === 'category' ? (r) => r.cat : (r) => roomGroup(r.room));
+  const set = aggregate(records, from, to, gran, split === 'category' ? (r) => r.cat : (r) => roomGroup(r.room));
   const order =
     split === 'category'
       ? (['heating', 'water_heater'] as string[]).filter((k) => set.groups.has(k))
@@ -121,10 +109,12 @@ export function renderOverview(view: HTMLElement, records: DayRecord[], part: Ov
     color: split === 'category' ? catColor(k as Category) : roomColor(k),
     data: set.groups.get(k)!.map((v) => Math.round(v * 10) / 10),
   }));
-  const labels = set.keys.map((k) => bucketLabel(k, state.gran));
+  const labels = set.keys.map((k) => bucketLabel(k, gran));
   // #297: partial buckets hatched, buckets with estimated or lost days paler, both explained in the tooltip
   const marks = chartMarks(records, set.keys, from, to);
-  barChart(document.getElementById('main-chart')!, { labels, series: ser, stacked: true, price: avgPrice(records), zoom: labels.length > 60, ...marks });
+  // #386: by usage, the share line above already names the two colours (no second legend)
+  const ownLegend = split === 'category' && shares.length > 1;
+  barChart(document.getElementById('main-chart')!, { labels, series: ser, stacked: true, price: avgPrice(records), zoom: labels.length > 60, ...marks, ...(ownLegend ? { legend: false } : {}) });
   document.getElementById('main-table')!.innerHTML = html(tableToggle(
     table(
       ['Période', ...ser.map((s) => s.name), 'Total'],

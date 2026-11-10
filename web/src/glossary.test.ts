@@ -1,6 +1,21 @@
 import { describe, expect, it } from 'vitest';
 import { dayLong, dayShort, hour, hourMin, hourRange, localDateTime, localDay, monthShort, periodBounds, periodLine, rangeLabel, seasonLabel, fmtTemp, signedPct, vsLabel } from './glossary';
 
+describe('glossaire : le jour d’aujourd’hui est le jour local (#299)', () => {
+  it('aucune vue ne prend la date du jour en UTC (toISOString), toutes passent par localDay()', async () => {
+    const fsName = 'node:fs';
+    const { readFileSync, readdirSync } = (await import(/* @vite-ignore */ fsName)) as {
+      readFileSync: (u: URL, enc: 'utf8') => string;
+      readdirSync: (u: URL) => string[];
+    };
+    const src = new URL('./', import.meta.url);
+    const files = ['', 'views/'].flatMap((d) => readdirSync(new URL(d, src)).filter((f) => f.endsWith('.ts') && !f.endsWith('.test.ts')).map((f) => `${d}${f}`));
+    // « now » written in UTC: between midnight and 1 or 2 am, it is still yesterday
+    const found = files.filter((f) => /new Date\(\)\.toISOString\(\)|new Date\(Date\.now\(\)\)\.toISOString\(\)/.test(readFileSync(new URL(f, src), 'utf8')));
+    expect(found).toEqual([]);
+  });
+});
+
 describe('glossaire : dates et heures (#299)', () => {
   it('écrit « 1er » et les mois en français', () => {
     expect(dayLong('2026-08-01')).toBe('1er août 2026');

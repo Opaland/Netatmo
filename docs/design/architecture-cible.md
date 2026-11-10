@@ -39,12 +39,15 @@ Onglets (bas sur mobile, haut ≥ 760 px)
 │           · sonde radiateur ↔ station · surface et kWh/m² · [Comment c'est calculé]
 │     └── Chauffe-eau (sous-page) : heures creuses, mode du contacteur, conso
 │     └── Air et confort du logement (sous-page) : CO₂ des nuits, humidité, capteurs HA
-├── 3. Historique
-│     préréglages : [Cette année / l'an dernier] [Hiver / hiver précédent] [Toutes les années]
-│     interrupteur « À climat égal » · années comparées · Totaux annuels
-│     · Qu'est-ce qui a changé ? (cascade) · Calendrier · Jours inhabituels
-│     └── Signature du logement (sous-page) : signature, intérieur − extérieur, avant / après travaux
-│     └── Météo (sous-page) : station Netatmo, températures, (#204 localisation, #221 vent, #220 pression)
+├── 3. Historique                     (#386, v1.7 : deux questions sur l'onglet, le reste en sous-pages)
+│     Hiver contre hiver : [Hiver / hiver précédent] [Cette année / l'an dernier] [Toutes les années]
+│     interrupteur « À climat égal » · Consommation en détail (période, usage, pas, par pièce)
+│     · « Pour aller plus loin » : chaque carte dit sa période et « Compté : … »
+│     └── Année par année (#historique-annees) : totaux, coût, froid en degrés-jours
+│     └── Qu'est-ce qui a changé ? (#historique-changements) : cascade pièce par pièce
+│     └── Le logement face au froid (#historique-froid) : chauffage selon le froid, écart dedans − dehors, vent
+│     └── Jours inhabituels (#historique-jours) · Calendrier et absences (#historique-calendrier)
+│     └── Station météo (#historique-station) : modules Netatmo, moyenne par semaine
 ├── 4. Compteur                        (masqué en mode locataire → remplacé par une ligne dans Outils)
 │     Part des usages (chauffage, eau chaude, autres) · Puissance maximale et délestage
 │     · Journée type (courbe de charge) · Veille (talon) · Heures pleines / creuses

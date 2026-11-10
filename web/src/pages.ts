@@ -6,12 +6,13 @@ import { activeRooms, ds, householdStatus, state } from './app';
 import { alert, list, seg as segment, switchField } from './components';
 import type { Handlers } from './events';
 import { dayShort, fmt1 } from './glossary';
-import { type Route, SETTINGS, type SettingsPage, type Tool, routeKey } from './router';
+import { HISTORY_PAGES, type HistoryPage, type Route, SETTINGS, type SettingsPage, type Tool, routeKey } from './router';
 import { LOCK_CHOICES } from './session';
 import { tenant } from './tenant';
 import { html } from './trusted';
 import { esc, filtered, roomColor } from './ui';
 import { lazyCard } from './lazy';
+import { selectionLabel } from './history';
 import { CATEGORY_LABEL } from './aggregate';
 import * as analyse from './views/analyse';
 import * as compare from './views/compare';
@@ -74,11 +75,25 @@ const comfortHandlers: Handlers = {
 // ------------------------------------------------------------------ filters (#308)
 /** The usage and rooms selection, set in Historique (usage, « Consommation en détail ») and Pièces (rooms): a chip says so elsewhere. */
 function filterChip(): string {
-  const all = activeRooms().length;
-  const n = state.rooms ? state.rooms.length : all;
-  if (state.cat === 'all' && n === all) return '';
-  const what = [state.cat === 'all' ? '' : CATEGORY_LABEL[state.cat], n === all ? '' : `${n} pièce${n > 1 ? 's' : ''} sur ${all}`].filter(Boolean).join(' · ');
+  const what = currentSelection();
+  if (!what) return '';
   return `<p class="filter-chip" role="status"><span>Sélection : <strong>${esc(what)}</strong></span> <button type="button" class="link" data-filter-reset>Tout afficher</button></p>`;
+}
+
+/** « Chauffe-eau · 2 pièces sur 7 », or '' when everything is counted. */
+export function currentSelection(): string {
+  const all = activeRooms().length;
+  return selectionLabel({ cat: state.cat, rooms: state.rooms ? state.rooms.length : all, allRooms: all });
+}
+
+/**
+ * #301: a selection kept from the last visit changes every figure without a word; at the start
+ * it is recalled once, above the page, with « Réinitialiser » (and « Garder », which hides it).
+ */
+export function keptFilterHtml(): string {
+  const what = currentSelection();
+  if (!what) return '';
+  return `<div class="kept-filter" role="status"><p>Sélection gardée depuis votre dernière visite : <strong>${esc(what)}</strong>. Les chiffres n'en comptent qu'une partie.</p><p class="actions"><button type="button" class="btn secondary" data-filter-reset>Réinitialiser</button> <button type="button" class="btn tertiary" data-filter-keep>Garder</button></p></div>`;
 }
 
 function roomsPicker(): string {
@@ -135,17 +150,60 @@ function renderPiece(view: HTMLElement, route: Route) {
 }
 const pieceHandlers: Handlers = { click: (el) => piece?.handleClick(el) ?? false };
 
-// ------------------------------------------------------------------ Historique
+// ------------------------------------------------------------------ Historique (#386)
+/**
+ * The tab answers two questions, one card each: « my winter against the previous one » and « in
+ * detail » (#311: the explorer of the v1.5 Synthèse). Everything else is a sub-page of its own,
+ * listed under « Pour aller plus loin » (as on the page of a room), with its period and what it counts.
+ */
 function renderHistorique(view: HTMLElement) {
   const records = filtered();
   stack(view, `<h1 class="page-title" id="page-title" tabindex="-1">Historique</h1>${filterChip()}`, [
-    (el) => overview.renderOverview(el, records, 'twelve'),
-    // #311: the explorer of the v1.5 Synthèse (period, usage, granularity, by room, values) left Accueil
-    (el) => overview.renderOverview(el, records, 'explore'),
     (el) => compare.renderCompare(el, records, 'history'),
-    (el) => rooms.renderRooms(el, records, 'changes'),
-    (el) => analyse.renderAnalyse(el, records, 'historique'),
+    (el) => overview.renderOverview(el, records, 'explore'),
+    (el) => (el.innerHTML = html(historyLinks())),
   ]);
+}
+
+/** « Pour aller plus loin »: the sub-pages of Historique, each with what it answers. */
+function historyLinks(): string {
+  const weather = !!ds!.weather;
+  const rows = (Object.keys(HISTORY_PAGES) as HistoryPage[])
+    .filter((p) => p !== 'station' || !!ds!.station)
+    .map((p) => ({
+      title: HISTORY_PAGES[p],
+      sub: {
+        annees: 'total, chauffage et coût par année',
+        changements: 'pièce par pièce, contre l’an dernier',
+        froid: weather ? 'le chauffage selon le froid dehors' : 'avec la météo (prochaine collecte)',
+        jours: weather ? 'quand le chauffage dévie de la météo' : 'avec la météo (prochaine collecte)',
+        calendrier: 'chaque jour de l’année, les absences',
+        station: 'température, humidité et CO₂',
+      }[p],
+      href: `#${routeKey({ page: 'historique-detail', sub: p })}`,
+    }));
+  return `<section class="card" id="history-more"><div class="card-head"><h2>Pour aller plus loin</h2></div>${list(rows, 'Pages de l’historique')}</section>`;
+}
+
+/** A sub-page of Historique: one question, one period, the selection named (#386, #301). */
+function renderHistoryDetail(view: HTMLElement, route: Route) {
+  if (route.page !== 'historique-detail') return;
+  const records = filtered();
+  const head = filterChip();
+  switch (route.sub) {
+    case 'annees':
+      return stack(view, head, [(el) => compare.renderCompare(el, records, 'years')]);
+    case 'changements':
+      return stack(view, head, [(el) => rooms.renderRooms(el, records, 'changes')]);
+    case 'froid':
+      return stack(view, head, [(el) => analyse.renderAnalyse(el, records, 'signature')]);
+    case 'jours':
+      return stack(view, head, [(el) => analyse.renderAnalyse(el, records, 'jours')]);
+    case 'calendrier':
+      return stack(view, head, [(el) => analyse.renderAnalyse(el, records, 'calendrier')]);
+    case 'station':
+      return stack(view, head, [(el) => analyse.renderAnalyse(el, records, 'station')]);
+  }
 }
 
 
@@ -429,7 +487,8 @@ export const PAGES: Record<Route['page'], Page> = {
   piece: { render: renderPiece, handlers: [pieceHandlers] },
   confort: { render: renderComfort, handlers: [comfortHandlers] },
   'chauffe-eau': { render: (v) => analyse.renderAnalyse(v, filtered(), 'chauffe-eau'), needsData: true },
-  historique: { render: renderHistorique, handlers: [h(undefined, overview.handleChange), h(compare.handleClick, compare.handleChange), h(undefined, analyse.handleChange), h(undefined, rooms.handleChange)] },
+  historique: { render: renderHistorique, handlers: [h(undefined, overview.handleChange), h(compare.handleClick, compare.handleChange)] },
+  'historique-detail': { render: renderHistoryDetail, handlers: [h(compare.handleClick, compare.handleChange), h(undefined, analyse.handleChange), h(undefined, rooms.handleChange)] },
   // #301: the meter tab and its detail pages (views/meter.ts), one period for all of them
   compteur: { render: renderMeter },
   'compteur-detail': { render: renderMeter, handlers: [h(undefined, analyse.handleChange)] },

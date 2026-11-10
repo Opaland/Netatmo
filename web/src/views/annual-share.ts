@@ -13,6 +13,7 @@ import { contracts, costOf, esc, firstDay, lastDay, offCol, yearColor } from '..
 import { html } from '../trusted';
 import { leaseWindow, tenant } from '../tenant';
 import { alertHtml } from '../components';
+import { localDay } from '../glossary';
 
 function reportWindow(year: number) {
   const last = lastDay();
@@ -95,7 +96,7 @@ function anonData(choice: number | 'lease'): AnonReport {
     sources: ['Intuis', d.weather ? `météo ${d.meta.weather_source === 'netatmo' ? 'station Netatmo (extérieur)' : 'Open-Meteo'}` : '', (d.linky.size || d.pmax.size) && !tenant().on ? 'compteur Linky' : '']
       .filter(Boolean)
       .join(', '),
-    generated: new Date().toISOString().slice(0, 10),
+    generated: localDay(),
     extras: extrasHtml(year),
     lease: isLease,
     leaseChoice: lease() !== null,

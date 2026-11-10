@@ -70,6 +70,7 @@ function routes() {
     ...simple,
     ...keys('TOOLS').map((k) => `outils-${k}`),
     ...keys('METER_PAGES').map((k) => `compteur-${k}`),
+    ...keys('HISTORY_PAGES').map((k) => `historique-${k}`),
     'parametres',
     ...keys('SETTINGS').map((k) => `parametres-${k}`),
     'bienvenue',
