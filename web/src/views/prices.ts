@@ -34,7 +34,7 @@ export function pricesForm() {
           ? `<p class="hint muted">Mon contrat, période par période (date de début, offre, puissance souscrite) :</p>${sharing()}${rows}
         <button type="button" class="link" id="contract-add">+ Ajouter un changement (puissance, offre)</button>
         ${kvaHint()}
-        ${now ? `<p class="hint muted">Aujourd'hui : HP ${fmt4(now.hp)} €, HC ${fmt4(now.hc)} €/kWh, abonnement ${nf0.format(now.fixedYear / 12)} €/mois TTC. Chaque jour est compté au tarif en vigueur ce jour-là (CRE, open data).</p>` : ''}`
+        ${now ? `<p class="hint muted">Aujourd'hui : HP ${fmt4(now.hp)}\u00a0€, HC ${fmt4(now.hc)}\u00a0€/kWh, abonnement ${nf0.format(now.fixedYear / 12)}\u00a0€/mois TTC. Chaque jour est compté au tarif en vigueur ce jour-là (CRE, open data).</p>` : ''}`
           : ''
       }
       ${radioField('Mes propres prix', mode === 'manual', { name: 'pmode', 'data-pmode': 'manual' })}

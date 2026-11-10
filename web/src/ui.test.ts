@@ -203,9 +203,9 @@ describe('room colours: they follow the room, never its rank', () => {
 
 describe('formatting', () => {
   it('signed percentage without « -0 », euros, long date', () => {
-    expect(ui.pct(12.4)).toBe('+12 %');
-    expect(ui.pct(-0.4)).toBe('0 %');
-    expect(ui.pct(-7.6)).toBe('−8 %');
+    expect(ui.pct(12.4)).toBe('+12 %');
+    expect(ui.pct(-0.4)).toBe('0 %');
+    expect(ui.pct(-7.6)).toBe('−8 %');
     expect(ui.fmtEur(1234.4).replace(/\s/g, ' ')).toBe('1 234 €');
     expect(ui.longDate('2025-03-07')).toBe('7 mars 2025');
   });
@@ -216,7 +216,7 @@ describe('formatting', () => {
     expect(ui.delta(100, 100)).toContain('class="delta neutral"');
     expect(ui.delta(100, 0)).toContain("pas de comparaison avec l'an dernier");
     // #310: the reference is always written out
-    expect(ui.delta(90, 100, 'vs nov. 2025 au 8')).toContain('<b>−10 %</b> <span class="vs">vs nov. 2025 au 8</span>');
+    expect(ui.delta(90, 100, 'vs nov. 2025 au 8')).toContain('<b>−10 %</b> <span class="vs">vs nov. 2025 au 8</span>');
     expect(ui.delta(90, 100)).not.toContain('N-1');
   });
 });

@@ -53,7 +53,7 @@ export function renderRooms(view: HTMLElement, records: DayRecord[], part: 'list
   const sorted = rooms.slice().sort((a, b) => (now.get(b.id) ?? 0) - (now.get(a.id) ?? 0));
   const hasTemps = activeRooms().some((r) => ds!.temps.has(r.id));
   const thr = state.comfortThreshold;
-  const thrLabel = `${thr.toString().replace('.', ',')} °C`;
+  const thrLabel = `${thr.toString().replace('.', ',')}\u00a0°C`;
 
   const listCard = () => `
   <section class="card">
@@ -97,8 +97,8 @@ export function renderRooms(view: HTMLElement, records: DayRecord[], part: 'list
           run ? `<small>${esc(offlineText(run))}</small>` : d === null ? '—' : pct(d),
           ...(hasTemps
             ? [
-                tm ? `${fmt1(tm[0])} °C` : '—',
-                tm?.[1] != null ? `${fmt1(tm[1])} °C` : '—',
+                tm ? `${fmt1(tm[0])}\u00a0°C` : '—',
+                tm?.[1] != null ? `${fmt1(tm[1])}\u00a0°C` : '—',
                 cold ? `${cold.under} j sur ${cold.n} <small class="muted">${cold.source === 'station' ? 'station' : 'radiateur'}</small>` : '—',
               ]
             : []),

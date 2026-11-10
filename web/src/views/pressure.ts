@@ -39,7 +39,7 @@ export function pressureCard(st: Station | null, d: Pick<Dataset, 'weather'>, la
   const head = ['Jour', 'Dehors (moyenne)', 'Pression', 'Sur 24 h', ...(s.hasNoise ? ['Heures bruyantes'] : [])];
   const rows = s.rows.map((r) => [
     esc(dayShort(r.day)),
-    r.outdoor === null ? '—' : `${fmt1(r.outdoor)} °C`,
+    r.outdoor === null ? '—' : `${fmt1(r.outdoor)}\u00a0°C`,
     hpa(r.pressure),
     trendText(r.trend),
     ...(s.hasNoise ? [r.loud === null ? '—' : `${r.loud} h${r.noiseHours !== null && r.noiseHours < 20 ? ' <small class="muted">(journée incomplète)</small>' : ''}`] : []),

@@ -217,25 +217,25 @@ function cellarCards(st: Station, map: Map<string, string>) {
       const level = run.current > 7 || streak > 7 || (spread !== null && spread < 3) ? 'high' : run.longest > 7 || wetDays > 0 ? 'mid' : 'low';
       const title =
         run.current > 7
-          ? `Humidité au-dessus de ${HUMID_DAYS} % depuis ${run.current} jours : risque de moisissure, aérer par temps sec ou déshumidifier.`
+          ? `Humidité au-dessus de ${HUMID_DAYS}\u00a0% depuis ${run.current} jours : risque de moisissure, aérer par temps sec ou déshumidifier.`
           : streak > 7
-            ? `Plus de 12 h par jour au-dessus de ${HUMID_HOURS} % depuis ${streak >= 90 ? 'plus de 90' : streak} jours : risque de moisissure, aérer par temps sec ou déshumidifier.`
+            ? `Plus de 12 h par jour au-dessus de ${HUMID_HOURS}\u00a0% depuis ${streak >= 90 ? 'plus de 90' : streak} jours : risque de moisissure, aérer par temps sec ou déshumidifier.`
             : run.longest > 7
-            ? `Humidité au-dessus de ${HUMID_DAYS} % pendant ${run.longest} jours d'affilée (jusqu'au ${longDate(run.longestEnd!)}) sur les 90 derniers jours.`
+            ? `Humidité au-dessus de ${HUMID_DAYS}\u00a0% pendant ${run.longest} jours d'affilée (jusqu'au ${longDate(run.longestEnd!)}) sur les 90 derniers jours.`
             : wetDays
-              ? `${wetDays} jour${wetDays > 1 ? 's' : ''} sur 90 avec au moins 12 h au-dessus de ${HUMID_HOURS} % : à surveiller.`
+              ? `${wetDays} jour${wetDays > 1 ? 's' : ''} sur 90 avec au moins 12 h au-dessus de ${HUMID_HOURS}\u00a0% : à surveiller.`
               : `Pas d'humidité prolongée sur les 90 derniers jours.`;
-      const sub = `${nf0.format(humidHours)} h au-dessus de ${HUMID_HOURS} % en 90 jours.${
-        spread !== null ? ` Cette semaine, la cave est en moyenne ${f1(spread)} °C au-dessus de son point de rosée${spread < 3 ? ' : un mur plus froid de quelques degrés se couvre de condensation' : ''}.` : ''
+      const sub = `${nf0.format(humidHours)} h au-dessus de ${HUMID_HOURS}\u00a0% en 90 jours.${
+        spread !== null ? ` Cette semaine, la cave est en moyenne ${f1(spread)}\u00a0°C au-dessus de son point de rosée${spread < 3 ? ' : un mur plus froid de quelques degrés se couvre de condensation' : ''}.` : ''
       }`;
       return `<section class="card">
       <h2>Humidité — ${esc(name)} <small class="muted">90 derniers jours</small></h2>
       ${verdictBox(level, esc(title), sub)}
-      <p class="hint muted">Le <strong>point de rosée</strong> est la température à laquelle l'humidité de l'air se condense. Il est calculé ici par la formule de Magnus à partir des moyennes du jour (température et humidité). Plus il est proche de la température de la cave, plus les surfaces froides se mouillent. Repères : au-delà de ${HUMID_HOURS} % d'humidité les moisissures peuvent se développer ; au-delà de ${HUMID_DAYS} % plus de 7 jours d'affilée, le risque est installé (seuils indicatifs, à confirmer).</p>
+      <p class="hint muted">Le <strong>point de rosée</strong> est la température à laquelle l'humidité de l'air se condense. Il est calculé ici par la formule de Magnus à partir des moyennes du jour (température et humidité). Plus il est proche de la température de la cave, plus les surfaces froides se mouillent. Repères : au-delà de ${HUMID_HOURS}\u00a0% d'humidité les moisissures peuvent se développer ; au-delà de ${HUMID_DAYS}\u00a0% plus de 7 jours d'affilée, le risque est installé (seuils indicatifs, à confirmer).</p>
       <div class="chart" id="cellar-${i}" role="img" aria-label="Humidité et point de rosée, ${esc(name)}"></div>
       ${tableToggle(
         table(
-          ['Jour', `Heures > ${HUMID_HOURS} %`, 'Humidité moyenne', 'Température moyenne', 'Point de rosée', 'Écart'],
+          ['Jour', `Heures > ${HUMID_HOURS}\u00a0%`, 'Humidité moyenne', 'Température moyenne', 'Point de rosée', 'Écart'],
           days(from, last)
             .reverse()
             .filter((d) => daily[d] || hrs[d])
@@ -245,10 +245,10 @@ function cellarCards(st: Station, map: Map<string, string>) {
               return [
                 longDate(d),
                 hrs[d] ? `${hrs[d].humid}${hrs[d].n < 24 ? ` sur ${hrs[d].n}` : ''}` : '—',
-                v && v[3] !== null ? `${v[3]} %` : '—',
-                v ? `${f1(v[2])} °C` : '—',
-                dp !== null ? `${f1(dp)} °C` : '—',
-                dp !== null ? `${f1(v[2] - dp)} °C` : '—',
+                v && v[3] !== null ? `${v[3]}\u00a0%` : '—',
+                v ? `${f1(v[2])}\u00a0°C` : '—',
+                dp !== null ? `${f1(dp)}\u00a0°C` : '—',
+                dp !== null ? `${f1(v[2] - dp)}\u00a0°C` : '—',
               ];
             }),
         ),
@@ -267,7 +267,7 @@ function drawCellar(st: Station, map: Map<string, string>) {
     const hrs = st.hours?.[k] ?? {};
     comboChart(el, {
       labels: ds90.map(dayLabel),
-      bars: [{ name: `Heures > ${HUMID_HOURS} %`, color: seqRamp()[2], data: ds90.map((d) => hrs[d]?.humid ?? null) }],
+      bars: [{ name: `Heures > ${HUMID_HOURS}\u00a0%`, color: seqRamp()[2], data: ds90.map((d) => hrs[d]?.humid ?? null) }],
       lines: [
         { name: 'Température moyenne', color: series(3), data: ds90.map((d) => daily[d]?.[2] ?? null) },
         {
@@ -336,7 +336,7 @@ function coldCard(st: Station | null, map: Map<string, string>) {
   if (needHourly) ensureHourly();
   const waiting = needHourly && !hourly;
   const s = currentSeason();
-  const t = `${f1(thr)} °C`;
+  const t = `${f1(thr)}\u00a0°C`;
   // #294: one definition of a cold day everywhere (Pièces too): the day's mean under the threshold
   const coldDaysCell = (r: ComfortRoom, season: number) => {
     const means: [string, number | null][] =
@@ -351,13 +351,13 @@ function coldCard(st: Station | null, map: Map<string, string>) {
     if (r.source === 'radiator') return days ?? '—';
     const per = coldPerDay(st!, r.module!, thr);
     const sum = per && sumSeason(per, season);
-    return sum ? `${nf0.format(sum.hours)} h (${nf0.format((sum.hours / sum.n) * 100)} %)${days ? ` · ${days}` : ''}` : waiting ? '…' : (days ?? '—');
+    return sum ? `${nf0.format(sum.hours)} h (${nf0.format((sum.hours / sum.n) * 100)}\u00a0%)${days ? ` · ${days}` : ''}` : waiting ? '…' : (days ?? '—');
   };
   const stationRooms = rooms.filter((r) => r.source === 'station');
   return `<section class="card">
     <div class="card-head"><h2>Heures sous ${t} <small class="muted">pièces chauffées</small></h2>
       <div class="controls"><label class="select"><span class="sr-only">Seuil</span><select data-comfort="threshold">${THRESHOLDS.map(
-        (v) => `<option value="${v}" ${v === thr ? 'selected' : ''}>Sous ${f1(v)} °C</option>`,
+        (v) => `<option value="${v}" ${v === thr ? 'selected' : ''}>Sous ${f1(v)}\u00a0°C</option>`,
       ).join('')}</select></label></div></div>
     <p class="hint muted">Source : <strong>station Netatmo</strong> (relevés horaires) quand la pièce est liée à un module, sinon <strong>sonde du radiateur</strong> (moyenne du jour : on compte alors des jours, pas des heures). La cave et l'extérieur ne sont pas des pièces chauffées.${
       waiting ? (hourlyFailed ? ' Relevés horaires indisponibles pour ce seuil.' : ' Chargement des relevés horaires pour ce seuil…') : ''
@@ -418,7 +418,7 @@ function probeCard(st: Station, map: Map<string, string>) {
       const o = offsetStats(ds!.temps.get(r.id), st.daily[k], from, last);
       if (!o) return `${pair(r, k)}<p class="hint muted">Pas de jour de chauffe (novembre à mars) avec les deux mesures sur les 12 derniers mois.</p>`;
       return `${pair(r, k)}
-        <p>Écart moyen <strong>${signed(o.mean)} °C</strong> : la sonde du radiateur lit ${o.mean >= 0 ? 'plus chaud' : 'plus froid'} que la station, sur ${o.n} jours de chauffe (écart-type ${f1(o.sd)} °C : ${o.stable ? 'stable' : 'variable'}).</p>
+        <p>Écart moyen <strong>${signed(o.mean)}\u00a0°C</strong> : la sonde du radiateur lit ${o.mean >= 0 ? 'plus chaud' : 'plus froid'} que la station, sur ${o.n} jours de chauffe (écart-type ${f1(o.sd)}\u00a0°C : ${o.stable ? 'stable' : 'variable'}).</p>
         ${offsetAdvice(o, state.comfortThreshold)
           .map((p) => `<p class="hint">${esc(p)}</p>`)
           .join('')}
@@ -429,7 +429,7 @@ function probeCard(st: Station, map: Map<string, string>) {
             o.months
               .slice()
               .reverse()
-              .map((m) => [bucketLabel(`${m.month}-01`, 'month'), `${f1(m.radiator)} °C`, `${f1(m.station)} °C`, `${signed(m.offset)} °C`, m.n]),
+              .map((m) => [bucketLabel(`${m.month}-01`, 'month'), `${f1(m.radiator)}\u00a0°C`, `${f1(m.station)}\u00a0°C`, `${signed(m.offset)}\u00a0°C`, m.n]),
           ),
         )}`;
     })
