@@ -5,6 +5,27 @@
 import { addDays } from './aggregate';
 import type { Fit, Weather } from './analysis';
 
+/** Inputs of the heat-pump card kept on this device. */
+export interface HeatPumpInputs {
+  mode: 'scop' | 'curve';
+  low: number;
+  high: number;
+  share: number; // 0..1
+}
+export const HP_DEFAULT: HeatPumpInputs = { mode: 'scop', low: 3, high: 4, share: 1 };
+
+/** #359: inputs read back from this device, each field bounded (anything else: its default). */
+export function parseHeatPumpInputs(raw: unknown, shares: readonly number[]): HeatPumpInputs {
+  const o = (raw && typeof raw === 'object' ? raw : {}) as Partial<Record<keyof HeatPumpInputs, unknown>>;
+  const ok = (v: unknown): v is number => typeof v === 'number' && v >= 1 && v <= 8;
+  return {
+    mode: o.mode === 'curve' ? 'curve' : 'scop',
+    low: ok(o.low) ? o.low : HP_DEFAULT.low,
+    high: ok(o.high) ? o.high : HP_DEFAULT.high,
+    share: shares.includes(o.share as number) ? (o.share as number) : HP_DEFAULT.share,
+  };
+}
+
 /**
  * Indicative COP of an air-air heat pump by outdoor temperature (indoor ≈ 20 °C).
  * Orders of magnitude from manufacturers' data sheets (EN 14825 test points): to be checked

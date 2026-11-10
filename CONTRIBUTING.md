@@ -28,6 +28,10 @@ cd web && npm ci && npm run dev     # puis « Essayer avec des données de démo
 
 ## 2. Vérifications (les mêmes qu'en CI)
 
+**Une seule commande les enchaîne** : `node scripts/porte.mjs` (ou `npm run porte` dans `web/`) lance
+les étapes de `.github/workflows/ci.yml` dans leur ordre (hors WebKit) et s'arrête à la première rouge
+en la nommant ; `--rapide` (lint, types, tests) suffit avant un commit. Le détail :
+
 | Où | Commande | Rôle |
 |---|---|---|
 | racine | `ruff check . && ruff format --check .` | lint et format Python |
@@ -38,7 +42,12 @@ cd web && npm ci && npm run dev     # puis « Essayer avec des données de démo
 | `web/` | `npm run e2e` | parcours de la démo dans Chromium (après `npm run build`), captures dans `web/e2e/screenshots/` |
 
 `npm run e2e` lance `vite preview` sur le port 4179 ; s'il est pris, choisissez-en un autre :
-`E2E_PORT=4200 npm run e2e`.
+`E2E_PORT=4200 npm run e2e`. Les e2e refusent de démarrer sur un `dist/` plus ancien que les sources
+(`web/e2e/dist-a-jour.mjs`) : lancer `npm run build` d'abord.
+
+Hors de la porte, à lancer à la main : `npm run mutation` (dans `web/`, tests de mutation des calculs,
+quelques minutes, rapport dans `web/reports/mutation/`) et `pytest -m reseau` (les sources publiques
+réelles : Open-Meteo, CRE, Tempo). Lecture des résultats : `docs/bmad/06-qa-strategy.md`.
 
 Dans les tests e2e, pas d'attente fixe (`waitForTimeout`) : attendre `#view[data-ready]` (helper
 `ready(page)`), posé par l'appli (`web/src/ready.ts`) quand la vue et ses cartes différées,
@@ -79,7 +88,8 @@ Non négociables (détails dans [`docs/PROJET.md`](docs/PROJET.md#7-règles-de-s
   commit (`data/*.enc.json`). Les tests utilisent des données fictives ; les captures, la démo.
 - **Journaux publics** (GitHub Actions) : uniquement des comptes et des codes, jamais de noms de pièces,
   de valeurs ni d'identifiants.
-- **Tests sans réseau** : toute API est simulée (voir `tests/`).
+- **Tests sans réseau** : toute API est simulée (voir `tests/`). Seul `tests/test_sources_reelles.py`
+  appelle les sources publiques sans clé, marqué `reseau` et exclu par défaut (`pytest -m reseau`).
 - **IA** : seuls des agrégats mensuels sont envoyés, et l'application montre exactement quoi.
 - Une faille de sécurité se signale en privé au mainteneur, jamais dans une issue publique : comment,
   et ce qui est déjà vérifié, dans [`SECURITY.md`](SECURITY.md).

@@ -16,6 +16,7 @@ import {
   coldSensors,
   coldStatus,
   parseColdConfig,
+  parseColdDraft,
 } from '../cold';
 import { hasToken, putVariable } from '../settings';
 import { esc, lastDay, longDate, table } from '../ui';
@@ -35,8 +36,8 @@ const shared = () => parseColdConfig((ds!.meta as { cold_alert?: unknown }).cold
 
 function draft(): ColdConfig {
   try {
-    const o = JSON.parse(localStorage.getItem(LS) ?? 'null') as Partial<ColdConfig> | null;
-    if (o && typeof o.threshold === 'number' && Array.isArray(o.rooms)) return { threshold: o.threshold, days: o.days ?? 1, rooms: o.rooms };
+    const d = parseColdDraft(JSON.parse(localStorage.getItem(LS) ?? 'null'));
+    if (d) return d;
   } catch {
     /* default below */
   }

@@ -1,0 +1,54 @@
+# #363 : les sources publiques sans clé (Open-Meteo, tarifs CRE, couleurs Tempo) appelées pour de
+# vrai, pour apprendre un changement de format par un test rouge plutôt que par des coûts ou une
+# météo faux. À la demande (un passage hebdomadaire s'ajoute avec `schedule:` si le propriétaire
+# le veut). Hors CI bloquante : `pytest -q` exclut le marqueur `reseau`.
+# Source injoignable : test ignoré ; mauvais format : échec, et une issue s'ouvre (une seule tant
+# que l'échec dure, fermée au premier passage vert). Journal : noms de colonnes et comptes seulement.
+name: Sources publiques
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  sources:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - run: pip install --require-hashes -r requirements-lock.txt
+      - run: pip install pytest
+      - run: pytest -m reseau -rs tests/test_sources_reelles.py
+      - name: Alerte en cas de format changé
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          title="⚠️ Une source publique a changé de format"
+          run_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          num=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search "\"$title\" in:title" --json number --jq '.[0].number // empty')
+          if [ -n "$num" ]; then
+            gh issue comment "$num" --repo "$GITHUB_REPOSITORY" --body "Nouvel échec le $(date -u +%F) : $run_url"
+          else
+            gh issue create --repo "$GITHUB_REPOSITORY" --title "$title" --body "Le test des sources publiques (Open-Meteo, CRE, Tempo) a échoué le $(date -u +%F) : $run_url
+
+          Le journal nomme la colonne ou la variable absente. À corriger dans le lecteur concerné (collector/weather.py, web/src/analysis.ts, collector/insights.py, scripts/tempo_jours.py), puis relancer Actions → Sources publiques.
+          Cette issue se fermera toute seule au prochain passage vert."
+          fi
+      - name: Fermeture de l'alerte
+        if: success()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          title="⚠️ Une source publique a changé de format"
+          for num in $(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search "\"$title\" in:title" --json number --jq '.[].number'); do
+            gh issue close "$num" --repo "$GITHUB_REPOSITORY" --comment "Formats de nouveau conformes le $(date -u +%F)."
+          done

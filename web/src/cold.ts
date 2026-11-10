@@ -47,14 +47,31 @@ export const COLD_MAX_ROOMS = 10;
 export function parseColdConfig(raw: unknown): ColdConfig | null {
   if (!raw || typeof raw !== 'object') return null;
   const o = raw as Record<string, unknown>;
-  const threshold = Number(o.threshold);
-  const days = o.days === undefined ? 1 : Number(o.days);
+  // #359: a number or a numeric string only; Number() of an object with an own `toString` throws
+  const num = (v: unknown) => (typeof v === 'number' ? v : typeof v === 'string' ? Number(v) : NaN);
+  const threshold = num(o.threshold);
+  const days = o.days === undefined ? 1 : num(o.days);
   if (!Number.isFinite(threshold) || threshold < 5 || threshold > 22) return null;
   if (!Number.isInteger(days) || days < 1 || days > 7) return null;
   if (!Array.isArray(o.rooms)) return null;
   const rooms = [...new Set(o.rooms.filter((r): r is string => typeof r === 'string' && r.length > 0 && r.length <= 64))];
   if (!rooms.length || rooms.length > COLD_MAX_ROOMS) return null;
   return { threshold, days, rooms };
+}
+
+/**
+ * #359: the draft kept on this device while the alert is being chosen (rooms may be empty).
+ * Unlike parseColdConfig it never refuses the whole draft for one bad field: each field falls
+ * back to its default. Before, `days` was taken as stored (a string or 99 went through).
+ */
+export function parseColdDraft(raw: unknown): ColdConfig | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const o = raw as Record<string, unknown>;
+  if (typeof o.threshold !== 'number' || !Number.isFinite(o.threshold) || o.threshold < 5 || o.threshold > 22) return null;
+  if (!Array.isArray(o.rooms)) return null;
+  const days = COLD_DAYS.includes(o.days as number) ? (o.days as number) : 1;
+  const rooms = [...new Set(o.rooms.filter((r): r is string => typeof r === 'string' && r.length > 0 && r.length <= 64))];
+  return { threshold: o.threshold, days, rooms };
 }
 
 /** The repository variable COLD_ALERT_JSON for this configuration. */

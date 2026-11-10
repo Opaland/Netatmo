@@ -5,7 +5,7 @@ import { addDays } from '../aggregate';
 import { datasetDoc, ds, onDatasetLoaded, rerender, state } from '../app';
 import { isBedroom } from '../comfort';
 import { loadHa, loadRoomState } from '../data';
-import { type HaDoc, KIND_LABEL, agreement, guessRoom, lastHaDay, summarize } from '../ha';
+import { type HaDoc, KIND_LABEL, agreement, guessRoom, lastHaDay, parseHaLinks, summarize } from '../ha';
 import { BEDROOMS_ID } from '../household';
 import { readPref, writePref } from '../money';
 import { esc, longDate, nf0, table } from '../ui';
@@ -39,8 +39,7 @@ function ensure() {
 /** Room chosen on this device for each opening sensor ('' = none), else guessed from the names. */
 function links(): Record<string, string> {
   try {
-    const v = JSON.parse(readPref(lsLinks()) ?? '{}');
-    return v && typeof v === 'object' ? (v as Record<string, string>) : {};
+    return parseHaLinks(JSON.parse(readPref(lsLinks()) ?? '{}'));
   } catch {
     return {};
   }

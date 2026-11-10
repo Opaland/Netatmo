@@ -6,7 +6,7 @@ import { KVA_STEPS, compareOffers, daySplits, offPeakShares } from '../analysis'
 import { datasetDoc, ds, state } from '../app';
 import { lastCurveDay } from '../curve';
 import { loadCurve } from '../data';
-import { type EvInput, HC_END, HC_START, addCharge, chargePeaks, evPlan, kmPerYear } from '../ev';
+import { EV_DEFAULT, type EvInput, HC_END, HC_START, addCharge, chargePeaks, evPlan, kmPerYear, parseEvInput } from '../ev';
 import { periodAt } from '../offers';
 import { tenant } from '../tenant';
 import { contracts, fmtEur, lastDay, longDate, nf0, offCol, table } from '../ui';
@@ -25,16 +25,10 @@ const POWERS: [number, string][] = [
 const REF_KWH_100 = 17; // kWh/100 km of a typical compact car, for the distance hint only
 
 function load(): EvInput {
-  const def: EvInput = { kwhWeek: 40, powerKw: 7.4, startHour: 22 };
   try {
-    const o = JSON.parse(localStorage.getItem(LS) ?? '{}') as Partial<EvInput>;
-    return {
-      kwhWeek: Number(o.kwhWeek) > 0 && Number(o.kwhWeek) <= 500 ? Number(o.kwhWeek) : def.kwhWeek,
-      powerKw: POWERS.some(([p]) => p === o.powerKw) ? o.powerKw! : def.powerKw,
-      startHour: Number.isInteger(o.startHour) && o.startHour! >= 0 && o.startHour! < 24 ? o.startHour! : def.startHour,
-    };
+    return parseEvInput(JSON.parse(localStorage.getItem(LS) ?? '{}'), POWERS.map(([p]) => p));
   } catch {
-    return def;
+    return { ...EV_DEFAULT };
   }
 }
 function save(v: EvInput) {
