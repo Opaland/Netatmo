@@ -86,7 +86,7 @@ export const SERVICES: LegalService[] = [
   },
   {
     name: 'Anthropic (analyse IA, facultative)',
-    frame: 'API payante, clé du foyer ; seuls des totaux mensuels et les noms des pièces sont envoyés.',
+    frame: 'API payante, clé du foyer ; seuls des totaux mensuels sont envoyés, les pièces et capteurs sous pseudonyme (« Pièce A », « Capteur B »), jamais leurs noms.',
     terms: 'Conditions commerciales d\'Anthropic, acceptées à la création de la clé ; non relues en détail pour cette page.',
     url: 'https://www.anthropic.com/legal/commercial-terms',
     read: '2026-11-09',

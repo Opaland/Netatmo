@@ -17,6 +17,8 @@
     "e2e:expliquer": "node e2e/expliquer.mjs",
     "e2e:retours": "node e2e/retours.mjs",
     "e2e:plannings": "node e2e/plannings.mjs",
+    "e2e:pwa": "node e2e/pwa.mjs",
+    "e2e:en-ligne": "node e2e/en-ligne.mjs",
     "e2e:sweep": "node e2e/sweep.mjs",
     "size": "node scripts/size-budget.mjs"
   },

@@ -315,7 +315,7 @@ function settingsSummary(p: SettingsPage): string {
     case 'securite':
       return `verrouillage ${state.lockAfter ? `après ${state.lockAfter < 60 ? `${state.lockAfter} min` : `${state.lockAfter / 60} h`}` : 'désactivé'}, sauvegarde`;
     default:
-      return 'ce qui est public, cadre juridique, version';
+      return 'installer, recharger l’application, ce qui est public, version';
   }
 }
 

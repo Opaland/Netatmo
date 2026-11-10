@@ -29,7 +29,13 @@ import { onboardingHeader } from './views/onboarding';
 import { SIMPLE_PAGES } from './views/proche';
 import * as settings from './views/settings';
 import { html } from './trusted';
+import { listenInstall } from './install';
+import { startPwa } from './pwa';
+import { nothingKept, renderOfflineScreen } from './views/offline-screen';
 import './style.css';
+
+// #357: Chrome may offer the installation while the page is still loading: listen first.
+listenInstall();
 
 // ------------------------------------------------------------------ icons
 const ICONS: Record<string, string> = {
@@ -569,6 +575,8 @@ async function showLockScreen() {
   try {
     resp = await fetch('data/keyinfo.json', { cache: 'no-cache' });
   } catch {
+    // #357: offline with nothing kept on this device: a screen that says so, not a form that fails
+    if (!navigator.onLine && (await nothingKept())) return renderOfflineScreen(() => void start());
     // Offline, never cached: the form stays (the passphrase may work once online), with a word.
     return renderLock(navigator.onLine ? '' : unavailable('Données'), true);
   }
@@ -585,8 +593,7 @@ function startError(err: unknown): string {
   return `Ouverture impossible : ${err instanceof Error ? err.message : String(err)}`;
 }
 
-if ('serviceWorker' in navigator && import.meta.env.PROD) {
-  import('virtual:pwa-register').then(({ registerSW }) => registerSW({ immediate: true }));
-}
+// #357: registration, « new version » banner, check on coming back to the foreground (src/pwa.ts)
+startPwa();
 
 start();

@@ -19,4 +19,12 @@ describe('cadre juridique (S-8.14)', () => {
     expect(legalHtml('2026-12-01')).not.toContain('<strong class="ko-red">à relire');
     expect(legalHtml('2028-01-01')).toContain('<strong class="ko-red">à relire');
   });
+
+  // #365: the collector sends pseudonyms (collector/insights.py pseudonyms()), never room names;
+  // the three surfaces (here, Paramètres → À propos, the analysis card) say the same.
+  it('says that rooms reach the AI under a pseudonym, never their names', () => {
+    const ia = SERVICES.find((s) => s.name.startsWith('Anthropic'))!;
+    expect(ia.frame).toMatch(/pseudonyme/);
+    expect(ia.frame).not.toMatch(/noms des pièces sont envoyés|et les noms des pièces/);
+  });
 });

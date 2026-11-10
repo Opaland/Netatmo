@@ -17,6 +17,8 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    outputs:
+      commit: ${{ steps.version.outputs.commit }}
     permissions:
       contents: read
       id-token: write # S-8.10: OIDC token to sign the provenance attestation (Sigstore)
@@ -50,6 +52,7 @@ jobs:
       # S-8.10: SHA-256 of every served file (SHA256SUMS, published with the site), then
       # build.json (commit, date, run, digest of SHA256SUMS) shown in Paramètres.
       - name: Empreintes SHA-256 et version déployée
+        id: version
         working-directory: web/dist
         run: |
           find . -type f ! -path '*/.*' ! -name SHA256SUMS ! -name build.json -printf '%P\0' | LC_ALL=C sort -z | xargs -0 sha256sum > SHA256SUMS
@@ -58,6 +61,7 @@ jobs:
             "$(git rev-parse HEAD)" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$GITHUB_REPOSITORY" "$GITHUB_RUN_ID" "$manifest" > build.json
           echo "### Empreintes publiées" >> "$GITHUB_STEP_SUMMARY"
           echo "SHA256SUMS : \`$manifest\` ($(wc -l < SHA256SUMS) fichiers)" >> "$GITHUB_STEP_SUMMARY"
+          echo "commit=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
       - uses: actions/configure-pages@v6
       - uses: actions/upload-pages-artifact@v5
         with:
@@ -78,25 +82,24 @@ jobs:
   deploy:
     needs: build
     runs-on: ubuntu-latest
+    outputs:
+      page_url: ${{ steps.deployment.outputs.page_url }}
     permissions:
       pages: write
       id-token: write # required by actions/deploy-pages
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
-    outputs:
-      url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - id: deployment
         uses: actions/deploy-pages@v5
 
-  # #353: the site just deployed, in the demo: every page at 360 px and 1280 px, text at 200 %
-  # and dark, with the invariants of web/e2e/sweep.mjs (no console error, no horizontal scroll,
-  # no « NaN » / « undefined »…, no empty card, axe). Demo data only: no secret here.
-  smoke:
-    needs: deploy
+  # #357 (part of #353): the published site, in the demo only: build.json reaches the deployed
+  # commit, manifest (id, shortcuts, maskable icon) and sw.js served, the worker controls the
+  # page, the demo opens without a JavaScript error nor a file in 4xx. No capture, no artefact.
+  site-en-ligne:
+    needs: [build, deploy]
     runs-on: ubuntu-latest
-    timeout-minutes: 20
     permissions:
       contents: read
     defaults:
@@ -104,8 +107,6 @@ jobs:
         working-directory: web
     steps:
       - uses: actions/checkout@v5
-        with:
-          persist-credentials: false
       - uses: actions/setup-node@v7
         with:
           node-version: 22
@@ -113,8 +114,15 @@ jobs:
           cache-dependency-path: web/package-lock.json
       - run: npm ci
       - run: npx playwright install --with-deps chromium
-      - name: Smoke test du site en ligne (démo)
+      - run: node e2e/en-ligne.mjs
         env:
-          SWEEP_BASE: ${{ needs.deploy.outputs.url }}
-          SWEEP_EXPLORE: "0"
+          SITE_URL: ${{ needs.deploy.outputs.page_url }}
+          EXPECTED_COMMIT: ${{ needs.build.outputs.commit }}
+      # #353: then every page of the published demo at 360 px, 1280 px, text at 200 % and dark, with
+      # the invariants of web/e2e/sweep.mjs (console, horizontal scroll, « NaN » / « undefined »…,
+      # empty cards, axe). Demo data only, no secret, no capture.
+      - name: Balayage de la démo publiée
         run: node e2e/sweep.mjs
+        env:
+          SWEEP_BASE: ${{ needs.deploy.outputs.page_url }}
+          SWEEP_EXPLORE: "0"

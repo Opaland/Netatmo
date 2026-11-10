@@ -141,9 +141,10 @@ toutes ouvertes.
     (heures par jour, avec l'accord du foyer) ; chambres regroupées comme ailleurs ; rien n'est
     envoyé à l'IA. Analyse d'impact courte (finalité, durée, qui voit quoi) :
     [api-notes.md](api-notes.md#données-doccupation--analyse-dimpact-courte-s-135) ;
-  - **IA** : seuls des totaux mensuels et les noms des pièces partent chez Anthropic ; l'application
-    montre exactement ce qui a été envoyé. Choisir des noms de pièces neutres (« Chambre 1 » plutôt
-    qu'un prénom) limite ce qui est transmis.
+  - **IA** : seuls des totaux mensuels partent chez Anthropic, les pièces et capteurs sous
+    pseudonyme (« Pièce A », « Capteur B », S-5.7, `collector/insights.py` `pseudonyms()`), jamais
+    leurs noms ; la correspondance reste dans les données chiffrées et l'application montre
+    exactement ce qui a été envoyé (#365).
 - Informez les membres du foyer de ce qui est archivé et de qui peut le lire (toute personne qui
   connaît la phrase de passe).
 
