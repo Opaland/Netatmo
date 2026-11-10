@@ -279,7 +279,7 @@ def merge_snapshots(
     read twice (artifact not yet expired) or two runs in the same hour count once.
     Returns counts only (public log): snapshots read, added, already counted, days touched,
     the Intuis calls those snapshots made, and the gateway restarts seen (#276)."""
-    from .devices import observe_gateway
+    from .devices import observe_gateway, observe_offline
 
     z = ZoneInfo(tz)
     today = today or datetime.now(z).date().isoformat()
@@ -293,6 +293,9 @@ def merge_snapshots(
     for snap in sorted(snaps, key=lambda s: s["t"]):
         if isinstance(snap.get("gateway"), dict):  # events: today's snapshots count too (no double count)
             stats["boots"] += observe_gateway(store, snap["t"], snap["gateway"], tz)
+        # #280: every radiator out of reach in this snapshot (events: today's count too)
+        links = [off for f in (snap.get("modules") or {}).values() if (off := is_offline(f)) is not None]
+        observe_offline(store, snap["t"], links, tz)
         local = datetime.fromtimestamp(snap["t"], z)
         day = local.date().isoformat()
         if day >= today:

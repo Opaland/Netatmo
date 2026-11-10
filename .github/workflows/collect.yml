@@ -129,6 +129,8 @@ jobs:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           # S-13.5: presence hours per day, opt-in only (see README)
           ROOM_STATE_PRESENCE: ${{ vars.ROOM_STATE_PRESENCE }}
+          # S-11.4 (#220): noisy hours of the living room per day, opt-in only (see README)
+          STATION_NOISE: ${{ vars.STATION_NOISE }}
           RENEW_FILE: ${{ runner.temp }}/renew.txt
           COLD_FILE: ${{ runner.temp }}/cold.txt
           # v1.5 (#214, #215): modules not answering, low station battery (types and dates only).
