@@ -117,6 +117,49 @@ export function endLabelsFit(
 }
 
 /**
+ * #413: lines a category label takes once wrapped word by word in `width` px (ECharts
+ * `overflow: 'break'`); a word wider than the line is cut into as many lines as it needs.
+ */
+export function wrappedLines(s: string, width: number, px: number): number {
+  const space = textPx(' ', px);
+  let lines = 1;
+  let cur = 0;
+  for (const w of s.split(/\s+/).filter(Boolean)) {
+    let ww = textPx(w, px);
+    if (cur && cur + space + ww <= width) {
+      cur += space + ww;
+      continue;
+    }
+    if (cur) lines++;
+    while (ww > width) {
+      lines++;
+      ww -= width;
+    }
+    cur = ww;
+  }
+  return lines;
+}
+
+/** Line height of a chart text, in px (ECharts: about 1.2 em; rounded up, never optimistic). */
+export const lineHeightPx = (px: number) => Math.ceil(px * 1.25);
+
+/**
+ * #413: how the category labels of a horizontal bar chart would be laid out — one per band of
+ * `plot / labels.length` px, centred, wrapped in `labelWidth` px — and what goes wrong:
+ * `overlaps`, the pairs of neighbouring labels whose estimated boxes cross (« Chauffe-eau /
+ * Chambre parentale », drawn over each other at 360 px and text 200 %), and `broken`, the labels
+ * with a word wider than the column (cut in the middle, « Chauff / e-eau »).
+ */
+export function categoryLabels(labels: string[], opts: { labelWidth: number; plot: number; px: number }): { overlaps: string[]; broken: string[] } {
+  const band = opts.plot / Math.max(1, labels.length);
+  const half = labels.map((l) => (wrappedLines(l, opts.labelWidth, opts.px) * lineHeightPx(opts.px)) / 2);
+  const overlaps: string[] = [];
+  for (let i = 1; i < labels.length; i++) if (half[i - 1] + half[i] > band) overlaps.push(`${labels[i - 1]} / ${labels[i]}`);
+  const broken = labels.filter((l) => l.split(/\s+/).some((w) => textPx(w, opts.px) > opts.labelWidth));
+  return { overlaps, broken };
+}
+
+/**
  * #304 (« manque de points ? »): which values of a line get a visible point. A short series
  * (≤ `few` values) shows them all; a long one only shows a value with no neighbour: without a
  * point it would not be drawn at all, since a gap (null) is never bridged by a straight line.
