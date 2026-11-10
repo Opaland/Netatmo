@@ -4,13 +4,13 @@
 // Each view lives in src/views/, shared helpers in src/ui.ts, state in src/app.ts.
 import { toCsv } from './aggregate';
 import { type State, activeRooms, app, ds, onDatasetOpened, onLock, setDataset, setRenderer, setState, state } from './app';
-import { disposeAll } from './charts';
+import { disposeAll, useChartPrefs } from './charts';
 import { BadEnvelope, WrongPassphrase } from './crypto';
 import { type Dataset, NoData, clearDataCaches, dataDir, forgetKeys, load, recallKey } from './data';
 import { type Ctl, cardHandlers, dispatch } from './events';
 import { lazyAction } from './lazy';
 import { clearMemo } from './memo';
-import { onceReady, viewRendered } from './ready';
+import { onceReady, track, viewRendered } from './ready';
 import { type Anchor, anchorOf, placeAnchor } from './scroll-anchor';
 import { framedHtml, isFramed } from './frame';
 import { prefetchForOffline, unavailable, updateNetStatus } from './offline';
@@ -128,6 +128,7 @@ function render() {
   const keepY = shownRoute === key ? anchorNow(focus) : null;
   const keepTab = changed && (document.activeElement as HTMLElement | null)?.closest?.('.tabs') ? focusSelector(document.activeElement) : null;
   disposeAll(app);
+  useChartPrefs(state.chart); // #20
   const { meta } = ds;
   const tab = tabOf(route);
   const parent = parentOf(route);
@@ -314,6 +315,12 @@ async function shellClick(el: HTMLElement, e: MouseEvent): Promise<boolean> {
   if (el.dataset.rooms) {
     setState({ rooms: el.dataset.rooms === 'all' ? null : [] });
     document.querySelector<HTMLDetailsElement>('.rooms-picker')?.setAttribute('open', '');
+    return true;
+  }
+  if (el.dataset.chartSettings !== undefined) {
+    // #20: the « Réglages du graphique » sheet, loaded on first use
+    const at = [...app.querySelectorAll('[data-chart-settings]')].indexOf(el);
+    void track(import('./chart-sheet')).then((m) => m.openChartSheet(at));
     return true;
   }
   if (el.dataset.filterReset !== undefined) {

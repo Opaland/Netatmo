@@ -20,6 +20,7 @@
     "e2e:pwa": "node e2e/pwa.mjs",
     "e2e:en-ligne": "node e2e/en-ligne.mjs",
     "e2e:sweep": "node e2e/sweep.mjs",
+    "e2e:reglages": "node e2e/reglages.mjs",
     "size": "node scripts/size-budget.mjs"
   },
   "dependencies": {

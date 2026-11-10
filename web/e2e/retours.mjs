@@ -65,8 +65,9 @@ const linkedRooms = (page) =>
 
 /**
  * Clicks a segment below the fold (`want`: a selector, else the last unchecked segment button of
- * the page that starts beyond the first screen) and checks that the page does not jump (scrollY
- * kept within a few px once the redrawn page has settled) and that the focus stays on it.
+ * the page that starts beyond the first screen) and checks that the page does not jump (#370: the
+ * segment kept within a few px of where it was on screen once the redrawn page has settled, even
+ * when the content above it changed height) and that the focus stays on it.
  */
 async function segmentKeepsPlace(page, where, want) {
   const target = await page.evaluate((w) => {
@@ -83,15 +84,18 @@ async function segmentKeepsPlace(page, where, want) {
   const { sel, y, below } = target;
   await page.evaluate((y) => window.scrollTo(0, y), y);
   await page.waitForTimeout(200);
+  const at = (s) => document.querySelector(s)?.getBoundingClientRect().top ?? null;
   const before = await page.evaluate(() => window.scrollY);
+  const top0 = await page.evaluate(at, sel);
   await page.click(sel);
   await page.waitForSelector(`${sel}[aria-checked="true"]`, { state: 'attached', timeout: 15000 });
   await ready(page);
   await page.waitForTimeout(400); // late charts and lazy cards
   const after = await page.evaluate(() => window.scrollY);
+  const top1 = await page.evaluate(at, sel);
   const focused = await page.evaluate((s) => document.activeElement === document.querySelector(s), sel);
   check(!below || before > 0, `${where} : le segment ${sel} n'a pas pu être amené sous la ligne de flottaison`);
-  check(Math.abs(after - before) <= 5, `${where} : le clic sur ${sel} fait défiler la page (${before} → ${after} px)`);
+  check(top0 !== null && top1 !== null && Math.abs(top1 - top0) <= 5, `${where} : le clic sur ${sel} fait sauter la page (segment à ${Math.round(top0)} → ${Math.round(top1)} px de l'écran, défilement ${before} → ${after} px)`);
   check(focused, `${where} : le focus quitte ${sel} après le clic`);
   return before;
 }
