@@ -22,13 +22,19 @@ export interface Invoice {
 }
 
 const DAY_RE = /^\d{4}-\d{2}-\d{2}$/;
+/** #359: a day that exists (the pattern alone lets 2026-02-30 through, read by Date as 2 March). */
+const isDay = (s: string) => {
+  if (!DAY_RE.test(s)) return false;
+  const t = Date.parse(`${s}T00:00:00Z`);
+  return Number.isFinite(t) && new Date(t).toISOString().slice(0, 10) === s;
+};
 const num = (v: unknown, max: number) => (typeof v === 'number' && Number.isFinite(v) && v >= 0 && v < max ? v : null);
 
 /** A clean invoice or null (local storage is not trusted blindly). */
 export function validInvoice(v: unknown): Invoice | null {
   if (!v || typeof v !== 'object') return null;
   const o = v as Record<string, unknown>;
-  if (typeof o.from !== 'string' || typeof o.to !== 'string' || !DAY_RE.test(o.from) || !DAY_RE.test(o.to) || o.to < o.from) return null;
+  if (typeof o.from !== 'string' || typeof o.to !== 'string' || !isDay(o.from) || !isDay(o.to) || o.to < o.from) return null;
   const amount = num(o.amount, 1e6);
   if (amount === null) return null;
   return {
@@ -185,7 +191,10 @@ export function reconcile(inv: Invoice, d: InvoiceData): Reconciliation {
         kind: 'kwh',
         eur: e,
         text: !hasLinky
-          ? `La facture compte ${kwh(diff)} de plus que les radiateurs et le chauffe-eau : les autres usages du logement (${diff > 0 ? '+' : '−'}${eur(e)}).`
+          ? diff > 0
+            ? `La facture compte ${kwh(diff)} de plus que les radiateurs et le chauffe-eau : les autres usages du logement (+${eur(e)}).`
+            : // #358 (mutation): fewer kWh than the radiators alone used to read « de plus »
+              `La facture compte ${kwh(diff)} de moins que les radiateurs et le chauffe-eau (−${eur(e)}) : relevé estimé ou dates de relevé décalées.`
           : inv.estimated
           ? `Relevé estimé : la facture compte ${kwh(diff)} ${diff > 0 ? 'de plus' : 'de moins'} que le compteur Linky (${diff > 0 ? '+' : '−'}${eur(e)}). Ils seront régularisés sur la prochaine facture relevée.`
           : `La facture compte ${kwh(diff)} ${diff > 0 ? 'de plus' : 'de moins'} que le compteur Linky (${diff > 0 ? '+' : '−'}${eur(e)}) : dates de relevé décalées d'un jour ou deux, ou index estimé non signalé.`,

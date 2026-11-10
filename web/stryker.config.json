@@ -1,0 +1,16 @@
+{
+  "$schema": "./node_modules/@stryker-mutator/core/schema/stryker-schema.json",
+  "_comment": "#358 : tests de mutation, lancés à la main (npm run mutation) ou par .github/workflows/mutation.yml, jamais dans la CI bloquante. Stryker s'installe pour la mesure seulement (npm i --no-save), hors de package-lock.json. tsconfigFile pointe vers un fichier absent : TypeScript 7 (natif) n'expose plus l'API JS que Stryker utilise pour réécrire tsconfig.json, et Vite lit le TypeScript sans lui. Mesures et lecture des survivants : docs/bmad/06-qa-strategy.md.",
+  "testRunner": "vitest",
+  "vitest": { "configFile": "vitest.mutation.config.mjs" },
+  "tsconfigFile": "stryker-sans-tsconfig.json",
+  "mutate": ["src/money.ts", "src/pricing.ts", "src/periods.ts", "src/invoice.ts", "src/reconstitute.ts", "src/crypto.ts"],
+  "coverageAnalysis": "perTest",
+  "ignoreStatic": true,
+  "reporters": ["html", "json", "clear-text", "progress"],
+  "htmlReporter": { "fileName": "reports/mutation/index.html" },
+  "jsonReporter": { "fileName": "reports/mutation/mutation.json" },
+  "tempDirName": ".stryker-tmp",
+  "cleanTempDir": "always",
+  "thresholds": { "high": 90, "low": 70, "break": null }
+}
