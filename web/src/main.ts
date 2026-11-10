@@ -150,8 +150,8 @@ function render() {
     <div class="title">
       <h1>${esc(meta.home.name)}${ds.source === 'demo' ? ' <span class="badge">démo</span>' : ''}</h1>
     </div>
-    <a class="status-pill ${s.level}" href="#etat" data-view="etat" title="État des données"><span class="dot" aria-hidden="true"></span><span class="pill-long">${esc(s.label)}</span><span class="pill-short">${esc(s.short)}</span><span class="sr-only"> : ${esc(s.text)}, voir l'état des données</span></a>
-    <a class="icon-btn" href="#parametres" data-view="parametres" aria-label="Paramètres"${route.page === 'parametres' ? ' aria-current="page"' : ''}>${icon('settings')}</a>
+    <div class="top-actions"><a class="status-pill ${s.level}" href="#etat" data-view="etat" title="État des données"><span class="dot" aria-hidden="true"></span><span class="pill-long">${esc(s.label)}</span><span class="pill-short">${esc(s.short)}</span><span class="sr-only"> : ${esc(s.text)}, voir l'état des données</span></a>
+    <a class="icon-btn" href="#parametres" data-view="parametres" aria-label="Paramètres"${route.page === 'parametres' ? ' aria-current="page"' : ''}>${icon('settings')}</a></div>
   </header>
   <nav class="tabs${tabs.length === 3 ? ' three' : ''}" aria-label="Onglets" data-swipe="tab">
     ${tabs

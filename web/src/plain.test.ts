@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
   GLOSSARY,
+  comparedPct,
   comparedToLastYear,
+  leftSentence,
   glossarySection,
   kpiTitle,
   pinnedTemp,
@@ -104,5 +106,22 @@ describe('vue Proche (#316)', () => {
       expect(s).not.toMatch(/consigne|setpoint|kWh/i);
       for (const n of sentenceLengths(s)) expect(n).toBeLessThanOrEqual(15);
     }
+  });
+});
+
+// #400: the vue Proche says the change computed by the Accueil, and the room it leaves out
+describe('figures shared with the Accueil (#400)', () => {
+  it('the change on last year, from the Accueil percentage', () => {
+    expect(comparedPct(-14.2)).toBe("C'est 14 % de moins que l'an dernier.");
+    expect(comparedPct(3.6)).toBe("C'est 4 % de plus que l'an dernier.");
+    expect(comparedPct(0.3)).toBe("C'est autant que l'an dernier.");
+    expect(comparedPct(null)).toBe("Pas de comparaison possible avec l'an dernier.");
+    expect(comparedToLastYear(86, 100)).toBe(comparedPct(-14));
+  });
+  it('a room left out, in short plain sentences', () => {
+    const s = leftSentence('Chambre enfant', '2026-11-05');
+    expect(s).toBe("Chambre enfant ne répond plus depuis le 5 novembre : cette pièce n'est pas comptée.");
+    expect(leftSentence('Bureau', null)).toBe("Bureau n'est pas comptée : cette pièce ne répondait pas l'an dernier.");
+    for (const n of sentenceLengths(s)) expect(n).toBeLessThanOrEqual(15);
   });
 });

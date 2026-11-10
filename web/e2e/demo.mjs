@@ -84,8 +84,10 @@ const tileAmounts = (page) =>
   );
 
 /**
- * #348: the header stays on one line (name, data pill, ⚙): the three overlap vertically, none
- * leaves the screen and the pill's text is not cut. Returns what is wrong, or ''.
+ * #348: the header (name, data pill, ⚙) on one line when it fits; #397: when it does not (360 px
+ * at 200 %, a long name), the name keeps its words on its own line(s) and the pill and ⚙ follow
+ * together on the line below — never a name squeezed beside them. None leaves the screen and the
+ * pill's text is not cut. Returns what is wrong, or ''.
  */
 const headerLine = (page) =>
   page.evaluate(() => {
@@ -94,8 +96,9 @@ const headerLine = (page) =>
     const [n, p, g] = [name, pill, gear].map((e) => e.getBoundingClientRect());
     const out = [];
     const overlap = (a, b) => a.top < b.bottom - 1 && b.top < a.bottom - 1;
-    if (!overlap(n, g) || !overlap(p, g) || !overlap(n, p)) out.push(`sur plusieurs lignes (nom ${Math.round(n.top)}–${Math.round(n.bottom)}, pastille ${Math.round(p.top)}–${Math.round(p.bottom)}, ⚙ ${Math.round(g.top)}–${Math.round(g.bottom)})`);
-    if (!(n.right <= p.left && p.right <= g.left)) out.push('nom, pastille et ⚙ ne se suivent pas');
+    const where = `(nom ${Math.round(n.top)}–${Math.round(n.bottom)}, pastille ${Math.round(p.top)}–${Math.round(p.bottom)}, ⚙ ${Math.round(g.top)}–${Math.round(g.bottom)})`;
+    if (!overlap(p, g) || !(p.right <= g.left)) out.push(`pastille et ⚙ séparés ${where}`);
+    else if (overlap(n, p) ? !(n.right <= p.left) : !(n.bottom <= p.top + 1)) out.push(`nom, pastille et ⚙ ne se suivent pas ${where}`);
     if (g.right > window.innerWidth + 1) out.push(`⚙ hors de l'écran (${Math.round(g.right)} px)`);
     if (pill.scrollWidth > pill.clientWidth + 1) out.push(`pastille coupée (« ${pill.innerText} »)`);
     if (!/\d/.test(pill.innerText)) out.push(`pastille sans date (« ${pill.innerText} »)`);

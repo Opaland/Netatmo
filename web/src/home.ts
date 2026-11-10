@@ -132,10 +132,55 @@ export function moneyVerdict(v: Verdict, cost: number | null): MoneyVerdict {
 const nf0 = new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 0 });
 const amount = (v: number, unit: '€' | 'kWh') => `${nf0.format(Math.round(Math.abs(v)))} ${unit}`;
 
+/**
+ * #383: the gap as written, from the two amounts as written (whole euros or kWh), so that
+ * « 5 € de moins » is always the difference of the two figures written under it.
+ */
+export const writtenGap = (m: MoneyVerdict) => Math.round(m.actual) - Math.round(m.expected);
+
 /** « 3 € de moins que d'habitude », « Comme d'habitude » under a euro (or a kWh). */
 export function verdictHeadline(m: MoneyVerdict): string {
-  if (Math.round(Math.abs(m.gap)) < 1) return "Comme d'habitude";
-  return `${amount(m.gap, m.unit)} de ${m.gap < 0 ? 'moins' : 'plus'} que d'habitude`;
+  const gap = writtenGap(m);
+  if (gap === 0) return "Comme d'habitude";
+  return `${amount(gap, m.unit)} de ${gap < 0 ? 'moins' : 'plus'} que d'habitude`;
+}
+
+/** « Chambre enfant », « Chambre enfant et Bureau », « A, B et C ». */
+const andList = (a: string[]) => (a.length < 2 ? (a[0] ?? '') : `${a.slice(0, -1).join(', ')} et ${a.at(-1)}`);
+
+/** #383: the scope of the verdict when rooms are left out: « hors Chambre enfant, hors ligne ». */
+export const leftOut = (left: string[]) => (left.length ? `hors ${andList(left)}, hors ligne` : '');
+
+export interface VerdictWords {
+  headline: string;
+  /** « 24 € » (in bold on screen). */
+  spent: string;
+  /** « (130 kWh) dépensés hors Chambre enfant, hors ligne, en novembre (au 8) ». */
+  spentRest: string;
+  /** « (130 kWh) dépensés » (the screen inserts the scope, with its alert, before the period). */
+  spentVerb: string;
+  /** « 29 € ». */
+  expectedAmount: string;
+  /** « 29 € attendus à météo comparable (−16 %) ». */
+  expected: string;
+}
+
+/**
+ * #383: the words of the verdict — headline, spent, expected and % — all from `m`, over its
+ * one scope, whose rooms left out are named (`left`). No other figure may enter: the spent
+ * amount taken over all the rooms gave « 5 € de moins » over « 26 € pour 29 € (−16 %) ».
+ */
+export function verdictWords(m: MoneyVerdict, left: string[], phrase: string, ref: string): VerdictWords {
+  const out = leftOut(left);
+  const verb = m.unit === '€' ? `(${amount(m.kwh, 'kWh')}) dépensés` : 'consommés';
+  return {
+    headline: verdictHeadline(m),
+    spent: amount(m.actual, m.unit),
+    spentRest: `${verb}${out ? ` ${out},` : ''} ${phrase}`,
+    spentVerb: verb,
+    expectedAmount: amount(m.expected, m.unit),
+    expected: `${amount(m.expected, m.unit)} attendus ${ref} (${signedPct(m.pct)})`,
+  };
 }
 
 /** The reference of the verdict, named the same way everywhere (verdict, month tile). */
