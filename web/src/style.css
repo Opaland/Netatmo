@@ -1041,13 +1041,6 @@ th {
   color: var(--text-muted);
   font-size: var(--font-sm);
 }
-/* #337: « Pourquoi ? » under the verdict, to « Expliquer un mois » */
-.verdict-link {
-  margin: 0;
-}
-.verdict-link .link {
-  min-height: 32px; /* WCAG 2.5.8 asks 24 px; the Accueil holds in three screens (#311) */
-}
 .toggle {
   display: inline-flex;
   align-items: center;

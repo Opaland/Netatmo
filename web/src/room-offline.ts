@@ -161,10 +161,10 @@ export function runIn(runs: OfflineRun[], room: string, from: string, to: string
  * « hors ligne depuis le 14 oct. 2025 », « hors ligne du 4 au 17 nov. 2024 »; a room switched off
  * on purpose: « arrêté depuis le 14 oct. 2025 (poêle) ».
  */
-export function offlineText(run: Pick<OfflineRun, 'from' | 'to' | 'ongoing' | 'stopped'>): string {
+export function offlineText(run: Pick<OfflineRun, 'from' | 'to' | 'ongoing' | 'stopped'>, withYear = true): string {
   const what = run.stopped ? 'arrêté' : 'hors ligne';
   const why = run.stopped && stopShort(run.stopped) ? ` (${stopShort(run.stopped)})` : '';
-  if (run.ongoing) return `${what} depuis le ${dayShort(run.from, true)}${why}`;
+  if (run.ongoing) return `${what} depuis le ${dayShort(run.from, withYear)}${why}`;
   const sameYear = run.from.slice(0, 4) === run.to.slice(0, 4);
   return `${what} du ${dayShort(run.from, !sameYear)} au ${dayShort(run.to, true)}${why}`;
 }

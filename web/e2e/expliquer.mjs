@@ -86,13 +86,12 @@ try {
     progress(`${name} : Accueil`);
     await go(page, 'accueil');
     const alerts = await page.locator('#alerts').innerText();
-    check(BEDROOM.test(alerts) && /Plus mesurée/.test(alerts), `${name} : alerte « hors ligne » absente de l'Accueil (« ${alerts.slice(0, 200)} »)`);
+    check(/Chambre enfant hors ligne depuis le 5 nov\. Que faire \?/.test(alerts), `${name} : alerte « hors ligne » absente de l'Accueil (« ${alerts.slice(0, 200)} »)`);
     check(!/Cuisine/.test(alerts), `${name} : alerte pour la Cuisine, arrêtée volontairement (« ${alerts.slice(0, 200)} »)`);
-    const link = page.locator('.verdict .verdict-link a[href^="#outils-expliquer-"]');
+    const link = page.locator('.verdict a.verdict-link[href^="#outils-expliquer-"]');
     check((await link.count()) === 1, `${name} : lien « Pourquoi ? » absent sous le verdict`);
     const sub = await page.locator('.verdict').innerText();
-    check(/sans Chambre enfant \(hors ligne\)/i.test(sub), `${name} : le verdict ne dit pas que la Chambre enfant n'est pas comparée (« ${sub.slice(0, 300)} »)`);
-    check(/Cuisine au poêle depuis le 14 oct\. 2025/.test(sub), `${name} : le verdict n'attribue pas la baisse au poêle (« ${sub.slice(0, 300)} »)`);
+    check(/Pourquoi \? \(poêle\)/.test(sub) && /dont le poêle \(Cuisine\)/.test((await link.getAttribute('aria-label')) ?? ''), `${name} : le verdict n'attribue pas la baisse au poêle (« ${sub.slice(0, 300)} »)`);
     check((await wide(page)) <= 1, `${name} : défilement horizontal sur l'Accueil (${await wide(page)} px)`);
 
     // ---------------------------------------------------------------- the link opens the month shown
@@ -171,12 +170,12 @@ try {
         await page.click('#stop-add');
         await page.waitForSelector('#stopped-card [data-stop-remove="r-ch2"]', { timeout: 10000 });
         await go(page, 'accueil');
-        check(!/Chambre enfant : hors ligne/.test(await page.locator('#alerts').innerText()), `${name} : alerte toujours là après « arrêté volontairement »`);
+        check(!/Chambre enfant hors ligne/.test(await page.locator('#alerts').innerText()), `${name} : alerte toujours là après « arrêté volontairement »`);
         await go(page, 'parametres-logement');
         await page.click('#stopped-card [data-stop-remove="r-ch2"]');
         await page.waitForSelector('#stopped-card #stop-room option[value="r-ch2"]', { state: 'attached', timeout: 10000 });
         await go(page, 'accueil');
-        check(BEDROOM.test(await page.locator('#alerts').innerText()), `${name} : alerte absente après avoir retiré la Chambre enfant`);
+        check(/Chambre enfant hors ligne/.test(await page.locator('#alerts').innerText()), `${name} : alerte absente après avoir retiré la Chambre enfant`);
       }
     }
     await ctx.close();

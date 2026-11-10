@@ -10,7 +10,7 @@ import { type DayRecord, addDays, minusYears, pctChange, total } from '../aggreg
 import { type Verdict, projectYear, verdict } from '../analysis';
 import { activeRooms, ds, state } from '../app';
 import { barChart, cssVar } from '../charts';
-import { alert, comparison, gauge, howDetails, legend, list, seg, tile } from '../components';
+import { comparison, gauge, howDetails, legend, list, seg, tile } from '../components';
 import { CATEGORY, NO_REFERENCE, PERIOD, TEMP, dayShort, monthLong, rangeLabel, signedPct, vsLabel } from '../glossary';
 import {
   HOME_PERIODS,
@@ -108,14 +108,12 @@ function projection(records: DayRecord[], r: HomeRange, v: Verdict | null, spent
 function explainLink(r: HomeRange): string {
   const ym = r.to.slice(0, 7);
   const before = `${Number(ym.slice(0, 4)) - 1}${ym.slice(4)}`;
-  return `<p class="verdict-link"><a class="link" href="#${routeKey({ page: 'outil', tool: 'expliquer', month: ym })}" aria-label="Pourquoi ? Expliquer l’écart de ${esc(monthLong(ym))} avec ${esc(monthLong(before))}">Pourquoi ? Expliquer l’écart</a></p>`;
+  // #346: a radiator switched off for a stove: the fall comes from it, said in the link (#311: inline, the screen holds in three)
+  const stove = [...stoppedIn(r.from, r.to), ...stoppedIn(minusYears(r.from), minusYears(r.to))].filter((x, k, a) => a.findIndex((y) => y.id === x.id) === k);
+  const text = stove.length ? 'Pourquoi ? (poêle)' : 'Pourquoi ?'; // #311: short, the stove is named in the label and on the page
+  return ` <a class="link verdict-link" href="#${routeKey({ page: 'outil', tool: 'expliquer', month: ym })}" aria-label="${esc(`Pourquoi ? L’écart de ${monthLong(ym)} avec ${monthLong(before)} expliqué${stove.length ? `, dont le poêle (${stove.map((x) => x.name).join(', ')})` : ''}`)}">${esc(text)}</a>`;
 }
 
-/** #346: a room switched off on purpose stays compared: its fall is a change of heating, said so. */
-function stoveNote(r: HomeRange): string {
-  const s = [...stoppedIn(r.from, r.to), ...stoppedIn(minusYears(r.from), minusYears(r.to))].filter((x, i, a) => a.findIndex((y) => y.id === x.id) === i);
-  return s.map((x) => (x.run.stopped!.reason === 'poele' ? ` ; ${x.name} au poêle depuis le ${dayShort(x.run.from, true)}` : ` ; ${x.name} : ${offlineText(x.run)}`)).join('');
-}
 
 /** #346: the rooms left out of the verdict, said under it. */
 function leftNote(left: string[]): string {
@@ -154,9 +152,8 @@ function verdictBlock(records: DayRecord[], r: HomeRange, v: Verdict | null, cmp
     <span class="verdict-icon" aria-hidden="true">${icon}</span>
     <div>
       <h2 class="verdict-title" id="verdict-title">${esc(verdictHeadline(m))}</h2>
-      <p class="verdict-sub">${what}, pour ${esc(fmtMoney(m.expected, m.unit))} attendus ${esc(ref)} (${esc(signedPct(m.pct))})${cmp.left.length ? `, sans ${esc(cmp.left.join(', '))} (hors ligne)` : ''}${esc(stoveNote(r))}.</p>
+      <p class="verdict-sub">${what}, pour ${esc(fmtMoney(m.expected, m.unit))} attendus ${esc(ref)} (${esc(signedPct(m.pct))}).${explainLink(r)}</p>
       ${g}
-      ${explainLink(r)}
       ${howDetails(
         'Comment c’est calculé',
         `<p class="hint">Attendu = consommation des mêmes dates des années passées (jusqu'à quatre)${
@@ -246,7 +243,7 @@ function countedCard(records: DayRecord[], r: HomeRange): string {
           const est = run ? offlineEstimate(x.id, r.from, r.to) : null; // « ≈ » before the value: estimated
           return {
             title: room.name,
-            sub: run ? `${offlineText(run)}` : changeText(x.change, vs),
+            sub: run ? offlineText(run, run.from.slice(0, 4) !== r.to.slice(0, 4)) : changeText(x.change, vs), // #311: short, one line
             value: `${est !== null ? '≈ ' : ''}${euros ? fmtEur(x.value) : fmtKwh(x.value)}`,
             color: water ? '--usage-water' : '--usage-heating',
             share: x.share,
@@ -270,17 +267,11 @@ function countedCard(records: DayRecord[], r: HomeRange): string {
 // ------------------------------------------------------------------ rooms offline (#346)
 /** One alert per room offline for 48 h or more: its days are missing, not 0. */
 function offlineAlerts(): string {
+  // #311: one compact line per room (the estimate is in « Ce qui a compté », the steps on the room page)
   return offlineNow()
-    .map((o) => {
-      const est = offlineEstimate(o.id, `${lastDay().slice(0, 8)}01`, lastDay());
-      return alert(
-        'warn',
-        `${o.name} : ${offlineText(o.run)}`,
-        '',
-        // the estimate is in « Ce qui a compté » (« ≈ ») and on the room page: kept short here (#311)
-        `<p>${esc(`Plus mesurée${est !== null ? ' (estimée)' : ''}, pas à 0.`)} <a class="link" href="#${routeKey({ page: 'piece', room: o.id })}">Que faire ?</a></p>`,
-      );
-    })
+    .map(
+      (o) => `<div class="alert warn" role="note"><span class="ico" aria-hidden="true">!</span><div><p><b>${esc(`${o.name} hors ligne depuis le ${dayShort(o.run.from, o.run.from.slice(0, 4) !== lastDay().slice(0, 4))}`)}</b> <a class="link" href="#${routeKey({ page: 'piece', room: o.id })}">Que faire ?</a></p></div></div>`,
+    )
     .join('');
 }
 
