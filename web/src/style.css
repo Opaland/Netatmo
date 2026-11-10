@@ -477,22 +477,6 @@ html {
   background: var(--surface-card);
   cursor: pointer;
 }
-.check {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  overflow-wrap: anywhere;
-  gap: var(--space-2);
-  min-height: var(--target-min);
-  padding: 0 var(--space-1);
-  cursor: pointer;
-}
-.check input {
-  width: 20px;
-  height: 20px;
-  flex: none;
-  accent-color: var(--accent);
-}
 .swatch {
   display: inline-block;
   width: 12px;
@@ -565,7 +549,7 @@ html {
     grid-column: 2;
     grid-row: 1;
     margin: 0;
-    font-size: 1.25rem;
+    font-size: var(--font-kpi-compact);
   }
   body:not(.is-report) .kpis .kpi > :not(h3, .kpi-value) {
     grid-column: 1 / -1;
@@ -619,7 +603,7 @@ html {
 }
 .kpi-value {
   margin: var(--space-1) 0 2px;
-  font-size: 1.5rem;
+  font-size: var(--font-kpi);
   font-weight: 600;
   line-height: 1.2;
   font-variant-numeric: tabular-nums;
@@ -931,7 +915,7 @@ html {
   max-height: 420px;
   background:
     linear-gradient(to left, var(--surface-card) 30%, transparent) right center / 24px 100% no-repeat local,
-    radial-gradient(farthest-side at 100% 50%, rgb(0 0 0 / 0.18), transparent) right center / 10px 100% no-repeat scroll;
+    radial-gradient(farthest-side at 100% 50%, var(--scroll-shadow), transparent) right center / 10px 100% no-repeat scroll;
 }
 table {
   border-collapse: separate;
@@ -1109,16 +1093,6 @@ th {
 .btn:disabled {
   opacity: 0.6;
 }
-.error {
-  min-height: 1.2em;
-  color: var(--state-bad);
-}
-.notice {
-  padding: var(--space-3);
-  border-radius: var(--radius-md);
-  border: 1px solid var(--border);
-  background: var(--state-info-soft);
-}
 .empty {
   text-align: center;
   padding: 40px 0;
@@ -1177,23 +1151,6 @@ th {
   margin: var(--space-1) 0 0;
   color: var(--text-muted);
   font-size: var(--font-sm);
-}
-.toggle {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-2);
-  padding: 0 var(--space-3);
-  min-height: var(--target-min);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-full);
-  background: var(--surface-card);
-  font-size: var(--font-sm);
-  cursor: pointer;
-}
-.toggle input {
-  width: 20px;
-  height: 20px;
-  accent-color: var(--accent);
 }
 fieldset.prices {
   border: 1px solid var(--border);
@@ -1267,8 +1224,8 @@ fieldset.prices legend {
   body,
   .card,
   .kpi {
-    background: #fff !important;
-    color: #000 !important;
+    background: var(--print-paper) !important;
+    color: var(--print-ink) !important;
     box-shadow: none !important;
   }
   #app {
@@ -1324,7 +1281,6 @@ fieldset.prices input {
   min-width: 0;
   box-sizing: border-box;
 }
-fieldset.prices input[type='radio'],
 fieldset.prices input[type='checkbox'] {
   width: auto;
 }
@@ -1340,7 +1296,7 @@ fieldset.prices input[type='checkbox'] {
   overflow: hidden;
   clip: rect(0 0 0 0);
 }
-fieldset.prices label:not(.check) {
+fieldset.prices label:not(.radio) {
   display: grid;
   gap: var(--space-1);
   font-size: var(--font-sm);
@@ -1362,13 +1318,6 @@ fieldset.prices label:not(.check) {
   grid-template-columns: minmax(0, 1fr);
   gap: 6px;
   overflow-wrap: anywhere;
-}
-.ok {
-  color: var(--state-good);
-  font-weight: 600;
-}
-.ko {
-  color: var(--text-muted);
 }
 fieldset.secrets {
   border: 1px solid var(--border);
@@ -1411,34 +1360,12 @@ fieldset.secrets input,
   display: grid;
   gap: 10px;
 }
-.settings-msg {
-  padding: 12px 14px;
-  border-radius: var(--radius-md);
-  background: var(--surface-card);
-  border: 1px solid var(--border);
-}
-.settings-msg.ko {
-  color: var(--state-bad);
-}
-.settings-msg:empty {
-  display: none;
-}
 /* #249: a lazy card that could not be shown says so (offline) or shows its error */
 .lazy-failed .link {
   margin-left: 4px;
 }
 .lazy-error {
   color: var(--state-bad);
-}
-
-.stale {
-  margin: 0 0 12px;
-  padding: 10px 14px;
-  border-radius: var(--radius-md);
-  border: 1px solid var(--state-bad);
-  color: var(--text);
-  background: var(--state-bad-soft);
-  font-size: var(--font-sm);
 }
 
 
@@ -1689,7 +1616,7 @@ fieldset.secrets input,
 /* S-8.10: SHA-256 of the deployed manifest (Paramètres) */
 code.hash {
   word-break: break-all;
-  font-size: 0.85em;
+  font-size: var(--font-xs);
 }
 
 /* v1.4: invoice (S-2.3), works and surfaces (S-6.2), research export (S-6.6) */
@@ -1737,7 +1664,7 @@ code.hash {
   box-shadow: var(--shadow-1);
 }
 .research-dialog::backdrop {
-  background: rgb(0 0 0 / 0.45);
+  background: var(--scrim);
 }
 .research-form {
   display: grid;
@@ -1985,6 +1912,36 @@ code.hash {
 .switch input:checked::after {
   transform: translateX(20px);
 }
+/* #317: a switch whose label carries a colour key or a grey detail; several in a list. */
+.switch > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.switch > span .swatch {
+  margin-right: var(--space-2);
+}
+/* One answer among a few (native radio). */
+.radio {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: var(--target-min);
+  overflow-wrap: anywhere;
+  cursor: pointer;
+}
+.radio input[type='radio'] {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  margin: 0;
+  accent-color: var(--accent);
+}
+/* Message of a form next to its button (empty until an action fills it). */
+.form-msg {
+  min-height: 1.2em;
+  margin: var(--space-2) 0;
+  color: var(--state-bad);
+}
 /* Alerts: info, warn, bad, good. */
 .alert {
   display: grid;
@@ -2087,7 +2044,7 @@ code.hash {
 }
 .now .temp {
   margin: 0;
-  font-size: 3rem;
+  font-size: var(--font-display);
   font-weight: 600;
   line-height: 1;
   font-variant-numeric: tabular-nums;

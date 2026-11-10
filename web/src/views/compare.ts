@@ -41,7 +41,7 @@ import {
   yearColor,
 } from '../ui';
 import { html } from '../trusted';
-import { legend, tile } from '../components';
+import { alertHtml, legend, tile } from '../components';
 import { lazyCard } from '../lazy';
 import { tenant, tenantNote } from '../tenant';
 
@@ -416,7 +416,7 @@ function simWarning() {
   const from = addDays(minusYears(last), 1);
   const over = [...ds!.pmax].filter(([d, v]) => d >= from && v > state.simKva!).length;
   return over
-    ? `<p class="stale" role="alert"><span aria-hidden="true">⚠️</span> Sur 12 mois, votre puissance a dépassé ${state.simKva} kVA pendant ${over} jour(s) : avec cet abonnement, le disjoncteur aurait coupé.</p>`
+    ? alertHtml('bad', `Sur 12 mois, votre puissance a dépassé ${state.simKva} kVA pendant ${over} jour(s) : avec cet abonnement, le disjoncteur aurait coupé.`)
     : `<p class="hint muted">Sur 12 mois, votre pic n'a jamais dépassé ${state.simKva} kVA.</p>`;
 }
 

@@ -64,8 +64,11 @@ doivent déjà être sûrs. Couleur : un nom de jeton (`'--usage-heating'`) ou u
 | Segment | `seg(name, value, options, label)` | `role="radiogroup"` ; passe à la ligne au lieu de déborder (#319) |
 | Sélecteur de période | `periodBar(segHtml, scope)` | ligne de portée annoncée (`aria-live`) |
 | Puce | `chip(label, pressed, attrs, swatch)` | `aria-pressed`, 44 px |
-| Interrupteur | `switchField(label, checked, attrs)` | case à cocher `role="switch"` : même évènement `change` ; utilisé pour « À climat égal » |
+| Interrupteur | `switchField(label, checked, attrs, { sub, swatch })` | case à cocher `role="switch"` : même évènement `change` ; le seul contrôle oui / non de l'application (#317 : remplace `.toggle` et `.check`), détail gris `sub`, pastille `swatch` (une pièce) |
+| Choix unique | `radioField(label, checked, attrs)` | bouton radio natif (même évènement `change`), 44 px ; pour un choix exclusif lu dans un formulaire |
 | Alerte | `alert('info' \| 'warn' \| 'bad' \| 'good', title, text, action)` | icône + mot ; `role="alert"` pour une erreur, `note` sinon |
+| Alerte (contenu riche) | `alertHtml(kind, html, attrs)` | même rendu ; contenu déjà sûr (gras, lien, actions `p.alert-actions`) ; `attrs` donne un `id` ou remplace le rôle (`status` pour un message d'état) ; #317 : remplace `.notice`, `.stale`, `.settings-msg` |
+| Message de formulaire | `formMsg(text, attrs)` | zone vivante (`role="alert"`) près du bouton, vide tant qu'aucune action ne l'a remplie (verrouillage, identifiants) |
 | États | `stateBlock('empty' \| 'loading' \| 'error' \| 'offline', text, action)` | `role="status"` (ou `alert`), `aria-busy` au chargement ; les cartes différées (`lazy.ts`) gardent leurs messages |
 | Panneau « maintenant » | `nowPanel({ temp, facts })` | liste de définitions |
 | Planning 24 h | `scheduleBand({ slots, offPeak, now, label })` | `role="img"` + phrase listant les créneaux ; heures creuses hachurées |
@@ -73,6 +76,13 @@ doivent déjà être sûrs. Couleur : un nom de jeton (`'--usage-heating'`) ou u
 | Boutons | classes `btn primary`, `btn secondary`, `btn tertiary` | 44 px, focus 3 px `--focus` |
 
 Toutes les cibles font au moins 44 px (`--target-min`), le focus est un contour de 3 px.
+
+**Garde-fous (#317)** : `web/src/design-usage.test.ts` échoue si une couleur ou une taille de
+police écrite en dur (hors jetons `styles/tokens*.css`) apparaît dans une feuille de style ou une
+vue — la liste blanche (`ALLOWED`, neuf entrées : taille de base de la page, manifeste, QR code,
+couleurs résolues d'ECharts) donne la raison de chacune et échoue si l'une n'est plus utilisée —,
+et si une ancienne classe (`notice`, `stale`, `error`, `ok`, `ko`, `toggle`, `check`,
+`settings-msg`) revient dans une vue ou une feuille (`.pill.ok` reste l'état « bon » d'une pastille).
 
 ## Graphiques
 

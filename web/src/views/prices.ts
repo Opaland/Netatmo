@@ -5,6 +5,7 @@ import { OFFERS, periodAt } from '../offers';
 import { contractInfo, contracts, esc, lastDay, longDate, nf0, priceAt, priceMode, tariffNames } from '../ui';
 import { tenant, tenantPricesForm } from '../tenant';
 import { dayLong } from '../glossary';
+import { alertHtml, radioField } from '../components';
 
 export function pricesForm() {
   const p = state.prices;
@@ -27,7 +28,7 @@ export function pricesForm() {
     .join('');
   const mode = priceMode();
   const trve = ds!.offers.size
-    ? `<label class="check"><input type="radio" name="pmode" data-pmode="trve" ${mode === 'trve' ? 'checked' : ''}> Tarifs officiels selon mon contrat</label>
+    ? `${radioField('Tarifs officiels selon mon contrat', mode === 'trve', { name: 'pmode', 'data-pmode': 'trve' })}
       ${
         mode === 'trve'
           ? `<p class="hint muted">Mon contrat, période par période (date de début, offre, puissance souscrite) :</p>${sharing()}${rows}
@@ -36,7 +37,7 @@ export function pricesForm() {
         ${now ? `<p class="hint muted">Aujourd'hui : HP ${fmt4(now.hp)} €, HC ${fmt4(now.hc)} €/kWh, abonnement ${nf0.format(now.fixedYear / 12)} €/mois TTC. Chaque jour est compté au tarif en vigueur ce jour-là (CRE, open data).</p>` : ''}`
           : ''
       }
-      <label class="check"><input type="radio" name="pmode" data-pmode="manual" ${mode === 'manual' ? 'checked' : ''}> Mes propres prix</label>
+      ${radioField('Mes propres prix', mode === 'manual', { name: 'pmode', 'data-pmode': 'manual' })}
       ${mode === 'manual' ? sharing() : ''}`
     : '';
   const manual =
@@ -69,15 +70,21 @@ function sharing() {
   if (info.source === 'shared') {
     return `<p class="hint"><span class="badge">partagé</span> <span class="muted">Contrat commun à tous les appareils (enregistré par la collecte).</span></p>${
       info.differs
-        ? `<div class="notice"><p>Le contrat saisi sur cet appareil diffère du contrat partagé : c'est le contrat partagé qui s'applique.</p>
-        <button type="button" class="link" id="contract-use-local">Utiliser plutôt celui de cet appareil</button>
-        <button type="button" class="link" id="contract-forget-local">Oublier celui de cet appareil</button></div>`
+        ? alertHtml(
+            'info',
+            `<p>Le contrat saisi sur cet appareil diffère du contrat partagé : c'est le contrat partagé qui s'applique.</p>
+        <p class="alert-actions"><button type="button" class="link" id="contract-use-local">Utiliser plutôt celui de cet appareil</button>
+        <button type="button" class="link" id="contract-forget-local">Oublier celui de cet appareil</button></p>`,
+          )
         : ''
     }`;
   }
   if (info.shared) {
-    return `<div class="notice"><p><strong>Modifié sur cet appareil</strong> · ${share || 'non partagé'} : les autres appareils gardent le contrat partagé.</p>
-      <button type="button" class="link" id="contract-revert">Revenir au contrat partagé</button></div>`;
+    return alertHtml(
+      'info',
+      `<p><strong>Modifié sur cet appareil</strong> · ${share || 'non partagé'} : les autres appareils gardent le contrat partagé.</p>
+      <p class="alert-actions"><button type="button" class="link" id="contract-revert">Revenir au contrat partagé</button></p>`,
+    );
   }
   return demo ? '' : `<p class="hint muted">Enregistré sur cet appareil seulement · ${share}</p>`;
 }
@@ -91,10 +98,10 @@ function kvaHint() {
   if (!change) return `<p class="hint muted">Linky : votre puissance maximale n'a jamais dépassé ${first.kva} kVA.</p>`;
   const known = list.some((c) => c.kva >= change.to && c.from <= change.firstOver);
   if (known) return `<p class="hint muted">Linky : cohérent avec votre contrat (dépassement de ${first.kva} kVA le ${longDate(change.firstOver)}).</p>`;
-  return `<div class="notice"><p>Votre Linky a dépassé <strong>${change.from} kVA</strong> pour la première fois le <strong>${longDate(change.firstOver)}</strong> : le compteur coupe au-delà de la puissance souscrite, vous étiez donc déjà en <strong>${change.to} kVA</strong> ce jour-là${
+  return alertHtml('warn', `<p>Votre Linky a dépassé <strong>${change.from} kVA</strong> pour la première fois le <strong>${longDate(change.firstOver)}</strong> : le compteur coupe au-delà de la puissance souscrite, vous étiez donc déjà en <strong>${change.to} kVA</strong> ce jour-là${
     change.lastWithin ? ` (passage entre le ${longDate(change.lastWithin)} et le ${longDate(change.firstOver)}, ou plus tôt)` : ''
   }.</p>
-    <button type="button" class="primary small" id="kva-apply" data-day="${change.firstOver}" data-kva="${change.to}">Ajouter ce changement à mon contrat</button></div>`;
+    <p class="alert-actions"><button type="button" class="primary small" id="kva-apply" data-day="${change.firstOver}" data-kva="${change.to}">Ajouter ce changement à mon contrat</button></p>`);
 }
 
 // ------------------------------------------------------------------ events

@@ -28,6 +28,7 @@ import { handleAppClick, mountAppCard } from './app-card';
 import { loadVotes, usefulRate } from '../insight';
 import { tenant, tenantNote } from '../tenant';
 import { intuisContractLine } from './devices-quality';
+import { alertHtml, formMsg, switchField } from '../components';
 
 let settingsRepo = repoFromLocation() ?? 'Opaland/Netatmo';
 /** The repository the settings write to (#346: radiators switched off, ⚙ Mon logement). */
@@ -65,7 +66,7 @@ export function renderSettings(view: HTMLElement, section: SettingsSection) {
       : s?.ok
         ? `<span class="muted">dernier succès le ${when(s.ok)}</span>`
         : `<span class="muted">${on ? 'actif' : 'non configuré'}</span>`;
-    return `<li><span class="${failing ? 'ko-red' : on ? 'ok' : 'ko'}" aria-hidden="true">${failing ? '⚠️' : on ? '✓' : '○'}</span> ${label} ${detail}${withExpiry ? expiry(s) : ''}</li>`;
+    return `<li><span class="${failing ? 'ko-red' : on ? 'pill ok' : 'muted'}" aria-hidden="true">${failing ? '⚠️' : on ? '✓' : '○'}</span> ${label} ${detail}${withExpiry ? expiry(s) : ''}</li>`;
   };
   const groups = GROUPS.map(
     (g) => `<fieldset class="secrets" data-group="${g.id}"><legend>${esc(g.title)}</legend>
@@ -73,7 +74,7 @@ export function renderSettings(view: HTMLElement, section: SettingsSection) {
       ${g.fields
         .map(
           (f) => `<label>${esc(f.label)} ${
-            configured ? (configured.has(f.name) ? '<span class="ok">✓ enregistré</span>' : '<span class="muted">non enregistré</span>') : ''
+            configured ? (configured.has(f.name) ? '<span class="pill ok">✓ enregistré</span>' : '<span class="muted">non enregistré</span>') : ''
           }
           <input name="${f.name}" ${noSaveAttrs(f.secret)} placeholder="${esc(
             f.placeholder ?? (configured?.has(f.name) ? 'laisser vide pour garder la valeur actuelle' : ''),
@@ -121,14 +122,14 @@ export function renderSettings(view: HTMLElement, section: SettingsSection) {
       La phrase de passe des données ne se change pas ici (voir « rekey » dans le README).</p>
     ${groups}
     <button class="primary" type="button" id="secrets-save" ${hasToken() ? '' : 'disabled'}>Chiffrer et enregistrer dans GitHub</button>
-    <p class="settings-msg ko" id="secrets-msg" role="alert"></p>
+    ${formMsg('', { id: 'secrets-msg' })}
   </section>`;
   const collectCard = `<section class="card">
     <h2>3. Lancer la collecte</h2>
     <p class="hint muted">Utile après avoir ajouté une connexion. La collecte prend quelques minutes, puis le site se met à jour.</p>
     <div class="controls">
       <button type="button" class="primary small" id="run-collect" ${hasToken() ? '' : 'disabled'}>Collecter maintenant</button>
-      <label class="toggle"><input type="checkbox" id="run-backfill"> Tout l'historique</label>
+      ${switchField("Tout l'historique", false, { id: 'run-backfill' })}
     </div>
   </section>`;
   const publicCard = `
@@ -180,7 +181,7 @@ export function renderSettings(view: HTMLElement, section: SettingsSection) {
     <p class="hint muted">Conditions d'utilisation de chaque service (Intuis, Netatmo, Conso API…), date de lecture et risque d'arrêt ; usage domestique et vie privée du foyer.</p>
     <button type="button" class="primary small" id="legal-open">Ouvrir « Cadre juridique »</button>
   </section>`;
-  const msg = settingsMsg ? `<p class="settings-msg ${settingsMsg.ok ? 'ok' : 'ko'}" role="status">${esc(settingsMsg.text)}</p>` : '';
+  const msg = settingsMsg ? alertHtml(settingsMsg.ok ? 'info' : 'bad', esc(settingsMsg.text), { role: 'status' }) : '';
   const body: Record<SettingsSection, string> = {
     sources: `${statusCard}
   <section class="card" id="devices-card" hidden></section>
@@ -225,8 +226,8 @@ function contractSection() {
           info.differs ? ' Le contrat saisi sur cet appareil en diffère : il est ignoré (voir « Mon contrat » ci-dessus).' : ''
         }</p>`
       : info.shared
-        ? '<p class="notice"><strong>Modifié sur cet appareil, non partagé</strong> : les autres appareils utilisent encore le contrat partagé.</p>'
-        : `<p class="notice">${info.source === 'default' ? 'Aucun contrat saisi : 9 kVA, heures pleines / creuses par défaut.' : 'Ce contrat est enregistré sur cet appareil seulement.'} Les autres appareils ne le connaissent pas.</p>`;
+        ? alertHtml('info', '<strong>Modifié sur cet appareil, non partagé</strong> : les autres appareils utilisent encore le contrat partagé.')
+        : alertHtml('info', `${info.source === 'default' ? 'Aucun contrat saisi : 9 kVA, heures pleines / creuses par défaut.' : 'Ce contrat est enregistré sur cet appareil seulement.'} Les autres appareils ne le connaissent pas.`);
   return `<section class="card" id="contract-share">
     <div class="card-head"><h2>Contrat partagé</h2>${scopeTag('foyer')}</div>
     <p class="hint muted">Le contrat (dates de changement, offre, puissance souscrite) sert au calcul des coûts. Partagé, il est enregistré
@@ -258,12 +259,15 @@ async function settingsAction(fn: () => Promise<string>) {
  */
 export function sharedOriginWarning(host: string): string {
   if (!host.endsWith('.github.io')) return '';
-  return `<p class="notice" id="shared-origin">
-      <strong>« Rester connecté » sur ${esc(host)} :</strong> cette adresse est partagée par tous les sites GitHub Pages du compte
+  return alertHtml(
+    'warn',
+    `<strong>« Rester connecté » sur ${esc(host)} :</strong> cette adresse est partagée par tous les sites GitHub Pages du compte
       ${esc(host.replace(/\.github\.io$/, ''))}. La clé gardée sur cet appareil ne peut pas être copiée, mais un script d'un autre site
       Pages de ce compte, ouvert dans ce navigateur, pourrait s'en servir pour déchiffrer vos données et vos notes.
-      Ne publiez aucun autre site Pages sur ce compte, ou ne cochez pas « Rester connecté » (la phrase de passe est alors demandée
-      à chaque ouverture). Un domaine personnel dédié supprime ce risque (README, section Sécurité).</p>`;
+      Ne publiez aucun autre site Pages sur ce compte, ou désactivez « Rester connecté » (la phrase de passe est alors demandée
+      à chaque ouverture). Un domaine personnel dédié supprime ce risque (README, section Sécurité).`,
+    { id: 'shared-origin' },
+  );
 }
 
 export function forgetToken() {

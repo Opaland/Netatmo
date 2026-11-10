@@ -16,12 +16,13 @@ export function isFramed(w: { top: unknown; self: unknown } = window): boolean {
   }
 }
 
-/** Message shown instead of the app inside a frame. */
+/** Message shown instead of the app inside a frame (markup of alertHtml(), components.ts, written
+ *  out: this module stays free of imports). */
 export function framedHtml(href: string): string {
   return `<main class="lock">
     <div class="lock-card" id="framed">
       <h1>Historique énergie</h1>
-      <p class="notice" role="alert">Pour votre sécurité, l'application ne s'affiche pas à l'intérieur d'une autre page.</p>
+      <div class="alert warn" role="alert"><span class="ico" aria-hidden="true">!</span><div><p>Pour votre sécurité, l'application ne s'affiche pas à l'intérieur d'une autre page.</p></div></div>
       <p><a href="${esc(href)}" target="_blank" rel="noopener noreferrer">Ouvrir l'application directement</a></p>
     </div>
   </main>`;

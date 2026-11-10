@@ -910,7 +910,7 @@ try {
       await page.goto(base);
       await page.fill('#pass', 'une phrase quelconque');
       await page.click('#unlock button.primary');
-      await page.waitForFunction(() => document.querySelector('.lock .error')?.textContent === 'Déchiffrement…');
+      await page.waitForFunction(() => document.querySelector('#lock-msg')?.textContent === 'Déchiffrement…');
       check(await page.isDisabled('#demo'), 'déverrouillage : le bouton de démo reste cliquable pendant le déchiffrement');
       await page.waitForSelector('#pass:not([disabled])', { timeout: 15000 });
       check(!(await page.locator('header.top').count()), 'déverrouillage : un jeu de données s’est ouvert');

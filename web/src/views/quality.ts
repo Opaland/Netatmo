@@ -10,6 +10,7 @@ import { html } from '../trusted';
 import { lsKey } from '../scope';
 import { lazyCard } from '../lazy';
 import { devicesQualityHtml } from './devices-quality';
+import { switchField } from '../components';
 
 let cached: Coverage | null = null;
 onDatasetLoaded(() => {
@@ -95,7 +96,7 @@ function gapsHtml(gaps: ReturnType<typeof gapMonths>, lost: boolean): string {
     )}
     ${
       lost
-        ? `<label class="toggle"><input type="checkbox" data-recon ${reconOn ? 'checked' : ''}> Reconstituer les jours perdus (à part, depuis Linky et la signature)</label>
+        ? `${switchField('Reconstituer les jours perdus (à part, depuis Linky et la signature)', reconOn, { 'data-recon': true })}
     <div id="recon-zone"></div>`
         : ''
     }`;
