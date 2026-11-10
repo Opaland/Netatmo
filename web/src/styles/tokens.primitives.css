@@ -21,11 +21,14 @@
   --grass-3: #e9f6e9; --grass-11: #2a7e3b; --grass-12: #203c25; --grass-d3: #1b2a1e; --grass-d11: #71d083; --grass-d12: #c2f0c2;
   --amber-3: #fff7c2; --amber-11: #ab6400; --amber-12: #4f3422; --amber-d3: #302008; --amber-d11: #ffca16; --amber-d12: #ffe7b3;
   --tomato-3: #feebe7; --tomato-11: #d13415; --tomato-12: #5c271f; --tomato-d3: #391714; --tomato-d11: #ff977d; --tomato-d12: #fbd3cb;
-  /* rooms: categorical hues without orange, blue or iris (step 10-11 in light, 10-11 in dark) */
-  --teal-11: #008573; --crimson-10: #df3478; --grass-10: #3e9b4f; --plum-10: #a144af;
-  --brown-11: #a07553; --cyan-11: #107d98; --gold-11: #71624b; --red-11: #ce2c31;
-  --teal-d10: #0eb39e; --crimson-d10: #ef5f8a; --grass-d10: #53b365; --plum-d11: #e796f3;
-  --brown-d11: #dbb594; --cyan-d10: #23afd0; --gold-d11: #cbb99f; --red-d10: #ff977d;
+  /* rooms (#399): categorical hues without orange, blue or iris, chosen so that any two rooms are
+     ≥ 20 apart (ΔE*ab) in light, dark and high contrast, and ≥ 3:1 on the cards (tokens.test.ts) */
+  --teal-11: #008573; --teal-12: #0d3d38; --crimson-9: #e93d82; --crimson-12: #621639;
+  --yellow-11: #9e6c00; --plum-9: #ab4aba; --plum-11: #953ea3; --grass-9: #46a758;
+  --brown-11: #815e46; --cyan-9: #00a2c7; --cyan-11: #107d98; --red-11: #ce2c31;
+  --teal-d11: #0bd8b6; --teal-d12: #adf0dd; --crimson-d11: #ff92ad; --yellow-d9: #ffe629;
+  --plum-d9: #ab4aba; --plum-d10: #b658c4; --grass-d9: #46a758; --brown-d9: #ad7f58;
+  --cyan-d9: #00a2c7; --red-d9: #e5484d;
 
   /* Open Props scales */
   --space-1: 4px; --space-2: 8px; --space-3: 12px; --space-4: 16px; --space-5: 24px; --space-6: 32px; --space-7: 48px;

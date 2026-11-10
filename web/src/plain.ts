@@ -96,11 +96,28 @@ export function verdictSentences(v: PlainVerdict, from: string, kwh = 'kWh'): st
   return out;
 }
 
+/**
+ * #400: a room left out of the figures, said in plain words: « Chambre enfant ne répond plus
+ * depuis le 5 novembre : cette pièce n'est pas comptée. » (`since` null: not measured a year
+ * earlier, so not comparable).
+ */
+export function leftSentence(name: string, since: string | null): string {
+  return since
+    ? `${name} ne répond plus depuis le ${dayOf(since)} ${monthOf(since)} : cette pièce n'est pas comptée.`
+    : `${name} n'est pas comptée : cette pièce ne répondait pas l'an dernier.`;
+}
+
 // ------------------------------------------------------------------ key figures
 /** Comparison with the same dates one year earlier, in words. */
 export function comparedToLastYear(now: number, before: number | null): string {
   if (before === null || before <= 0) return "Pas de comparaison possible avec l'an dernier.";
-  const p = Math.round(((now - before) / before) * 100);
+  return comparedPct(((now - before) / before) * 100);
+}
+
+/** #400: the same, from the change computed by the Accueil (null: no year before). */
+export function comparedPct(pct: number | null): string {
+  if (pct === null || !Number.isFinite(pct)) return "Pas de comparaison possible avec l'an dernier.";
+  const p = Math.round(pct);
   if (p === 0) return "C'est autant que l'an dernier.";
   return `C'est ${nf0.format(Math.abs(p))} % ${p > 0 ? 'de plus' : 'de moins'} que l'an dernier.`;
 }

@@ -99,7 +99,7 @@ bleu à l'eau chaude (constat C1 de l'audit) ; l'iris ne se confond avec aucun u
 | `--series-measure` | sand 12 (trait) | une mesure isolée (puissance, température mesurée) |
 | `--series-reference` | sand 9, pointillé | référence (puissance souscrite, signature, attendu) |
 | `--year-0` … `--year-3` | iris 9, iris 7, sand 9, sand 7 | **années** : la plus récente en iris plein, puis éclaircies ; jamais orange ni bleu |
-| `--room-1` … `--room-8` | palette catégorielle actuelle réordonnée **sans** orange ni bleu en tête | pièces |
+| `--room-1` … `--room-8` | sarcelle, cramoisi, jaune, prune, herbe, brun, cyan, rouge (Radix), **sans** orange, bleu ni iris ; deux pièces à ΔE*ab ≥ 20 entre elles et des usages, dans chaque thème (#399, `tokens.test.ts`) | pièces, une couleur fixe par pièce (`roomColor`) ; un module de la station prend celle de sa pièce (`moduleColor`), l'extérieur `--series-reference` pointillé |
 | `--seq-1` … `--seq-7` | rampe iris 2 → 11 (clair), inversée en sombre, **avec variante contraste élevé** | calendrier, cartes de chaleur, CO₂ |
 | `--state-good` / `--state-warn` / `--state-bad` / `--state-info` | grass 11 `#2a7e3b` · amber 11 `#ab6400` · tomato 11 `#d13415` · iris 11 | baisse / attention / hausse ou erreur / information |
 

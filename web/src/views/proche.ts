@@ -4,16 +4,18 @@
 // and asks for a confirmation in the page before showing the whole app. Plain language (S-7.13,
 // plain.ts): short sentences, rounded figures, no technical word. Every figure is computed over
 // the whole home (the selection made in the full view does not apply here).
-import { type DayRecord, MONTHS_LONG, minusYears, total } from '../aggregate';
-import { verdict } from '../analysis';
+import { type Category, type DayRecord, MONTHS_LONG, applyFilter, minusYears, total } from '../aggregate';
+import { writtenGap } from '../home';
 import { activeRooms, ds, setState, state } from '../app';
 import type { Handlers } from '../events';
 import { localDay } from '../glossary';
 import {
+  comparedPct,
   comparedToLastYear,
   glossarySection,
   heatingSentence,
   kpiTitle,
+  leftSentence,
   pinnedTemp,
   plainEur,
   plainNum,
@@ -25,8 +27,10 @@ import {
 } from '../plain';
 import type { Route } from '../router';
 import { html } from '../trusted';
-import { avgPrice, costOf, esc, lastDay } from '../ui';
+import { costOf, esc, lastDay } from '../ui';
+import { offlineNow } from './offline-rooms';
 import { meanTemp } from './pinned';
+import { homeScope, yoy } from './verdict-scope';
 import '../proche.css';
 
 const fmtTemp = new Intl.NumberFormat('fr-FR', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
@@ -40,12 +44,16 @@ export function simpleExit(): string {
 }
 
 // ------------------------------------------------------------------ cards
+/**
+ * #400: the verdict of the Accueil, the same figures in plain words: the same scope (homeScope:
+ * the rooms out of reach left out, and named), the same gap in euros as « 5 € de moins que
+ * d'habitude » (writtenGap), the same change on last year as the month tile (yoy).
+ */
 function verdictCard(from: string, to: string): string {
-  const records = ds!.records;
-  const v = verdict(records, from, to, ds!.weather);
-  if (!v) return '';
-  const price = avgPrice(records);
-  const eur = price ? (v.actual - v.expected) * price : null;
+  const sc = homeScope(wholeHome(), from, to);
+  const v = sc.v;
+  if (!v || !sc.m) return '';
+  const eur = sc.m.unit === '€' ? writtenGap(sc.m) : null;
   const sentences = verdictSentences({ ...v, eur }, from, '{kwh}');
   // the euros say it all; without prices, the two figures in kWh
   const shown = eur !== null && Math.round(Math.abs(eur)) >= 1 ? [sentences[sentences.length - 1]] : sentences.slice(0, 2);
@@ -53,7 +61,7 @@ function verdictCard(from: string, to: string): string {
   return `<section class="card proche-verdict verdict-${v.level}">
     <span class="mark" aria-hidden="true">${mark}</span>
     <div><p class="proche-strong">${esc(verdictTitle(v.level))}</p>
-    <p>${shown.map((s) => esc(s).replace('{kwh}', term('kwh'))).join(' ')}</p></div>
+    <p>${shown.map((s) => esc(s).replace('{kwh}', term('kwh'))).join(' ')}</p>${leftNote(sc.left)}</div>
   </section>`;
 }
 
@@ -85,6 +93,28 @@ const monthLabel = (last: string) => {
   return t.charAt(0).toUpperCase() + t.slice(1);
 };
 
+/** The whole home, as the Accueil counts it with nothing narrowed (heating and hot water). */
+const wholeHome = () => applyFilter(ds!.records, { cats: new Set<Category>(['heating', 'water_heater']), rooms: null });
+
+/** #400: the rooms left out of the figures, in plain words. */
+function leftNote(left: string[]): string {
+  if (!left.length) return '';
+  const now = new Map(offlineNow().map((o) => [o.name, o.run.from]));
+  return left.map((name) => `<p>${esc(leftSentence(name, now.get(name) ?? null))}</p>`).join('');
+}
+
+/** #400: the month of the home: the amount and the change of the Accueil month tile, same scope. */
+function homeMonthCard(last: string): string {
+  const from = `${last.slice(0, 8)}01`;
+  const all = wholeHome();
+  const sc = homeScope(all, from, last);
+  return `<section class="card proche-month">
+    <h3 class="muted">${esc(monthLabel(last))}</h3>
+    <p class="proche-big">${sc.spent.unit === '€' ? plainEur(sc.spent.value) : `${plainNum(sc.spent.kwh)} kWh`}</p>
+    <p>${esc(comparedPct(yoy(all, from, last)))}</p>${leftNote(sc.left)}
+  </section>`;
+}
+
 function monthCard(records: DayRecord[], last: string, label = monthLabel(last)): string {
   const from = `${last.slice(0, 8)}01`;
   const kwh = total(records, from, last);
@@ -113,7 +143,7 @@ function renderHome(view: HTMLElement) {
   view.innerHTML = html`<h2 class="sr-only" id="page-title" tabindex="-1">Accueil</h2>
   ${verdictCard(from, last)}
   ${room ? roomTodayCard(room.id, room.name) : chooseRoomCard()}
-  ${monthCard(ds!.records, last)}
+  ${homeMonthCard(last)}
   <section class="card">${glossarySection()}</section>
   ${simpleExit()}`;
 }
