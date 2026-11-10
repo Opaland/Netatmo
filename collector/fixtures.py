@@ -11,6 +11,7 @@ deployed. The app opens one only in demo mode, with `?fixture=<name>` in the add
 
 from __future__ import annotations
 
+import copy
 import re
 import shutil
 import tempfile
@@ -265,6 +266,77 @@ def sans_prix(f: Fixture) -> None:
         f.doc(name).pop("tariffs", None)
 
 
+def _copy_room(f: Fixture, src: str, new: str, name: str) -> None:
+    """A new heating room with the measures of `src` (every document that keys a section by room)."""
+    f.rooms.append({**next(r for r in f.rooms if r["id"] == src), "id": new, "name": name})
+    for doc_name in f.docs():
+        for section in f.doc(doc_name).values():
+            if isinstance(section, dict) and isinstance(section.get(src), dict):
+                section[new] = copy.deepcopy(section[src])
+
+
+def compte_charge(f: Fixture) -> None:
+    """A fuller account than the demo, as a real one may be: more rooms (ids made of digits, as
+    Intuis gives them), long room and module names, every optional source on, and sources that
+    failed with the longest messages the collector writes (an exception class name, a schema
+    path: words without a space)."""
+    names = {
+        "r-salon": "Salon salle à manger",
+        "r-ch1": "Chambre parentale (étage)",
+        "r-ch2": "Chambre des enfants côté jardin",
+        "r-sdb": "Salle de bain de l'étage",
+    }
+    for r in f.rooms:
+        r["name"] = names.get(r["id"], r["name"])
+    for i, (src, name) in enumerate(
+        [
+            ("r-ch1", "Chambre d'amis"),
+            ("r-ch2", "Bibliothèque-mezzanine"),
+            ("r-salon", "Véranda"),
+            ("r-sdb", "Salle d'eau du rez-de-chaussée"),
+        ]
+    ):
+        _copy_room(f, src, f"318004{i:04d}", name)
+    station = f.doc("station").get("modules", {})
+    for key, name in {
+        "m0": "Séjour (station principale)",
+        "m2": "Chambre des enfants côté jardin",
+        "m3": "Cave à vin du sous-sol",
+    }.items():
+        if key in station:
+            station[key]["name"] = name
+    now = f.meta.get("updated") or f"{f.today.isoformat()}T04:12:00+00:00"
+    ok = f"{f.ago(1)}T04:12:00+00:00"
+    src = f.meta.setdefault("sources", {})
+    src["intuis"] = {
+        "ok": ok,
+        "error": now,
+        "message": (
+            "Intuis : format de réponse inattendu (homestatus), "
+            "champ « body.home.rooms[].therm_setpoint_end_time » absent"
+        ),
+    }
+    src["appareils"] = {"ok": ok, "error": now, "message": "erreur RemoteProtocolError"}
+    src["ia"] = {"ok": ok, "error": now, "message": "erreur AuthenticationError"}
+    src["releve-horaire"] = {"ok": ok, "error": now, "message": "agrégation impossible (UnicodeDecodeError)"}
+    src["linky-30min"] = {
+        "ok": ok,
+        "note": "aucune mesure : activez la collecte de la courbe de charge dans votre espace Enedis",
+    }
+    src["shelly"] = {
+        "ok": now,
+        "note": (
+            "2 prise(s) sans compteur d'énergie : non exploitable(s) sans hub ; "
+            "1 prise(s) hors ligne, rattrapée(s) à la prochaine collecte"
+        ),
+    }
+    src["netatmo"] = {
+        **src.get("netatmo", {}),
+        "note": "pile faible : 2 module(s) ; 1 module(s) muet(s) depuis plus de 6 h",
+    }
+    src["home-assistant"] = {"ok": now}
+
+
 FIXTURES: dict[str, Callable[[Fixture], None]] = {
     "annee-incomplete": annee_incomplete,
     "une-annee": une_annee,
@@ -278,6 +350,7 @@ FIXTURES: dict[str, Callable[[Fixture], None]] = {
     "sans-station": sans_station,
     "valeurs-nulles": valeurs_nulles,
     "sans-prix": sans_prix,
+    "compte-charge": compte_charge,
 }
 
 

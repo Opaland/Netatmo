@@ -83,6 +83,13 @@ const MODES = {
   },
   proche: { data: null, storage: { state: JSON.stringify({ simple: true }) }, applied: () => document.body.classList.contains('simple-nav') },
 };
+/**
+ * Data fixtures swept like the demo itself in CI (every display, axe, explorer): a full history
+ * with more and longer content than the demo, standing for a real account (smoke-reel.yml found
+ * two failures that the demo could not show: an error message without a space in ⚙ Sources at
+ * 200 %, the focus lost on a room box of ⚙ Objectifs).
+ */
+const RICH = new Set(['compte-charge']);
 const DISPLAYS = {
   360: { viewport: { width: 360, height: 800 } },
   1280: { viewport: { width: 1280, height: 900 } },
@@ -104,7 +111,9 @@ function dataFixtures() {
  * that no longer happens is reported so that it is removed from here.
  * { route: regex on the route, kind: invariant, why }.
  */
-const EXPECTED = [];
+const EXPECTED = [
+  { route: /^(pieces|confort)$/, kind: 'defilement-saute', fixture: 'compte-charge', why: '#370 : la page saute après une case ou une liste, avec 10 pièces' },
+];
 const expected = (f) => EXPECTED.find((e) => e.route.test(f.route) && e.kind === f.kind && (!e.fixture || e.fixture === f.fixture));
 
 // ------------------------------------------------------------------ invariants (in the page)
@@ -309,6 +318,7 @@ async function act(s, css, how) {
     /* hidden input of a styled switch: its label is on screen */
   }
   s.lastAct = { css, ...(await el.evaluate((e) => ({ y: window.scrollY, top: (e.closest('label') ?? e).getBoundingClientRect().top }))) };
+  s.covered = how.value === undefined ? await el.evaluate(coveredBy) : null; // a list is chosen from, not clicked
   try {
     // a list is chosen from while it has the focus (Playwright's selectOption does not give it)
     if (how.value !== undefined) await el.focus();
@@ -320,6 +330,26 @@ async function act(s, css, how) {
     await (how.value !== undefined ? el.evaluate((e, v) => ((e.value = v), e.dispatchEvent(new Event('change', { bubbles: true }))), how.value) : el.evaluate((e) => e.click()));
   }
   return true;
+}
+
+/**
+ * #353 (smoke test on real data): what is painted where the control is about to be clicked, when
+ * it is neither the control nor its label (null otherwise). On a phone, a box brought just above
+ * the bottom of the screen sat under the fixed tab bar: the click went to the bar (a tab, or
+ * nothing) and the sweep saw « focus perdu », or nothing at all when the tab changed the page.
+ */
+function coveredBy(e) {
+  const r = (e.closest('label') ?? e).getBoundingClientRect();
+  const box = e.getBoundingClientRect();
+  const at = box.width && box.height ? box : r; // the hidden input of a styled switch: its label
+  const x = at.left + at.width / 2;
+  const y = at.top + at.height / 2;
+  if (!at.width || !at.height || x < 0 || y < 0 || x > window.innerWidth || y > window.innerHeight) return null; // clicked another way (act)
+  const hit = document.elementFromPoint(x, y);
+  if (!hit || hit === e || e.contains(hit) || [...(e.labels ?? [])].some((l) => l.contains(hit)) || hit.closest('label')?.contains(e)) return null;
+  const cls = typeof hit.className === 'string' && hit.className ? `.${hit.className.split(' ')[0]}` : '';
+  const zone = hit.closest('nav, header, [role=dialog], .tabs');
+  return `${hit.tagName.toLowerCase()}${cls}${zone && zone !== hit ? ` dans ${zone.tagName.toLowerCase()}${zone.className ? `.${String(zone.className).split(' ')[0]}` : ''}` : ''}`;
 }
 
 /** Between two clicks of a group: the re-render of the first one is done. */
@@ -360,7 +390,7 @@ async function scrollAndFocus(s) {
 
 async function exploreJob(browser, job) {
   const s = new Session(browser, job.run, job.display, record);
-  const richData = !job.run.data; // the demo itself, its modes, or real data
+  const richData = !job.run.data || RICH.has(job.run.data); // the demo itself, its modes, real data, or a fuller account
   try {
     await s.open();
     const rooms = await s.rooms();
@@ -384,6 +414,9 @@ async function exploreJob(browser, job) {
             return false;
           }
           const page = await s.page.evaluate(() => document.getElementById('view')?.dataset.page ?? '');
+          // a control covered by another element (the tab bar…): the click went there, whatever the page shows next
+          const hidden = s.covered ? [{ kind: 'cible-masquee', detail: s.covered }] : [];
+          s.covered = null;
           const moved = page === shown ? await scrollAndFocus(s) : [];
           s.lastAct = null;
           const found = await s.check(where(what));
@@ -396,7 +429,7 @@ async function exploreJob(browser, job) {
             now = await s.page.evaluate(dataDisplays);
             if (vanished() && SOURCE === 'demo' && env.SWEEP_DEBUG) console.log(JSON.stringify({ what, baseline, now }));
           }
-          const lost = [...moved];
+          const lost = [...hidden, ...moved];
           // (only on full data: on a trimmed fixture, « not enough days » instead of a table is right)
           // a segment, a radio or a select switches between views by design: only an on/off
           // control (checkbox, switch, chip) must not make a table or a chart vanish
@@ -541,12 +574,13 @@ try {
   const wanted = list(env.SWEEP_FIXTURES);
   const runs = wanted ? runsAll.filter((r) => wanted.includes(r.name)) : runsAll;
   const displays = list(env.SWEEP_DISPLAYS) ?? Object.keys(DISPLAYS);
-  const main = (r) => r.name === 'demo' || r.name === 'donnees-reelles';
+  const main = (r) => r.name === 'demo' || r.name === 'donnees-reelles' || RICH.has(r.name);
 
   const jobs = [];
   for (const run of runs) {
     for (const display of displays) {
-      // CI: the plain demo (or real data) in every display, axe included; the fixtures at 360 px.
+      // CI: the plain demo (or real data) and the fuller account (RICH) in every display, axe
+      // included; the other fixtures at 360 px.
       if (!FULL && !main(run) && display !== displays[0]) continue;
       jobs.push({ type: 'sweep', run, display, axe: FULL || main(run) });
     }
