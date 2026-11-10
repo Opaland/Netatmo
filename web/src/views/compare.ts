@@ -396,9 +396,13 @@ function woodSeasons2(records: DayRecord[], a: number, b: number): string {
   const pm = A.eur !== null && B.eur !== null ? pctChange(A.eur, B.eur) : null;
   const one = (y: number, x: typeof A) =>
     `${seasonLabel(y)} : ≈ ${fmtKwh(x.kwh)}${x.wood >= 1 ? ` dont ${fmtKwh(x.wood)} de bois` : ''}${x.eur !== null ? `, ≈ ${fmtEur(x.eur)}` : ''}`;
-  return `<p id="wood-seasons"><b>Chauffage électricité + bois</b> (hors abonnement) : ${esc(one(a, A))} ; ${esc(one(b, B))}.${
+  // #426: folded under its headline (the change, electricity + wood), the winters inside: the tab
+  // holds in 4 screens at 360 px. The figure that keeps the stove from reading as a saving stays
+  // on the screen; only the detail per winter waits for a touch.
+  const head = pe !== null ? `Électricité + bois : ${signedPct(pe)} en énergie${pm !== null ? `, ${signedPct(pm)} en euros` : ''}` : 'Chauffage électricité + bois';
+  return `<details class="table-details" id="wood-seasons"><summary>${esc(head)}</summary><p><b>Chauffage électricité + bois</b> (hors abonnement) : ${esc(one(a, A))} ; ${esc(one(b, B))}.${
     pe !== null ? ` <b>${signedPct(pe)} en énergie${pm !== null ? `, ${signedPct(pm)} en euros` : ''}</b> vs l'hiver ${esc(seasonLabel(b))}, météo non corrigée.` : ''
-  } <a class="link" href="#parametres-logement">Bois et hypothèses</a></p>`;
+  } <a class="link" href="#parametres-logement">Bois et hypothèses</a></p></details>`;
 }
 
 function seasonTiles(records: DayRecord[], picked: number[], current: number, climate: boolean): string {

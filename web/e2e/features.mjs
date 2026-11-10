@@ -410,6 +410,25 @@ try {
     await audit(page, 'historique');
   }
 
+  // #426: Historique also holds in 4 screens on a small Android phone (360 × 800), in the CI's wide
+  // font (DejaVu Sans, A6): the iPhone check above left 304 px of margin while 360 px was over.
+  progress('historique 360 px');
+  {
+    const c = await browser.newContext({ viewport: { width: 360, height: 800 }, deviceScaleFactor: 1, hasTouch: true, serviceWorkers: 'block' });
+    const p = await c.newPage();
+    p.on('pageerror', (e) => errors.push(`${BROWSER} historique 360: ${e.message}`));
+    await p.goto(base);
+    await p.click('#demo');
+    await ready(p);
+    await p.addStyleTag({ content: 'html, body, button, input, select, textarea { font-family: "DejaVu Sans", system-ui, sans-serif !important; }' });
+    await go(p, 'historique');
+    const [h, screenH] = await p.evaluate(() => [document.documentElement.scrollHeight, window.innerHeight]);
+    progress(`historique 360 px : ${h} px (limite ${4 * screenH})`);
+    check(h <= 4 * screenH, `#426 : l'Historique fait ${h} px à 360 × 800 (DejaVu Sans), plus de 4 écrans (${4 * screenH} px)`);
+    await p.screenshot({ path: `${OUT}/${BROWSER}-360-historique.png`, fullPage: true });
+    await c.close();
+  }
+
   // v1.5 figures (#245 #246 #294 #295 #297 #298)
   progress('chiffres v1.5');
   {

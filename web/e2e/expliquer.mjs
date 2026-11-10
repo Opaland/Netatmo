@@ -172,7 +172,12 @@ try {
     // #366: winter against winter (Historique) counts the whole heating, electricity + wood
     if (name === 'clair' || big) {
       await go(page, 'historique');
-      const seasons = (await page.locator('#wood-seasons').count()) ? await page.locator('#wood-seasons').innerText() : '';
+      // #426: folded under its headline (the change in energy and euros), the winters inside
+      const fold = page.locator('#wood-seasons');
+      const headline = (await fold.count()) ? await fold.locator('summary').innerText() : '';
+      check(/^Électricité \+ bois : [−+]\d+\s% en énergie, [−+]\d+\s% en euros$/.test(headline), `${name} : hiver contre hiver, l'écart électricité + bois absent du titre replié (« ${headline} »)`);
+      if (await fold.count()) await fold.locator('summary').click();
+      const seasons = (await fold.count()) ? await fold.innerText() : '';
       check(/2025–2026 : ≈ [\d\s ]+\skWh dont [\d\s ]+\skWh de bois, ≈ [\d\s ]+\s€/.test(seasons) && /en énergie, [−+]\d+\s% en euros/.test(seasons), `${name} : hiver contre hiver sans le bois (« ${seasons.slice(0, 200)} »)`);
       check((await wide(page)) <= 1, `${name} : défilement horizontal sur Historique (${await wide(page)} px)`);
     }
