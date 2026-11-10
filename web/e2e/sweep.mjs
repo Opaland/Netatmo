@@ -6,6 +6,8 @@
 //   - no horizontal scroll;
 //   - no « NaN », « undefined », « Infinity », « Invalid Date », « null » visible (text or label);
 //   - no card (nor chart) left empty without a message;
+//   - no text painted over another, none cut by the box that holds it, no ordinary word broken
+//     in the middle without a hyphen (#384, #397: what the horizontal scroll does not see);
 //   - axe: no serious or critical violation (WCAG 2.1 AA);
 //   - the view becomes ready (#view[data-ready], #260).
 // Then a control explorer: on each page, every checkbox, switch, segment, radio, chip and select
@@ -219,13 +221,23 @@ function pageChecks() {
   // list: overflow hidden), the two defects the horizontal scroll cannot see (a pill over the
   // amount of its row at 360 px, out of its card at 200 %). Every visible text node of the view,
   // line by line (the rectangles of a range). Left aside, on purpose: the charts (their own
-  // labels), what is visually hidden (.sr-only), what sticks (a sticky bar over the page
-  // scrolled) and a text cut with an ellipsis; [data-overlap-ok] marks a wanted overlap.
+  // labels), what is visually hidden (.sr-only, clip), what sticks or floats over the page (a
+  // sticky bar, an open panel) and a text cut with an ellipsis; [data-overlap-ok] marks a wanted
+  // overlap.
   {
     const range = document.createRange();
     const memo = new Map();
     const style = (el) => memo.get(el) ?? (memo.set(el, getComputedStyle(el)), memo.get(el));
-    const sticks = (el) => { for (let a = el; a && a !== document.body; a = a.parentElement) if (/sticky|fixed/.test(style(a).position)) return true; return false; };
+    // what sticks (a bar over the page scrolled) or floats over it on purpose (a panel opened
+    // over the card: positioned, with its own background) is above the page, not over a text
+    const opaque = (s) => s.backgroundColor !== 'rgba(0, 0, 0, 0)' && s.backgroundColor !== 'transparent';
+    const sticks = (el) => {
+      for (let a = el; a && a !== document.body; a = a.parentElement) {
+        const s = style(a);
+        if (/sticky|fixed/.test(s.position) || (s.position === 'absolute' && opaque(s))) return true;
+      }
+      return false;
+    };
     const clipper = (el) => {
       for (let a = el.parentElement; a && a !== document.body; a = a.parentElement) {
         const s = style(a);
@@ -249,18 +261,21 @@ function pageChecks() {
     const hidden = (el) => { for (let a = el; a && a !== document.body; a = a.parentElement) if (style(a).clip !== 'auto' || style(a).clipPath !== 'none') return true; return false; };
     const ellipsis = (el) => { for (let a = el; a && a !== document.body; a = a.parentElement) if (style(a).textOverflow === 'ellipsis') return true; return false; };
     const boxes = [];
-    const view = document.getElementById('view') ?? document.body;
+    // the view and the header (#397: « Maiso / n » in the name of the home); the tab bar and what
+    // sticks are measured for broken words, not for overlaps (they ride over the page scrolled)
+    const view = document.getElementById('app') ?? document.body;
     const walker = document.createTreeWalker(view, NodeFilter.SHOW_TEXT);
     for (let n = walker.nextNode(); n; n = walker.nextNode()) {
       const el = n.parentElement;
-      if (!el || !n.textContent.trim() || el.closest('.sr-only, .chart, svg, [data-overlap-ok]') || !visible(el) || sticks(el) || hidden(el)) continue;
+      if (!el || !n.textContent.trim() || el.closest('.sr-only, .chart, svg, [data-overlap-ok]') || !visible(el) || hidden(el)) continue;
+      const stuck = sticks(el);
       // the content of a closed <details> keeps its boxes in Chromium: not painted all the same
       if (el.checkVisibility ? !el.checkVisibility({ contentVisibilityAuto: true, opacityProperty: true, visibilityProperty: true }) : Number(style(el).opacity) === 0) continue;
       if (el.closest('details:not([open])') && !el.closest('summary')) continue;
       range.selectNodeContents(n);
       for (const raw of range.getClientRects()) {
         const r = raw.width > 2 && raw.height > 2 ? painted(el, raw) : null;
-        if (r) boxes.push({ el, n, r, raw });
+        if (r) boxes.push({ el, n, r, raw, stuck });
       }
     }
     const say = (b) => b.n.textContent.trim().replace(/\s+/g, ' ').slice(0, 40);
@@ -269,9 +284,10 @@ function pageChecks() {
     let overlaps = 0;
     for (let i = 0; i < boxes.length && overlaps < 3; i++) {
       const a = boxes[i];
+      if (a.stuck) continue;
       for (let j = i + 1; j < boxes.length && boxes[j].r.top < a.r.bottom && overlaps < 3; j++) {
         const b = boxes[j];
-        if (b.n === a.n) continue;
+        if (b.n === a.n || b.stuck) continue;
         const w = Math.min(a.r.right, b.r.right) - Math.max(a.r.left, b.r.left);
         const h = Math.min(a.r.bottom, b.r.bottom) - Math.max(a.r.top, b.r.top);
         if (w > 2 && h > Math.min(a.r.height, b.r.height) / 4) {
@@ -280,21 +296,21 @@ function pageChecks() {
         }
       }
     }
-    // a short word broken in the middle (« Salo / n »): a column squeezed until overflow-wrap
-    // breaks anywhere. Code and identifiers (« onError ») break where they must.
+    // #384, #397: an ordinary word broken in the middle without a hyphen (« Salo / n », « Maiso /
+    // n »): a column squeezed until overflow-wrap breaks it anywhere. Left aside: a hyphenation
+    // (hyphens: auto, lang="fr": the browser draws its hyphen), code and identifiers (« onError »)
+    // and a word wider than its whole card (a name made of data, #372: it must break somewhere).
     let broken = 0;
     for (const n of new Set(boxes.map((b) => b.n))) {
       if (broken >= 3) break;
-      if (n.parentElement.closest('code, pre, kbd, samp')) continue;
+      if (n.parentElement.closest('code, pre, kbd, samp') || style(n.parentElement).hyphens === 'auto') continue;
       for (const m of n.textContent.matchAll(/(?<![\p{L}\d_])\p{L}{2,12}(?![\p{L}\d_])/gu)) {
         if (/\p{Ll}\p{Lu}/u.test(m[0])) continue;
         range.setStart(n, m.index);
         range.setEnd(n, m.index + m[0].length);
         const parts = [...range.getClientRects()].filter((r) => r.width > 0);
         const lines = new Set(parts.map((r) => Math.round(r.top)));
-        // a word wider than its whole card (« Consommation » at 200 %) cannot but break: a defect
-        // only when it would fit the card, i.e. a column squeezed narrower than its words
-        const box = n.parentElement.closest('.card, .list, .verdict, .kpi, .alert') ?? view;
+        const box = n.parentElement.closest('.card, .list, .verdict, .kpi, .alert, .top, #view') ?? view;
         const bs = style(box);
         const room = box.clientWidth - parseFloat(bs.paddingLeft) - parseFloat(bs.paddingRight);
         if (lines.size > 1 && parts.reduce((w, r) => w + r.width, 0) <= room) {
@@ -737,11 +753,15 @@ async function selfTest(browser, run, display) {
       clip.append(Object.assign(document.createElement('span'), { textContent: 'secret-coupé-42 secret-coupé-42' }));
       clip.firstChild.style.whiteSpace = 'nowrap';
       view.append(clip);
+      // and a short word squeezed in a column until it breaks in the middle (« Salo / n »)
+      const narrow = Object.assign(document.createElement('p'), { textContent: 'Salon' });
+      Object.assign(narrow.style, { width: '2ch', overflowWrap: 'anywhere' });
+      view.append(narrow);
     });
     const found = await s.page.evaluate(pageChecks);
     const kinds = found.map((f) => f.kind);
-    const missing = ['texte-interdit', 'carte-vide', 'defilement-horizontal', 'textes-recouverts', 'texte-coupe'].filter((k) => !kinds.includes(k));
-    if (found.some((f) => /recouverts|coupe/.test(f.kind) && /secret/i.test(f.quiet ?? ''))) throw new Error('auto-contrôle : le diagnostic discret d’un texte recouvert cite un contenu');
+    const missing = ['texte-interdit', 'carte-vide', 'defilement-horizontal', 'textes-recouverts', 'texte-coupe', 'mot-coupe'].filter((k) => !kinds.includes(k));
+    if (found.some((f) => /recouverts|coupe/.test(f.kind) && /secret|Salon/i.test(f.quiet ?? ''))) throw new Error('auto-contrôle : le diagnostic discret d’un texte recouvert ou coupé cite un contenu');
     if (missing.length) throw new Error(`auto-contrôle : invariants muets (${missing.join(', ')})`);
     const quiet = found.find((f) => f.kind === 'defilement-horizontal').quiet ?? '';
     if (!/^\d+ px : div\.card > span/.test(quiet) || !quiet.includes('texte trop long dans : p.hint') || /secret/i.test(quiet))
@@ -821,7 +841,7 @@ try {
     const browser = await chromium.launch();
     try {
       await selfTest(browser, runs[0], displays[0]);
-      console.log('Auto-contrôle : les invariants voient un « NaN », une carte vide et un débordement, dont le diagnostic discret ne cite aucun contenu.');
+      console.log('Auto-contrôle : les invariants voient un « NaN », une carte vide, un débordement, deux textes l’un sur l’autre, un texte coupé par sa carte et un mot coupé en son milieu, dont le diagnostic discret ne cite aucun contenu.');
     } finally {
       await browser.close();
     }

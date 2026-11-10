@@ -7,7 +7,7 @@
 // « Consommation en détail » (day, week, room, table) in Historique, Linky in Compteur,
 // invoice and analysis in Outils, budget inputs and CO₂ in ⚙ Objectifs.
 import { type DayRecord, addDays, minusYears, pctChange, total } from '../aggregate';
-import { type Verdict, projectYear, verdict } from '../analysis';
+import { type Verdict, projectYear } from '../analysis';
 import { activeRooms, ds, state } from '../app';
 import { barChart, cssVar } from '../charts';
 import { comparison, gauge, howDetails, legend, list, seg, tile } from '../components';
@@ -21,7 +21,6 @@ import {
   expectedLabel,
   homePeriod,
   homeRange,
-  moneyVerdict,
   monthTick,
   monthlyOutdoor,
   periodPhrase,
@@ -37,28 +36,12 @@ import { projectedCost } from '../synthese';
 import { html } from '../trusted';
 import { avgPrice, costAvailable, costOf, esc, firstDay, fmtEur, fmtKwh, lastDay, table, tableToggle } from '../ui';
 import { chartMarks, yoyGapNote } from './quality';
-import { comparableRecords, offlineEstimate, offlineLine, offlineNow, offlineRun, stoppedIn } from './offline-rooms';
+import { offlineEstimate, offlineLine, offlineNow, offlineRun, stoppedIn } from './offline-rooms';
 import { offlineText } from '../room-offline';
+import { type Scope, fmtMoney, homeScope, money, yoy } from './verdict-scope';
 
 const ord = (day: string) => (Number(day.slice(8, 10)) === 1 ? '1er' : String(Number(day.slice(8, 10))));
 const END_LABEL = { month: 'fin du mois', season: 'fin de saison', year: "fin d'année", '12m': '' } as const;
-
-/** Euros when prices are known, else kWh (every amount of the screen). */
-function money(records: DayRecord[], from: string, to: string): { value: number; unit: '€' | 'kWh'; kwh: number } {
-  const kwh = total(records, from, to);
-  const eur = costAvailable() ? costOf(records, from, to) : null;
-  return eur === null ? { value: kwh, unit: 'kWh', kwh } : { value: eur, unit: '€', kwh };
-}
-const fmtMoney = (v: number, unit: '€' | 'kWh') => (unit === '€' ? fmtEur(v) : fmtKwh(v));
-
-/** Change vs the same days a year earlier, in euros when both are priced, else in kWh. */
-function yoy(all: DayRecord[], from: string, to: string): number | null {
-  if (!all.some((r) => r.day <= minusYears(to))) return null;
-  const records = comparableRecords(all, from, to).records; // #346: a room no longer measured is not « en baisse »
-  const now = money(records, from, to);
-  const before = money(records, minusYears(from), minusYears(to));
-  return now.unit === before.unit ? pctChange(now.value, before.value) : pctChange(now.kwh, before.kwh);
-}
 
 export function renderHome(view: HTMLElement, records: DayRecord[]) {
   const last = lastDay();
@@ -67,15 +50,14 @@ export function renderHome(view: HTMLElement, records: DayRecord[]) {
   const n = state.rooms ? state.rooms.length : all;
   const narrowed = state.cat !== 'all' || n !== all;
   const scope = `${scopeTitle(r)} · ${countedLine({ cat: state.cat, rooms: n, allRooms: all, euros: costAvailable() })}`;
-  // #346: the verdict leaves out the rooms offline over the period or a year earlier
-  const cmp = comparableRecords(records, r.from, r.to);
-  const v = verdict(cmp.records, r.from, r.to, ds!.weather);
+  // #346, #383: the verdict leaves out the rooms offline over the period or a year earlier
+  const sc = homeScope(records, r.from, r.to);
   view.innerHTML = html`
   <h2 class="sr-only" id="page-title" tabindex="-1">Accueil</h2>
   <div class="periodbar">${seg('home', r.period, HOME_PERIODS, 'Période')}<p class="scope" aria-live="polite">${esc(scope)}${
     narrowed ? ` <button type="button" class="link" data-filter-reset>Tout compter</button>` : ''
   }</p></div>
-  ${verdictBlock(r, v, cmp)}
+  ${verdictBlock(r, sc)}
   ${tiles(records, last)}
   <div id="budget-zone"></div>
   <div class="alerts" id="alerts"><div id="grid-zone"></div><div id="cold-alert-zone"></div></div>
@@ -122,12 +104,11 @@ function explainLink(r: HomeRange): string {
  * left out of the comparison (offline over the period or a year earlier, #346) are left out of
  * every figure, and named in the sentence (« hors Chambre enfant, hors ligne »).
  */
-function verdictBlock(r: HomeRange, v: Verdict | null, cmp: { records: DayRecord[]; left: string[] }): string {
-  const records = cmp.records;
-  const spent = money(records, r.from, r.to);
+function verdictBlock(r: HomeRange, sc: Scope): string {
+  const { records, spent, v, left } = sc;
   const end = projection(records, r, v, spent);
-  if (!v) {
-    const out = leftOut(cmp.left);
+  if (!v || !sc.m) {
+    const out = leftOut(left);
     const amount = spent.unit === '€' ? fmtEur(spent.value) : fmtKwh(spent.kwh);
     const what = `<b class="num">${esc(amount)}</b>${spent.unit === '€' ? ` (${esc(fmtKwh(spent.kwh))})` : ''} ${spent.unit === '€' ? 'dépensés' : 'consommés'}${out ? ` ${esc(out)},` : ''} ${esc(periodPhrase(r))}`;
     return `<section class="verdict" aria-labelledby="verdict-title">
@@ -136,14 +117,14 @@ function verdictBlock(r: HomeRange, v: Verdict | null, cmp: { records: DayRecord
     <p class="verdict-sub">${what}. Pas encore d'année précédente sur ces dates : la comparaison viendra avec un an de données.${offlineNote()}</p></div>
   </section>`;
   }
-  const m = moneyVerdict(v, spent.unit === '€' ? spent.value : null);
+  const m = sc.m;
   const gap = writtenGap(m);
   const icon = gap < 0 ? '▼' : gap > 0 ? '▲' : '=';
   const ref = v.climate ? 'à météo comparable' : 'd’après les années passées';
   const max = Math.max(m.actual, m.expected, end ?? 0) || 1;
   const endTxt = end !== null && END_LABEL[r.period] ? `${END_LABEL[r.period]} ≈ ${fmtMoney(end, m.unit)}` : '';
-  const w = verdictWords(m, cmp.left, periodPhrase(r), ref);
-  const out = leftOut(cmp.left);
+  const w = verdictWords(m, left, periodPhrase(r), ref);
+  const out = leftOut(left);
   const g = gauge({
     label: `${scopeTitle(r)}${out ? `, ${out}` : ''} : ${w.spent} ${m.unit === '€' ? 'dépensés' : 'consommés'}, ${w.expectedAmount} attendus à cette date${
       endTxt ? `, environ ${fmtMoney(end!, m.unit)} prévus à la ${END_LABEL[r.period]}` : ''
@@ -179,11 +160,11 @@ function tiles(records: DayRecord[], last: string): string {
   const yearFrom = `${last.slice(0, 4)}-01-01`;
   const year = Number(last.slice(0, 4));
   // #383: the month tile over the scope of its comparisons (and of the verdict on « Mois »)
-  const mcmp = comparableRecords(records, monthFrom, last);
-  const mo = money(mcmp.records, monthFrom, last);
+  const ms = homeScope(records, monthFrom, last);
+  const mo = ms.spent;
   const yr = money(records, yearFrom, last);
-  const mv = verdict(mcmp.records, monthFrom, last, ds!.weather);
-  const mOut = leftOut(mcmp.left);
+  const mv = ms.v;
+  const mOut = leftOut(ms.left);
   const versus = (from: string, to: string) => {
     const p = yoy(records, from, to);
     return p === null ? `<span class="delta neutral">${NO_REFERENCE}</span>` : comparison(p, vsLabel(from, to)) + yoyGapNote(records, from, to);

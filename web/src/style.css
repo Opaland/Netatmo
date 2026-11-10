@@ -108,18 +108,25 @@ html {
 /* ---------------------------------------------------------------- header (#308) */
 /* Home name, data-status pill (→ État des données) and ⚙ Paramètres; the tab bar under it
    (bottom of the screen on a phone, top from 760 px); a sub-page has a back arrow and a title. */
-/* #348: always one line, ⚙ included, down to 360 px at 200 % text: the name wraps in its
-   column and, when the header is narrow, the pill keeps the dot and the date only. */
+/* #348: the pill keeps the dot and the date only when the header is narrow. #397: the name of
+   the home keeps its words: when it does not fit beside the pill and ⚙ (360 px at 200 % text, a
+   long name), the pill and ⚙ go to the next line, on the right, instead of squeezing the name
+   until « Maiso / n ». */
 .top {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
+  display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: var(--space-2);
   padding: calc(var(--space-3) + env(safe-area-inset-top)) 0 var(--space-3);
   container-type: inline-size;
 }
 .top .title {
+  flex: 1 1 auto;
   min-width: 0;
+  max-width: 100%;
+}
+.top .status-pill {
+  margin-left: auto;
 }
 .top .title h1 {
   margin: 0;
@@ -231,6 +238,8 @@ html {
   font-size: min(var(--font-xs), 3.3vw);
   line-height: 1.15;
   overflow-wrap: anywhere;
+  /* #397: a label too wide for its tab (« Historique » in bold at 200 %) breaks between syllables */
+  hyphens: auto;
 }
 .tabs .icon {
   width: 22px;
@@ -704,6 +713,16 @@ html {
 }
 .card-head > * {
   min-width: 0;
+}
+/* #397: a word of a title wider than its whole card (« Consommation » at 200 %) breaks between
+   syllables, with its hyphen (lang="fr"), not anywhere; only long words (9 letters, 4 each side):
+   a short word goes whole to the next line. Names and labels keep their words (no hyphens). */
+.card-head h2,
+.page-title,
+.verdict-title,
+.kpi h3 {
+  hyphens: auto;
+  hyphenate-limit-chars: 9 4 4;
 }
 .card-sub {
   margin: 0 0 var(--space-2);

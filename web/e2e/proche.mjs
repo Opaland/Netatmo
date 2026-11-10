@@ -210,6 +210,11 @@ try {
       await p.click('#demo');
       await page(p, 'accueil');
       check(!(await p.locator('#view[data-page^=bienvenue]').count()), 'démo : le premier lancement s’ouvre de lui-même');
+      // #400: the figures of the full Accueil, to compare with the vue Proche below
+      const num = (s) => Number(String(s).replace(/[\s  ]/g, '').replace('−', '-'));
+      const fullGap = /^([\d\s  ]+) € de (moins|plus)/.exec((await p.locator('#verdict-title').innerText()).trim());
+      const fullYoy = /([−+]?[\d\s  ]+) %\s*vs nov\./.exec(await p.locator('.home-tiles .kpi').first().innerText());
+      const fullMonth = (await p.locator('.home-tiles .kpi .kpi-value').first().innerText()).trim();
       await p.evaluate(() => (location.hash = '#parametres-affichage'));
       await page(p, 'parametres-affichage');
       await p.check('[data-toggle=simple]');
@@ -218,6 +223,18 @@ try {
       const tabs = await p.locator('.tabs a span').allInnerTexts();
       check(tabs.join('|') === 'Accueil|Ma pièce|Aide', `vue Proche : onglets ${tabs.join('|')}`);
       check((await p.locator('#view .proche-big').count()) >= 1, 'vue Proche : chiffre du mois absent');
+      // #400: the same figures as the full Accueil (gap in euros, month amount, change on last
+      // year), and the room out of reach named
+      {
+        const said = (await p.locator('#view').innerText()).replace(/\s+/g, ' ');
+        const gap = /Cela fait environ ([\d\s  ]+) € de (moins|plus)/.exec(said);
+        const yo = /C'est ([\d\s  ]+) % de (moins|plus) que l'an dernier/.exec(said);
+        const month = (await p.locator('#view .proche-month .proche-big').innerText()).trim();
+        check(fullGap && gap && num(gap[1]) === num(fullGap[1]) && gap[2] === fullGap[2], `vue Proche : écart « ${gap?.[0]} » ≠ Accueil « ${fullGap?.[0]} » (#400)`);
+        check(fullYoy && yo && num(yo[1]) === Math.abs(num(fullYoy[1])) && (yo[2] === 'moins') === num(fullYoy[1]) < 0, `vue Proche : « ${yo?.[0]} » ≠ Accueil « ${fullYoy?.[0]} » (#400)`);
+        check(num(month.replace('€', '')) === num(fullMonth.replace('€', '')), `vue Proche : mois ${month} ≠ Accueil ${fullMonth} (#400)`);
+        check(/Chambre enfant ne répond plus depuis le 5 novembre : cette pièce n'est pas comptée\./.test(said), 'vue Proche : la pièce hors ligne n’est pas nommée (#400)');
+      }
       check((await p.locator('#view [data-term=kwh]').count()) >= 1, 'vue Proche : glossaire absent');
       check(await p.locator('[data-simple-exit=ask]').isVisible(), 'vue Proche : sortie non visible');
       await screens(p, 'accueil');
