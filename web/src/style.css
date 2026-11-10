@@ -92,6 +92,18 @@ code {
   margin: 0 auto;
   padding: 0 var(--space-4) calc(84px + env(safe-area-inset-bottom));
 }
+/* #353 (smoke test on real data): a control brought into view (keyboard focus, a scroll to it)
+   stops above the tab bar fixed at the bottom of a phone, never under it: hidden there, its tap
+   went to the tab and its focus could not be seen (WCAG 2.4.11). The bar is 65 px high (its
+   labels do not grow with the text size); the margin is the one #app keeps under its content. */
+html {
+  scroll-padding-bottom: calc(84px + env(safe-area-inset-bottom));
+}
+@media (min-width: 760px) {
+  html {
+    scroll-padding-bottom: 0;
+  }
+}
 
 /* ---------------------------------------------------------------- header (#308) */
 /* Home name, data-status pill (→ État des données) and ⚙ Paramètres; the tab bar under it
@@ -1224,7 +1236,12 @@ fieldset.prices label:not(.check) {
   padding: 0;
   margin: 8px 0;
   display: grid;
+  /* #353 (smoke test on real data): a failed source shows the collector's message, which can
+     hold a word without a space (an exception name, « body.home.rooms[].therm_setpoint… »):
+     the column no longer grows to that word and the word breaks (360 px, text at 200 %). */
+  grid-template-columns: minmax(0, 1fr);
   gap: 6px;
+  overflow-wrap: anywhere;
 }
 .ok {
   color: var(--state-good);

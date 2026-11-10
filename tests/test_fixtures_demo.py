@@ -45,3 +45,11 @@ def test_chaque_fixture_se_construit_et_garde_ses_cas_limites(tmp_path):
     s = store("valeurs-nulles")
     temps = s.doc(recent[:4])["temps"]["r-salon"]
     assert temps[recent][1] is None
+    # a fuller account than the demo (smoke test on real data): ten heated rooms, ids made of
+    # digits with their measures, a failed source whose message holds a word without a space
+    s = store("compte-charge")
+    heated = [r for r in meta["compte-charge"]["rooms"] if r["category"] == "heating"]
+    assert len(heated) == 10 and "3180040000" in {r["id"] for r in heated}
+    assert s.doc(recent[:4])["temps"]["3180040000"] == s.doc(recent[:4])["temps"]["r-ch1"]
+    assert "therm_setpoint_end_time" in meta["compte-charge"]["sources"]["intuis"]["message"]
+    assert "home-assistant" in meta["compte-charge"]["sources"]
