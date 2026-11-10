@@ -192,6 +192,7 @@ try {
       check((await page.locator('#view a[href="#outils-expliquer"]').count()) === 1, `${name} : « Expliquer un mois » absent d'Outils`);
       // Historique: a month opens its explanation
       await go(page, 'historique');
+      await page.locator('#explain-fold summary').click(); // #386: folded under the winter chart
       const jan = page.locator('#explain-links a[href="#outils-expliquer-2026-01"]');
       check((await jan.count()) === 1 && /Expliquer janv\. 2026 \(janvier 2026\)/.test((await jan.textContent()) ?? ''), `${name} : pas de lien « janv. 2026 » dans l'Historique`);
       await jan.click();

@@ -4,6 +4,7 @@
 // Lazy module: loaded when the page is opened.
 
 import { alertHtml } from './components';
+import { localDay } from './glossary';
 
 export type Risk = 'faible' | 'moyen' | 'élevé';
 
@@ -105,7 +106,7 @@ const esc = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`)
 const fmt = (d: string) => new Date(`${d}T12:00:00Z`).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' });
 
 /** Content of the « Cadre juridique » card. */
-export function legalHtml(today = new Date().toISOString().slice(0, 10)): string {
+export function legalHtml(today = localDay()): string {
   const docUrl = 'https://github.com/Opaland/Netatmo/blob/main/docs/juridique.md';
   return `${alertHtml('info', "<strong>Ceci n'est pas un avis juridique.</strong> Résumé de ce que le projet a lu des conditions des services qu'il appelle, à la date indiquée.")}
     <p class="hint">Cadre : un <strong>usage domestique</strong> de vos propres données (radiateurs, station, compteur), chiffrées, dans votre propre dépôt ; rien n'est vendu ni partagé.
