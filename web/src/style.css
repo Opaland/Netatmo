@@ -1881,6 +1881,11 @@ code.hash {
   min-height: var(--target-min);
   cursor: pointer;
 }
+/* #397: a long label beside the switch (« Bibliothèque » at 200 %) breaks between syllables */
+.switch > span {
+  min-width: 0;
+  hyphens: auto;
+}
 .switch input {
   appearance: none;
   -webkit-appearance: none;
