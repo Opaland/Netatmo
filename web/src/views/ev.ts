@@ -13,6 +13,7 @@ import { contracts, fmtEur, lastDay, longDate, nf0, offCol, table } from '../ui'
 import { html } from '../trusted';
 import '../simulators.css';
 import { lsKey } from '../scope';
+import { alertHtml } from '../components';
 
 const LS = lsKey('ev');
 const POWERS: [number, string][] = [
@@ -180,7 +181,7 @@ function drawPeaks(zone: HTMLElement, plan: NonNullable<ReturnType<typeof evPlan
   const when = r.maxKey ? ` le ${longDate(r.maxKey.slice(0, 10))} à ${r.maxKey.slice(11, 16)}` : '';
   zone.innerHTML = html`<h3>Le compteur tiendrait-il ?</h3>${
     r.slots
-      ? `<p class="stale" role="status"><span aria-hidden="true">⚠️</span> Sur ${nf0.format(r.covered / 48)} jours de courbe de charge, <strong>${nf0.format(r.slots)} demi-heure${r.slots > 1 ? 's' : ''}</strong> (${r.days} jour${r.days > 1 ? 's' : ''}) dépasseraient la puissance souscrite (${kva} kVA aujourd'hui) avec la recharge, contre ${nf0.format(r.slotsBefore)} sans. Il faudrait au moins <strong>${need} kVA</strong>, ou une recharge plus lente ou plus tardive.</p>`
+      ? alertHtml('warn', `Sur ${nf0.format(r.covered / 48)} jours de courbe de charge, <strong>${nf0.format(r.slots)} demi-heure${r.slots > 1 ? 's' : ''}</strong> (${r.days} jour${r.days > 1 ? 's' : ''}) dépasseraient la puissance souscrite (${kva} kVA aujourd'hui) avec la recharge, contre ${nf0.format(r.slotsBefore)} sans. Il faudrait au moins <strong>${need} kVA</strong>, ou une recharge plus lente ou plus tardive.`, { role: 'status' })
       : `<p class="hint"><strong>Aucune demi-heure</strong> au-dessus de la puissance souscrite (${kva} kVA aujourd'hui) sur ${nf0.format(r.covered / 48)} jours de courbe de charge, recharge comprise.</p>`
   }
   <p class="hint muted">Demi-heure la plus chargée avec la recharge : ${kw(r.maxW)}${when} (sans la voiture, le maximum était ${kw(r.maxBeforeW)}).</p>`;

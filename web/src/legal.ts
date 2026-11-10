@@ -3,6 +3,8 @@
 // each version review (a reading older than a year is flagged « à relire »).
 // Lazy module: loaded when the page is opened.
 
+import { alertHtml } from './components';
+
 export type Risk = 'faible' | 'moyen' | 'élevé';
 
 export interface LegalService {
@@ -105,12 +107,12 @@ const fmt = (d: string) => new Date(`${d}T12:00:00Z`).toLocaleDateString('fr-FR'
 /** Content of the « Cadre juridique » card. */
 export function legalHtml(today = new Date().toISOString().slice(0, 10)): string {
   const docUrl = 'https://github.com/Opaland/Netatmo/blob/main/docs/juridique.md';
-  return `<p class="notice"><strong>Ceci n'est pas un avis juridique.</strong> Résumé de ce que le projet a lu des conditions des services qu'il appelle, à la date indiquée.</p>
+  return `${alertHtml('info', "<strong>Ceci n'est pas un avis juridique.</strong> Résumé de ce que le projet a lu des conditions des services qu'il appelle, à la date indiquée.")}
     <p class="hint">Cadre : un <strong>usage domestique</strong> de vos propres données (radiateurs, station, compteur), chiffrées, dans votre propre dépôt ; rien n'est vendu ni partagé.
       Le RGPD exempte en principe l'usage strictement personnel ou domestique (article 2.2.c, à vérifier si l'usage change). Pour les membres du foyer : vue foyer (chambres regroupées), verrouillage automatique.</p>
     <ul class="legal-list" style="list-style:none;padding:0;margin:12px 0">${SERVICES.map(
       (s) => `<li style="padding:10px 0;border-top:1px solid var(--border)">
-        <h3 style="font-size:0.95rem">${esc(s.name)}</h3>
+        <h3 style="font-size:var(--font-md)">${esc(s.name)}</h3>
         <p class="hint muted" style="margin:2px 0">${esc(s.frame)}</p>
         <p style="margin:4px 0">${esc(s.terms)} <a href="${esc(s.url)}" target="_blank" rel="noopener">Source</a></p>
         <p class="hint" style="margin:2px 0">Lu le ${fmt(s.read)}${stale(s.read, today) ? ' <strong class="ko-red">à relire</strong>' : ''} · risque d'arrêt <strong${s.risk === 'élevé' ? ' class="ko-red"' : ''}>${s.risk}</strong></p></li>`,

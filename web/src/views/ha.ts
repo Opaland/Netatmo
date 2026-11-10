@@ -89,7 +89,7 @@ export function haCard(showBedrooms: boolean): string {
     }. Rien n'est lu depuis Home Assistant par GitHub.</p>
     ${table(['Capteur', 'Type', 'Jours importés', '30 derniers jours importés'], rows, 99)}
     ${openings.length ? agreementBlock(openings.map((s) => ({ key: s.key, name: s.name, hidden: isPrivate(s.key, s.name) })), roomOf, rooms) : ''}
-    ${anyPrivate ? '<button type="button" class="toggle" data-comfort="show-bedrooms">Afficher le détail des chambres</button>' : ''}
+    ${anyPrivate ? '<button type="button" class="btn secondary" data-comfort="show-bedrooms">Afficher le détail des chambres</button>' : ''}
   </section>`;
 }
 

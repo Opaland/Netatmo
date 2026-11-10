@@ -4,7 +4,7 @@
 // heating. Applied on this device at once; saved for the household in the repository variable
 // STOPPED_ROOMS_JSON (the nightly collection copies it into the encrypted meta).
 import { ds, rawDataset, rerender } from '../app';
-import { alert } from '../components';
+import { alert, alertHtml } from '../components';
 import { dayShort } from '../glossary';
 import { STOP_REASONS, type StopReason, type StoppedRoom, offlineText, parseStopped, stoppedJson } from '../room-offline';
 import { hasToken, putVariable } from '../settings';
@@ -76,7 +76,7 @@ export function mountStopped(card: HTMLElement | null, repo: () => string) {
       ${pending ? '<button type="button" class="link" id="stop-reset">Revenir à la version du foyer</button>' : ''}
     </div>
     <p class="hint muted">${demo ? 'Démo : appliqué sur cet appareil seulement, rien n’est envoyé.' : hasToken() ? 'Pris en compte par la collecte de la nuit (plus d’alerte pour ces pièces).' : 'Connectez un jeton GitHub (⚙ Sources de données, permission Variables) pour enregistrer, ou copiez la variable à la main.'}</p>
-    ${message ? `<p class="settings-msg ${message.ok ? 'ok' : 'ko'}" role="status">${esc(message.text)}</p>` : ''}
+    ${message ? alertHtml(message.ok ? 'info' : 'bad', esc(message.text), { role: 'status' }) : ''}
   </section>`);
   const apply = (next: StoppedRoom[]) => {
     setStoppedDraft(stoppedJson(next) === stoppedJson(shared) ? null : parseStopped(next));

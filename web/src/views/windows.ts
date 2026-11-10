@@ -27,6 +27,7 @@ import {
   totals,
 } from '../windows';
 import { fmt1 as f1 } from '../glossary';
+import { switchField } from '../components';
 
 const BEDROOMS = BEDROOMS_ID;
 const EXCLUDE_HOURS = 2;
@@ -124,7 +125,7 @@ export function windowsCard(showBedrooms: boolean): string {
     }</p>
     <div class="chart" id="windows-chart" role="img" aria-label="Heures de fenêtre ouverte par jour et par pièce, 30 derniers jours"></div>
     ${table(['Pièce (30 jours)', 'Fenêtre ouverte', 'Boost', 'Pendant le boost', 'Radiateur en chauffe', 'Délestage', 'Autres modes', 'Couverture'], rows)}
-    ${hasBedrooms && !showBedrooms ? '<button type="button" class="toggle" data-comfort="show-bedrooms">Afficher le détail des chambres</button>' : ''}
+    ${hasBedrooms && !showBedrooms ? '<button type="button" class="btn secondary" data-comfort="show-bedrooms">Afficher le détail des chambres</button>' : ''}
     <h3 class="sub-title">Par mois <small class="muted">heures de fenêtre ouverte</small></h3>
     ${tableToggle(table(['Pièce', ...months.map((m) => bucketLabel(`${m}-01`, 'month'))], monthRows))}
     ${explanations(rs, last, group)}
@@ -174,7 +175,7 @@ function signatureBlock(rs: RoomState) {
   const w = e.without;
   const diff = w ? `Pente ${slope(w.slope)} au lieu de ${slope(e.all.slope)} (${w.slope === e.all.slope ? 'inchangée' : `${f1(-(w.slope - e.all.slope))} kWh/°C d'écart`}), seuil de chauffe ${bal(w.balance)} au lieu de ${bal(e.all.balance)}.` : 'Trop peu de jours restants pour recalculer la signature.';
   return `<h3 class="sub-title">Effet sur la signature énergétique <small class="muted">saison ${esc(e.season)}</small></h3>
-    <label class="toggle"><input type="checkbox" data-windows="exclude" ${exclude ? 'checked' : ''}> Exclure les jours avec une fenêtre ouverte plus de ${EXCLUDE_HOURS} h</label>
+    ${switchField(`Exclure les jours avec une fenêtre ouverte plus de ${EXCLUDE_HOURS} h`, exclude, { 'data-windows': 'exclude' })}
     <p class="hint muted">Signature de la saison : ${slope(e.all.slope)} par degré plus froid, seuil de chauffe ${bal(e.all.balance)}, sur ${e.all.n} jours de chauffe.</p>
     ${exclude ? `<p id="windows-signature">${e.excluded} jour${e.excluded > 1 ? 's' : ''} exclu${e.excluded > 1 ? 's' : ''}. ${diff}</p>` : ''}`;
 }

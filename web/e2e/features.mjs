@@ -230,7 +230,7 @@ try {
       await audit(page, 'verrou-phrase-affichee');
       await page.click('#unlock button.primary');
       check((await page.getAttribute('#pass', 'type')) === 'password', 'afficher : la phrase reste en clair après validation');
-      await page.waitForFunction(() => document.querySelector('.lock .error')?.textContent === 'Phrase de passe incorrecte.', null, { timeout: 30000 });
+      await page.waitForFunction(() => document.querySelector('#lock-msg')?.textContent === 'Phrase de passe incorrecte.', null, { timeout: 30000 });
       check((await page.getAttribute('#pass', 'autocomplete')) === 'current-password', 'afficher : autocomplete non rétabli');
 
       // #334: « Rester connecté », then reload

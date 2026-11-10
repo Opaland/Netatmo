@@ -19,6 +19,7 @@ import {
 import { html } from '../trusted';
 import { activeRooms, downloadBlob, esc, fmt1 as num1, fmtKwh, lastDay, longDate, table } from '../ui';
 import { onCard } from '../events';
+import { switchField } from '../components';
 
 const signed = (v: number) => `${v > 0 ? '+' : v < 0 ? '−' : ''}${num1(Math.abs(v))}`;
 /** Today in the device's time zone (the evening being noted). */
@@ -58,7 +59,7 @@ function draw(zone: HTMLElement) {
   const recent = notes.slice(-8).reverse();
   zone.innerHTML = html`<section class="card" id="shutters-card">
     <div class="card-head"><h2>Volets fermés le soir <small class="muted">journal de cet appareil</small></h2></div>
-    <label class="check"><input type="checkbox" data-shutters="tonight" ${notes.includes(t) ? 'checked' : ''}> Volets fermés ce soir (${esc(longDate(t))})</label>
+    ${switchField(`Volets fermés ce soir (${longDate(t)})`, notes.includes(t), { 'data-shutters': 'tonight' })}
     <div class="controls" style="align-items:center;margin:6px 0">
       <label>Autre soir <input type="date" data-shutters="day" max="${t}" value="${addDays(t, -1)}" style="padding:6px;border:1px solid var(--border);border-radius:8px;background:var(--surface-card)"></label>
       <button type="button" class="primary small" data-shutters="add">Noter</button>

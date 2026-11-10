@@ -27,6 +27,6 @@ export function installSteps(): string {
   return `<ul class="plain install-steps">
     <li><strong>iPhone, iPad</strong> : dans Safari, bouton Partager (le carré d'où sort une flèche), puis « Sur l'écran d'accueil ».</li>
     <li><strong>Android</strong> : dans Chrome, menu ⋮, puis « Installer l'application » (ou « Ajouter à l'écran d'accueil »).</li>
-    <li>Ouvrez l'appli depuis sa nouvelle icône et saisissez la phrase de passe que l'on vous a dite ; cochez « Rester connecté » pour ne pas la retaper.</li>
+    <li>Ouvrez l'appli depuis sa nouvelle icône et saisissez la phrase de passe que l'on vous a dite ; activez « Rester connecté » pour ne pas la retaper.</li>
   </ul>`;
 }
