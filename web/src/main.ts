@@ -11,7 +11,7 @@ import { type Ctl, cardHandlers, dispatch } from './events';
 import { lazyAction } from './lazy';
 import { clearMemo } from './memo';
 import { onceReady, track, viewRendered } from './ready';
-import { type Anchor, anchorOf, placeAnchor } from './scroll-anchor';
+import { type Anchor, anchorOf, placeAnchor, scrolledAway } from './scroll-anchor';
 import { framedHtml, isFramed } from './frame';
 import { prefetchForOffline, unavailable, updateNetStatus } from './offline';
 import { PAGES, dataStatus } from './pages';
@@ -219,8 +219,21 @@ function holdScroll(a: Anchor) {
   };
   for (const t of ['wheel', 'touchstart', 'keydown', 'pointerdown'] as const) window.addEventListener(t, stop, { capture: true, passive: true });
   releaseScroll = stop;
+  // #370: where the hold left the page, and where the control was in it (to tell a redraw, which
+  // moves the control, from a scroll by something else, which does not)
+  const docTop = () => {
+    const t = topOf(a.sel);
+    return t === null ? null : window.scrollY + t;
+  };
+  let lastY = window.scrollY;
+  let lastDoc = docTop();
   const tick = () => {
+    const doc = docTop();
+    const bottom = window.scrollY + window.innerHeight >= document.documentElement.scrollHeight - 1;
+    if (a.sel && doc !== null && lastDoc !== null && scrolledAway(window.scrollY, lastY, doc - lastDoc, bottom)) return stop();
     const settled = place() <= 1 && document.querySelector('#view[data-ready]');
+    lastY = window.scrollY;
+    lastDoc = docTop();
     if (settled || performance.now() > until) return stop();
     frame = requestAnimationFrame(tick);
   };

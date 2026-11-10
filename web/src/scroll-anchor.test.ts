@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { anchorOf, placeAnchor } from './scroll-anchor';
+import { anchorOf, placeAnchor, scrolledAway } from './scroll-anchor';
 
 describe('anchorOf (#370)', () => {
   it('anchors on the control when it is on screen', () => {
@@ -35,4 +35,17 @@ describe('placeAnchor (#370)', () => {
   it('never above the top of the page', () => {
     expect(placeAnchor(a, { y: 100, top: 0, natural: 5000, winH: 740 })).toEqual({ y: 0, slack: 0 });
   });
+});
+
+describe('scrolledAway (#370)', () => {
+  it('a scroll by something else: the control did not move in the page', () => {
+    expect(scrolledAway(1317, 0, 0, false)).toBe(true);
+  });
+  it('a redraw moved the control (the browser followed it): keep holding', () => {
+    expect(scrolledAway(1338, 1317, 21, false)).toBe(false);
+  });
+  it('the page got shorter and the browser clamped it at its end: keep holding', () => {
+    expect(scrolledAway(1161, 1548, 0, true)).toBe(false);
+  });
+  it('nothing moved', () => expect(scrolledAway(500, 500, 0, false)).toBe(false));
 });

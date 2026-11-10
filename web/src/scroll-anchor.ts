@@ -35,3 +35,12 @@ export function placeAnchor(a: Anchor, now: { y: number; top: number | null; nat
   // room only for a control still there: without one, the lazy cards make the page tall again
   return { y, slack: found ? Math.max(0, y - Math.max(0, now.natural - now.winH)) : 0 };
 }
+
+/**
+ * Something else scrolled the page while the anchor is held (a script, a link to an anchor, the
+ * reader's scroll bar): the hold lets go instead of pulling the page back. `lastY`: the scroll
+ * position the hold left; `moved`: how far the control moved in the page since (a redraw above
+ * it, which the hold must follow); `bottom`: the page is scrolled to its end (the browser clamps
+ * a page that got shorter, which is not a scroll by the reader).
+ */
+export const scrolledAway = (y: number, lastY: number, moved: number, bottom: boolean) => Math.abs(y - lastY) > 1 && Math.abs(moved) <= 1 && !bottom;
