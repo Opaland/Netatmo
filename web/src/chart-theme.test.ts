@@ -3,6 +3,7 @@ import {
   axisHour,
   axisText,
   buildTheme,
+  categoryLabels,
   endLabelsFit,
   legendHeight,
   legendRows,
@@ -11,6 +12,7 @@ import {
   scaleText,
   splitCount,
   themeKey,
+  wrappedLines,
   weeklyMeans,
   zeroBased,
 } from './chart-theme';
@@ -97,5 +99,29 @@ describe('règles de lisibilité (#304, #306)', () => {
     expect(axisHour('nov. 2025')).toBe('nov. 2025');
     expect(axisText('sem. du 3 nov. 2026')).toBe('3 nov. 2026');
     expect(scaleText(48.4, 'kWh')).toEqual(['48 kWh', '0']);
+  });
+});
+
+describe('étiquettes des barres horizontales (#413)', () => {
+  it('compte les lignes d’un nom replié mot à mot, et coupe un mot plus large que la colonne', () => {
+    // 12 px : un caractère ≈ 7 px ; « Chambre parentale » (124 px) tient sur 2 lignes de 115 px
+    expect(wrappedLines('Salon', 115, 12)).toBe(1);
+    expect(wrappedLines('Chambre parentale', 115, 12)).toBe(2);
+    expect(wrappedLines('Chambre parentale', 200, 12)).toBe(1);
+    // 24 px : « parentale » (126 px) ne tient plus en 115 px : coupé en deux
+    expect(wrappedLines('Chambre parentale', 115, 24)).toBe(3);
+    expect(wrappedLines('', 115, 12)).toBe(1);
+  });
+  it('voit les noms voisins qui se chevauchent à 200 %, pas à taille normale', () => {
+    const rooms = ['Salon', 'Chauffe-eau', 'Chambre parentale', 'Chambre enfant'];
+    const normal = categoryLabels(rooms, { labelWidth: 115, plot: 4 * 52, px: 13 });
+    expect(normal).toEqual({ overlaps: [], broken: [] });
+    const big = categoryLabels(rooms, { labelWidth: 115, plot: 4 * 52, px: 26 });
+    // « Salon » (1 ligne) et « Chauffe-eau » (2) tiennent encore à deux dans 52 px
+    expect(big.overlaps).toEqual(['Chauffe-eau / Chambre parentale', 'Chambre parentale / Chambre enfant']);
+    expect(big.broken).toEqual(['Chauffe-eau', 'Chambre parentale']);
+  });
+  it('un seul nom ne chevauche rien', () => {
+    expect(categoryLabels(['Chambre parentale'], { labelWidth: 40, plot: 30, px: 26 }).overlaps).toEqual([]);
   });
 });

@@ -88,7 +88,8 @@ export function renderRooms(view: HTMLElement, records: DayRecord[], part: 'list
         const tm = winterTemps(r.id, winter);
         const cold = r.category === 'heating' ? coldDays(r.id, winter, thr) : null;
         return [
-          `<a class="link" href="#piece-${esc(encodeURIComponent(r.id))}" data-room-link="${esc(r.id)}"><span class="swatch" style="background:${roomColor(r.id)}"></span>${esc(r.name)}</a> <small class="muted">${CATEGORY_LABEL[r.category]}</small>`,
+          // #413: the name wraps and its category goes under it, never cut by the table (« Cha… »)
+          `<span class="cell-name"><a class="link" href="#piece-${esc(encodeURIComponent(r.id))}" data-room-link="${esc(r.id)}"><span class="swatch" style="background:${roomColor(r.id)}"></span>${esc(r.name)}</a> <small class="muted">${CATEGORY_LABEL[r.category]}</small></span>`,
           v,
           sum ? `${nf0.format((v / sum) * 100)} %` : '—',
           b,
