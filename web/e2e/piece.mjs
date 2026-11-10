@@ -126,7 +126,7 @@ try {
     check(/Maintenant/.test(text) && (await page.locator('#piece-now .now .temp').count()) === 1, `${name} : panneau « maintenant » absent`);
     check((await page.locator('#piece-now .sched').count()) === 1, `${name} : planning du jour absent`);
     check(/jusqu’à \d+ h/.test(text), `${name} : mode sans « jusqu'à »`);
-    check(/vs \d{4} à date/.test(await page.locator('#piece-cost').innerText()), `${name} : coût sans comparaison nommée`);
+    check(/vs [a-zéû.]+ \d{4}/.test(await page.locator('#piece-cost').innerText()), `${name} : coût sans comparaison nommée`);
     check(/Temps à la consigne/.test(text) && /température demandée/.test(await page.locator('#piece-at-setpoint-def').innerText()), `${name} : « temps à la consigne » sans définition`);
     check(!/tps/i.test(text), `${name} : libellé « tps » encore présent`);
     check(/Pourquoi il a fait froid/.test(text), `${name} : « Pourquoi il a fait froid » absent`);
@@ -138,6 +138,24 @@ try {
     check((await wide(page)) <= 1, `${name} : défilement horizontal sur la page Pièce (${await wide(page)} px)`);
     await audit(page, `${name}/piece`, enhanced);
     await page.screenshot({ path: `${OUT}/piece-${BROWSER}-${name}-salon.png`, fullPage: true });
+
+    // #388: one period on the page of a room, said under each card; its cost on the same period
+    check((await page.locator('#view .periodbar [data-set=pieces]').count()) === 4, `${name} : page Pièce sans sélecteur de période`);
+    const uncounted = await page.evaluate(() =>
+      [...document.querySelectorAll('#view section.card')].filter((c) => c.id !== 'piece-now' && !/Pour aller plus loin/.test(c.textContent) && !c.querySelector('.counted')).map((c) => c.querySelector('h2')?.textContent ?? c.id),
+    );
+    check(!uncounted.length, `${name} : cartes sans « Compté : » (${uncounted.join(', ')})`);
+    check(/€/.test(await page.locator('#piece-conso').innerText()), `${name} : coût absent de la carte Consommation`);
+    await page.click('#view .periodbar [data-value=year]');
+    await ready(page);
+    check(/^Année \d{4}, du 1er janv\./.test(await page.locator('#view .periodbar .scope').innerText()), `${name} : la période « Année » ne s'applique pas à la page Pièce`);
+    check(/vs \d{4} à date/.test(await page.locator('#piece-cost').innerText()), `${name} : coût de l'année sans comparaison à date`);
+    check(/Année \d{4}/.test(await page.locator('#piece-conso .counted').innerText()), `${name} : carte Consommation sur une autre période`);
+    await go(page, 'pieces');
+    check(/^Année \d{4}/.test(await page.locator('#view .periodbar .scope').innerText()), `${name} : Pièces ne garde pas la période choisie sur la page d'une pièce`);
+    check(/Année \d{4}/.test(await page.locator('#pieces-compare .counted').innerText()), `${name} : « comparé à l'an dernier » sur une autre période que la liste`);
+    await page.click('#view .periodbar [data-value=month]');
+    await ready(page);
 
     // ---------------------------------------------------------------- a room with cold days (parents' bedroom: 18 °C asked, aired some mornings)
     if (name === 'clair') {
