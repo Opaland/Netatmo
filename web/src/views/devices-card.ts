@@ -9,7 +9,7 @@ import { ROLE_LABEL, type ShellyRole, readShellyPrefs, writeShellyPrefs } from '
 import { addDays } from '../aggregate';
 import { esc, lastDay, longDate, table } from '../ui';
 import { html } from '../trusted';
-import { f1, intuisContractLine, plural, roomLabel } from './devices-quality';
+import { devicesQualityHtml, f1, intuisContractLine, plural, roomLabel } from './devices-quality';
 import { stoppedRooms } from './offline-rooms';
 import { alertHtml } from '../components';
 
@@ -105,13 +105,18 @@ export function mountDevices(el: HTMLElement | null) {
   }
   // #218 (and #214 per room), from the hourly snapshots: loaded on demand
   if (d.meta.has_roomstate) parts.push('<div id="devices-rooms"></div>');
-  // #279
-  parts.push(shellySection());
+  // #279 (#387: the forms only in ⚙ Sources de données; État des données, a reading page, links to them)
+  const reading = el.dataset.reading !== undefined;
+  const shelly = shellySection();
+  if (!reading) parts.push(shelly);
+  else if (shelly) parts.push('<p class="hint muted">Nom et rôle des compteurs Shelly à pinces : <a class="link" href="#parametres-sources">⚙ Sources de données</a>.</p>');
+  // #387: firmware, power cuts of the year (formerly the « Qualité des données » card of the page)
+  if (reading) parts.push(devicesQualityHtml());
   el.hidden = false;
   // #278: shown with the contract when that section is on the page (not in the demo / tenant mode)
   const contractLine = document.getElementById('contract-share') ? '' : intuisContractLine();
-  el.innerHTML = html(`<h2>État des appareils</h2>${contractLine}${parts.join('')}`);
-  bindShelly(el);
+  el.innerHTML = html(`${reading ? '' : '<h2>État des appareils</h2>'}${contractLine}${parts.join('')}`);
+  if (!reading) bindShelly(el);
   if (d.meta.has_roomstate) {
     void loadRoomState(d).then((rs) => {
       const zone = document.getElementById('devices-rooms');

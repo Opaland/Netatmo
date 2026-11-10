@@ -4,6 +4,7 @@
 // Lazy module: loaded when the page is opened.
 
 import { alertHtml } from './components';
+import { localDay } from './glossary';
 
 export type Risk = 'faible' | 'moyen' | 'élevé';
 
@@ -16,7 +17,7 @@ export interface LegalService {
   risk: Risk;
 }
 
-export const LEGAL_REVIEW = '2026-11-09';
+export const LEGAL_REVIEW = '2026-11-10';
 
 export const SERVICES: LegalService[] = [
   {
@@ -51,6 +52,14 @@ export const SERVICES: LegalService[] = [
     terms: 'Usage non commercial uniquement (domotique personnelle admise), moins de 10 000 appels par jour. Données sous licence CC BY 4.0 : « Météo : Open-Meteo.com ».',
     url: 'https://open-meteo.com/en/terms',
     read: '2026-11-09',
+    risk: 'faible',
+  },
+  {
+    name: 'PVGIS (Commission européenne)',
+    frame: 'Production solaire heure par heure (simulateur Panneaux solaires, facultatif), API gratuite sans compte, appelée par la collecte quand la localisation change.',
+    terms: 'Usage libre ; réutilisation autorisée avec mention de la source : « PVGIS © Union européenne ». Coordonnées envoyées arrondies à environ 1 km.',
+    url: 'https://joint-research-centre.ec.europa.eu/photovoltaic-geographical-information-system-pvgis/getting-started-pvgis/api-non-interactive-service_en',
+    read: '2026-11-10',
     risk: 'faible',
   },
   {
@@ -105,7 +114,7 @@ const esc = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`)
 const fmt = (d: string) => new Date(`${d}T12:00:00Z`).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' });
 
 /** Content of the « Cadre juridique » card. */
-export function legalHtml(today = new Date().toISOString().slice(0, 10)): string {
+export function legalHtml(today = localDay()): string {
   const docUrl = 'https://github.com/Opaland/Netatmo/blob/main/docs/juridique.md';
   return `${alertHtml('info', "<strong>Ceci n'est pas un avis juridique.</strong> Résumé de ce que le projet a lu des conditions des services qu'il appelle, à la date indiquée.")}
     <p class="hint">Cadre : un <strong>usage domestique</strong> de vos propres données (radiateurs, station, compteur), chiffrées, dans votre propre dépôt ; rien n'est vendu ni partagé.

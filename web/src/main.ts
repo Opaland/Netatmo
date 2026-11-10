@@ -14,7 +14,7 @@ import { onceReady, track, viewRendered } from './ready';
 import { type Anchor, anchorOf, placeAnchor, scrolledAway } from './scroll-anchor';
 import { framedHtml, isFramed } from './frame';
 import { prefetchForOffline, unavailable, updateNetStatus } from './offline';
-import { PAGES, dataStatus } from './pages';
+import { PAGES, currentSelection, dataStatus, keptFilterHtml } from './pages';
 import { type Route, allowed, parentOf, parseRoute, routeKey, simpleTabs, tabOf, titleOf, visibleTabs } from './router';
 import { IdleLock, REMEMBER_DAYS, clearLockNotice, idleSince, lockNotice, markIdleLock } from './session';
 import { isIos, keyLoss, lossMessage, readMark, writeMark } from './storage';
@@ -114,6 +114,20 @@ function tipHtml(route: Route): string {
   return `<p class="onb-tip" role="note"><span>Touchez une pièce pour son détail.</span> <button type="button" class="btn tertiary" data-tip-ok>Compris</button></p>`;
 }
 
+/**
+ * #301: the selection (usage, rooms) found when the data opens was kept from the last visit: it is
+ * recalled above the pages until it is reset or kept. null: not known yet (data not opened).
+ */
+let keptFilter: boolean | null = null;
+onLock(() => (keptFilter = null));
+function keptFilterBanner(): string {
+  if (keptFilter === null) keptFilter = currentSelection() !== '';
+  if (!keptFilter || state.simple) return '';
+  const h = keptFilterHtml();
+  if (!h) keptFilter = false; // reset since: the recall is over
+  return h;
+}
+
 // ------------------------------------------------------------------ shell
 function render() {
   if (!ds) return;
@@ -151,7 +165,7 @@ function render() {
   app.innerHTML = html`
   <header class="top" data-swipe="${swipePeriod(route) ? 'period' : 'tab'}">
     <div class="title">
-      <h1>${esc(meta.home.name)}${ds.source === 'demo' ? ' <span class="badge">démo</span>' : ''}</h1>
+      <p class="home-name">${esc(meta.home.name)}${ds.source === 'demo' ? ' <span class="badge">démo</span>' : ''}</p>
     </div>
     <div class="top-actions"><a class="status-pill ${s.level}" href="#etat" data-view="etat" title="État des données"><span class="dot" aria-hidden="true"></span><span class="pill-long">${esc(s.label)}</span><span class="pill-short">${esc(s.short)}</span><span class="sr-only"> : ${esc(s.text)}, voir l'état des données</span></a>
     <a class="icon-btn" href="#parametres" data-view="parametres" aria-label="Paramètres"${route.page === 'parametres' ? ' aria-current="page"' : ''}>${icon('settings')}</a></div>
@@ -160,7 +174,7 @@ function render() {
     ${tabs
       .map(
         ([k, l]) =>
-          `<a href="#${k}" data-view="${k}"${isOn(k) ? ' aria-current="page"' : ''}>${icon(state.simple && k.startsWith('piece') ? 'piece' : state.simple && k === 'aide' ? 'aide' : k)}<span>${esc(l)}</span></a>`,
+          `<a href="#${k}" data-view="${k}" aria-label="${esc(l)}"${isOn(k) ? ' aria-current="page"' : ''}>${icon(state.simple && k.startsWith('piece') ? 'piece' : state.simple && k === 'aide' ? 'aide' : k)}<span>${esc(l)}</span></a>`,
       )
       .join('')}
   </nav>
@@ -168,10 +182,11 @@ function render() {
   <p class="offline" id="net-status" role="status" hidden></p>
   ${
     sub
-      ? `<div class="subhead"><a class="back" href="#${parent}" data-back aria-label="Retour">${icon('back')}</a><h2 id="page-title" tabindex="-1">${esc(title)}</h2></div>`
+      ? `<div class="subhead"><a class="back" href="#${parent}" data-back aria-label="Retour">${icon('back')}</a><h1 id="page-title" tabindex="-1">${esc(title)}</h1></div>`
       : ''
   }
   ${tipHtml(route)}
+  ${keptFilterBanner()}
   <main id="view" data-page="${esc(key)}"></main>`;
   finishRender(route, key, changed, focus, keepTab, keepY);
 }
@@ -341,6 +356,12 @@ async function shellClick(el: HTMLElement, e: MouseEvent): Promise<boolean> {
     setState({ cat: 'all', rooms: null });
     return true;
   }
+  if (el.dataset.filterKeep !== undefined) {
+    keptFilter = false;
+    render();
+    app.querySelector<HTMLElement>('#page-title')?.focus();
+    return true;
+  }
   if (el.dataset.tipOk !== undefined) {
     dismissTip(ds?.source === 'demo');
     el.closest('.onb-tip')?.remove();
@@ -495,7 +516,7 @@ app.addEventListener('keydown', (e) => {
 
 // ------------------------------------------------------------------ swipe (S-7.11)
 /**
- * #348: the screens with one period (Accueil, Compteur and its detail pages, Historique) change
+ * #348: the screens with one period (Accueil, Pièces and a room, Compteur and its detail pages, Historique) change
  * it by a swipe on the header, the others change tab; the tab bar always changes tab. The
  * periods in the order of their control: swipe right for the next, longer one.
  */
@@ -503,6 +524,8 @@ function swipePeriod(route: Route): { list: [string, string][]; current: string;
   if (route.page === 'accueil') return { list: HOME_PERIODS, current: homePeriod(state.home), set: (v) => setState({ home: v as HomePeriod }) };
   if (route.page === 'compteur' || route.page === 'compteur-detail')
     return { list: HOME_PERIODS, current: homePeriod(state.meter), set: (v) => setState({ meter: v as HomePeriod }) };
+  if (route.page === 'pieces' || route.page === 'piece')
+    return { list: HOME_PERIODS, current: homePeriod(state.pieces), set: (v) => setState({ pieces: v as HomePeriod }) };
   if (route.page === 'historique') return { list: historyPeriods(), current: state.period, set: (v) => setState({ period: v }) };
   return null;
 }

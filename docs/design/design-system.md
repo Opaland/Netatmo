@@ -100,7 +100,7 @@ bleu à l'eau chaude (constat C1 de l'audit) ; l'iris ne se confond avec aucun u
 | `--series-reference` | sand 9, pointillé | référence (puissance souscrite, signature, attendu) |
 | `--year-0` … `--year-3` | iris 9, iris 7, sand 9, sand 7 | **années** : la plus récente en iris plein, puis éclaircies ; jamais orange ni bleu |
 | `--room-1` … `--room-8` | sarcelle, cramoisi, jaune, prune, herbe, brun, cyan, rouge (Radix), **sans** orange, bleu ni iris ; deux pièces à ΔE*ab ≥ 20 entre elles et des usages, dans chaque thème (#399, `tokens.test.ts`) | pièces, une couleur fixe par pièce (`roomColor`) ; un module de la station prend celle de sa pièce (`moduleColor`), l'extérieur `--series-reference` pointillé |
-| `--seq-1` … `--seq-7` | rampe iris 2 → 11 (clair), inversée en sombre, **avec variante contraste élevé** | calendrier, cartes de chaleur, CO₂ |
+| `--seq-1` … `--seq-5` | rampe d'encre sand 4 → 12 (clair), inversée en sombre (#409 : jamais l'iris de l'accent, réservé aux actions et à la sélection) | calendrier, cartes de chaleur, CO₂ |
 | `--state-good` / `--state-warn` / `--state-bad` / `--state-info` | grass 11 `#2a7e3b` · amber 11 `#ab6400` · tomato 11 `#d13415` · iris 11 | baisse / attention / hausse ou erreur / information |
 
 Règles : rouge = « plus de dépense », vert = « moins de dépense » ; pour une **température** on
@@ -134,7 +134,7 @@ donc sensibles au texte système. Mode simple : `--font-md` passe à 1,25 rem pa
 | Élévation | `--shadow-1` (cartes, clair seulement) · `--shadow-3` (menus, feuilles) ; en sombre, une bordure remplace l'ombre |
 | Cibles | `--target-min` 44 px (tous les contrôles tactiles) |
 | Mouvement | `--ease-out` (Open Props `--ease-out-3`), durées 120 / 200 ms ; **nul** sous `prefers-reduced-motion` |
-| Mise en page | `--content-max` 1 100 px ; rupture unique à 760 px (onglets en haut, 2 colonnes) |
+| Mise en page | `--content-max` 1 100 px ; rupture unique à 760 px (onglets en haut, 2 colonnes pour les pages de cartes indépendantes : Compteur, Air et confort, #408) ; paragraphes limités à 70 ch (~75 caractères, WCAG 1.4.8) |
 
 ## 4. Composants
 

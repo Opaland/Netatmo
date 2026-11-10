@@ -47,11 +47,11 @@ export function pmaxMonths(pmax: Map<string, number>, from: string, to: string):
 export const ENERGY_ONLY = 'hors abonnement';
 export const WITH_SUBSCRIPTION = 'abonnement inclus';
 
-/** Sentence under the key figures: what the euros of the Synthèse cover. */
-export function costScope(cat: string): string {
-  const scope = cat === 'heating' ? 'radiateurs seuls' : cat === 'water_heater' ? 'chauffe-eau seul' : 'radiateurs et chauffe-eau';
-  return `Euros : énergie seule, ${ENERGY_ONLY}, ${scope} (pas tout le logement) ; « ≈ » pour une estimation au prix moyen de la sélection sur 12 mois.`;
-}
+/**
+ * #292 / #386: what the euros of « Consommation en détail » cover, after its « Compté : » (which
+ * names the meters and the rooms, history.ts).
+ */
+export const EUROS_NOTE = `euros : énergie seule, ${ENERGY_ONLY} ; « ≈ » pour une estimation au prix moyen de la sélection sur 12 mois`;
 
 /**
  * #291: euros of the year-end projection: the real cost so far (the « Depuis le 1er janvier »

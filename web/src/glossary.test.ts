@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   agreePlurals,
   dayLong,
+  fmtTemp,
   dayShort,
   hour,
   hourMin,
@@ -18,6 +19,21 @@ import {
   usageLabel,
   vsLabel,
 } from './glossary';
+
+describe('glossaire : le jour d’aujourd’hui est le jour local (#299)', () => {
+  it('aucune vue ne prend la date du jour en UTC (toISOString), toutes passent par localDay()', async () => {
+    const fsName = 'node:fs';
+    const { readFileSync, readdirSync } = (await import(/* @vite-ignore */ fsName)) as {
+      readFileSync: (u: URL, enc: 'utf8') => string;
+      readdirSync: (u: URL) => string[];
+    };
+    const src = new URL('./', import.meta.url);
+    const files = ['', 'views/'].flatMap((d) => readdirSync(new URL(d, src)).filter((f) => f.endsWith('.ts') && !f.endsWith('.test.ts')).map((f) => `${d}${f}`));
+    // « now » written in UTC: between midnight and 1 or 2 am, it is still yesterday
+    const found = files.filter((f) => /new Date\(\)\.toISOString\(\)|new Date\(Date\.now\(\)\)\.toISOString\(\)/.test(readFileSync(new URL(f, src), 'utf8')));
+    expect(found).toEqual([]);
+  });
+});
 
 describe('glossaire : dates et heures (#299)', () => {
   it('écrit « 1er » et les mois en français', () => {
@@ -65,10 +81,14 @@ describe('périodes standard avec leurs bornes (§ 7.1, #299)', () => {
 });
 
 describe('glossaire : nombres et comparaisons (#315)', () => {
+  it('#389 : l’unité ne se sépare jamais de son nombre (espace insécable)', () => {
+    expect(fmtTemp(19.94)).toBe('19,9 °C');
+    expect(signedPct(-16)).toBe('−16 %');
+  });
   it('pourcentages signés', () => {
-    expect(signedPct(-16.4)).toBe('−16 %');
-    expect(signedPct(2.6)).toBe('+3 %');
-    expect(signedPct(-0.2)).toBe('0 %');
+    expect(signedPct(-16.4)).toBe('−16 %');
+    expect(signedPct(2.6)).toBe('+3 %');
+    expect(signedPct(-0.2)).toBe('0 %');
   });
   it('dit toujours à quoi on se compare', () => {
     expect(vsLabel('2026-11-01', '2026-11-08')).toBe('vs nov. 2025 au 8');

@@ -9,7 +9,7 @@ import { type DayRecord, bucketLabel } from '../aggregate';
 import { tariffSplit } from '../analysis';
 import { ds, state } from '../app';
 import { barChart, cssVar } from '../charts';
-import { type LegendItem, alert, gauge, howDetails, legend, list, seg } from '../components';
+import { type LegendItem, alert, countedNote, gauge, howDetails, legend, list, seg } from '../components';
 import { HOME_PERIODS, type HomeRange, homeRange, scopeTitle } from '../home';
 import { lazyCard } from '../lazy';
 import {
@@ -37,7 +37,7 @@ import * as analyse from './analyse';
 
 const hasCurve = () => !!((ds!.meta as { linky_curve_years?: number[] }).linky_curve_years ?? []).length;
 const hasTariffs = () => !!ds!.meta.has_tariffs;
-const counted = (text: string) => `<p class="counted"><span class="counted-k">Compté :</span> ${text}</p>`;
+const counted = countedNote;
 const head = (id: string, title: string, sub: string) =>
   `<div class="card-head"><h2 id="${id}">${esc(title)}</h2><span class="card-period">${esc(sub)}</span></div>`;
 
@@ -62,7 +62,7 @@ function periodBar(r: HomeRange, what = 'tout le logement, relevé par le compte
 /** Entry point of the tab and of its detail pages (`route.page === 'compteur-detail'`). */
 export function renderMeter(view: HTMLElement, route: Route) {
   const sub = route.page === 'compteur-detail' ? route.sub : null;
-  const title = sub ? '' : '<h2 class="page-title" id="page-title" tabindex="-1">Compteur <small class="muted">Linky</small></h2>';
+  const title = sub ? '' : '<h1 class="page-title" id="page-title" tabindex="-1">Compteur <small class="muted">Linky</small></h1>';
   if (tenant().on) {
     view.innerHTML = html(`${title}${tenantNote('Les cartes du compteur (part des usages, puissance, courbe de charge) sont masquées')}`); // S-12.6
     return;
@@ -149,7 +149,7 @@ function powerCard(r: HomeRange): string {
           label: `Puissance la plus haute : ${fmtKva(peak.max)}, soit ${nf0.format(v.used)} % des ${kva} kVA souscrits`,
           value: peak.max,
           max: Math.max(kva, peak.max),
-          color: v.level === 'tight' ? '--state-warn' : '--accent',
+          color: v.level === 'tight' ? '--state-warn' : '--series-measure',
           scale: ['0', `utilisés : ${nf0.format(v.used)} %`, `souscrits : ${kva} kVA`],
         })
       : '';
@@ -169,7 +169,7 @@ function drawPower(r: HomeRange) {
   const b = powerBuckets(ds!.pmax, r.from, r.to, gran(r));
   barChart(el, {
     labels: b.keys.map((k) => bucketLabel(k, gran(r))),
-    series: [{ name: 'Puissance la plus haute', color: cssVar('--accent'), data: b.max.map((x) => Math.round(x * 10) / 10) }],
+    series: [{ name: 'Puissance la plus haute', color: cssVar('--series-measure'), data: b.max.map((x) => Math.round(x * 10) / 10) }],
     stacked: false,
     price: null,
     unit: 'kVA',

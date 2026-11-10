@@ -30,8 +30,8 @@ const errors = [];
 const check = (ok, msg) => ok || errors.push(msg);
 const t0 = Date.now();
 const progress = (s) => console.log(`[${Math.round((Date.now() - t0) / 1000)} s] plannings ${s}`);
-const PAGES = ['outils-plannings', 'outils-absences', 'historique'];
-const WAIT = { 'outils-plannings': '#plannings-summary', 'outils-absences': '#absence-card', historique: '#hist-absences' };
+const PAGES = ['outils-plannings', 'outils-absences', 'historique-calendrier'];
+const WAIT = { 'outils-plannings': '#plannings-summary', 'outils-absences': '#absence-card', 'historique-calendrier': '#hist-absences' };
 
 async function waitForServer() {
   for (let i = 0; i < 50; i++) {
@@ -84,11 +84,11 @@ try {
     progress('plannings');
     const sum = await text(page, '#plannings-summary');
     check(/Compté : 4 semaines, du .+ au 8 nov\. 2026/.test(sum), `plannings : « Compté : » → ${sum.slice(0, 200)}`);
-    check(/En heures creuses \d+ %/.test(sum), `plannings : part en heures creuses absente → ${sum.slice(0, 300)}`);
+    check(/En heures creuses \d+\s%/.test(sum), `plannings : part en heures creuses absente → ${sum.slice(0, 300)}`);
     check(/Gain possible/.test(sum), 'plannings : tuile « Gain possible » absente');
     check(/Lecture seule/.test(sum) && /ne modifie jamais/.test(sum), 'plannings : la lecture seule n’est pas dite');
     const salon = await text(page, '#plan-r-salon');
-    check(/7 h → 20,0 °C/.test(salon), `Salon : relance de 7 h absente → ${salon.slice(0, 300)}`);
+    check(/7 h → 20,0\s°C/.test(salon), `Salon : relance de 7 h absente → ${salon.slice(0, 300)}`);
     check(/Avancer la relance de 7 h à \d+ h/.test(salon) && /€ par mois de chauffe/.test(salon), `Salon : pas de suggestion chiffrée → ${salon.slice(0, 400)}`);
     check(/heures pleines/.test(salon), 'Salon : part en heures pleines de la montée absente');
     check(await page.locator('#plan-r-salon .sched').count(), 'Salon : planning type absent');
@@ -116,8 +116,8 @@ try {
     await page.locator('#absence-card [data-absence-earlier]').first().click(); // back as seen by the radiators
     await page.waitForFunction(() => !/Début avancé de 12 h/.test(document.querySelector('#absence-card')?.textContent ?? ''), null, { timeout: 10000 }).catch(() => errors.push('absences : la correction ne s’annule pas'));
 
-    // ------------------------------------------------------------ Historique: absences next to the comparisons
-    await go(page, 'historique');
+    // ------------------------------------------------------------ Historique: absences next to the calendar (#386)
+    await go(page, 'historique-calendrier');
     const hist = await text(page, '#hist-absences');
     check(/\d+ jours? d'absence l'hiver 2026–2027/.test(hist), `Historique : jours d’absence de l’hiver absents → ${hist.slice(0, 300)}`);
     check(await page.locator('#hist-absences a[href="#outils-absences"]').count(), 'Historique : pas de lien vers le détail des absences');

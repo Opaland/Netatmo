@@ -118,6 +118,64 @@ export function oldClassUses(files: Record<string, string>): string[] {
   return found;
 }
 
+/** Rules of a style sheet: { selector, decls } (the rules inside an @media come out one by one). */
+function rules(css: string): { selector: string; decls: { prop: string; value: string }[] }[] {
+  return [...stripCss(css).matchAll(/([^{}]+)\{([^{}]*)\}/g)].map((m) => ({
+    selector: m[1].trim().replace(/\s+/g, ' '),
+    decls: [...`${m[2]};`.matchAll(/([a-z0-9-]+)\s*:\s*([^;]+);/g)].map((d) => ({ prop: d[1], value: d[2].trim() })),
+  }));
+}
+/** What a rule may set on a select besides the one look of the base rule: its place, not its look. */
+const PLACING = /^(?:width|max-width|min-width|box-sizing|flex(?:-[a-z]+)?|margin(?:-[a-z]+)?|grid-[a-z-]+|justify-self|align-self|order)$/;
+/**
+ * #402: rules that restyle a select outside the base rule (`select { … }` in style.css, and the
+ * `button, input, select` reset): `file: selector { prop }`.
+ */
+export function selectRestyles(files: Record<string, string>): string[] {
+  const found: string[] = [];
+  for (const [file, text] of Object.entries(files)) {
+    if (!file.endsWith('.css')) continue;
+    for (const r of rules(text)) {
+      if (!r.selector.split(',').some((s) => /(?:^|[\s>+~(])select(?![\w-])/.test(s.trim()))) continue;
+      if (r.selector === 'select' || r.selector === 'button, input, select') continue;
+      for (const d of r.decls) if (!PLACING.test(d.prop)) found.push(`${file}: ${r.selector} { ${d.prop} }`);
+    }
+  }
+  return found;
+}
+
+/**
+ * #409: the accent (iris) is for actions and selection, never for data. The colours given to a
+ * gauge, a share bar, a legend or a chart series in the views: `file: text`. The exceptions are
+ * the setpoint lines: what was asked of a radiator, drawn next to the measure; their colour is a
+ * design decision left to the owner (PR of #409).
+ */
+const ACCENT_DATA_ALLOWED: { file: string; literal: string }[] = [
+  { file: 'views/analyse.ts', literal: "{ name: TEMP.setpointShort, color: cssVar('--accent')" },
+  { file: 'views/piece.ts', literal: "{ label: TEMP.setpointShort, color: '--accent', kind: 'line' }" },
+  { file: 'views/piece.ts', literal: "{ name: 'Demandée (consigne)', color: cssVar('--accent')" },
+];
+export function accentData(files: Record<string, string>): string[] {
+  const found: string[] = [];
+  for (const [file, text] of Object.entries(files)) {
+    if (file.endsWith('.css')) {
+      for (const r of rules(text)) {
+        for (const d of r.decls) {
+          if (/^--seq-\d$/.test(d.prop) && /iris|#5b5bd6/i.test(d.value)) found.push(`${file}: ${d.prop}: ${d.value}`);
+          if (/\.gauge\b/.test(r.selector) && /^background/.test(d.prop) && /--accent\b/.test(d.value)) found.push(`${file}: ${r.selector} { ${d.prop}: ${d.value} }`);
+        }
+      }
+      continue;
+    }
+    const code = stripTs(text);
+    for (const m of code.matchAll(/[^\n]*(?:color:\s*'--accent'|cssVar\('--accent'\)|\?\?\s*'--accent'|var\(--\$\{[^}]*'accent'[^}]*\}\))[^\n]*/g)) {
+      if (ACCENT_DATA_ALLOWED.some((a) => file.endsWith(a.file) && m[0].includes(a.literal))) continue;
+      found.push(`${file}: ${m[0].trim().slice(0, 120)}`);
+    }
+  }
+  return found;
+}
+
 /** The text parts of the string literals of a module (the `${…}` of a template left out). */
 function texts(code: string): string[] {
   const out: string[] = [];
@@ -140,6 +198,12 @@ const EMOJI_ALLOWED = [
   { file: 'incidents.ts', literal: '⚠' },
   { file: 'incidents.ts', literal: '🔋' },
 ];
+/** #427: « Compté : » is written by countedNote / countedInner / countedText (components.ts) only. */
+export function countedLiterals(files: Record<string, string>): string[] {
+  return Object.entries(files)
+    .filter(([file]) => !file.endsWith('.css') && file !== 'components.ts')
+    .flatMap(([file, text]) => texts(text).filter((t) => /Compté[\s\u00a0]*:/.test(t)).map((t) => `${file}: « ${t.trim().slice(0, 50)} »`));
+}
 export function wordingFaults(files: Record<string, string>): string[] {
   const found: string[] = [];
   for (const [file, text] of Object.entries(files)) {
@@ -174,10 +238,44 @@ describe('design system usage (#317)', () => {
     expect(wordingFaults(files)).toEqual([]);
   });
 
+  it('#427: « Compté : » is written by the shared component only', () => {
+    expect(countedLiterals(files)).toEqual([]);
+    expect(files['components.ts']).toContain("const COUNTED = 'Compté :'");
+    expect(countedLiterals({ 'views/x.ts': 'const a = `<p class="counted"><span class="counted-k">Compté :</span> ${t}</p>`; // Compté : ok' })).toHaveLength(1);
+    expect(countedLiterals({ 'views/x.ts': "// « Compté : … » in a comment\nconst a = countedNote('x');" })).toEqual([]);
+  });
+
+  it('#406: one plural(), in glossary.ts (AGENTS.md §5)', () => {
+    const copies = Object.entries(files).filter(([f, t]) => f !== 'glossary.ts' && /\b(?:const|function)\s+plural\b/.test(stripTs(t)));
+    expect(copies.map(([f]) => f)).toEqual([]);
+  });
+
   it('the wording guard sees what it guards', () => {
     expect(wordingFaults({ 'views/x.ts': 'const a = `${n} jour(s) au-dessus`;' })).toEqual(['views/x.ts: « jour(s) »']);
     expect(wordingFaults({ 'views/x.ts': "const a = `${h.low ? ' ⚠️' : ''}`;" })).toHaveLength(1);
     expect(wordingFaults({ 'views/x.ts': 'const a = get(s); const b = `${xs.map((s) => esc(s)).join(\', \')}`;' })).toEqual([]);
+  });
+
+  it('#402: one look for every select, defined once (other rules only place it)', () => {
+    expect(selectRestyles(files)).toEqual([]);
+  });
+
+  it('#409: no data in the accent colour (gauges, bars, ramps), the setpoint lines aside', () => {
+    expect(accentData({ ...files, 'styles/tokens.css': read('styles/tokens.css') })).toEqual([]);
+    for (const a of ACCENT_DATA_ALLOWED) expect(files[a.file]?.includes(a.literal), `${a.file}: ${a.literal}`).toBe(true);
+  });
+
+  it('the select and accent guards see what they guard', () => {
+    expect(selectRestyles({ 'x.css': 'select { border-radius: 9px; }\n.form select { width: 100%; }' })).toEqual([]);
+    expect(selectRestyles({ 'x.css': '.money-field input,\n.money-field select { padding: 10px; width: 100%; }' })).toEqual(['x.css: .money-field input, .money-field select { padding }']);
+    expect(selectRestyles({ 'x.css': '@media (min-width: 1px) { .a > select { border: 0; } }' })).toHaveLength(1);
+    expect(selectRestyles({ 'x.css': '.select { border: 0; }' })).toEqual([]);
+    expect(accentData({ 'views/x.ts': "gauge({ value: 1, color: '--accent' })" })).toHaveLength(1);
+    expect(accentData({ 'views/x.ts': "series: [{ name: 'Pic', color: cssVar('--accent'), data }]" })).toHaveLength(1);
+    expect(accentData({ 'views/x.ts': "shareBar(o.share, o.color ?? '--accent')" })).toHaveLength(1);
+    expect(accentData({ 'views/x.ts': "const a = `<span style=\"background:var(--${over ? 'bad' : 'accent'})\">`;" })).toHaveLength(1);
+    expect(accentData({ 'x.css': ':root { --seq-4: var(--iris-9); }\n.gauge .fill { background: var(--gauge-color, var(--accent)); }' })).toHaveLength(2);
+    expect(accentData({ 'views/x.ts': "color: cssVar('--series-measure')", 'x.css': '.btn { background: var(--accent); }' })).toEqual([]);
   });
 
   it('the guards see what they guard (a literal, an old class)', () => {

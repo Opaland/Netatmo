@@ -68,9 +68,16 @@ async function go(page, key) {
 const DESTINATIONS = {
   // #311: period, verdict and its gauge, 3 tiles, alerts, what counted, consumption and cold, AI summary
   accueil: ['.periodbar [data-set=home]', '.periodbar .scope', '.verdict .gauge', '.home-tiles .kpi', '#grid-card .alert', '#counted-card .list .row', 'text:Poêle à bois (Cuisine)', '#home-chart canvas', '#insight-card .md', 'a[href="#historique"]'],
-  pieces: ['.rooms-picker', '#rooms-chart canvas', 'a[href="#confort"]', 'a[href="#chauffe-eau"]'],
+  pieces: ['.periodbar [data-set=pieces]', '#pieces-compare .counted', '.rooms-picker', '#rooms-chart canvas', 'a[href="#confort"]', 'a[href="#chauffe-eau"]'],
+  // #386: winter against winter and « en détail » on the tab, the rest in its sub-pages, each card saying what it counts
   // #394: the cut days of the incident log, said under « Consommation en détail » and in its chart's summary
-  historique: ['.kpis-one .kpi', '#explore-card #main-chart canvas', '#explore-card #cut-note', '#main-chart[aria-label*="Jours de coupure"]', '#explore-card [data-set=cat]', '#explore-card [data-set=gran]', '#cmp-chart canvas', 'text:Totaux annuels', '#rooms-waterfall canvas', '#sig-chart canvas', '#sig-wind table', 'text:Le vent explique', '#indoor-sig-chart canvas', '#unusual-card', '#cal-chart canvas', '#station-chart canvas'],
+  historique: ['#cmp-chart canvas', '#cmp-card .card-period', '#cmp-card .counted', '#explore-card #main-chart canvas', '#explore-card #cut-note', '#main-chart[aria-label*="Jours de coupure"]', '#explore-card [data-set=cat]', '#explore-card [data-set=gran]', '#explore-card .counted', '#history-more a[href="#historique-froid"]'],
+  'historique-annees': ['#years-card table', '#years-card .card-period', '#years-card .counted', '#years-card button.term[data-term=dju]', 'text:Totaux par année'],
+  'historique-changements': ['#rooms-waterfall canvas', '#changes-card .card-period', '#changes-card .counted'],
+  'historique-froid': ['#sig-chart canvas', '#sig-card .counted', '#sig-wind table', 'text:Le vent explique', '#indoor-sig-chart canvas'],
+  'historique-jours': ['#unusual-card .card-period', '#unusual-card .counted'],
+  'historique-calendrier': ['#cal-chart canvas', '#calendar-card .card-period', '#calendar-card .counted'],
+  'historique-station': ['#station-chart canvas', '#station-table table'],
   // #301: part of the usages, maximum power (shedding in « Voir les valeurs »), then the detail pages
   compteur: ['#linky-chart canvas', '#pmax-chart canvas', '#offload-zone table', '#share-card .counted', '#power-card .counted', 'a[href="#compteur-veille"]', 'a[href="#compteur-heures-creuses"]'],
   'compteur-journee': ['#curve-typical canvas', '#curve-day-chart canvas', '#hour-grid canvas', '#curve-card .counted'],
@@ -79,11 +86,13 @@ const DESTINATIONS = {
   'compteur-heures-creuses': ['#offpeak-chart canvas', '#offpeak-card .counted', 'text:Heures pleines / creuses'],
   confort: ['#pressure-card table', 'text:bruyante', '#cold-chart canvas', '#windows-chart canvas', '#ha-card table', '#cellar-0 canvas', '#probe-0 canvas'],
   'chauffe-eau': ['#wh-month-chart canvas', '#contactor-line:not([hidden])'],
-  etat: ['#quality', '.status-list', '#devices-card [data-shelly-role]', '#quality-years .year-verdict', '#incidents .incident-list li', 'text:h sans Internet', 'text:coupure de courant', '#quality-sources [data-source=heating] .gaps li', '#quality-sources [data-source=station]', '#quality-fine [data-source=linky30]', '#quality-fine [data-source=room30]', 'text:Année par année'],
+  etat: ['#quality', '.status-list', '#devices-card a[href="#parametres-sources"]', '#quality-years .year-verdict', '#incidents .incident-list li', 'text:h sans Internet', 'text:coupure de courant', '#quality-sources [data-source=heating] .gaps li', '#quality-sources [data-source=station]', '#quality-fine [data-source=linky30]', '#quality-fine [data-source=room30]', 'text:Année par année'],
   rapport: ['.report .kpis', '#report-offers table'],
   'outils-offres': ['#offers-chart canvas'],
   'outils-voiture': ['#ev-card #ev-result table'],
   'outils-pac': ['#hp-card #hp-result table'],
+  // #356: production profile, result per size (prices of the contract offered), amiante, hypotheses
+  'outils-solaire': ['#solar-card #solar-profile strong', '#solar-result h3', '#solar-result .list .row', '.sim-note', 'text:amiante', 'text:Hypothèses de ce résultat', 'text:pilotage avant la batterie'],
   outils: ['a[href="#etat"] .swatch', 'a[href="#outils-offres"] .s', 'a[href="#parametres-securite"]', 'text:Sauvegarde chiffrée'],
   'outils-consigne': ['#setpoint-card #sp-result', '.sim-note', 'text:Simulation'],
   'outils-teletravail': ['#telework-card'],
@@ -95,8 +104,8 @@ const DESTINATIONS = {
   'outils-exports': ['#export', '[data-export-long=csv]', '[data-export-long=json]', '[data-research]', '#backup'],
   'parametres-contrat': ['[data-pmode]', '#contract-share'],
   // #366: the stove's wood (demo: three purchases, two seasons), on Accueil too (winter against winter: e2e/expliquer.mjs)
-  'parametres-logement': ['#wood-card [aria-label="Bois par saison"] .row', '#wood-card #wood-add', '#works-card [data-works-surface]', 'a[href="#compteur-autres"]'],
-  'parametres-sources': ['.status-list', '#gh-login', '#devices-card'],
+  'parametres-logement': ['#wood-card [aria-label="Bois par saison"] .row', '#wood-card #wood-add', '#works-card [data-works-surface]', 'a[href="#compteur-autres"]', '#location-card #loc-edit', 'text:Commune d'],
+  'parametres-sources': ['.status-list', '#gh-login', '#devices-card [data-shelly-role]'],
   'parametres-objectifs': ['#money-card #budget-input', '#co2-input', '[data-threshold]', '#cold-card [data-cold-room]'],
   'parametres-affichage': ['[data-set=theme]', '[data-toggle=simple]', 'select[data-pin]', '[data-toggle=household]'],
   'parametres-foyer': ['#invite-open', '#tenant-card #tenant-on'],
@@ -280,6 +289,37 @@ try {
     await ctx.close();
   }
 
+  // ---------------------------------------------------------------- #301: a selection kept from the last visit
+  progress('sélection gardée');
+  for (const answer of ['Réinitialiser', 'Garder']) {
+    const c = await browser.newContext({ viewport: { width: 360, height: 780 }, deviceScaleFactor: 1, serviceWorkers: 'block' });
+    // the last visit chose « Eau chaude » (set once: the app saves the state again afterwards)
+    await c.addInitScript(() => {
+      if (sessionStorage.getItem('e2e-seeded')) return;
+      sessionStorage.setItem('e2e-seeded', '1');
+      localStorage.setItem('intuis-history:state', JSON.stringify({ cat: 'water_heater' }));
+    });
+    const p = await c.newPage();
+    p.on('pageerror', (e) => errors.push(`${BROWSER} sélection gardée: ${e.message}`));
+    await p.goto(base);
+    await p.click('#demo');
+    await ready(p);
+    const banner = p.locator('.kept-filter');
+    check((await banner.count()) === 1 && /Eau chaude/.test(await banner.innerText()), `#301 : pas de rappel de la sélection gardée au démarrage (${await p.locator('#view').getAttribute('data-page')})`);
+    await go(p, 'historique');
+    check((await banner.count()) === 1, '#301 : le rappel de la sélection gardée disparaît en changeant de page');
+    await p.getByRole('button', { name: answer, exact: true }).click();
+    await ready(p);
+    check((await banner.count()) === 0, `#301 : le rappel reste après « ${answer} »`);
+    const chip = await p.locator('#view .filter-chip').count();
+    check(answer === 'Réinitialiser' ? chip === 0 : chip === 1, `#301 : « ${answer} » ${answer === 'Réinitialiser' ? 'garde' : 'retire'} la sélection`);
+    if (answer === 'Garder') {
+      await go(p, 'accueil');
+      check((await banner.count()) === 0, '#301 : le rappel revient après « Garder »');
+    }
+    await c.close();
+  }
+
   // ---------------------------------------------------------------- demo on an iPhone
   const ctx = await browser.newContext({ ...iphone, acceptDownloads: true });
   await ctx.addInitScript(recordViolations);
@@ -291,7 +331,7 @@ try {
   await page.waitForSelector('.kpi', { timeout: 30000 });
   await go(page, 'pieces');
   const roomNames = (await page.locator('.rooms-panel label').allInnerTexts()).map((t) => t.split('\n')[0].replace(/\s*(Chauffage|Chauffe-eau)\s*$/, '').trim());
-  const homeName = (await page.locator('.top h1').innerText()).replace(/\s*démo$/i, '').trim();
+  const homeName = (await page.locator('.top .home-name').innerText()).replace(/\s*démo$/i, '').trim();
   check(roomNames.length >= 3, `pièces introuvables (${roomNames.join(', ')})`);
 
   // S-7.9: the five views
@@ -306,6 +346,14 @@ try {
     await ready(page);
     await page.screenshot({ path: `${OUT}/${BROWSER}-iphone-${view}.png`, fullPage: true });
     await checkViolations(page, view);
+  }
+
+  // #387: État des données, a verdict per source and the detail folded, holds in 4 screens
+  progress('état des données');
+  {
+    await go(page, 'etat');
+    const [h, screenH] = await page.evaluate(() => [document.documentElement.scrollHeight, window.innerHeight]);
+    check(h <= 4 * screenH, `#387 : État des données fait ${h} px, plus de 4 écrans (${4 * screenH} px)`);
   }
 
   // #311 / #302: Accueil holds in 3 iPhone screens; one period for the screen, each comparison named
@@ -330,14 +378,47 @@ try {
     await audit(page, 'accueil');
   }
 
+  // #386: Historique holds in 4 iPhone screens, one question per page, no technical term left
+  progress('historique');
+  {
+    await go(page, 'historique');
+    const [h, screenH] = await page.evaluate(() => [document.documentElement.scrollHeight, window.screen.height]);
+    check(h <= 4 * screenH, `#386 : l'Historique fait ${h} px, plus de 4 écrans (${4 * screenH} px)`);
+    const subs = await page.locator('#history-more a').evaluateAll((as) => as.map((a) => a.getAttribute('href')));
+    check(subs.length >= 5, `#386 : « Pour aller plus loin » n'a que ${subs.length} sous-pages`);
+    for (const route of ['historique', ...subs.map((s) => s.slice(1))]) {
+      await go(page, route);
+      const text = await page.locator('#view').innerText();
+      const jargon = text.match(/\bDJU\b|\b[Pp]entes?\b|[Ss]ignature|\bsuspect\b|\bseuil\b/g);
+      check(!jargon, `#386 : terme technique visible dans ${route} → ${[...new Set(jargon ?? [])].join(', ')}`);
+      // #299 / #301: every card of the page says its period and what it counts
+      const cards = await page.locator('#view section.card:not(#history-more)').evaluateAll((cs) =>
+        cs.filter((c) => c.querySelector('.chart, table')).map((c) => [c.querySelector('h2')?.textContent ?? '?', !!c.querySelector('.card-period'), !!c.querySelector('.counted')]),
+      );
+      for (const [title, period, counted] of cards) check(period && counted, `#299/#301 : ${route} « ${title} » sans ${period ? '' : 'période '}${counted ? '' : '« Compté : »'}`);
+    }
+    // #306: « An » only over whole years
+    await go(page, 'historique');
+    await page.selectOption('select[data-set=period]', '12m');
+    await ready(page);
+    check((await page.locator('#explore-card [data-set=gran][data-value=year]').count()) === 0, '#306 : granularité « An » proposée sur 12 mois glissants');
+    await page.selectOption('select[data-set=period]', 'all');
+    await ready(page);
+    check((await page.locator('#explore-card [data-set=gran][data-value=year]').count()) === 1, '#306 : granularité « An » absente sur « Tout »');
+    await page.selectOption('select[data-set=period]', '12m');
+    await ready(page);
+    await audit(page, 'historique');
+  }
+
   // v1.5 figures (#245 #246 #294 #295 #297 #298)
   progress('chiffres v1.5');
   {
     const label = () => page.locator('#cmp-chart').getAttribute('aria-label');
+    await go(page, 'historique-annees');
+    const totals = await page.locator('#years-card').innerText();
+    check(/\*[\s\S]*Évolution de \d{4} : \d{4} compte \d+ jours? estimés? ou manquants?/.test(totals), '#297 : évolution annuelle sans mention des jours perdus');
     await go(page, 'historique');
     await page.waitForSelector('#cmp-chart canvas');
-    const totals = await page.locator('table', { hasText: 'Évolution' }).first().innerText();
-    check(/jours? estimés? ou manquants?/.test(totals), '#297 : évolution annuelle sans mention des jours perdus');
     await page.click('[data-set=compareMode][data-value=cumul]');
     await ready(page);
     const cumul = (await label()) ?? '';
@@ -345,24 +426,35 @@ try {
     await page.click('[data-set=compareMode][data-value=season]');
     await ready(page);
     check((await page.locator('[data-season]', { hasText: 'en cours' }).count()) === 1, '#298 : pas de puce pour la saison en cours');
-    check(/\(en cours\) : total [\d\s  ]+ kWh/.test((await label()) ?? ''), '#298 : saison en cours absente du graphique');
+    check(/\(en cours\) : total [\d\s  ]+\skWh/.test((await label()) ?? ''), '#298 : saison en cours absente du graphique');
     // maquette « Historique » : hiver contre hiver, deux hivers complets chiffrés, à climat égal, l'hiver en cours en pointillé
     check((await page.locator('#cmp-card .season-tiles .kpi').count()) === 2, 'Historique : les deux hivers complets ne sont pas chiffrés');
     check(/à climat égal/.test(await page.locator('#cmp-card').innerText()), 'Historique : pas de comparaison « à climat égal »');
     check((await page.locator('#cmp-legend .legend i.line').count()) === 1, 'Historique : hiver en cours non signalé (pointillé)');
+    await page.click('[data-set=compareMode][data-value=monthly]');
+    await ready(page);
     // #303 : un seul tableau de signature, saison courte « provisoire »
+    await go(page, 'historique-froid');
+    await page.waitForSelector('#sig-chart canvas');
     check((await page.locator('#indoor-sig table').count()) === 0, '#303 : deuxième tableau de signature');
     check(/provisoire|en cours/.test(await page.locator('#sig-table').innerText()), '#303 : saison en cours non signalée dans la signature');
     // #305 : résumés chiffrés des graphiques sans série
-    for (const id of ['#rooms-waterfall', '#sig-chart', '#cal-chart']) {
+    for (const [route, id] of [['historique-changements', '#rooms-waterfall'], ['historique-froid', '#sig-chart'], ['historique-calendrier', '#cal-chart']]) {
+      await go(page, route);
+      await page.waitForSelector(`${id} canvas`);
       const a = (await page.locator(id).getAttribute('aria-label')) ?? '';
       check(/\d/.test(a.split('. ').slice(1).join('. ')), `#305 : ${id} sans résumé chiffré (« ${a.slice(0, 120)} »)`);
     }
-    await page.click('[data-set=compareMode][data-value=monthly]');
     await go(page, 'pieces');
     await page.waitForSelector('#rooms-chart canvas');
     const head = await page.locator('#view table thead').first().innerText();
-    check(/Jours à moyenne sous/.test(head) && /hiver \d{4}–\d{4}/.test(head), `#294 : colonne des jours froids sans définition ni hiver (« ${head.replace(/\s+/g, ' ')} »)`);
+    // #294, #388: the cold days follow the period of the page, said once by « Compté : » (no winter of their own)
+    const counted = await page.locator('#pieces-compare .counted').innerText();
+    const card = await page.locator('#pieces-compare').innerText();
+    check(
+      /Jours à moyenne sous/.test(head) && /^Compté : [A-ZÉ].* \d{4}/.test(counted) && /Températures et jours froids : mêmes jours que les kWh/.test(card) && !/hiver \d{4}–\d{4}/.test(card),
+      `#294 : colonne des jours froids sans définition ni période (« ${head.replace(/\s+/g, ' ')} » / « ${counted} »)`,
+    );
     await go(page, 'outils');
     await page.click('#view a[href="#rapport"]');
     await page.waitForSelector('.report .kpis');

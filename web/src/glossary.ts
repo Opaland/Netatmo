@@ -69,8 +69,12 @@ const nf0 = new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 0 });
 /** « −16 % », « +3 % », « 0 % » (typographic minus, never « -0 »). */
 export function signedPct(p: number): string {
   const r = Math.round(p);
-  return `${r > 0 ? '+' : r < 0 ? '−' : ''}${nf0.format(Math.abs(r))} %`;
+  return withUnit(`${r > 0 ? '+' : r < 0 ? '−' : ''}${nf0.format(Math.abs(r))}`, '%');
 }
+/** #389: the space between a number and its unit is non-breaking (« 19,9 °C », « −16 % »,
+ * « 135 € »): a narrow screen or a large text never leaves the unit alone on its line. */
+export const NBSP = '\u00a0';
+export const withUnit = (n: string, unit: string) => `${n}${NBSP}${unit}`;
 /**
  * #258: one decimal, French style, typographic minus: « 19,5 », « −2,5 », « 0,0 » (never « -0,0 »).
  * The one copy of the app (temperatures, kWh/°C, hours, kVA).
@@ -80,6 +84,8 @@ export function fmt1(v: number): string {
   const s = Math.abs(r).toFixed(1).replace('.', ',');
   return r < 0 ? `−${s}` : s;
 }
+/** « 19,9 °C » (#389). */
+export const fmtTemp = (v: number) => withUnit(fmt1(v), UNIT.temp);
 // CO₂: money.ts fmtCo2() writes « 274 kg CO₂e » with the unit above.
 
 // ------------------------------------------------------------------ dates and hours (§ 7.2)

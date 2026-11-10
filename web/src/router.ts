@@ -18,7 +18,8 @@ export const TOOLS = {
   offres: 'Quelle offre coûte le moins ?',
   voiture: 'Une voiture électrique',
   pac: 'Une pompe à chaleur',
-  consigne: 'Demander 1 °C de moins aux radiateurs',
+  solaire: 'Des panneaux solaires',
+  consigne: 'Demander 1\u00a0°C de moins aux radiateurs',
   teletravail: 'Une journée de télétravail',
   facture: 'Une facture',
   plannings: 'Mes plannings et les heures creuses',
@@ -53,12 +54,27 @@ export const METER_PAGES = {
 } as const;
 export type MeterPage = keyof typeof METER_PAGES;
 
+/**
+ * #386: the sub-pages of the Historique tab (« #historique-froid »), in the order of its list
+ * « Pour aller plus loin ». The tab itself keeps « hiver contre hiver » and « en détail ».
+ */
+export const HISTORY_PAGES = {
+  annees: 'Année par année',
+  changements: 'Qu’est-ce qui a changé ?',
+  froid: 'Le logement face au froid',
+  jours: 'Jours inhabituels',
+  calendrier: 'Calendrier et absences',
+  station: 'Station météo',
+} as const;
+export type HistoryPage = keyof typeof HISTORY_PAGES;
+
 export type Route =
   | { page: Tab }
   | { page: 'piece'; room: string }
   | { page: 'confort' | 'chauffe-eau' | 'etat' | 'rapport' | 'aide' }
   | { page: 'outil'; tool: Tool; month?: string }
   | { page: 'compteur-detail'; sub: MeterPage }
+  | { page: 'historique-detail'; sub: HistoryPage }
   | { page: 'parametres'; section: SettingsPage | null }
   | { page: 'bienvenue'; step: OnboardingStep };
 
@@ -82,6 +98,8 @@ export function parseRoute(hash: string): Route | null {
   if (m) return Object.hasOwn(SETTINGS, m[1]) ? { page: 'parametres', section: m[1] as SettingsPage } : null;
   m = /^compteur-(.+)$/.exec(h);
   if (m) return Object.hasOwn(METER_PAGES, m[1]) ? { page: 'compteur-detail', sub: m[1] as MeterPage } : null;
+  m = /^historique-(.+)$/.exec(h);
+  if (m) return Object.hasOwn(HISTORY_PAGES, m[1]) ? { page: 'historique-detail', sub: m[1] as HistoryPage } : null;
   m = /^outils-expliquer-(\d{4}-(?:0[1-9]|1[0-2]))$/.exec(h); // #337: « expliquer » a month
   if (m) return { page: 'outil', tool: 'expliquer', month: m[1] };
   m = /^outils-(.+)$/.exec(h);
@@ -108,6 +126,8 @@ export function routeKey(r: Route): string {
       return `outils-${r.tool}${r.month ? `-${r.month}` : ''}`;
     case 'compteur-detail':
       return `compteur-${r.sub}`;
+    case 'historique-detail':
+      return `historique-${r.sub}`;
     case 'parametres':
       return r.section ? `parametres-${r.section}` : 'parametres';
     case 'bienvenue':
@@ -126,6 +146,8 @@ export function tabOf(r: Route): Tab | null {
       return 'pieces';
     case 'compteur-detail':
       return 'compteur';
+    case 'historique-detail':
+      return 'historique';
     case 'outil':
     case 'etat':
     case 'rapport':
@@ -148,6 +170,8 @@ export function parentOf(r: Route): string | null {
       return 'pieces';
     case 'compteur-detail':
       return 'compteur';
+    case 'historique-detail':
+      return 'historique';
     case 'outil':
     case 'etat':
     case 'rapport':
@@ -182,6 +206,8 @@ export function titleOf(r: Route, roomName: (id: string) => string = (id) => id)
       return TOOLS[r.tool];
     case 'compteur-detail':
       return METER_PAGES[r.sub];
+    case 'historique-detail':
+      return HISTORY_PAGES[r.sub];
     case 'parametres':
       return r.section ? SETTINGS[r.section] : 'Paramètres';
     default:

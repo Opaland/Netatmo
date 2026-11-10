@@ -35,7 +35,7 @@ import { cutDays } from './quality';
 import { html } from '../trusted';
 import { onCard } from '../events';
 import { NS, lsKey } from '../scope';
-import { switchField } from '../components';
+import { switchField, countedText } from '../components';
 
 const num1 = (v: number) => v.toLocaleString('fr-FR', { maximumFractionDigits: 1 });
 const shortDate = (d: string) => `${Number(d.slice(8, 10))} ${MONTHS_SHORT[Number(d.slice(5, 7)) - 1]} ${d.slice(0, 4)}`;
@@ -349,7 +349,7 @@ function historyAbsences(list: ReturnType<typeof absences>): string {
   const recent = list.filter((p) => p.to >= season(cur - 1)[0]).slice(0, 4);
   return `<section class="card" id="hist-absences" aria-labelledby="hist-absences-title">
     <div class="card-head"><h2 id="hist-absences-title">Absences</h2></div>
-    <p class="card-sub">Compté : hivers ${label(cur - 1)} et ${label(cur)} (septembre à août) · mode absent des radiateurs, sinon consommation</p>
+    <p class="card-sub">${esc(countedText(`hivers ${label(cur - 1)} et ${label(cur)} (septembre à août) · mode absent des radiateurs, sinon consommation`))}</p>
     <p>Ces jours restent comptés dans les comparaisons de cette page : <strong>${now} jour${now > 1 ? 's' : ''} d'absence l'hiver ${label(cur)}</strong>, ${before ? `${before} l'hiver ${label(cur - 1)}` : `aucun l'hiver ${label(cur - 1)}`}. Une absence fait baisser la consommation d'un hiver sans que le logement chauffe mieux.</p>
     <ul class="absence-list">${recent.map((p) => `<li>${esc(shortDate(p.from))} → ${esc(shortDate(p.to))} <small class="muted">${daysOf(p).length} jour${daysOf(p).length > 1 ? 's' : ''}${p.confirmed ? ', mode absent' : p.manual ? ', ajoutée' : ', détectée'}</small></li>`).join('')}</ul>
     <a class="link" href="#outils-absences">Heures, économie estimée et corrections</a>

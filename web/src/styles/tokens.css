@@ -50,12 +50,13 @@
   --room-6: var(--brown-11);
   --room-7: var(--cyan-9);
   --room-8: var(--red-11);
-  /* sequential ramp (calendar, heat maps): light → dark */
-  --seq-1: #e0e1fc;
-  --seq-2: #b8baf8;
-  --seq-3: #8c8fec;
-  --seq-4: #5b5bd6;
-  --seq-5: #272962;
+  /* sequential ramp (calendar, heat maps): light → dark. #409: in ink (warm grey), like a measure
+     on its own (--series-measure), never in the iris of the accent, kept for actions */
+  --seq-1: var(--sand-4);
+  --seq-2: var(--sand-8);
+  --seq-3: var(--sand-10);
+  --seq-4: var(--sand-11);
+  --seq-5: var(--sand-12);
   /* states: down is good (less spent), up is bad; a temperature is never green or red */
   --state-good: var(--grass-11);
   --state-good-soft: var(--grass-3);
@@ -117,11 +118,11 @@
     --room-6: var(--brown-d9);
     --room-7: var(--cyan-d9);
     --room-8: var(--red-d9);
-    --seq-1: #202248;
-    --seq-2: #3d3e82;
-    --seq-3: #5b5bd6;
-    --seq-4: #9b9ef0;
-    --seq-5: #e0dffe;
+    --seq-1: var(--sand-d4);
+    --seq-2: var(--sand-d8);
+    --seq-3: var(--sand-d10);
+    --seq-4: var(--sand-d11);
+    --seq-5: var(--sand-d12);
     --state-good: var(--grass-d11);
     --state-good-soft: var(--grass-d3);
     --state-warn: var(--amber-d11);
@@ -174,11 +175,11 @@
   --room-6: var(--brown-d9);
   --room-7: var(--cyan-d9);
   --room-8: var(--red-d9);
-  --seq-1: #202248;
-  --seq-2: #3d3e82;
-  --seq-3: #5b5bd6;
-  --seq-4: #9b9ef0;
-  --seq-5: #e0dffe;
+  --seq-1: var(--sand-d4);
+  --seq-2: var(--sand-d8);
+  --seq-3: var(--sand-d10);
+  --seq-4: var(--sand-d11);
+  --seq-5: var(--sand-d12);
   --state-good: var(--grass-d11);
   --state-good-soft: var(--grass-d3);
   --state-warn: var(--amber-d11);

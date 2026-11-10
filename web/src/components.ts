@@ -81,7 +81,7 @@ export interface GaugeOpts {
   expected?: number | null;
   /** Hatched projection up to the end of the period. */
   projected?: number | null;
-  /** Token or colour of the fill (default: accent). */
+  /** Token or colour of the fill (default: --series-measure, #409: the accent is for actions). */
   color?: string;
   /** Texts under the track, left to right. */
   scale?: string[];
@@ -116,7 +116,7 @@ export function listRow(o: RowOpts): string {
   const a = o.href ? attrs({ href: o.href }) : o.attrs ? ` type="button"${attrs(o.attrs)}` : '';
   return `<li><${tag} class="row"${a}>${o.color ? `<span class="swatch" style="background:${color(o.color)}" aria-hidden="true"></span>` : '<span></span>'}<span><span class="t">${esc(o.title)}</span>${
     o.sub ? `<span class="s">${esc(o.sub)}</span>` : ''
-  }${o.share !== undefined ? shareBar(o.share, o.color ?? '--accent') : ''}</span><span class="v">${esc(o.value ?? '')}</span>${
+  }${o.share !== undefined ? shareBar(o.share, o.color ?? '--series-measure') : ''}</span><span class="v">${esc(o.value ?? '')}</span>${
     tag === 'div' ? '<span></span>' : '<span class="chev" aria-hidden="true">›</span>'
   }</${tag}></li>`;
 }
@@ -129,6 +129,14 @@ export function seg<T extends string>(name: string, value: T, options: [T, strin
     .map(([v, l]) => `<button type="button" role="radio" aria-checked="${v === value}" data-set="${esc(name)}" data-value="${esc(v)}">${esc(l)}</button>`)
     .join('')}</div>`;
 }
+/** #427: the label of what a card counts, written here only (design-usage.test.ts refuses it elsewhere). */
+const COUNTED = 'Compté :';
+/** « Compté : … » as HTML, for a line that already exists (`text` is HTML). */
+export const countedInner = (text: string) => `<span class="counted-k">${COUNTED}</span> ${text}`;
+/** « Compté : … » under a card title: what its figures count (period, scope). `text` is HTML. */
+export const countedNote = (text: string) => `<p class="counted">${countedInner(text)}</p>`;
+/** « Compté : … » as plain text (a scope line, a card subtitle, escaped by its caller). */
+export const countedText = (text: string) => `${COUNTED} ${text}`;
 /** One period selector per screen, with its scope line (« Novembre 2026, du 1er au 8 · … »). */
 export const periodBar = (segHtml: string, scope: string) => `<div class="periodbar">${segHtml}<p class="scope" aria-live="polite">${esc(scope)}</p></div>`;
 /** Toggle chip (multiple choice, aria-pressed). */

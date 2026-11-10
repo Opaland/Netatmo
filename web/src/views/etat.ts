@@ -13,16 +13,18 @@ import {
   type QualityReport,
   type SourceQuality,
   covered,
+  coverLevel,
   curveParts,
   fineSource,
   gapPeriod,
   monthStatus,
   qualityReport,
   seenParts,
+  sourceVerdict,
   yearVerdicts,
 } from '../data-quality';
 import { offlineDays, offlineModules, restarts, setupDates, splitStopped } from '../devices';
-import { MONTHS_LONG, dayShort } from '../glossary';
+import { MONTHS_LONG, dayShort, plural, withUnit } from '../glossary';
 import { suspectDays } from '../reconstitute';
 import { html } from '../trusted';
 import { esc } from '../ui';
@@ -30,8 +32,7 @@ import { stoppedRooms } from './offline-rooms';
 import { incidentsCard } from './incidents';
 import { SOURCE_NAME } from '../pages';
 
-const pct = (v: number | null) => (v === null ? '—' : `${Math.floor(v * 100)} %`);
-const plural = (n: number, w: string) => `${n} ${w}${n > 1 ? 's' : ''}`;
+const pct = (v: number | null) => (v === null ? '—' : withUnit(String(Math.floor(v * 100)), '%'));
 
 function input(): QualityInput {
   const d = rawDataset() ?? ds!;
@@ -76,23 +77,32 @@ function report() {
   return cache;
 }
 
-/** « Vos données, année par année » and the sources, drawn in #etat-bilan. */
+/**
+ * #387: the verdict of each source first (one line, its worst year named), the detail by year
+ * and the gaps folded under it, then « Année par année » folded too, drawn in #etat-bilan.
+ */
 export function mountEtat(el: HTMLElement | null) {
   if (!el || !ds) return;
   const { report: r, input: i } = report();
   const m = monthStatus(i);
   const month = MONTHS_LONG[Number(i.last.slice(5, 7)) - 1];
   const verdicts = yearVerdicts(r);
-  el.innerHTML = html`<section class="kpis">
+  const toCheck = verdicts.filter((v) => v.level !== 'good').map((v) => `${v.year} ${LEVEL_LABEL[v.level]}`);
+  el.innerHTML = html`<section class="kpis kpis-one">
       ${tile({
         label: `Radiateurs en ${month}, au ${dayShort(i.last)}`,
         value: `${m.ok + m.estimated} / ${m.expected} jours`,
         sub: esc(m.missing ? `${plural(m.missing, 'jour')} incomplet${m.missing > 1 ? 's' : ''}` : m.estimated ? `dont ${m.estimated} estimé${m.estimated > 1 ? 's' : ''}` : 'tous complets'),
       })}
-      ${tile({ label: 'Années suivies', value: String(verdicts.length), sub: esc(`depuis ${r.sources[0]?.first ? dayShort(r.sources[0].first, true) : '—'}`) })}
     </section>
-    <section class="card" id="quality-years" aria-labelledby="qy-title">
-      <div class="card-head"><h2 id="qy-title">Année par année</h2></div>
+    <section class="card" id="quality-sources" aria-labelledby="qs-title">
+      <div class="card-head"><h2 id="qs-title">Source par source</h2></div>
+      <p class="card-sub">Part des jours couverts depuis le premier relevé de chaque source${r.sources[0]?.first ? ` (le ${esc(dayShort(r.sources[0].first, true))} pour les radiateurs)` : ''}. Touchez une source pour le détail par année et ses trous.</p>
+      ${r.sources.map(sourceBlock).join('')}
+      <div id="quality-fine"><p class="hint muted" role="status">Relevés à la demi-heure et à l’heure : chargement…</p></div>
+    </section>
+    <details class="card fold" id="quality-years">
+      <summary><h2>Année par année</h2> <span class="fold-sub">${esc(`${plural(verdicts.length, 'année')}${toCheck.length ? ` · ${toCheck.join(', ')}` : ', toutes de bonne qualité'}`)}</span></summary>
       <p class="card-sub">Jours où toutes les pièces ont une valeur (mesurée ou estimée depuis le total du mois), et ce qui explique les manques.</p>
       ${verdicts
         .map(
@@ -100,27 +110,25 @@ export function mountEtat(el: HTMLElement | null) {
         <p>${esc(v.headline)}.</p>${v.reasons.length ? `<ul>${v.reasons.map((x) => `<li>${esc(x)}</li>`).join('')}</ul>` : ''}${v.answer ? `<p class="hint${v.reasons.length ? '' : ' muted'}">${esc(v.answer)}</p>` : ''}</div>`,
         )
         .join('')}
-    </section>
-    ${incidentsCard(rawDataset() ?? ds!, stoppedRooms(), SOURCE_NAME)}
-    <section class="card" id="quality-sources" aria-labelledby="qs-title">
-      <div class="card-head"><h2 id="qs-title">Source par source</h2></div>
-      <p class="card-sub">Part des jours couverts chaque année, depuis le premier relevé de la source ; trous de 3 jours ou plus, avec leur cause quand elle est connue.</p>
-      ${r.sources.map(sourceBlock).join('')}
-      <div id="quality-fine"><p class="hint muted" role="status">Relevés à la demi-heure et à l’heure : chargement…</p></div>
-    </section>`;
+    </details>
+    ${incidentsCard(rawDataset() ?? ds!, stoppedRooms(), SOURCE_NAME)}`;
   void fine(i);
 }
 
+const LEVEL_TOKEN = { good: '--state-good', fair: '--state-warn', poor: '--state-bad' } as const;
+
+/** One source: its verdict line (summary), then the years and the gaps (folded, #387). */
 function sourceBlock(s: SourceQuality): string {
+  const v = sourceVerdict(s);
   const shown = s.gaps.slice(0, 8);
   const more = s.gaps.length - shown.length;
-  return `<div class="source-quality" data-source="${s.id}">
-    <h3>${esc(s.label)}</h3>
+  return `<details class="source-quality" data-source="${s.id}" data-level="${v.level}">
+    <summary><span class="swatch" aria-hidden="true"></span><span class="sq-text"><strong>${esc(s.label)}</strong> <span class="sq-verdict">${esc(v.text)}</span></span><b class="sq-pct">${pct(v.overall)}</b></summary>
     ${list(
       [...s.years].reverse().map((y) => {
         const c = covered(y);
         const parts = [`${y.full} complets`, y.estimated ? `${y.estimated} estimés` : '', y.partial ? `${y.partial} partiels` : '', y.missing ? `${y.missing} manquants` : ''].filter(Boolean);
-        return { title: String(y.year), sub: `${parts.join(', ')} sur ${y.expected} jours`, value: pct(c), share: (c ?? 0) * 100, color: (c ?? 0) >= 0.98 ? '--state-good' : (c ?? 0) >= 0.9 ? '--state-warn' : '--state-bad' };
+        return { title: String(y.year), sub: `${parts.join(', ')} sur ${y.expected} jours`, value: pct(c), share: (c ?? 0) * 100, color: LEVEL_TOKEN[coverLevel(c)] };
       }),
       `${s.label} : jours couverts par année`,
     )}
@@ -128,7 +136,7 @@ function sourceBlock(s: SourceQuality): string {
     ${more > 0 ? `<p class="hint muted">Et ${more} autre${more > 1 ? 's trous plus courts' : ' trou plus court'}.</p>` : ''}
     ${s.scattered ? `<p class="hint muted">${plural(s.scattered, 'jour')} isolé${s.scattered > 1 ? 's' : ''} sans valeur (1 ou 2 jours de suite).</p>` : ''}
     ${s.notes.map((n) => `<p class="hint muted">${esc(n)}</p>`).join('')}
-  </div>`;
+  </details>`;
 }
 
 function gapItem(g: Gap): string {

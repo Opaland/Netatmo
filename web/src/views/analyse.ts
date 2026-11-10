@@ -1,5 +1,6 @@
 // Analyse: AI insight, energy signature, anomalies, calendar, hourly profile,
 // peak / off-peak split, Netatmo station and room temperatures.
+import { countedNote } from '../components';
 import { type DayRecord, addDays, bucketLabel, minusYears, seasonOf } from '../aggregate';
 import { anomalies, dayProfile, daysAbove, weekHourGrid } from '../analysis';
 import { type CiFit, MIN_DAYS, type SeasonSignatures, seasonSignatures, signatureDays } from '../indoorsig';
@@ -8,7 +9,9 @@ import { calendarChart, cssVar, gridHeatmap, lineChart, scatterChart } from '../
 import { loadHourly, loadRoom30, loadRoomState } from '../data';
 import { lazyCard } from '../lazy';
 import { unavailable } from '../offline';
-import { TEMP, dayLong, dayShort, seasonLabel } from '../glossary';
+import { TEMP, dayLong, dayShort, periodLine, seasonLabel } from '../glossary';
+import { yearLine } from '../history';
+import { countedHtml } from './compare';
 import { weeklyMeans } from '../chart-theme';
 import { activeRooms, catColor, esc, fmt1, isOutdoor, moduleColor, roomName, fmtKwh, lastDay, longDate, seasonStyle, seg, table, measureColor, referenceColor } from '../ui';
 import { hour } from '../glossary';
@@ -78,27 +81,28 @@ export function signatureTable(sigs: SeasonSignatures[], current: number, withDe
     [
       'Saison',
       'Jours de chauffe',
-      'Pente (kWh par °C en moins)',
-      'Plus de chauffe au-dessus de',
-      ...(withDelta ? ["Pente sur l'écart (kWh par °C d'écart)", "Chauffe au-delà d'un écart de"] : []),
+      'kWh de plus par jour pour 1 °C de moins dehors',
+      'Plus de chauffage au-dessus de',
+      ...(withDelta ? ["kWh de plus par jour pour 1 °C d'écart dedans − dehors", "Chauffage au-delà d'un écart de"] : []),
     ],
     sigs
       .slice()
       .reverse()
       .map((s) => [esc(seasonName(s.season, s.days, current)), s.days, ...fit(s.outdoor, -1, s.days), ...(withDelta ? fit(s.delta, 1, s.deltaDays) : [])]),
-  )}<p class="hint muted">Entre crochets, l'intervalle de confiance à 95 %. Jours de chauffe sous 15 °C dehors ; jours perdus ou estimés exclus. Une saison de moins de ${PROVISIONAL_DAYS} jours est provisoire (droite en pointillé).</p>`;
+  )}<p class="hint muted">Entre crochets, la fourchette où la vraie valeur se trouve 19 fois sur 20. Jours chauffés sous 15 °C dehors ; jours perdus ou estimés exclus. Une saison de moins de ${PROVISIONAL_DAYS} jours est provisoire (droite en pointillé).</p>`;
 }
 
 /**
  * #308: the v1.5 « Analyse » cards, spread over the new pages. Each part draws only its cards:
- * « historique » (signature, unusual days, calendar, station), « compteur » (hourly profile of
+ * the sub-pages of Historique (#386: « signature », the home against the cold; « jours », unusual
+ * days; « calendrier », the calendar and the absences; « station »), « compteur » (hourly profile of
  * the radiators and the water heater, on the « Journée type » page, over `range`), « chauffe-eau », a tool of Outils (« consigne », « pac », « teletravail »,
  * « absences », « volets », « ia ») or the works card (« travaux », ⚙ Mon logement), and
  * « temps » for the temperatures of one room (its page).
  */
-export type AnalysePart = 'historique' | 'compteur' | 'chauffe-eau' | 'consigne' | 'pac' | 'teletravail' | 'absences' | 'volets' | 'ia' | 'travaux' | 'temps';
+export type AnalysePart = 'signature' | 'jours' | 'calendrier' | 'station' | 'compteur' | 'chauffe-eau' | 'consigne' | 'pac' | 'teletravail' | 'absences' | 'volets' | 'ia' | 'travaux' | 'temps';
 
-export function renderAnalyse(view: HTMLElement, records: DayRecord[], part: AnalysePart = 'historique', room: string | null = null, range?: [string, string]) {
+export function renderAnalyse(view: HTMLElement, records: DayRecord[], part: AnalysePart = 'signature', room: string | null = null, range?: [string, string]) {
   const years = ds!.meta.years;
   const year = state.analyseYear ?? years[years.length - 1];
   const last = lastDay();
@@ -107,28 +111,29 @@ export function renderAnalyse(view: HTMLElement, records: DayRecord[], part: Ana
   const cards: [AnalysePart, () => string][] = [
     ['ia', () => (ds!.insights ? '<section class="card insight" id="insight-card" aria-busy="true"><h2>Analyse du mois</h2></section>' : '<section class="card"><p class="hint muted">Analyse du mois : à activer dans ⚙ Paramètres → Sources de données (clé Anthropic).</p></section>')],
     [
-      'historique',
+      'signature',
       () =>
         ds!.weather
-          ? `<section class="card">
-    <div class="card-head"><h2>Signature du logement <small class="muted">chauffage</small></h2></div>
-    <p class="hint muted">Chaque point est un jour : consommation de chauffage selon la température extérieure moyenne${ds!.meta.weather_source === 'netatmo' ? ' (station Netatmo)' : ' (Open-Meteo)'}. La droite résume la saison : plus elle est <strong>pentue</strong>, plus la maison consomme par degré de froid ; là où elle touche zéro, c'est la température à partir de laquelle vous ne chauffez plus.</p>
-    <div class="chart tall" id="sig-chart" role="img" aria-label="Signature énergétique"></div>
+          ? `<section class="card" id="sig-card">
+    <div class="card-head"><h2>Chauffage selon le froid dehors</h2><span class="card-period">${esc(`3 dernières saisons (sept. – août, au ${dayShort(last)})`)}</span></div>
+    <p class="hint muted">Chaque point est un jour : le chauffage de la journée selon la température moyenne dehors${ds!.meta.weather_source === 'netatmo' ? ' (station Netatmo)' : ' (Open-Meteo)'}. La droite résume la saison : plus elle <strong>monte vite vers la gauche</strong>, plus la maison consomme pour chaque degré de froid ; là où elle touche zéro, c'est la température à partir de laquelle vous ne chauffez plus.</p>
+    <div class="chart tall" id="sig-chart" role="img" aria-label="Chauffage de chaque jour selon la température extérieure"></div>
     <div id="sig-table"></div>
     <div id="sig-wind-zone"></div>
+    ${countedHtml(true)}
   </section>
   <section class="card" id="indoor-sig" hidden></section>`
-          : `<section class="card"><h2>Signature du logement</h2><p class="hint muted">Disponible dès que la collecte a récupéré la météo (prochaine collecte).</p></section>`,
+          : `<section class="card"><h2>Chauffage selon le froid dehors</h2><p class="hint muted">Disponible dès que la collecte a récupéré la météo (prochaine collecte).</p></section>`,
     ],
     ['travaux', () => (tenant().on ? tenantNote('Les travaux sont l’affaire du propriétaire : la saisie est masquée') : '<div id="works-zone"></div>')],
     ['consigne', () => setpointCard(records) || '<section class="card"><p class="hint muted">Simulation disponible avec la météo et une saison de chauffe.</p></section>'],
     ['pac', () => (ds!.weather ? '<section class="card" id="hp-card" hidden></section>' : '<section class="card"><p class="hint muted">Simulation disponible avec la météo.</p></section>')],
     ['volets', () => '<div id="shutters-zone"></div>'],
-    ['historique', () => anomaliesCard(records)],
+    ['jours', () => anomaliesCard(records) || '<section class="card"><p class="hint muted">Aucun jour inhabituel : le chauffage a suivi la météo.</p></section>'],
     [
-      'historique',
+      'calendrier',
       () => `<section class="card" id="calendar-card">
-    <div class="card-head"><h2>Calendrier <small class="muted">kWh par jour</small></h2>
+    <div class="card-head"><h2>Calendrier <small class="muted">kWh par jour</small></h2><span class="card-period">${esc(yearLine(year, last))}</span>
       <div class="controls"><label class="select"><span class="sr-only">Année</span><select data-set="analyseYear">${years
         .slice()
         .reverse()
@@ -136,6 +141,7 @@ export function renderAnalyse(view: HTMLElement, records: DayRecord[], part: Ana
         .join('')}</select></label></div>
     </div>
     <div class="chart" id="cal-chart" style="height:190px" role="img" aria-label="Calendrier de consommation"></div>
+    ${countedHtml()}
   </section>
   <div id="hist-absence-zone"></div>`,
     ],
@@ -149,7 +155,7 @@ export function renderAnalyse(view: HTMLElement, records: DayRecord[], part: Ana
     ],
     ['teletravail', () => '<div id="telework-zone"></div>'],
     ['chauffe-eau', () => waterHeaterCard() || '<section class="card"><p class="hint muted">Pas de chauffe-eau suivi, ou pas encore de relevé heures pleines / creuses.</p></section>'],
-    ['historique', () => stationCard()],
+    ['station', () => stationCard() || '<section class="card"><p class="hint muted">Pas de station Netatmo reliée : à activer dans ⚙ Paramètres → Sources de données.</p></section>'],
     [
       'temps',
       () =>
@@ -252,12 +258,13 @@ function anomaliesCard(records: DayRecord[]) {
   const list = anomalies(records, ds!.weather, judgedOut(ds!.records, '0000-01-01', lastDay())).slice(0, 12);
   const suspect = (a: (typeof list)[number]) => a.z < 0 && a.kwh < SUSPECT_RATIO * a.expected;
   const alerts = hcAlerts();
-  if (!list.length) return alerts ? `<section class="card"><h2>Jours inhabituels</h2>${alerts}</section>` : '';
+  if (!list.length) return alerts ? `<section class="card"><h2>Jours inhabituels</h2>${alerts}${countedHtml(true)}</section>` : '';
   const withStates = !!ds!.meta.has_roomstate;
   if (withStates) loadExplanations();
-  return `<section class="card" id="unusual-card"><h2>Jours inhabituels <small class="muted">chauffage, écart à la signature</small></h2>
+  const since = list[list.length - 1].day;
+  return `<section class="card" id="unusual-card"><div class="card-head"><h2>Jours inhabituels</h2><span class="card-period">${esc(`les ${list.length} plus récents, depuis le ${dayShort(since, true)}`)}</span></div>
     ${alerts}
-    <p class="hint muted">Jours où le chauffage s'écarte nettement de ce qu'annonce la température extérieure (plus de 2 fois l'écart habituel et plus de 3 kWh) : fenêtre ouverte, absence, invités, réglage oublié… Les jours perdus chez Intuis ou estimés, et ceux d'une coupure de courant ou d'Internet (journal des incidents), n'y figurent pas ; un jour très en dessous de la signature est marqué <strong>suspect</strong> (donnée peut-être incomplète, voir « État des données » dans Outils).</p>
+    <p class="hint muted">Jours où le chauffage s'écarte nettement de ce qu'annonçait la température dehors (plus de 2 fois l'écart habituel et plus de 3 kWh) : fenêtre ouverte, absence, invités, réglage oublié… « Attendu » : le chauffage d'un jour ordinaire à la même température, lu sur la saison. Les jours perdus chez Intuis ou estimés, et ceux d'une coupure de courant ou d'Internet (journal des incidents), n'y figurent pas ; un jour très en dessous de l'attendu est marqué <strong>à vérifier</strong> (donnée peut-être incomplète, voir « État des données » dans Outils).</p>
     ${withStates ? '<p class="hint muted">« Explication possible » : heures de fenêtre ouverte de toutes les pièces ce jour-là, ou mode absence relevé (relevé horaire de l’état des pièces). Une fenêtre ouverte coupe le radiateur de la pièce, qui relance ensuite : le jour peut se retrouver au-dessus ou en dessous de l’attendu.</p>' : ''}
     ${table(
       ['Jour', 'Consommé', 'Attendu', 'Écart', ...(withStates ? ['Explication possible'] : [])],
@@ -265,10 +272,10 @@ function anomaliesCard(records: DayRecord[]) {
         longDate(a.day),
         fmtKwh(a.kwh),
         fmtKwh(Math.max(0, a.expected)),
-        `<span class="delta ${a.z > 0 ? 'up' : 'down'}"><span aria-hidden="true">${a.z > 0 ? '▲' : '▼'}</span> ${a.z > 0 ? '+' : '−'}${fmtKwh(Math.abs(a.kwh - a.expected))}</span>${suspect(a) ? ' <span class="badge-suspect" title="Très en dessous de la signature : donnée peut-être incomplète chez Intuis">suspect</span>' : ''}`,
+        `<span class="delta ${a.z > 0 ? 'up' : 'down'}"><span aria-hidden="true">${a.z > 0 ? '▲' : '▼'}</span> ${a.z > 0 ? '+' : '−'}${fmtKwh(Math.abs(a.kwh - a.expected))}</span>${suspect(a) ? ' <span class="badge-suspect" title="Très en dessous de l’attendu : donnée peut-être incomplète chez Intuis">à vérifier</span>' : ''}`,
         ...(withStates ? [explanation(a.day)] : []),
       ]),
-    )}</section>`;
+    )}${countedHtml(true)}</section>`;
 }
 
 /** S-3.7: indoor − outdoor signature, a lazily loaded card under the signature. */
@@ -285,12 +292,13 @@ function stationCard() {
   const st = ds!.station;
   if (!st) return '';
   return `<section class="card">
-    <div class="card-head"><h2>Station météo Netatmo <small class="muted">moyenne par semaine, 12 derniers mois</small></h2>
+    <div class="card-head"><h2>Station météo Netatmo <small class="muted">moyenne par semaine</small></h2><span class="card-period">${esc(periodLine('12m', lastDay()))}</span>
       <div class="controls">${seg('stationMetric', state.stationMetric, [['temp', 'Température'], ['hum', 'Humidité'], ['co2', 'CO₂']], 'Mesure')}</div>
     </div>
     ${state.stationMetric === 'co2' ? '<p class="hint muted">CO₂ : au-delà de 1 000 ppm, l\'air est confiné (aérer) ; 1 500 ppm et plus, aération insuffisante. Mesuré par les modules intérieurs seulement.</p>' : ''}
     <div class="chart" id="station-chart" role="img" aria-label="Mesures de la station Netatmo"></div>
     <div id="station-table"></div>
+    ${countedNote("les modules de la station Netatmo (pas les sondes des radiateurs), le CO₂ à l'intérieur seulement.")}
   </section>`;
 }
 
@@ -374,9 +382,11 @@ function drawHourly(records: DayRecord[], range?: [string, string]) {
   const byHalf = !!half && halfDays >= HALF_HOUR_MIN_DAYS;
   zone.innerHTML = html`<div class="chart" id="hour-grid" style="height:280px" role="img" aria-label="Consommation moyenne par jour de semaine et par heure"></div>
     <div class="chart" id="hour-profile" style="height:240px" role="img" aria-label="Journée type${byHalf ? ' au pas de 30 minutes' : ''}"></div>
-    <p class="counted"><span class="counted-k">Compté :</span> les radiateurs et le chauffe-eau (pas tout le logement), kWh moyens par heure, du ${esc(longDate(from))} au ${esc(longDate(last))}${
-      byHalf ? ` ; courbe au pas de 30 minutes sur ${halfDays} jours mesurés pièce par pièce` : ''
-    }.</p>`;
+    ${countedNote(
+      `les radiateurs et le chauffe-eau (pas tout le logement), kWh moyens par heure, du ${esc(longDate(from))} au ${esc(longDate(last))}${
+        byHalf ? ` ; courbe au pas de 30 minutes sur ${halfDays} jours mesurés pièce par pièce` : ''
+      }.`,
+    )}`;
   gridHeatmap(document.getElementById('hour-grid')!, {
     xLabels: hours,
     yLabels: dows,
