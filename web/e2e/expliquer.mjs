@@ -95,7 +95,7 @@ try {
       const num = (s) => Number(s.replace(/[\s  ]/g, '').replace('−', '-'));
       const title = (await page.locator('#verdict-title').innerText()).trim();
       const said = (await page.locator('.verdict .verdict-sub').first().innerText()).replace(/\s+/g, ' ');
-      const h = /^([\d\s  ]+) € de (moins|plus) que d'habitude$/.exec(title);
+      const h = /^([\d\s  ]+)\s€ de (moins|plus) que d'habitude$/.exec(title);
       const s = /^([\d\s  ]+) € \(([\d\s  ]+) kWh\) dépensés ⚠ hors Chambre enfant, hors ligne depuis le 5 nov\. \(que faire \?\), en novembre \(au 8\), pour ([\d\s  ]+) € attendus .*?\(([−+]?[\d\s  ]+) %\)/.exec(said);
       check(h && s, `${name} : verdict illisible (« ${title} » / « ${said.slice(0, 200)} »)`);
       if (h && s) {
@@ -157,7 +157,7 @@ try {
     check(/^Compté : tout le logement \(compteur Linky\), du 1er janv\. au 31 janv\. 2026, comparé aux mêmes jours de janvier 2025$/.test(scope), `${name} : ligne « Compté : » (« ${scope} »)`);
     // the parts are drawn from 0 (no zoomed axis): the summary gives both totals
     const aria = (await page.locator('#explain-chart').getAttribute('aria-label')) ?? '';
-    check(/^Écart par cause, en kWh\. de [\d\s ]+ kWh \(janv\. 2025\) à [\d\s ]+ kWh \(janv\. 2026\)/.test(aria), `${name} : résumé de la cascade (« ${aria.slice(0, 160)} »)`);
+    check(/^Écart par cause, en kWh\. de [\d\s ]+\skWh \(janv\. 2025\) à [\d\s ]+\skWh \(janv\. 2026\)/.test(aria), `${name} : résumé de la cascade (« ${aria.slice(0, 160)} »)`);
     const view = await page.locator('#view').innerText();
     check(/Cuisine : radiateur arrêté depuis le 14 oct\. 2025 \(poêle\)/.test(view) && !/Cuisine : hors ligne/.test(view), `${name} : la Cuisine arrêtée n'est pas signalée comme telle dans l'explication`);
     check((await page.locator('#explain-rooms .row').count()) >= 5, `${name} : pièce par pièce incomplet`);
