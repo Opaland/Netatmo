@@ -1,0 +1,50 @@
+# #358 : tests de mutation (Stryker) sur les calculs qui changent un résultat affiché
+# (euros, kWh, périodes, chiffrement). À la demande seulement, et informatif : jamais dans
+# la CI bloquante (trop lent pour chaque commit ; un survivant n'est pas toujours un défaut).
+# Stryker s'installe pour ce job seulement (npm i --no-save) : package-lock.json ne change pas.
+# Lecture des survivants : docs/bmad/06-qa-strategy.md, § « Tests de mutation ».
+name: Mutation
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  mutation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+      - run: npm run mutation
+      - name: Score par fichier dans le résumé du job
+        if: always()
+        run: |
+          [ -f reports/mutation/mutation.json ] || { echo "Pas de rapport." >> "$GITHUB_STEP_SUMMARY"; exit 0; }
+          node -e '
+          const r = require("./reports/mutation/mutation.json");
+          const rows = ["| Fichier | Score | Tués | Survivants | Non couverts |", "|---|---|---|---|---|"];
+          for (const [f, v] of Object.entries(r.files)) {
+            const c = { Killed: 0, Timeout: 0, Survived: 0, NoCoverage: 0 };
+            for (const m of v.mutants) if (m.status in c) c[m.status]++;
+            const valid = c.Killed + c.Timeout + c.Survived + c.NoCoverage;
+            rows.push(`| ${f} | ${valid ? (((c.Killed + c.Timeout) / valid) * 100).toFixed(1) : "-"} % | ${c.Killed + c.Timeout} | ${c.Survived} | ${c.NoCoverage} |`);
+          }
+          console.log(rows.join("\n"));
+          ' >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: rapport-mutation
+          path: web/reports/mutation
+          retention-days: 30

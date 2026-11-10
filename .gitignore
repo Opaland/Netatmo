@@ -11,3 +11,8 @@ __pycache__/
 web/node_modules/
 web/dist/
 e2e/screenshots/
+web/reports/
+web/.stryker-tmp/
+# Claude Code : copies de travail des agents, réglages personnels
+.claude/worktrees/
+.claude/settings.local.json
