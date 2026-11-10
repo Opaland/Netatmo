@@ -4,6 +4,7 @@ import { roomDeltas } from '../analysis';
 import { ds, setState, state } from '../app';
 import { cssVar, hbarChart } from '../charts';
 import { uncertainDays } from '../checks';
+import { cutDays } from './quality';
 import { coldWinterDays, effectiveMapping, seasonOf as seasonOfWinter } from '../comfort';
 import { windowSuffix, yoyCaveat, yoyWindow } from '../periods';
 import {
@@ -39,7 +40,7 @@ export function renderRooms(view: HTMLElement, records: DayRecord[], part: 'list
   const first = records.reduce((a, r) => (r.day < a ? r.day : a), records[0]?.day ?? firstDay());
   const uncertain = uncertainDays(records, ds!.estimated, first, last);
   const win = yoyWindow(year, first, last);
-  const caveat = yoyCaveat(win, uncertain);
+  const caveat = yoyCaveat(win, uncertain, { cuts: cutDays() });
   const suffix = windowSuffix(win);
   const now = totalsBy(records, `${year}-01-01`, end, (r) => r.room);
   const nowCmp = win ? totalsBy(records, win.from, win.to, (r) => r.room) : now;

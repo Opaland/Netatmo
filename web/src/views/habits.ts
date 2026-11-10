@@ -31,6 +31,7 @@ import {
 import { readPref, writePref } from '../money';
 import { activeRooms, avgPrice, costOf, esc, firstDay, fmtEur, fmtKwh, lastDay, nf0, roomName, table } from '../ui';
 import { currentHcHp } from './waterheater';
+import { cutDays } from './quality';
 import { html } from '../trusted';
 import { onCard } from '../events';
 import { NS, lsKey } from '../scope';
@@ -237,7 +238,7 @@ async function saveEdits(edits: AbsenceEdits) {
 function absences(edits: AbsenceEdits) {
   const key = `${ds!.records.length}|${lastDay()}|${byMode?.length ?? -1}`;
   if (!detected || detected.key !== key) {
-    detected = { key, list: withModeAbsences(absencePeriods(lowDays(ds!.records, ds!.weather, ds!.linky, firstDay(), lastDay())), byMode ?? []) };
+    detected = { key, list: withModeAbsences(absencePeriods(lowDays(ds!.records, ds!.weather, ds!.linky, firstDay(), lastDay(), new Set(cutDays().keys()))), byMode ?? []) };
   }
   return mergeAbsences(detected.list, edits);
 }
