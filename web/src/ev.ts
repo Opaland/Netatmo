@@ -1,12 +1,10 @@
 // S-2.14: electric-vehicle charging simulation. Pure functions, no DOM, no app state.
 // The charge of each day starts at the same local time, at constant power, until the daily
-// energy is delivered (it may run past midnight). Off-peak hours are assumed 22 h → 6 h, the
-// Tempo schedule (the HP/HC schedule of a given meter can differ: shown as an assumption).
+// energy is delivered (it may run past midnight). The off-peak hours are the shared ones of
+// offpeak.ts (#428): read in the half hours, else typed, else 22 h → 6 h stated as an assumption.
 import type { DaySplit } from './analysis';
 import { type Curve, SLOTS, watts } from './curve';
-
-export const HC_START = 22; // h
-export const HC_END = 6; // h
+import { FALLBACK_RANGES, slotShares } from './offpeak';
 
 export interface EvInput {
   kwhWeek: number; // energy taken from the grid per week (charging losses included)
@@ -40,10 +38,11 @@ export interface EvPlan {
   next: number[];
 }
 
-export const isOffPeakSlot = (slot: number) => slot >= HC_START * 2 || slot < HC_END * 2;
-
-/** Daily charge, half hour by half hour. */
-export function evPlan({ kwhWeek, powerKw, startHour }: EvInput): EvPlan | null {
+/**
+ * Daily charge, half hour by half hour. `offPeak`: share (0..1) of each half hour that is
+ * off-peak (offpeak.ts); a half hour cut by a bound counts pro rata of its minutes.
+ */
+export function evPlan({ kwhWeek, powerKw, startHour }: EvInput, offPeak: readonly number[] = slotShares(FALLBACK_RANGES)): EvPlan | null {
   if (!(kwhWeek > 0) || !(powerKw > 0)) return null;
   const kwhDay = kwhWeek / 7;
   const same = new Array(48).fill(0);
@@ -58,8 +57,9 @@ export function evPlan({ kwhWeek, powerKw, startHour }: EvInput): EvPlan | null 
     const kwh = Math.min(left, powerKw / 2);
     left -= kwh;
     (abs < 48 ? same : next)[slot] += kwh * 2000; // kWh over 30 min -> W
-    if (isOffPeakSlot(slot)) hc += kwh;
-    else hp += kwh;
+    const f = offPeak[slot] ?? 0;
+    hc += kwh * f;
+    hp += kwh * (1 - f);
   }
   if (left > 1e-9) return null;
   return { kwhDay, hc, hp, hours: kwhDay / powerKw, same, next };

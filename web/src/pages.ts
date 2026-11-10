@@ -412,6 +412,8 @@ function renderSettingsPage(view: HTMLElement, route: Route) {
       return stack(view, head, [
         (el) => (el.innerHTML = html(`<section class="card" id="prices-card"><div class="card-head"><h2>Mon contrat et mes prix</h2>${scopeTag(prices.sharedNow() ? 'foyer' : 'appareil')}</div>${prices.pricesForm()}</section>`)),
         (el) => settings.renderSettings(el, 'contrat'),
+        // #428: the off-peak hours applied (read, typed or assumed), lazy
+        (el) => void lazyCard(() => import('./views/offpeak-card'), (m) => m.mountOffPeak(el), { zone: el, what: 'Heures creuses' }),
       ]);
     case 'logement':
       return stack(view, head, [
