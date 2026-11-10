@@ -109,7 +109,13 @@ L'adresse du site s'affiche dans **Settings → Pages** (de la forme
 ### 6. Installer sur le téléphone
 
 - **iPhone** : ouvrir l'adresse dans Safari → bouton Partager → **Sur l'écran d'accueil**.
-- **Android** : ouvrir l'adresse dans Chrome → menu ⋮ → **Installer l'application**.
+- **Android** : ouvrir l'adresse dans Chrome → menu ⋮ → **Installer l'application**, ou le bouton
+  **Installer l'application** de ⚙ Paramètres → À propos quand Chrome le propose.
+
+**Mises à jour** (#357) : une nouvelle version attend qu'on la demande ; un bandeau « Nouvelle version
+disponible » propose **Recharger** (rien ne se recharge tout seul). Une appli qui semble bloquée sur une
+ancienne version : ⚙ Paramètres → À propos → **Recharger l'application** retélécharge le code sans
+toucher à la clé mémorisée, aux notes chiffrées ni aux données gardées hors connexion.
 
 **Inviter un membre du foyer** : Paramètres → **Inviter** affiche un QR code de l'adresse de l'appli
 et ces étapes ; le proche le scanne, installe l'appli, et vous lui **dites la phrase de passe de vive
@@ -521,6 +527,9 @@ scripts/            outils ponctuels (jours Tempo, constats de revue → issues)
 ```
 
 ## Sécurité
+
+Une faille se signale **en privé** : voir [`SECURITY.md`](SECURITY.md) (comment, périmètre, ce qui
+est déjà vérifié).
 
 - Identifiants et phrase de passe : uniquement dans les **secrets GitHub**, jamais dans le dépôt.
 - Données : AES-256-GCM, clé dérivée par PBKDF2-SHA256 (600 000 itérations). Le sel est public

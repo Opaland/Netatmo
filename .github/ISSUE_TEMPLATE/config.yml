@@ -1,1 +1,6 @@
 blank_issues_enabled: false
+contact_links:
+  # #364: a flaw is never reported in a public issue (SECURITY.md)
+  - name: Signaler une faille
+    url: https://github.com/Opaland/Netatmo/security/advisories/new
+    about: "En privé, jamais dans une issue publique. Comment faire et ce qui est déjà vérifié : SECURITY.md."
