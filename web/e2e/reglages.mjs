@@ -82,6 +82,16 @@ try {
     });
     check(s.h >= 44 && s.inside, `200 % : le dernier réglage n'est pas atteignable (${Math.round(s.h)} px)`);
     await page.screenshot({ path: `${OUT}/reglages-${BROWSER}-200.png` });
+    // the « Voir les valeurs » fold next to the button keeps a usable title (it shrank to 0 px
+    // beside the floated button at 200 %, and could not be clicked)
+    await page.keyboard.press('Escape');
+    const folds = await page.evaluate(() =>
+      [...document.querySelectorAll('.chart-settings + .table-details > summary')].map((s) => {
+        const r = s.getBoundingClientRect();
+        return Math.round(Math.min(r.width, r.height));
+      }),
+    );
+    check(folds.length > 0 && folds.every((v) => v >= 44), `200 % : titre de « Voir les valeurs » écrasé à côté du bouton (${folds.join(', ')} px)`);
     await ctx.close();
   }
 

@@ -1714,6 +1714,11 @@ code.hash {
 .chart-settings + .table-details > :not(summary) {
   clear: both;
 }
+/* the fold's title is a flex box: beside the float it would shrink to nothing at 200 % (seen at
+   0 px wide); with a minimum width, it goes under the button when there is no room left */
+.chart-settings + .table-details > summary {
+  min-width: min(100%, 9em);
+}
 .sheet {
   box-sizing: border-box;
   width: 100%;
