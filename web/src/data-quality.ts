@@ -3,7 +3,7 @@
 // collector/quality.py). Pure: no DOM, no state, unit-tested. For each source and each year:
 // days covered, gaps with their probable cause when it is known, and what can be recovered.
 import { type DayRecord, MONTHS_SHORT, addDays, rawRecords } from './aggregate';
-import { dayShort, rangeLabel } from './glossary';
+import { dayShort, rangeLabel, withUnit } from './glossary';
 
 export type SourceId = 'heating' | 'water' | 'linky' | 'station' | 'room30' | 'linky30' | 'roomstate';
 
@@ -531,7 +531,7 @@ export interface YearVerdict {
   answer: string;
 }
 
-const pctText = (v: number) => `${Math.floor(v * 100)} %`;
+const pctText = (v: number) => withUnit(String(Math.floor(v * 100)), '%');
 
 /** One answer per year, radiators first: « est-ce normal ? », « quelle qualité ? ». */
 export function yearVerdicts(r: QualityReport): YearVerdict[] {
@@ -596,4 +596,42 @@ export function monthStatus(input: Pick<QualityInput, 'last' | 'rooms' | 'record
     else res.ok++;
   }
   return res;
+}
+
+/** Level of a share of covered days: the thresholds of the year verdicts and of the bars. */
+export const coverLevel = (c: number | null): Level => (c === null || c >= 0.98 ? 'good' : c >= 0.9 ? 'fair' : 'poor');
+
+export interface SourceVerdict {
+  level: Level;
+  /** Covered share over every year of the source (null: nothing expected). */
+  overall: number | null;
+  /** The year with the lowest share, when it is under 98 %. */
+  worst: { year: number; covered: number } | null;
+  /** One line: « complet depuis 2022 », « à vérifier : 2024 (89 %) · muet depuis 4 jours ». */
+  text: string;
+}
+
+/**
+ * #387: one line per source at the top of État des données, its detail by year folded below.
+ * The level is the worst year's (a single bad year is what one comes to this page to find); a
+ * source silent right now is at least « correct ».
+ */
+export function sourceVerdict(s: SourceQuality): SourceVerdict {
+  const exp = s.years.reduce((a, y) => a + y.expected, 0);
+  const overall = exp ? s.years.reduce((a, y) => a + y.full + y.estimated, 0) / exp : null;
+  let worst: SourceVerdict['worst'] = null;
+  for (const y of s.years) {
+    const c = covered(y);
+    if (c !== null && c < 0.98 && (!worst || c < worst.covered)) worst = { year: y.year, covered: c };
+  }
+  const level = coverLevel(worst?.covered ?? null);
+  const since = s.years.reduce((a, y) => (y.expected && y.year < a ? y.year : a), Infinity);
+  const head = worst
+    ? `${level === 'poor' ? 'à vérifier' : 'presque complet'} : ${worst.year} (${pctText(worst.covered)})`
+    : overall === null
+      ? 'aucun jour attendu'
+      : `complet depuis ${since}`;
+  const ongoing = s.gaps.find((g) => g.ongoing && g.kind !== 'zero');
+  const parts = [head, ...(ongoing ? [`muet depuis ${ongoing.days} jour${ongoing.days > 1 ? 's' : ''} (${ongoing.who})`] : [])];
+  return { level: ongoing && level === 'good' ? 'fair' : level, overall, worst, text: parts.join(' · ') };
 }

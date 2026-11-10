@@ -28,7 +28,7 @@ export function windSentence(w: WindSignature, current: number): string {
     return `${name} : un peu moins de chauffage les jours venteux, à froid égal (${signed(10 * w.wind.slope)} kWh par jour pour 10 km/h). Effet inattendu : il tient sans doute à autre chose (soleil, absences), à prendre avec prudence.`;
   }
   const [lo, hi] = w.windRange;
-  return `${name} : à température égale, 10 km/h de vent en plus demandent environ ${fmt1(10 * w.wind.slope)} kWh de chauffage par jour (${range(w.wind.ci, 10)}). Un jour venteux (${Math.round(hi)} km/h) coûte ainsi ≈ ${fmt1(w.wind.slope * (hi - lo))} kWh de plus qu’un jour calme (${Math.round(lo)} km/h). Le vent explique ${pct(w.gain)} de ce que le froid seul n’expliquait pas.`;
+  return `${name} : à température égale, 10 km/h de vent en plus demandent environ ${fmt1(10 * w.wind.slope)} kWh de chauffage par jour (${range(w.wind.ci, 10)}). Un jour venteux (${Math.round(hi)} km/h) coûte ainsi ≈ ${fmt1(w.wind.slope * (hi - lo))}\u00a0kWh de plus qu’un jour calme (${Math.round(lo)} km/h). Le vent explique ${pct(w.gain)} de ce que le froid seul n’expliquait pas.`;
 }
 
 export function windBlock(days: Map<string, SigPoint[]>, wind: Map<string, [number, number | null]> | undefined, rain: Map<string, number> | undefined, current: number): string {

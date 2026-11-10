@@ -111,7 +111,7 @@ export function windowsCard(showBedrooms: boolean): string {
         .filter(([, h]) => h >= 0.5)
         .map(([m, h]) => `${esc(modeLabel(m))} ${nf0.format(h)} h`)
         .join(', ');
-      return [esc(roomLabel(k)), h1(t.open), h1(t.boost), t.boost && k !== BEDROOMS ? `≈ ${f1(boost30(k))} kWh` : '—', h1(t.heating), h1(t.offload), modes || '—', `${nf0.format((t.n / (t.days * 24)) * 100)} %`];
+      return [esc(roomLabel(k)), h1(t.open), h1(t.boost), t.boost && k !== BEDROOMS ? `≈ ${f1(boost30(k))}\u00a0kWh` : '—', h1(t.heating), h1(t.offload), modes || '—', `${nf0.format((t.n / (t.days * 24)) * 100)}\u00a0%`];
     });
   // monthly open-window hours, last 12 months
   const monthly = monthlyOpen(rs, group);
@@ -120,7 +120,7 @@ export function windowsCard(showBedrooms: boolean): string {
     .sort()
     .map((k) => [esc(roomLabel(k)), ...months.map((m) => (monthly.get(k)!.has(m) ? nf0.format(monthly.get(k)!.get(m)!) : '—'))]);
   return `<section class="card" id="windows-card">${head}
-    <p class="hint muted">Relevés reçus sur les 30 derniers jours : <strong>${nf0.format(cov.hours)} h sur ${nf0.format(cov.expected)}</strong> (${nf0.format((cov.hours / cov.expected) * 100)} %). Les heures sont estimées au prorata des relevés reçus chaque jour.${
+    <p class="hint muted">Relevés reçus sur les 30 derniers jours : <strong>${nf0.format(cov.hours)} h sur ${nf0.format(cov.expected)}</strong> (${nf0.format((cov.hours / cov.expected) * 100)}\u00a0%). Les heures sont estimées au prorata des relevés reçus chaque jour.${
       hasBedrooms && !showBedrooms ? ' Les chambres sont regroupées par respect pour leurs occupants.' : ''
     }</p>
     <div class="chart" id="windows-chart" role="img" aria-label="Heures de fenêtre ouverte par jour et par pièce, 30 derniers jours"></div>
@@ -152,9 +152,9 @@ function explanations(rs: RoomState, last: string, group: (r: string) => string)
   const unusual = ds!.weather ? anomaliesWithWindows(ds!.records, ds!.weather, rs).filter((a) => a.day >= from).slice(0, 5) : [];
   const items = [
     ...cold.map((c) => {
-      const fall = c.drop ? `chute de ${f1(c.drop.fall)} °C vers ${c.drop.at.replace(':', ' h ')}` : '';
+      const fall = c.drop ? `chute de ${f1(c.drop.fall)}\u00a0°C vers ${c.drop.at.replace(':', ' h ')}` : '';
       const why = c.open >= 1 ? `fenêtre ouverte ${h1(c.open)}${fall ? `, ${fall}` : ''}` : `${fall} (fenêtre ou porte ouverte, probablement)`;
-      return `<li>${esc(longDate(c.day))} — <strong>${esc(roomLabel(c.room))}</strong> à ${f1(c.temp)} °C en moyenne : ${why}.</li>`;
+      return `<li>${esc(longDate(c.day))} — <strong>${esc(roomLabel(c.room))}</strong> à ${f1(c.temp)}\u00a0°C en moyenne : ${why}.</li>`;
     }),
     ...unusual.map((a) => `<li>${esc(longDate(a.day))} — jour inhabituel (${a.z > 0 ? 'plus' : 'moins'} de chauffage que prévu par la météo) : fenêtres ouvertes ${h1(a.open)} au total.</li>`),
   ];
@@ -170,10 +170,10 @@ function signatureBlock(rs: RoomState) {
   if (!ds!.weather) return '';
   const e = signatureEffect(ds!.records, ds!.weather, rs, EXCLUDE_HOURS);
   if (!e) return '';
-  const slope = (v: number) => `${f1(-v)} kWh/°C`;
-  const bal = (v: number | null) => (v === null ? '—' : `${f1(v)} °C`);
+  const slope = (v: number) => `${f1(-v)}\u00a0kWh/°C`;
+  const bal = (v: number | null) => (v === null ? '—' : `${f1(v)}\u00a0°C`);
   const w = e.without;
-  const diff = w ? `Pente ${slope(w.slope)} au lieu de ${slope(e.all.slope)} (${w.slope === e.all.slope ? 'inchangée' : `${f1(-(w.slope - e.all.slope))} kWh/°C d'écart`}), seuil de chauffe ${bal(w.balance)} au lieu de ${bal(e.all.balance)}.` : 'Trop peu de jours restants pour recalculer la signature.';
+  const diff = w ? `Pente ${slope(w.slope)} au lieu de ${slope(e.all.slope)} (${w.slope === e.all.slope ? 'inchangée' : `${f1(-(w.slope - e.all.slope))}\u00a0kWh/°C d'écart`}), seuil de chauffe ${bal(w.balance)} au lieu de ${bal(e.all.balance)}.` : 'Trop peu de jours restants pour recalculer la signature.';
   return `<h3 class="sub-title">Effet sur la signature énergétique <small class="muted">saison ${esc(e.season)}</small></h3>
     ${switchField(`Exclure les jours avec une fenêtre ouverte plus de ${EXCLUDE_HOURS} h`, exclude, { 'data-windows': 'exclude' })}
     <p class="hint muted">Signature de la saison : ${slope(e.all.slope)} par degré plus froid, seuil de chauffe ${bal(e.all.balance)}, sur ${e.all.n} jours de chauffe.</p>

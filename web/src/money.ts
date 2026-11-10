@@ -3,6 +3,7 @@
 // Preferences are per device (localStorage), like the other display settings.
 import { addDays } from './aggregate';
 import type { TrveRow } from './analysis';
+import { withUnit } from './glossary';
 import { lsKey } from './scope';
 
 // ------------------------------------------------------------------ preferences (per device)
@@ -95,7 +96,7 @@ export const co2Custom = () => co2Factor() !== CO2_DEFAULT;
 export const co2Of = (kwh: number, factor = co2Factor()) => kwh * factor;
 export function fmtCo2(kg: number): string {
   const nf = new Intl.NumberFormat('fr-FR', { maximumFractionDigits: kg < 10 ? 1 : 0 });
-  return kg >= 1000 ? `${new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 1 }).format(kg / 1000)} t CO₂e` : `${nf.format(kg)} kg CO₂e`;
+  return kg >= 1000 ? withUnit(new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 1 }).format(kg / 1000), 't CO₂e') : withUnit(nf.format(kg), 'kg CO₂e');
 }
 export const fmtFactor = (f: number) => `${f.toLocaleString('fr-FR', { maximumFractionDigits: 4 })} kg CO₂e/kWh`;
 

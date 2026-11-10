@@ -5,7 +5,7 @@
 // temperature). The view (views/home.ts) only lays them out.
 import { type DayRecord, addDays, bucketKeys, minusYears, pctChange } from './aggregate';
 import type { Verdict, Weather } from './analysis';
-import { MONTHS_LONG, MONTHS_SHORT, PERIOD, dayShort, seasonLabel, signedPct } from './glossary';
+import { MONTHS_LONG, MONTHS_SHORT, PERIOD, dayShort, seasonLabel, signedPct, withUnit } from './glossary';
 import { daysBetween } from './periods';
 
 export type HomePeriod = 'month' | 'season' | '12m' | 'year';
@@ -130,7 +130,7 @@ export function moneyVerdict(v: Verdict, cost: number | null): MoneyVerdict {
 }
 
 const nf0 = new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 0 });
-const amount = (v: number, unit: '€' | 'kWh') => `${nf0.format(Math.round(Math.abs(v)))} ${unit}`;
+const amount = (v: number, unit: '€' | 'kWh') => withUnit(nf0.format(Math.round(Math.abs(v))), unit);
 
 /**
  * #383: the gap as written, from the two amounts as written (whole euros or kWh), so that

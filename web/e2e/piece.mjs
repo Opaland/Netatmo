@@ -144,7 +144,7 @@ try {
       await go(page, 'piece-r-ch1');
       await page.waitForSelector('#froid li', { timeout: 15000 }).catch(() => errors.push(`${name} : chambre parentale sans jour froid expliqué`));
       const cold = await page.locator('#froid').innerText();
-      check(/température demandée de 18,0 °C/.test(cold) && /\(1\d,\d °C\) :/.test(cold), `${name} : jours froids de la chambre parentale mal expliqués (« ${cold.slice(0, 200)} »)`);
+      check(/température demandée de 18,0\s°C/.test(cold) && /\(1\d,\d\s°C\) :/.test(cold), `${name} : jours froids de la chambre parentale mal expliqués (« ${cold.slice(0, 200)} »)`);
       await page.screenshot({ path: `${OUT}/piece-${BROWSER}-${name}-chambre.png`, fullPage: true });
 
       // ---------------------------------------------------------------- household view: « Chambres » regroupées, never named

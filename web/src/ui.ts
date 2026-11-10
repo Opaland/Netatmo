@@ -7,7 +7,7 @@ import { type ResolvedContract, resolveContract } from './contract';
 import { type ContractPeriod, periodAt } from './offers';
 import { type HcHp, flatPrice, hcHp, manualHcHp, manualPriceAt } from './pricing';
 import { comparison, seg } from './components';
-import { NO_REFERENCE, dayLong, localDay, signedPct } from './glossary';
+import { NO_REFERENCE, dayLong, localDay, signedPct, withUnit } from './glossary';
 import { effectiveMapping, isOutdoor as outdoorModule } from './comfort';
 import type { Station } from './data';
 import { tenant } from './tenant';
@@ -21,7 +21,7 @@ export { fmtKwh } from './charts';
 export const nf0 = new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 0 });
 /** Signed, rounded percentage without "-0" (glossary.ts, #315). */
 export const pct = signedPct;
-export const fmtEur = (v: number) => `${nf0.format(v)} €`;
+export const fmtEur = (v: number) => withUnit(nf0.format(v), '€');
 
 /** « 1er août 2026 » (#299: one date format, glossary.ts). */
 export const longDate = (day: string) => dayLong(day);

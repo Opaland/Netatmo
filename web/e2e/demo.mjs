@@ -374,7 +374,10 @@ try {
       await page.waitForSelector('#view[data-page=etat][data-ready]', { state: 'attached' });
       // #318 / #336: the quality report, year by year, with the causes (demo: 26 days lost at Intuis in 2024)
       try {
-        await page.waitForSelector('#quality-years .year-verdict', { timeout: 15000 });
+        await page.waitForSelector('#quality-years .year-verdict', { state: 'attached', timeout: 15000 });
+        // #387: the detail is folded under one line per subject; reading the page is opening it
+        await page.click('#quality-years > summary');
+        await page.click('#quality-sources [data-source=heating] > summary');
         const years = await page.locator('#quality-years').innerText();
         if (!/2024/.test(years) || !/Trou de 26 jours|trou de 26 jours/.test(years) || !/Intuis n'a rien renvoyé/.test(years)) errors.push(`${name}/etat: bilan 2024 sans le trou de 26 jours ni sa cause`);
         if (!/Récupérable \?/.test(await page.locator('#quality-sources').innerText())) errors.push(`${name}/etat: « récupérable ? » absent`);
@@ -382,6 +385,8 @@ try {
         errors.push(`${name}/etat: bilan qualité non rendu (${err})`);
       }
       try {
+        // #387: no form in this reading page (the Shelly clamps are named in ⚙ Sources de données)
+        if (await page.locator('#view [data-shelly-name], #view [data-shelly-role]').count()) errors.push(`${name}/etat: formulaire des pinces Shelly dans une page de lecture`);
         await page.click('#quality > summary');
         await page.check('[data-recon]');
         await page.waitForSelector('#recon-chart canvas', { timeout: 15000 });
@@ -440,7 +445,7 @@ try {
     for (const id of ['co2-0', 'cellar-0', 'cold-chart', 'probe-0']) {
       if (!(await page.locator(`#${id} canvas`).count())) errors.push(`${name}/confort: graphique ${id} absent`);
     }
-    if (!(await page.getByText('Heures sous 18,0 °C').count())) errors.push(`${name}/confort: seuil 18 °C non appliqué`);
+    if (!(await page.getByText(/Heures sous 18,0\s°C/).count())) errors.push(`${name}/confort: seuil 18 °C non appliqué`);
     // E13 (S-13.3): open windows per room (lazy document), signature without the window days
     try {
       await page.waitForSelector('#windows-chart canvas', { timeout: 15000 });
@@ -493,7 +498,7 @@ try {
     // S-13.3: « pourquoi cette pièce était froide ? » (room states loaded on demand)
     await page.click('[data-question=cold]');
     try {
-      await page.waitForFunction(() => /sous 19 °C/.test(document.querySelector('.question-answer')?.textContent ?? ''), null, { timeout: 10000 });
+      await page.waitForFunction(() => /sous 19\s°C/.test(document.querySelector('.question-answer')?.textContent ?? ''), null, { timeout: 10000 });
     } catch (err) {
       errors.push(`${name}/rapport: question « pièce froide » sans réponse (${err})`);
     }
@@ -709,7 +714,7 @@ try {
     }
     check(/Données du/.test(await page.locator('.top .status-pill').innerText()), '360 px : la pastille longue « Données du … » n’est plus affichée à 100 %');
     await page.addStyleTag({ content: 'html { font-size: 200% !important; }' });
-    for (const view of ['accueil', 'pieces', 'piece-r-bureau', 'historique', 'compteur', 'outils', 'confort', 'parametres', 'parametres-contrat', 'parametres-affichage']) {
+    for (const view of ['accueil', 'pieces', 'piece-r-bureau', 'historique', 'compteur', 'outils', 'confort', 'etat', 'parametres', 'parametres-contrat', 'parametres-affichage']) {
       progress(`360 px, texte 200 % : ${view}`);
       await go(page, view);
       await nextFrame(page);
@@ -724,6 +729,30 @@ try {
           if (el.matches('.seg button, .tabs a span') && el.scrollWidth > el.clientWidth + 1) found.push(`« ${el.textContent} » coupé`);
           // #308: each tab keeps a 44 px target
           if (el.matches('.tabs a') && (r.height < 44 || r.width < 44)) found.push(`onglet « ${el.textContent} » trop petit (${Math.round(r.width)} × ${Math.round(r.height)} px)`);
+        }
+        // #389 (WCAG 1.4.4): the label of the current tab grows with the text (26 px at 200 %)
+        const tab = document.querySelector('.tabs a[aria-current=page] span');
+        if (tab && parseFloat(getComputedStyle(tab).fontSize) < 20) found.push(`libellé de l’onglet actif à ${getComputedStyle(tab).fontSize}`);
+        // #389: no number left at the end of a line without its unit (« −16 / % », « 19,9 / °C »)
+        const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+        for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+          if (!n.parentElement?.closest('#view, .tabs, .top') || n.parentElement.closest('details:not([open]) > :not(summary)')) continue;
+          for (const m of n.data.matchAll(/\d[  ](?:€|%|°C|kWh)/g)) {
+            const at = (i) => {
+              const range = document.createRange();
+              range.setStart(n, i);
+              range.setEnd(n, i + 1);
+              return range.getBoundingClientRect();
+            };
+            const a = at(m.index);
+            const b = at(m.index + 2);
+            if (a.height && b.height && Math.abs(a.top - b.top) > a.height / 2) found.push(`unité coupée de son nombre : « ${n.data.slice(Math.max(0, m.index - 10), m.index + 5)} »`);
+          }
+        }
+        // #389: no label cut by an ellipsis (a select shows its whole option once opened)
+        for (const el of document.querySelectorAll('#view *, .tabs *, .top *')) {
+          if (el.matches('select') || getComputedStyle(el).textOverflow !== 'ellipsis') continue;
+          if (el.scrollWidth > el.clientWidth + 1) found.push(`« ${el.textContent} » tronqué par des points de suspension`);
         }
         return found;
       });

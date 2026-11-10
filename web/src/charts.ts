@@ -17,7 +17,7 @@ import {
   themeKey,
   zeroBased,
 } from './chart-theme';
-import { dayLong, signedPct } from './glossary';
+import { dayLong, signedPct, withUnit } from './glossary';
 import { type Measure, changeSummary, daysSummary, gridSummary, rankSummary, slopeSummary, summarize } from './summary';
 import { html, node } from './trusted';
 import { track } from './ready';
@@ -75,7 +75,7 @@ export const cssVar = (name: string) => getComputedStyle(document.documentElemen
 
 const nf1 = new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 1 });
 const nf0 = new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 0 });
-export const fmtKwh = (v: number) => `${(Math.abs(v) < 100 ? nf1 : nf0).format(v)} kWh`;
+export const fmtKwh = (v: number) => withUnit((Math.abs(v) < 100 ? nf1 : nf0).format(v), 'kWh');
 
 export function escapeHtml(s: string): string {
   return s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
