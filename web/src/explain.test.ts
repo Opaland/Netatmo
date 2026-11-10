@@ -58,6 +58,26 @@ const step = (e: ReturnType<typeof explainMonth>, k: string) => e!.steps.find((s
 const sumSteps = (e: ReturnType<typeof explainMonth>) => e!.steps.reduce((s, x) => s + x.kwh, 0);
 
 describe('explain a month', () => {
+  it('#394: a day of cut is left out of both months, with its day a year earlier', () => {
+    const i = input();
+    // a power cut on 10 January 2026: the radiators stop, the day falls to 0
+    const cutDay = '2026-01-10';
+    i.records = i.records.map((r) => (r.day === cutDay ? { ...r, kwh: 0 } : r));
+    i.linky.set(cutDay, 0);
+    const naive = explainMonth(i)!;
+    expect(naive.delta).toBeLessThan(-10); // without the journal: an « économie »
+    const e = explainMonth({ ...i, cuts: new Map([[cutDay, 'power'], ['2025-01-20', 'internet']]) })!;
+    expect(e.delta).toBeCloseTo(0, 6);
+    expect(e.cuts.map((c) => [c.day, c.ref, c.kind, c.on])).toEqual([
+      ['2026-01-10', '2025-01-10', 'power', 'now'],
+      ['2026-01-20', '2025-01-20', 'internet', 'ref'],
+    ]);
+    expect(e.weather).not.toBeNull(); // the degree days are counted on the same 29 days
+    expect(e.basis).toBe('linky');
+    for (const k of ['meteo', 'pieces', 'eau', 'autres']) expect(step(e, k)).toBeCloseTo(0, 6); // no part takes the cut
+    expect(sumSteps(e)).toBeCloseTo(e.delta, 6);
+  });
+
   it('the same month: nothing to explain', () => {
     const e = explainMonth(input())!;
     expect(e.delta).toBeCloseTo(0, 6);
