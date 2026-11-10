@@ -9,6 +9,7 @@
 //   - no text painted over another, none cut by the box that holds it, no ordinary word broken
 //     in the middle without a hyphen (#384, #397: what the horizontal scroll does not see);
 //   - no value axis writing the same label twice (« 21, 21, 20, 20 », #398);
+//   - no category label of a horizontal bar chart drawn over its neighbour (#413);
 //   - axe: no serious or critical violation (WCAG 2.1 AA);
 //   - the view becomes ready (#view[data-ready], #260).
 // Then a control explorer: on each page, every checkbox, switch, segment, radio, chip and select
@@ -346,6 +347,11 @@ function pageChecks() {
     // charts.ts (axisFmt) on the chart element: the canvas has no text to read
     for (const a of chart.getAttributeNames().filter((n) => n.startsWith('data-axis-dup-')))
       out.push({ kind: 'etiquettes-axe-en-double', detail: `${chart.id || '(sans id)'} : « ${chart.getAttribute(a)} »`, quiet: `${chart.id || '(sans id)'}, axe ${a.slice(14)}` });
+    // #413: category labels of a horizontal bar chart drawn over each other (« Chauffe-eau » on
+    // « Chambre parentale » at 360 px, text 200 %), noted by charts.ts (noteOverlap) from the
+    // boxes it estimates for them; the names stay out of the quiet diagnosis (real data)
+    if (chart.hasAttribute('data-axis-overlap-y'))
+      out.push({ kind: 'etiquettes-axe-recouvertes', detail: `${chart.id || '(sans id)'} : « ${chart.getAttribute('data-axis-overlap-y')} »`, quiet: `${chart.id || '(sans id)'}, axe y` });
   }
   return out;
 }
@@ -767,12 +773,14 @@ async function selfTest(browser, run, display) {
       chart.id = 'auto-controle-axe';
       chart.append(document.createElement('canvas'));
       chart.setAttribute('data-axis-dup-y', '20');
+      // #413: and whose category labels overlap (names of « data »: never in the quiet diagnosis)
+      chart.setAttribute('data-axis-overlap-y', 'secret-piece-42 / secret-piece-43');
       view.append(chart);
     });
     const found = await s.page.evaluate(pageChecks);
     const kinds = found.map((f) => f.kind);
-    const missing = ['texte-interdit', 'carte-vide', 'defilement-horizontal', 'textes-recouverts', 'texte-coupe', 'mot-coupe', 'etiquettes-axe-en-double'].filter((k) => !kinds.includes(k));
-    if (found.some((f) => /recouverts|coupe/.test(f.kind) && /secret|Salon/i.test(f.quiet ?? ''))) throw new Error('auto-contrôle : le diagnostic discret d’un texte recouvert ou coupé cite un contenu');
+    const missing = ['texte-interdit', 'carte-vide', 'defilement-horizontal', 'textes-recouverts', 'texte-coupe', 'mot-coupe', 'etiquettes-axe-en-double', 'etiquettes-axe-recouvertes'].filter((k) => !kinds.includes(k));
+    if (found.some((f) => /recouver|coupe/.test(f.kind) && /secret|Salon/i.test(f.quiet ?? ''))) throw new Error('auto-contrôle : le diagnostic discret d’un texte recouvert ou coupé cite un contenu');
     if (missing.length) throw new Error(`auto-contrôle : invariants muets (${missing.join(', ')})`);
     const quiet = found.find((f) => f.kind === 'defilement-horizontal').quiet ?? '';
     if (!/^\d+ px : div\.card > span/.test(quiet) || !quiet.includes('texte trop long dans : p.hint') || /secret/i.test(quiet))
@@ -852,7 +860,7 @@ try {
     const browser = await chromium.launch();
     try {
       await selfTest(browser, runs[0], displays[0]);
-      console.log('Auto-contrôle : les invariants voient un « NaN », une carte vide, un débordement, deux textes l’un sur l’autre, un texte coupé par sa carte, un mot coupé en son milieu et un axe aux étiquettes en double ; le diagnostic discret ne cite aucun contenu.');
+      console.log('Auto-contrôle : les invariants voient un « NaN », une carte vide, un débordement, deux textes l’un sur l’autre, un texte coupé par sa carte, un mot coupé en son milieu, un axe aux étiquettes en double et des noms d’axe l’un sur l’autre ; le diagnostic discret ne cite aucun contenu.');
     } finally {
       await browser.close();
     }

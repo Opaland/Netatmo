@@ -2376,6 +2376,100 @@ code.hash {
   }
 }
 
+/* #413: a horizontal bar chart in HTML rows (charts.ts barRows) when its canvas labels would
+   not fit: the name above its bar(s), the value at the end, like the cascade above */
+.chart[data-rows] {
+  height: auto;
+}
+.hbars {
+  display: grid;
+  gap: var(--space-3);
+  font-size: var(--font-sm);
+}
+.hbars-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-3);
+  margin: 0;
+  color: var(--text-muted);
+}
+.hbars-legend i {
+  display: inline-block;
+  width: 0.75em;
+  height: 0.75em;
+  margin-right: var(--space-1);
+  border-radius: 2px;
+}
+.hbar-row {
+  display: grid;
+  gap: var(--space-1);
+}
+.hbar-link {
+  cursor: pointer;
+}
+.hbar-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.hbar-track {
+  position: relative;
+  flex: 1 1 auto;
+  height: 14px;
+}
+.hbar-track::before {
+  content: '';
+  position: absolute;
+  left: var(--zero);
+  top: -2px;
+  bottom: -2px;
+  border-left: 1px solid var(--border-strong);
+}
+.hbar-track i {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  min-width: 1px;
+  border-radius: 3px;
+}
+.hbar-track i.alt {
+  top: 3px;
+  bottom: 3px;
+}
+.hbar-value {
+  flex: 0 0 var(--value-w);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+@media (prefers-contrast: more) {
+  /* the second series also differs by its stripes, not by its grey alone (S-7.7) */
+  .hbar-track i.alt {
+    background-image: repeating-linear-gradient(45deg, transparent 0 2px, var(--surface-card) 2px 4px);
+  }
+}
+@media (forced-colors: active) {
+  .hbar-track i,
+  .hbars-legend i {
+    forced-color-adjust: none;
+    background-color: CanvasText !important;
+  }
+  .hbar-track i.alt {
+    background-color: GrayText !important;
+  }
+}
+
+/* #413: a name in the pinned first column of a table wraps (and its category goes under it)
+   instead of being cut by the edge of the table at 360 px and text 200 % (« Cha… ») */
+.cell-name {
+  display: inline-block;
+  min-width: min(10em, 45vw);
+  white-space: normal;
+}
+.cell-name small {
+  display: block;
+}
+
 /* #346: a room out of reach, said in the verdict that leaves it out */
 .verdict-warn b {
   color: var(--text);

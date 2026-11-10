@@ -93,6 +93,28 @@ try {
     await audit(page, `${name}/pieces`, enhanced);
     await page.screenshot({ path: `${OUT}/piece-${BROWSER}-${name}-liste.png`, fullPage: true });
 
+    // #413: « comparé à l'an dernier » — at text 200 % the bars become HTML rows, each name
+    // whole and above its bars, none over another; the table's first column cuts nothing
+    await page.waitForSelector(big ? '#rooms-chart .hbar-row' : '#rooms-chart canvas', { timeout: 15000 }).catch(() => errors.push(`${name} : graphique par pièce absent ou pas sous la forme attendue`));
+    if (big) {
+      const rows = await page.evaluate(() =>
+        [...document.querySelectorAll('#rooms-chart .hbar-label')].map((e) => {
+          const r = e.getBoundingClientRect();
+          return { text: e.textContent, top: r.top, bottom: r.bottom, right: r.right, max: e.closest('.chart').getBoundingClientRect().right };
+        }),
+      );
+      check(rows.length >= 4 && rows.some((r) => r.text === 'Chambre parentale'), `${name} : noms du graphique par pièce incomplets (${rows.map((r) => r.text).join(', ')})`);
+      check(rows.every((r, i) => i === 0 || r.top >= rows[i - 1].bottom - 0.5), `${name} : noms du graphique par pièce l'un sur l'autre`);
+      check(rows.every((r) => r.right <= r.max + 0.5), `${name} : nom du graphique par pièce coupé`);
+      const cut = await page.evaluate(() =>
+        [...document.querySelectorAll('#pieces-compare table tbody td:first-child')].filter((td) => td.scrollWidth > td.clientWidth + 1 || td.getBoundingClientRect().right > td.closest('.table-wrap').getBoundingClientRect().right + 1).length,
+      );
+      check(cut === 0, `${name} : ${cut} nom(s) de pièce coupé(s) dans la liste sous le graphique`);
+      await page.locator('#rooms-chart .hbar-row').first().click();
+      await page.waitForSelector('#view[data-page^="piece-"][data-ready]', { state: 'attached', timeout: 15000 }).catch(() => errors.push(`${name} : toucher une ligne du graphique par pièce n'ouvre pas sa page`));
+      await go(page, 'pieces');
+    }
+
     // ---------------------------------------------------------------- the most expensive room (Salon in the demo)
     progress(`${name} : page Pièce`);
     await page.locator('#view a[data-room-link]').first().click();
