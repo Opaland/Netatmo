@@ -135,7 +135,7 @@ function teleworkCard(): string {
       ? `Une journée de télétravail coûte <strong>${money(Math.abs(diff))} ${more}</strong> qu'une journée au bureau pour chauffer « ${esc(name)} » ${delta}, à climat égal.`
       : a === 'telework'
         ? `Tous vos jours ouvrés sont en télétravail : dans « ${esc(name)} », une journée de télétravail coûte <strong>${money(g('telework').kwh)}</strong> et un jour de week-end <strong>${money(g('weekend').kwh)}</strong>, à climat égal, soit ${money(Math.abs(diff))} ${more} ${delta}. Sans jour au bureau, le week-end sert de point de comparaison.`
-        : `Dans « ${esc(name)} », un jour ouvré coûte <strong>${money(g('weekday').kwh)}</strong> et un jour de week-end <strong>${money(g('weekend').kwh)}</strong>, à climat égal : écart de ${money(Math.abs(diff))} par jour. Cochez vos jours de télétravail pour isoler leur coût.`;
+        : `Dans « ${esc(name)} », un jour ouvré coûte <strong>${money(g('weekday').kwh)}</strong> et un jour de week-end <strong>${money(g('weekend').kwh)}</strong>, à climat égal : écart de ${money(Math.abs(diff))} par jour. Activez vos jours de télétravail pour isoler leur coût.`;
   return `<section class="card" id="telework-card">${head}
     <p>${sentence}</p>
     ${table(

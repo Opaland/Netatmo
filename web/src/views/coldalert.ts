@@ -126,7 +126,7 @@ export function mountColdSettings(card: HTMLElement | null, repo: () => string, 
             }),
             99,
           )
-        : '<p class="hint muted">Cochez au moins une pièce.</p>'
+        : '<p class="hint muted">Activez au moins une pièce.</p>'
     }
     <p class="hint muted">Variable du dépôt <code>${COLD_VARIABLE}</code> (Settings → Secrets and variables → Actions → Variables) :</p>
     <code class="sim-json">${esc(chosen.length ? coldJson(cfg) : '—')}</code>

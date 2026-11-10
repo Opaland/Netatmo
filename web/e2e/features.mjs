@@ -165,7 +165,7 @@ try {
     page.on('pageerror', (e) => errors.push(`${BROWSER} éviction: ${e.message}`));
     await page.goto(base);
     await page.waitForSelector('#pass', { timeout: 15000 });
-    const notice = await page.locator('#lock-notice').innerText().catch(() => '');
+    const notice = await page.locator('#lock-notice p').innerText().catch(() => '');
     check(/^iOS a effacé la clé, vos données sont intactes/.test(notice), `éviction : message attendu sur iPhone, lu « ${notice} »`);
     await page.screenshot({ path: `${OUT}/${BROWSER}-cle-effacee.png`, fullPage: true });
     await audit(page, 'verrou-cle-effacee');
@@ -264,12 +264,12 @@ try {
       await ctx.clock.runFor(16 * 60_000);
       for (const p of [other, page]) {
         await p.waitForSelector('#lock-notice', { timeout: 15000 }).catch(() => {});
-        const n = await p.locator('#lock-notice').innerText().catch(() => '');
+        const n = await p.locator('#lock-notice p').innerText().catch(() => '');
         check(/^Verrouillé après 15 min sans activité/.test(n), `inactivité : message attendu, lu « ${n} »`);
       }
       await other.reload();
       await other.waitForSelector('#pass', { timeout: 15000 });
-      check(/sans activité/.test(await other.locator('#lock-notice').innerText().catch(() => '')), 'inactivité : message perdu au rechargement');
+      check(/sans activité/.test(await other.locator('#lock-notice p').innerText().catch(() => '')), 'inactivité : message perdu au rechargement');
       await other.screenshot({ path: `${OUT}/${BROWSER}-verrou-inactivite.png`, fullPage: true });
       await audit(other, 'verrou-inactivite');
     } catch (err) {
