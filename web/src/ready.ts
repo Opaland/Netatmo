@@ -42,10 +42,19 @@ export class Pending {
   }
 }
 
+let waiting: (() => void)[] = [];
 const mark = (on: boolean) => {
+  if (on) {
+    const fns = waiting;
+    waiting = [];
+    for (const fn of fns) fn();
+  }
   if (typeof document === 'undefined') return;
   document.getElementById('view')?.toggleAttribute('data-ready', on);
 };
+
+/** #353: run `fn` once the view is ready (its lazy cards drawn), e.g. to give the focus back. */
+export const onceReady = (fn: () => void) => void waiting.push(fn);
 const work = new Pending(
   () => mark(true),
   () => mark(false),

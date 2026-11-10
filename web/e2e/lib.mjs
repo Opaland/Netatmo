@@ -14,6 +14,7 @@ export async function startPreview(port) {
   const server = spawn(process.execPath, ['node_modules/vite/bin/vite.js', 'preview', '--port', String(port), '--strictPort'], { stdio: 'ignore' });
   let exited = false;
   server.on('exit', () => (exited = true));
+  process.on('exit', () => server.kill()); // a script that throws does not leave the port taken
   const base = `http://localhost:${port}/`;
   for (let i = 0; i < 100; i++) {
     if (exited) throw new Error(`le serveur de prévisualisation s'est arrêté (port ${port})`);

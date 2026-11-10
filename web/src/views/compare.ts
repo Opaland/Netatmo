@@ -400,11 +400,26 @@ function simWarning() {
     : `<p class="hint muted">Sur 12 mois, votre pic n'a jamais dépassé ${state.simKva} kVA.</p>`;
 }
 
+/** The power list of the comparator (« celle de mon contrat », « simuler 9 kVA »…). */
+function powerControl(): string {
+  return `<div class="controls">
+      <label class="select">Puissance<select data-set="simKva">
+        <option value="" ${state.simKva === null ? 'selected' : ''}>celle de mon contrat</option>
+        ${[6, 9, 12, 15, 18].map((k) => `<option value="${k}" ${state.simKva === k ? 'selected' : ''}>simuler ${k} kVA</option>`).join('')}
+      </select></label>
+    </div>`;
+}
+
 function comparatorCard() {
   if (tenant().on) return tenantNote('Le comparateur d\'offres est masqué'); // S-12.6
   if (!ds!.offers.size || !ds!.tempo.rows.length) return '';
   const { all, scope } = comparison();
-  if (!all.hphc.days) return '';
+  // #353: a simulated power without regulated tariffs on the period: the card stays, with its list
+  // (it used to vanish with it, leaving no way back)
+  if (!all.hphc.days)
+    return state.simKva === null
+      ? ''
+      : `<section class="card"><h2>Quelle offre EDF aurait coûté le moins ?</h2>${powerControl()}<p class="hint">Aucun tarif réglementé connu à ${state.simKva} kVA sur la période : choisissez une autre puissance.</p></section>`;
   const tot = (k: 'base' | 'hphc' | 'tempo') => all[k].energy + all[k].subscription;
   const best = (['base', 'hphc', 'tempo'] as const).reduce((a, b) => (tot(b) < tot(a) ? b : a));
   const names = { base: 'Base', hphc: 'Heures pleines / creuses', tempo: 'Tempo' };
@@ -416,12 +431,7 @@ function comparatorCard() {
         ? 'Votre option <strong>heures pleines / creuses</strong> a été la moins chère.'
         : `En <strong>${names[best]}</strong>, vous auriez payé <strong>${fmtEur(diff)}</strong> de moins qu'en heures pleines / creuses sur la période.`
     }</p>
-    <div class="controls">
-      <label class="select">Puissance<select data-set="simKva">
-        <option value="" ${state.simKva === null ? 'selected' : ''}>celle de mon contrat</option>
-        ${[6, 9, 12, 15, 18].map((k) => `<option value="${k}" ${state.simKva === k ? 'selected' : ''}>simuler ${k} kVA</option>`).join('')}
-      </select></label>
-    </div>
+    ${powerControl()}
     ${simWarning()}
     <div class="chart" id="offers-chart" role="img" aria-label="Écart de coût de Base et de Tempo avec votre offre heures pleines / creuses, par année"></div>
     <div id="offers-table"></div>

@@ -47,7 +47,9 @@ class Fixture:
         self.store = Store(out, PASSPHRASE)
         self.today = today
         self.dir = out
-        self.names = sorted(p.name.removesuffix(".enc.json") for p in out.glob("*.enc.json") if p.name != "meta.enc.json")
+        self.names = sorted(
+            p.name.removesuffix(".enc.json") for p in out.glob("*.enc.json") if p.name != "meta.enc.json"
+        )
         self.meta = dict(self.store.meta)
         self.rooms: list[dict] = list(self.meta["rooms"])
 
@@ -190,7 +192,9 @@ def sans_chauffe_eau(f: Fixture) -> None:
 
 def _station_keep(f: Fixture, keep: set[str], names: dict[str, str]) -> None:
     station = f.doc("station")
-    station["modules"] = {k: {**m, "name": names.get(k, m["name"])} for k, m in station.get("modules", {}).items() if k in keep}
+    station["modules"] = {
+        k: {**m, "name": names.get(k, m["name"])} for k, m in station.get("modules", {}).items() if k in keep
+    }
     for section in station.values():
         if isinstance(section, dict) and section is not station["modules"]:
             for k in [k for k in section if re.fullmatch(r"m\d+", k) and k not in keep]:

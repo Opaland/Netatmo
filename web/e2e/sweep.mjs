@@ -19,7 +19,7 @@
 //     explorer, the other fixtures at 360 px) | full (every fixture × every display, axe and
 //     explorer everywhere: manual or nightly run)
 //   SWEEP_FIXTURES=demo,sans-prix…  SWEEP_DISPLAYS=360,sombre…  SWEEP_ROUTES=<regex>
-//   SWEEP_EXPLORE=0 (no explorer)  SWEEP_WORKERS=4  E2E_PORT=4190
+//   SWEEP_EXPLORE=0 (no explorer)  SWEEP_WORKERS=4  E2E_PORT=4196
 //   SWEEP_BASE=https://…/ : sweep a site already served (smoke test of the deployed demo)
 //   SWEEP_SOURCE=data + DATA_PASSPHRASE : real data (dist/data). ASSERTIONS ONLY: no capture, and
 //     each line says « page X : OK » or « page X : échec : <invariant> », never a value, a name
@@ -73,12 +73,15 @@ function routes() {
 }
 
 // ------------------------------------------------------------------ fixtures and displays
-const ns = `(() => { const d = location.pathname.replace(/[^/]*$/, '').replace(/^\\/+|\\/+$/g, ''); return d ? 'intuis-history@' + d : 'intuis-history'; })()`;
 const daysAgo = (n) => new Date(Date.now() - n * 864e5).toISOString().slice(0, 10);
 /** Data fixture (folder of dist/demo-fixtures, null = the demo) and settings of the device. */
 const MODES = {
-  locataire: { data: null, storage: { tenant: JSON.stringify({ on: true, leaseFrom: daysAgo(200), leaseTo: null }) } },
-  proche: { data: null, storage: { state: JSON.stringify({ simple: true }) } },
+  locataire: {
+    data: null,
+    storage: { tenant: JSON.stringify({ on: true, leaseFrom: daysAgo(200), leaseTo: null }) },
+    applied: () => !!document.querySelector('.tabs') && !document.querySelector('.tabs [data-view="compteur"]'), // no Compteur tab
+  },
+  proche: { data: null, storage: { state: JSON.stringify({ simple: true }) }, applied: () => document.body.classList.contains('simple-nav') },
 };
 const DISPLAYS = {
   360: { viewport: { width: 360, height: 800 } },
@@ -163,16 +166,18 @@ class Session {
     const storage = { ...(this.run.storage ?? {}) };
     if (SOURCE === 'data') storage.state ??= '{}'; // a device already used: no first launch
     await this.ctx.addInitScript(
-      ([nsExpr, entries]) => {
+      (entries) => {
         try {
-          const prefix = (0, eval)(nsExpr);
+          // the app's namespace (src/scope.ts): « intuis-history@<dépôt> » under a path, else « intuis-history »
+          const dir = location.pathname.replace(/[^/]*$/, '').replace(/^\/+|\/+$/g, '');
+          const prefix = dir ? `intuis-history@${dir}` : 'intuis-history';
           localStorage.clear();
           for (const [k, v] of entries) localStorage.setItem(`${prefix}:${k}`, v);
         } catch {
           /* storage blocked: defaults */
         }
       },
-      [ns, Object.entries(storage)],
+      Object.entries(storage),
     );
     this.page = await this.ctx.newPage();
     this.page.on('pageerror', () => this.errors.push('erreur-js'));
@@ -219,6 +224,8 @@ async function sweepJob(browser, job) {
   const where = (route) => ({ fixture: job.run.name, display: job.display, route });
   try {
     await s.open();
+    // the settings of the mode were really read by the app (a sweep of the plain demo proves nothing)
+    if (job.run.applied && !(await s.page.evaluate(job.run.applied))) throw new Error(`mode « ${job.run.name} » non appliqué`);
     const rooms = await s.rooms();
     roomNames[job.run.name] ??= rooms;
     const all = [...ROUTES.slice(0, 5), ...rooms, ...ROUTES.slice(5)].filter((r) => !ROUTE_FILTER || ROUTE_FILTER.test(r));
@@ -284,6 +291,11 @@ async function act(s, css, how) {
     const on = await el.evaluate((e) => (e.type === 'checkbox' ? e.checked : e.getAttribute('aria-pressed') === 'true' || e.getAttribute('aria-checked') === 'true'));
     if (on === how.set) return false;
   }
+  // a control in a closed fold: opened first, as a person would (« Choisir les saisons »…)
+  await el.evaluate((e) => {
+    const fold = e.closest('details');
+    if (fold && !fold.open) fold.open = true;
+  });
   try {
     await el.scrollIntoViewIfNeeded({ timeout: 3000 });
   } catch {
@@ -318,7 +330,7 @@ async function scrollAndFocus(s) {
   if (!s.lastAct) return [];
   const { css, y, top } = s.lastAct;
   s.lastAct = null;
-  const now = await s.page.evaluate((css) => {
+  const look = (css) => {
     const el = document.querySelector(css);
     const a = document.activeElement;
     return {
@@ -326,7 +338,13 @@ async function scrollAndFocus(s) {
       top: el ? (el.closest('label') ?? el).getBoundingClientRect().top : null,
       focused: !!a && a !== document.body && (a.matches(css) || !!a.closest('label')?.querySelector(css)),
     };
-  }, css);
+  };
+  let now = await s.page.evaluate(look, css);
+  // a card drawn late gives the focus back late: a second look within a second
+  for (let i = 0; i < 4 && !now.focused; i++) {
+    await s.page.waitForTimeout(250);
+    now = await s.page.evaluate(look, css);
+  }
   const out = [];
   if (y > 100 && now.y < y - 50 && (now.top === null || now.top - top > 150)) out.push({ kind: 'defilement-saute', detail: `${Math.round(y)} → ${Math.round(now.y)} px` });
   if (!now.focused) out.push({ kind: 'focus-perdu', detail: css });
@@ -335,6 +353,7 @@ async function scrollAndFocus(s) {
 
 async function exploreJob(browser, job) {
   const s = new Session(browser, job.run, job.display, record);
+  const richData = !job.run.data; // the demo itself, its modes, or real data
   try {
     await s.open();
     const rooms = await s.rooms();
@@ -363,7 +382,7 @@ async function exploreJob(browser, job) {
           const found = await s.check(where(what));
           let now = await s.page.evaluate(dataDisplays);
           const vanished = () => Object.entries(baseline).some(([card, was]) => now[card] && ((was.tables && !now[card].tables) || (was.charts && !now[card].charts)));
-          if (watchLoss && vanished()) {
+          if (watchLoss && richData && vanished()) {
             // a second look, a moment later (a chart drawn late is not a lost chart)
             await s.page.waitForTimeout(1500);
             await ready(s.page, 20000).catch(() => {});
@@ -371,9 +390,10 @@ async function exploreJob(browser, job) {
             if (vanished() && SOURCE === 'demo' && env.SWEEP_DEBUG) console.log(JSON.stringify({ what, baseline, now }));
           }
           const lost = [...moved];
+          // (only on full data: on a trimmed fixture, « not enough days » instead of a table is right)
           // a segment, a radio or a select switches between views by design: only an on/off
           // control (checkbox, switch, chip) must not make a table or a chart vanish
-          if (watchLoss) for (const [card, was] of Object.entries(baseline)) {
+          if (watchLoss && richData) for (const [card, was] of Object.entries(baseline)) {
             const is = now[card];
             if (!is) continue;
             if (was.tables && !is.tables) lost.push({ kind: 'tableau-perdu', detail: card });
@@ -429,6 +449,41 @@ async function exploreJob(browser, job) {
     }
   } catch (err) {
     record({ fixture: job.run.name, display: job.display, route: '(ouverture)' }, [{ kind: 'exception', detail: String(err).slice(0, 300) }]);
+  } finally {
+    await s.close();
+  }
+}
+
+// ------------------------------------------------------------------ self-test
+/**
+ * A sweep that cannot fail proves nothing: on one page, a card « NaN », an empty card and a
+ * too wide block are slipped in, and the invariants must see all three before anything else runs.
+ */
+async function selfTest(browser, run, display) {
+  const s = new Session(browser, run, display, () => {});
+  try {
+    await s.open();
+    await s.page.evaluate(() => {
+      const view = document.getElementById('view');
+      const card = (text) => {
+        const c = document.createElement('section');
+        c.className = 'card';
+        const h = document.createElement('h2');
+        h.textContent = 'Auto-contrôle';
+        c.append(h);
+        if (text) c.append(Object.assign(document.createElement('p'), { textContent: text }));
+        view.append(c);
+      };
+      card('Total : NaN kWh');
+      card('');
+      const wide = document.createElement('div');
+      wide.style.width = '3000px';
+      wide.style.height = '1px';
+      view.append(wide);
+    });
+    const kinds = (await s.page.evaluate(pageChecks)).map((f) => f.kind);
+    const missing = ['texte-interdit', 'carte-vide', 'defilement-horizontal'].filter((k) => !kinds.includes(k));
+    if (missing.length) throw new Error(`auto-contrôle : invariants muets (${missing.join(', ')})`);
   } finally {
     await s.close();
   }
@@ -499,6 +554,15 @@ try {
   console.log(
     `Balayage ${SOURCE === 'data' ? 'des vraies données' : remote ? `de ${base}` : 'de la démo'} : ${runs.length} jeu(x), ${displays.join(', ')}, ${ROUTES.length} routes + pièces, ${jobs.length} tâches sur ${WORKERS} navigateur(s)${FULL ? ' (complet)' : ''}.`,
   );
+  {
+    const browser = await chromium.launch();
+    try {
+      await selfTest(browser, runs[0], displays[0]);
+      console.log('Auto-contrôle : les invariants voient un « NaN », une carte vide et un débordement.');
+    } finally {
+      await browser.close();
+    }
+  }
   const queue = [...jobs];
   await Promise.all(
     Array.from({ length: WORKERS }, async () => {
