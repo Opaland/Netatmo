@@ -522,7 +522,7 @@ docs/               notes sur l'API, étude de l'existant, feuille de route, rè
                     et Zigbee, module intérieur de la station, audit de tous les appareils et achats, origine dédiée)
   design/           inventaire de l'interface (couleurs, typographie, composants), base du design system
   revues-agents/    consignes des revues de code et design par agents (à chaque version)
-  bmad/             cadrage BMAD : brief, revue des 62 personas, PRD, architecture, epics, QA
+  bmad/             cadrage BMAD : brief, revue des 72 personas, PRD, architecture, epics, QA
 .github/workflows/  CI, collecte quotidienne, déploiement GitHub Pages, revue par agents (à la demande)
 scripts/            outils ponctuels (jours Tempo, constats de revue → issues)
 ```

@@ -30,11 +30,13 @@ describe('chiffres de la documentation (#362)', () => {
     expect(n).toBeGreaterThanOrEqual(50);
     expect([...numbers].sort((a, b) => a - b), 'numérotation continue de 1 à n').toEqual(Array.from({ length: n }, (_, i) => i + 1));
     agree(String(n), [
-      ['docs/PROJET.md', /\*\*(\d+) personas\*\* depuis le cadrage/],
+      ['docs/PROJET.md', /\*\*(\d+) personas\*\* depuis/],
       ['README.md', /revue des (\d+) personas/],
       ['docs/bmad/00-index.md', /une revue par (\d+) personas/],
-      ['docs/bmad/00-index.md', /personas 51 à (\d+) ajoutés/],
     ]);
+    // the index lists the additions (« personas 51 à 62 », « personas 63 à 72 »…): the last one ends at n
+    const ranges = found('docs/bmad/00-index.md', /personas \d+ à (\d+)/).map(Number);
+    expect(Math.max(...ranges), 'docs/bmad/00-index.md : dernier ajout de personas').toBe(n);
   });
 
   it('le budget de taille écrit = BUDGET_KB et TARGET de size-budget.mjs', () => {
