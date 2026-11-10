@@ -290,7 +290,7 @@ def build(out_dir: Path, names: list[str] | None = None) -> list[str]:
     today = datetime.now(ZoneInfo("Europe/Paris")).date()
     with tempfile.TemporaryDirectory() as tmp:
         base = Path(tmp) / "demo"
-        generate(base, PASSPHRASE)
+        generate(base, PASSPHRASE, today=today)
         for name in names:
             out = out_dir / name
             shutil.rmtree(out, ignore_errors=True)

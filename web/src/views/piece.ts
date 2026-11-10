@@ -8,7 +8,7 @@ import { type DayRecord, addDays, bucketKeys, bucketLabel, minusYears, pctChange
 import { activeRooms, datasetDoc, ds, onDatasetLoaded, rerender, state } from '../app';
 import { barChart, chartOf, cssVar, lineChart } from '../charts';
 import { effectiveMapping, isBedroom, lastNightDay, lastNights, nightVerdict, offsetStats, signed, summarizeNights } from '../comfort';
-import { comparison, howDetails, legend, listRow, scheduleBand, tile } from '../components';
+import { alert, comparison, howDetails, legend, listRow, scheduleBand, tile } from '../components';
 import { type Dataset, loadRoom30, loadRoomState } from '../data';
 import type { DatasetDoc } from '../loader';
 import { BEDROOMS_ID } from '../household';
@@ -34,6 +34,8 @@ import { html } from '../trusted';
 import { avgPrice, costOf, esc, fmtEur, fmtKwh, lastDay, nf0, offCol } from '../ui';
 import { ABSENCE_MODES, type RoomState, type StateCell, bits, modeLabel } from '../windows';
 import { lazyCard } from '../lazy';
+import { offlineText } from '../room-offline';
+import { offlineEstimate, offlineLine, offlineRun } from './offline-rooms';
 
 // ------------------------------------------------------------------ documents (loaded on demand)
 /** Hourly room states (window, load shedding, modes): one document, a year of daily aggregates. */
@@ -122,10 +124,16 @@ export function renderPieces(view: HTMLElement, o: PiecesOpts) {
   const rs = doc(stateDoc, 'pieces');
   const rows = activeRooms().map((r) => {
     const mine = ds!.records.filter((x) => x.room === r.id);
-    return { room: r, kwh: total(mine, yearStart, last), eur: costOf(mine, yearStart, last) };
+    // #346: a room offline counts with its share estimated from the meter (« ≈ »), never 0 kWh
+    // sorted on what was measured; the estimate is said under the name, never added in
+    const run = offlineRun(r.id, yearStart, last);
+    const est = run ? (offlineEstimate(r.id, yearStart, last) ?? 0) : 0;
+    return { room: r, kwh: total(mine, yearStart, last), eur: costOf(mine, yearStart, last), run, est };
   });
-  const value = (x: { kwh: number; eur: number | null }) =>
-    x.eur === null ? esc(fmtKwh(x.kwh)) : `${esc(fmtEur(x.eur))}<span class="s">${esc(fmtKwh(x.kwh))}</span>`;
+  const value = (x: { kwh: number; eur: number | null; run: unknown }) => {
+    if (x.run && !x.kwh) return '—'; // nothing measured: not « 0 kWh »
+    return x.eur === null ? esc(fmtKwh(x.kwh)) : `${esc(fmtEur(x.eur))}<span class="s">${esc(fmtKwh(x.kwh))}</span>`;
+  };
   const heated = byCost(rows.filter((x) => x.room.category === 'heating')).map((x) => {
     const m = measured(x.room.id);
     const t = meanIn(m.days, from30, last);
@@ -133,7 +141,11 @@ export function renderPieces(view: HTMLElement, o: PiecesOpts) {
     for (const [d, v] of m.days) if (d >= from30 && d <= last && v !== null && v < thr) cold++;
     const open = rs ? sumState(rs, members(x.room.id), from30, last, (c) => c.open_window_h) : null;
     const pill = comfortPill(cold, open, thr);
-    const sub = t ? `${fmt1(t.mean)} °C · <span class="pill ${pill.level}">${esc(pill.text)}</span>` : '<span class="muted">pas de température relevée</span>';
+    const sub = x.run
+      ? `<span class="pill${x.run.stopped ? '' : ' warn'}">${esc(offlineText(x.run))}</span>${x.est ? ` · ≈ ${esc(fmtKwh(x.est))} estimés` : ''}`
+      : t
+        ? `${fmt1(t.mean)} °C · <span class="pill ${pill.level}">${esc(pill.text)}</span>`
+        : '<span class="muted">pas de température relevée</span>';
     const tag = x.room.id === BEDROOMS_ID ? ' <span class="tag">regroupées</span>' : '';
     return `<li><a class="row" href="#piece-${esc(encodeURIComponent(x.room.id))}" data-room-link="${esc(x.room.id)}"><span class="swatch" style="background:var(--usage-heating)" aria-hidden="true"></span><span><span class="t">${esc(x.room.name)}${tag}</span><span class="s">${sub}</span></span><span class="v">${value(x)}</span><span class="chev" aria-hidden="true">›</span></a></li>`;
   });
@@ -175,6 +187,31 @@ export function renderPiece(view: HTMLElement, id: string) {
   for (let d = from30; d <= last; d = addDays(d, 1)) days.push(d);
 
   const parts: string[] = [];
+  // #346: a room without reading says so first, with its estimate from the meter
+  const run = offlineRun(id, minusYears(yearStart), last);
+  if (run?.stopped) {
+    // switched off on purpose (⚙ Mon logement): expected, not a failure
+    const st = run.stopped;
+    parts.push(
+      alert(
+        'info',
+        `Radiateur ${offlineText(run)}`,
+        '',
+        `<p>${esc(`${st.label ? `${st.label.charAt(0).toUpperCase()}${st.label.slice(1)}. ` : ''}Pas de données attendues : la baisse de sa consommation électrique vient du changement de mode de chauffage, pas de vos réglages.`)} <a class="link" href="#parametres-logement">Réglage</a></p>`,
+      ),
+    );
+  } else if (run) {
+    const line = offlineLine(id, yearStart, last);
+    parts.push(
+      alert(
+        run.ongoing ? 'warn' : 'info',
+        `${room.name} : ${offlineText(run)}`,
+        `${run.ongoing ? 'Le module n’envoie plus rien : les jours sans relevé ne sont pas à 0 kWh, ils manquent. ' : 'Les jours sans relevé manquent (ils ne sont pas à 0 kWh). '}${
+          line.includes('estimés') ? `Depuis le 1er janvier, ${line.split(' · ')[1]}. ` : ''
+        }Les comparaisons avec l’an dernier ne comptent pas cette pièce.${run.ongoing ? ' Hors ligne, le radiateur ne reçoit plus le planning ni le mode absence : vérifier son alimentation, le redémarrer, puis l’associer de nouveau dans l’application Intuis.' : ''}`,
+      ),
+    );
+  }
   if (heating) parts.push(nowCard(room.name, ids, group, m, r30, rs, last));
   parts.push(tilesRow(mine, m, r30, ids, yearStart, from30, last, heating));
   if (heating && [...m.days].some(([d, v]) => d >= from30 && v !== null)) {
@@ -321,12 +358,14 @@ function tilesRow(
   const pTo = minusYears(last);
   const before = total(mine, pFrom, pTo);
   const eurBefore = before > 0 ? costOf(mine, pFrom, pTo) : null;
-  const delta = before > 0 ? (eur !== null && eurBefore ? pctChange(eur, eurBefore) : pctChange(kwh, before)) : null;
+  // #346: offline this year or the last one: measured days only, not compared
+  const run = offlineRun(mine[0]?.room ?? ids[0], pFrom, last);
+  const delta = !run && before > 0 ? (eur !== null && eurBefore ? pctChange(eur, eurBefore) : pctChange(kwh, before)) : null;
   const tiles = [
     tile({
-      label: PERIOD.ytd,
+      label: run ? `${PERIOD.ytd}, jours mesurés` : PERIOD.ytd,
       value: eur === null ? fmtKwh(kwh) : fmtEur(eur),
-      sub: `${eur === null ? '' : `${esc(fmtKwh(kwh))} · `}${comparison(delta, vsLabel(yearStart, last), { none: NO_REFERENCE })}`,
+      sub: `${eur === null ? '' : `${esc(fmtKwh(kwh))} · `}${comparison(delta, vsLabel(yearStart, last), { none: run ? `${offlineText(run)} : ${run.stopped ? 'changement de mode de chauffage' : 'non comparé'}` : NO_REFERENCE })}`,
       id: 'piece-cost',
     }),
   ];

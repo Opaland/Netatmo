@@ -14,6 +14,7 @@
     "e2e:compteur": "node e2e/compteur.mjs",
     "e2e:proche": "node e2e/proche.mjs",
     "e2e:piece": "node e2e/piece.mjs",
+    "e2e:expliquer": "node e2e/expliquer.mjs",
     "e2e:retours": "node e2e/retours.mjs",
     "e2e:plannings": "node e2e/plannings.mjs",
     "e2e:sweep": "node e2e/sweep.mjs",

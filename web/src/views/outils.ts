@@ -63,7 +63,14 @@ export function renderOutils(view: HTMLElement, status: Freshness & { label: str
     'Journaux',
   )}
   <p class="section-title" id="ia">Analyse du mois</p>
-  ${list([ins ? { title: /^\d{4}-\d{2}$/.test(ins.period) ? cap(monthLong(ins.period)) : TOOLS.analyse, sub: firstSentence(ins.markdown) || 'rédigée par l’IA, avec ce qui a été envoyé', value: 'IA', href: href('analyse') } : row('analyse', 'à activer (⚙ Sources de données, clé Anthropic)')], 'Analyse du mois')}
+  ${list(
+    [
+      // #337: why a month cost more or less than a year earlier (calculated, no AI)
+      row('expliquer', 'pourquoi un mois a coûté plus ou moins que l’an dernier : météo, pièces, températures demandées, pièces hors ligne'),
+      ins ? { title: /^\d{4}-\d{2}$/.test(ins.period) ? cap(monthLong(ins.period)) : TOOLS.analyse, sub: firstSentence(ins.markdown) || 'rédigée par l’IA, avec ce qui a été envoyé', value: 'IA', href: href('analyse') } : row('analyse', 'à activer (⚙ Sources de données, clé Anthropic)'),
+    ],
+    'Analyse du mois',
+  )}
   <p class="section-title">Rapports et exports</p>
   ${list(
     [

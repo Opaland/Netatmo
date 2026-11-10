@@ -2,6 +2,7 @@
 // (public/demo, last day 8 November 2026: the numbers of the maquette accueil.html).
 import { beforeAll, describe, expect, it } from 'vitest';
 import type { DayRecord } from './aggregate';
+import { applyStopped, notComparable, offlineRuns, parseStopped } from './room-offline';
 import { verdict } from './analysis';
 import type { Dataset } from './data';
 import { demoDataset } from './__fixtures__/demo';
@@ -120,12 +121,21 @@ describe('on the demo (maquette accueil.html)', () => {
   beforeAll(async () => {
     ds = await demoDataset();
   });
-  it('the month: −7 % vs expected at comparable weather, 170 kWh', () => {
+  it('the month: the kids’ bedroom offline is left out, the kitchen stove stays (#346)', () => {
     const records = ds.records.filter((r) => r.cat !== 'ignore');
     const r = homeRange('month', ds.meta.last_day!);
-    const v = verdict(records, r.from, r.to, ds.weather)!;
-    expect(Math.round(v.actual)).toBe(170);
-    expect(Math.round(v.pct)).toBe(-7);
+    // all rooms: the kitchen (stove) and, these last days, the kids' bedroom (out of reach) send nothing
+    const raw = verdict(records, r.from, r.to, ds.weather)!;
+    expect(Math.round(raw.actual)).toBe(138);
+    expect(Math.round(raw.pct)).toBe(-22);
+    // the kitchen is switched off on purpose (meta.stopped_rooms): a real fall, still compared;
+    // the bedroom is out of reach: left out of the comparison (what the Accueil verdict shows)
+    const runs = applyStopped(offlineRuns(ds.records, ds.meta.rooms, ds.meta.last_day!), parseStopped((ds.meta as { stopped_rooms?: unknown }).stopped_rooms));
+    const left = notComparable(runs, r.from, r.to);
+    expect([...left]).toEqual(['r-ch2']);
+    const v = verdict(records.filter((x) => !left.has(x.room)), r.from, r.to, ds.weather)!;
+    expect(Math.round(v.actual)).toBe(130);
+    expect(Math.abs(v.pct)).toBeLessThan(Math.abs(raw.pct));
     expect(v.climate).toBe(true);
   });
 });
