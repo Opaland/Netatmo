@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { type Dataset, clearDataCaches, hourlyYears, loadRoomState, mergeRooms } from './data';
+import { type Dataset, clearDataCaches, dataDir, hourlyYears, loadRoomState, mergeRooms } from './data';
 
 const ds = { meta: { hourly_years: [2023, 2024, 2025, 2026] } } as unknown as Dataset;
 
@@ -44,5 +44,17 @@ describe('household view of the hourly data (#255)', () => {
     await loadRoomState(shown);
     expect(get).toHaveBeenCalledTimes(2);
     vi.unstubAllGlobals();
+  });
+});
+
+describe('dossier des données et fixtures de démo (#353)', () => {
+  it('les vraies données viennent toujours de data/, même avec ?fixture=', () => {
+    expect(dataDir('data', '?fixture=sans-prix')).toBe('data');
+  });
+  it('la démo ouvre une fixture nommée seulement si le nom est sûr', () => {
+    expect(dataDir('demo', '')).toBe('demo');
+    expect(dataDir('demo', '?fixture=sans-prix')).toBe('demo-fixtures/sans-prix');
+    expect(dataDir('demo', '?fixture=../data')).toBe('demo');
+    expect(dataDir('demo', '?fixture=')).toBe('demo');
   });
 });

@@ -1,0 +1,59 @@
+name: Smoke test sur les vraies données
+
+# #353: the systematic sweep of web/e2e/sweep.mjs (every page, 360 px, 1280 px, text at 200 %,
+# dark; then every control of every page) on the REAL encrypted data of data/, decrypted in the
+# browser with DATA_PASSPHRASE. ASSERTIONS ONLY, the repository is public:
+#   - no screenshot, no trace, no artifact uploaded;
+#   - each log line is « page X : OK » or « page X : échec : <invariant> » (rooms numbered,
+#     never named; no value, no text of the page): SWEEP_SOURCE=data turns the quiet mode on.
+on:
+  workflow_dispatch:
+    inputs:
+      complet:
+        description: "Balayage complet (axe sur chaque affichage) au lieu du sous-ensemble rapide"
+        type: boolean
+        default: false
+      explorateur:
+        description: "Actionner aussi chaque case, bascule, segment et liste de chaque page"
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: smoke-reel
+  cancel-in-progress: true
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      # No secret in these steps: the dependencies install and build without it.
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npm run build
+      - name: Données chiffrées servies avec l'appli (comme au déploiement)
+        run: |
+          test -f ../data/keyinfo.json || { echo "Pas de données chiffrées dans data/"; exit 1; }
+          cp -r ../data dist/data
+      # DATA_PASSPHRASE in this step only. The sweep prints no value nor any text of the pages.
+      - name: Balayage (assertions seulement)
+        env:
+          SWEEP_SOURCE: data
+          SWEEP_SCOPE: ${{ inputs.complet && 'full' || 'ci' }}
+          SWEEP_EXPLORE: ${{ inputs.explorateur && '1' || '0' }}
+          DATA_PASSPHRASE: ${{ secrets.DATA_PASSPHRASE }}
+        run: node e2e/sweep.mjs

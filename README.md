@@ -501,6 +501,7 @@ python -m collector discover
 | `python -m collector snapshot --out DOSSIER` | Un relevé chiffré de l'état des pièces (utilisé par le workflow « Relevé horaire ») |
 | `python -m collector restore-backup FICHIER [--dry-run]` | Restaure dans `data/` une sauvegarde chiffrée téléchargée depuis l'appli |
 | `python -m collector demo` | Régénère les données de démonstration |
+| `python -m collector fixtures` | Jeux de démo nommés (cas limites : année incomplète, trou de 41 jours, sans chauffe-eau, sans prix…) dans `web/dist/demo-fixtures`, pour `npm run e2e:sweep` (balayage de toutes les pages, `?fixture=<nom>` en démo seulement) ; jamais publiés |
 
 Application web :
 

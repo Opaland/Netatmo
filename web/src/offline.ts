@@ -3,7 +3,7 @@
 // on Wi-Fi the app also fetches, in the background, the hourly files that only the Analyse
 // view loads, so they are there offline. Requests are conditional (cache: 'no-cache' → ETag,
 // 304 when unchanged), so an unchanged file is not downloaded again.
-import type { Dataset } from './data';
+import { type Dataset, dataDir } from './data';
 import { html } from './trusted';
 import { track } from './ready';
 
@@ -31,8 +31,8 @@ export function canPrefetch(c: NetInfo | undefined, online = true): boolean {
 
 // S-1.26: the latest year of per-room half hours too (the Analyse profile prefers them).
 const hourlyFiles = (ds: Dataset) => [
-  ...(ds.meta.hourly_years ?? []).map((y) => `${ds.source}/${y}.hourly.enc.json`),
-  ...(ds.meta.room30_years ?? []).slice(-1).map((y) => `${ds.source}/${y}.room30.enc.json`),
+  ...(ds.meta.hourly_years ?? []).map((y) => `${dataDir(ds.source)}/${y}.hourly.enc.json`),
+  ...(ds.meta.room30_years ?? []).slice(-1).map((y) => `${dataDir(ds.source)}/${y}.room30.enc.json`),
 ];
 
 /** Warm the service-worker cache with the hourly files (no decryption, nothing kept in memory). */

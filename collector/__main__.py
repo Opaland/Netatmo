@@ -6,6 +6,7 @@ backfill    Force la récupération de tout l'historique disponible
 verify      Déchiffre les données locales et affiche un résumé
 export-csv  Exporte les données déchiffrées en CSV
 demo        Génère des données de démonstration chiffrées (phrase « demo »)
+fixtures    Jeux de démo nommés (cas limites) pour les tests E2E, dans web/dist (#353)
 restore-backup FICHIER  Restaure dans data/ une sauvegarde chiffrée téléchargée depuis l'appli
 import-ha FICHIER  Verse un export Home Assistant (statistiques) dans l'archive chiffrée
 snapshot    Relevé horaire de l'état des pièces, chiffré dans un dossier (workflow « Relevé horaire »)
@@ -848,6 +849,12 @@ def cmd_demo(s: Settings, args: argparse.Namespace) -> None:
     print("Fichiers : " + ", ".join(generate(out, args.passphrase, today=today)))
 
 
+def cmd_fixtures(s: Settings, args: argparse.Namespace) -> None:
+    from .fixtures import build
+
+    print("Fixtures : " + ", ".join(build(Path(args.output), args.names)))
+
+
 def main(argv: list[str] | None = None) -> None:
     p = argparse.ArgumentParser(
         prog="collector", description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
@@ -895,6 +902,9 @@ def main(argv: list[str] | None = None) -> None:
     dm.add_argument("-o", "--output", default="web/public/demo")
     dm.add_argument("--passphrase", default="demo")
     dm.add_argument("--today", help="AAAA-MM-JJ : regénérer la démo comme ce jour-là (données jusqu'à la veille)")
+    fx = sub.add_parser("fixtures", help="jeux de démo nommés pour les tests E2E (#353), jamais publiés")
+    fx.add_argument("-o", "--output", default="web/dist/demo-fixtures")
+    fx.add_argument("names", nargs="*", metavar="NOM")
     args = p.parse_args(argv)
     # S-1.16: defence in depth for the public logs (every log record, uncaught exceptions and,
     # in GitHub Actions, stdout / stderr are redacted). The first defence is errors.SourceError.
@@ -917,6 +927,7 @@ def main(argv: list[str] | None = None) -> None:
         "insights": cmd_insights,
         "export-csv": cmd_export,
         "demo": cmd_demo,
+        "fixtures": cmd_fixtures,
         "restore-backup": cmd_restore_backup,
         "import-ha": cmd_import_ha,
         "snapshot": cmd_snapshot,

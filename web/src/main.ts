@@ -6,11 +6,11 @@ import { toCsv } from './aggregate';
 import { type State, activeRooms, app, ds, onDatasetOpened, onLock, setDataset, setRenderer, setState, state } from './app';
 import { disposeAll } from './charts';
 import { BadEnvelope, WrongPassphrase } from './crypto';
-import { type Dataset, NoData, clearDataCaches, forgetKeys, load, recallKey } from './data';
+import { type Dataset, NoData, clearDataCaches, dataDir, forgetKeys, load, recallKey } from './data';
 import { type Ctl, cardHandlers, dispatch } from './events';
 import { lazyAction } from './lazy';
 import { clearMemo } from './memo';
-import { viewRendered } from './ready';
+import { onceReady, viewRendered } from './ready';
 import { framedHtml, isFramed } from './frame';
 import { prefetchForOffline, unavailable, updateNetStatus } from './offline';
 import { PAGES, dataStatus } from './pages';
@@ -89,7 +89,7 @@ let shownRoute: string | null = null;
 
 /** Selector finding the focused control again after a re-render: its id, else its data-* attributes. */
 function focusSelector(el: Element | null): string | null {
-  if (!el || el === document.body || !app.contains(el)) return null;
+  if (!el || el === document.body || (el.isConnected && !app.contains(el))) return null; // detached: a card redrew it (#353)
   if (el.id) return `#${CSS.escape(el.id)}`;
   const data = [...el.attributes].filter((a) => a.name.startsWith('data-'));
   if (!data.length) return null;
@@ -215,11 +215,26 @@ function finishRender(route: Route, key: string, changed: boolean, focus: string
     });
   } else if (focus) {
     // #256: give the focus back to the control that had it (the page was redrawn around it).
-    queueMicrotask(() => {
-      if (document.activeElement && document.activeElement !== document.body) return;
-      app.querySelector<HTMLElement>(focus)?.focus({ preventScroll: true });
-    });
+    restoreFocus(focus);
   }
+}
+
+/**
+ * #256 / #353: give the focus back to the control found by `sel` once the page or the card was
+ * redrawn around it. A control drawn by a lazy card (Télétravail, Questions…) is not there yet:
+ * once the view is ready, try again, opening the fold that holds it (room picker).
+ */
+function restoreFocus(sel: string) {
+  const give = () => {
+    if (document.activeElement && document.activeElement !== document.body) return true;
+    const el = app.querySelector<HTMLElement>(sel);
+    if (!el) return false;
+    const fold = el.closest('details');
+    if (fold && !fold.open) fold.open = true;
+    el.focus({ preventScroll: true });
+    return true;
+  };
+  queueMicrotask(() => give() || onceReady(give));
 }
 
 function renderView(view: HTMLElement, route: Route) {
@@ -330,7 +345,7 @@ async function shellClick(el: HTMLElement, e: MouseEvent): Promise<boolean> {
     el.textContent = 'Sauvegarde en cours…';
     try {
       const { downloadBackup } = await import('./backup');
-      const n = await downloadBackup(ds.source, ds.meta);
+      const n = await downloadBackup(dataDir(ds.source), ds.meta);
       el.textContent = `Sauvegarde téléchargée (${n} fichiers)`;
     } catch (err) {
       el.textContent = `Sauvegarde impossible : ${err instanceof Error ? err.message : err}`;
@@ -381,8 +396,10 @@ function shellChange(t: Ctl): boolean {
 app.addEventListener('click', async (e) => {
   const el = (e.target as HTMLElement).closest<HTMLElement>('button, a, [data-view]');
   if (!el || !ds) return;
+  const sel = el.matches('button') ? focusSelector(el) : null;
   if (await shellClick(el, e)) return;
   dispatch([...pageHandlers(), ...cardHandlers()], 'click', el, e);
+  if (sel && !el.isConnected) restoreFocus(sel); // #353: a card redrawn around its own button
 });
 
 /** A text-like field (not a box, a radio or a list): its change comes with a move of the focus. */
@@ -393,11 +410,13 @@ app.addEventListener('change', (e) => {
   if (!ds) return;
   deferred = typed(t);
   if (deferred) viewRendered(); // not ready until the deferred redraw (#260)
+  const sel = typed(t) ? null : focusSelector(t);
   try {
     if (shellChange(t)) return;
     dispatch([...pageHandlers(), ...cardHandlers()], 'change', t, e);
   } finally {
     deferred = false;
+    if (sel) queueMicrotask(() => !t.isConnected && restoreFocus(sel)); // #353: a card redrawn around its own control
   }
 });
 app.addEventListener('input', (e) => ds && dispatch([...pageHandlers(), ...cardHandlers()], 'input', e.target, e));

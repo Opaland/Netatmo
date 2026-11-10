@@ -118,3 +118,11 @@ jobs:
         env:
           SITE_URL: ${{ needs.deploy.outputs.page_url }}
           EXPECTED_COMMIT: ${{ needs.build.outputs.commit }}
+      # #353: then every page of the published demo at 360 px, 1280 px, text at 200 % and dark, with
+      # the invariants of web/e2e/sweep.mjs (console, horizontal scroll, « NaN » / « undefined »…,
+      # empty cards, axe). Demo data only, no secret, no capture.
+      - name: Balayage de la démo publiée
+        run: node e2e/sweep.mjs
+        env:
+          SWEEP_BASE: ${{ needs.deploy.outputs.page_url }}
+          SWEEP_EXPLORE: "0"

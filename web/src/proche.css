@@ -209,6 +209,7 @@ main.onboarding {
 }
 .onb-step .field {
   display: grid;
+  grid-template-columns: minmax(0, 1fr); /* #353: a long offer name does not widen the page at 360 px */
   gap: var(--space-1);
 }
 .onb-step .field select,

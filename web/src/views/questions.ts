@@ -10,6 +10,8 @@ import { type Drops, type RoomState, bedroomGrouping } from '../windows';
 
 let month: string | null = null;
 let question: QuestionId | null = null;
+/** #353: selector of the control last used here, focused again after each redraw. */
+let keep: string | null = null;
 // S-13.3: room states for « pourquoi cette pièce était froide ? », loaded when that question is asked
 // (#247: for the dataset shown only, forgotten on lock)
 const states = datasetDoc((d) => loadRoomState(d));
@@ -77,13 +79,17 @@ export function mountQuestions(el: HTMLElement | null) {
   el.querySelector<HTMLSelectElement>('#question-month')!.addEventListener('change', (e) => {
     e.stopPropagation(); // not a state change of the app
     month = (e.target as HTMLSelectElement).value;
+    keep = '#question-month';
     mountQuestions(el);
   });
   el.querySelectorAll<HTMLButtonElement>('[data-question]').forEach((b) =>
     b.addEventListener('click', () => {
       question = b.dataset.question as QuestionId;
+      keep = `[data-question="${question}"]`;
       mountQuestions(el);
-      el.querySelector<HTMLElement>(`[data-question="${question}"]`)?.focus();
     }),
   );
+  // #353: the control used keeps the focus, also when the answer is drawn again once loaded
+  const a = document.activeElement;
+  if (keep && (!a || a === document.body)) el.querySelector<HTMLElement>(keep)?.focus({ preventScroll: true });
 }
