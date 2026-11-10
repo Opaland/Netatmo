@@ -148,14 +148,14 @@ try {
     });
     check(!clash.length, `${name} : cascade, textes superposés : ${clash.slice(0, 4).join(' ; ')}`);
     const sentence = await page.locator('#explain-sentence').innerText();
-    check(/^En janvier 2026, le logement a consommé \d+ kWh de moins qu’en janvier 2025/.test(sentence), `${name} : phrase de synthèse inattendue (« ${sentence} »)`);
+    check(/^En janvier 2026, le logement a consommé \d+\skWh de moins qu’en janvier 2025/.test(sentence), `${name} : phrase de synthèse inattendue (« ${sentence} »)`);
     check(/Surtout le poêle \(Cuisine\)/.test(sentence) && /plus froid/.test(sentence), `${name} : la synthèse ne cite ni le poêle ni la météo (« ${sentence} »)`);
     const steps = await page.locator('#explain-steps ul[aria-label="Écart par cause"] .row').allInnerTexts();
     const want = ['Météo', 'Températures demandées', 'Changement de mode de chauffage (poêle : Cuisine)', 'Pièces', 'Eau chaude', 'Autres usages']; // the full names, under the chart
     check(want.every((w, i) => steps[i]?.startsWith(w)), `${name} : parts de l'écart (${steps.map((s) => s.split('\n')[0]).join(' | ')})`);
     // #366: the stove's wood, out of the meter: its own line, never in the parts that add up
     const wood = await page.locator('#explain-wood').innerText();
-    check(/Poêle \(bois\)[\s\S]*≈ [\d\s ]+ kWh de chaleur et ≈ \d+ € en janv\. 2026/.test(wood) && /Chauffage électricité \+ bois/.test(wood), `${name} : ligne « poêle » absente (« ${wood.slice(0, 200)} »)`);
+    check(/Poêle \(bois\)[\s\S]*≈ [\d\s ]+\skWh de chaleur et ≈ \d+\s€ en janv\. 2026/.test(wood) && /Chauffage électricité \+ bois/.test(wood), `${name} : ligne « poêle » absente (« ${wood.slice(0, 200)} »)`);
     check(!steps.some((s) => /bois/.test(s.split('\n')[0])), `${name} : le bois compté dans les parts de l'écart`);
     const scope = await page.locator('#view .periodbar .scope').innerText();
     check(/^Compté : tout le logement \(compteur Linky\), du 1er janv\. au 31 janv\. 2026, comparé aux mêmes jours de janvier 2025$/.test(scope), `${name} : ligne « Compté : » (« ${scope} »)`);
@@ -173,7 +173,7 @@ try {
     if (name === 'clair' || big) {
       await go(page, 'historique');
       const seasons = (await page.locator('#wood-seasons').count()) ? await page.locator('#wood-seasons').innerText() : '';
-      check(/2025–2026 : ≈ [\d\s ]+ kWh dont [\d\s ]+ kWh de bois, ≈ [\d\s ]+ €/.test(seasons) && /en énergie, [−+]\d+ % en euros/.test(seasons), `${name} : hiver contre hiver sans le bois (« ${seasons.slice(0, 200)} »)`);
+      check(/2025–2026 : ≈ [\d\s ]+\skWh dont [\d\s ]+\skWh de bois, ≈ [\d\s ]+\s€/.test(seasons) && /en énergie, [−+]\d+\s% en euros/.test(seasons), `${name} : hiver contre hiver sans le bois (« ${seasons.slice(0, 200)} »)`);
       check((await wide(page)) <= 1, `${name} : défilement horizontal sur Historique (${await wide(page)} px)`);
     }
 
