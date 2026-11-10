@@ -14,6 +14,22 @@ export interface EvInput {
   startHour: number; // 0..23, local time
 }
 
+/** Default inputs of the simulation. */
+export const EV_DEFAULT: EvInput = { kwhWeek: 40, powerKw: 7.4, startHour: 22 };
+
+/** #359: inputs read back from this device, each field bounded (anything else: its default). */
+export function parseEvInput(raw: unknown, powers: readonly number[]): EvInput {
+  const o = (raw && typeof raw === 'object' ? raw : {}) as Partial<Record<keyof EvInput, unknown>>;
+  // a number or a numeric string only: Number() of an object with an own `toString` throws
+  const kwh = typeof o.kwhWeek === 'number' ? o.kwhWeek : typeof o.kwhWeek === 'string' ? Number(o.kwhWeek) : NaN;
+  const start = o.startHour;
+  return {
+    kwhWeek: kwh > 0 && kwh <= 500 ? kwh : EV_DEFAULT.kwhWeek,
+    powerKw: powers.includes(o.powerKw as number) ? (o.powerKw as number) : EV_DEFAULT.powerKw,
+    startHour: typeof start === 'number' && Number.isInteger(start) && start >= 0 && start < 24 ? start : EV_DEFAULT.startHour,
+  };
+}
+
 export interface EvPlan {
   kwhDay: number;
   hc: number; // kWh per day in off-peak hours

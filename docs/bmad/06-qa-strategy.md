@@ -82,3 +82,87 @@ Un récit est **terminé** quand :
 | 7 | Pour un calcul : un exemple chiffré à la main figure dans le test |
 | 8 | README ou `docs/` mis à jour si la configuration change (secret, variable, commande) ; ADR ajouté si une décision d'architecture change |
 | 9 | Pour une fonctionnalité qui touche aux totaux : vérification sur données réelles faite et notée (§ 4) |
+
+## 7. Tests de mutation (#358)
+
+Stryker (lanceur Vitest) casse le code exprès et regarde si un test s'en aperçoit. **Hors de la CI
+bloquante** : lancé à la main (`cd web && npm run mutation`, quelques minutes) ou par le workflow
+`Mutation` (`workflow_dispatch`, rapport HTML en artefact 30 jours, score par fichier dans le résumé du
+job). Stryker s'installe pour la mesure seulement (`npm i --no-save`) : `package-lock.json` et `npm ci`
+ne changent pas. Configuration : `web/stryker.config.json` ; les trois tests qui lisent des fichiers
+hors de `web/` (documentation) ne tournent pas dans le bac à sable (`web/vitest.mutation.config.mjs`).
+Pas de score minimal imposé : un survivant n'est pas toujours un défaut, il se **lit**.
+
+### Mesures (10/11/2026)
+
+| Fichier | Mutants | Vague 1 | Après les tests ajoutés | Survivants + non couverts restants |
+|---|---|---|---|---|
+| `money.ts` | 153 | 48,4 % | 94,8 % | 8 |
+| `pricing.ts` | 47 | 97,9 % | 97,9 % | 1 |
+| `periods.ts` | 237 | 65,8 % | 92,8 % | 17 |
+| `invoice.ts` | 290 | 62,9 % | 93,8 % | 18 |
+| `reconstitute.ts` | 306 | 72,6 % | 76,5 % | 72 → #392 |
+| `crypto.ts` | 58 | 82,8 % | 96,6 % | 2 |
+| **Total** | 1 091 | **66,8 %** (223 survivants, 140 non couverts) | **89,2 %** (98 survivants, 20 non couverts) | |
+
+Les tests ajoutés sont dans `web/src/mutation-vague1.test.ts` ; chacun a été vu rouge sur son mutant
+(le survivant a disparu à la vague suivante). La vague 1 a aussi trouvé **un vrai défaut** : sans
+Linky, une facture qui compte moins de kWh que les radiateurs disait « de plus » (`invoice.ts`, corrigé).
+
+### Survivants lus et laissés, avec leur raison
+
+| Fichier : ligne | Mutant | Classement | Raison |
+|---|---|---|---|
+| `money.ts:16` | `raw === null`, `raw === ''` retirés | équivalent | `Number(null)` et `Number('')` valent 0, que les deux validateurs refusent (`v > 0`) |
+| `money.ts:70` | `projectedKwh !== null` → `true` | équivalent | `null >= ytdKwh` est faux dès que `ytdKwh > 0`, condition déjà exigée |
+| `money.ts:97` | `kg < 10` → `kg <= 10` | équivalent | à 10 exactement, 0 ou 1 décimale écrivent tous deux « 10 » |
+| `money.ts:111` | `<` → `<=` dans le tri | équivalent | ne change l'ordre que de deux grilles de même date de début |
+| `pricing.ts:51` | `'0000-01-01'` → `''` | équivalent | la ligne de prix manuelle est rendue pour tout jour ; sa date n'est jamais lue |
+| `periods.ts:14` | `isLeap` (9 mutants) | équivalent | n'est appelé que pour un début au 29 février de l'année d'avant : l'année comparée suit une bissextile et ne l'est jamais |
+| `periods.ts:59-60` | `a > from` → `>=`, `b < to` → `<=` | équivalent | à égalité les deux branches donnent la même borne |
+| `periods.ts:92-93, 96` | bornes de `yoyWindow` (6 mutants) | équivalent | rattrapés par le contrôle `from > to`, ou la tranche `slice(5)` donne `01-01` dans les deux cas |
+| `invoice.ts:27, 31, 35, 37` | contrôles de type de `validInvoice` (8 mutants) | équivalent | `isDay` compare à la chaîne d'origine (`===`) et `Number.isFinite` ne convertit pas : un tableau ou une chaîne ne passent pas |
+| `invoice.ts:127, 157` | `subDays--`, `subDays === 0` → `false` | équivalent | seul `subDays === 0` est lu, et sans jour de prix `avgPrice` est déjà nul |
+| `invoice.ts:194-200, 227` | `diff > 0` → `>= 0`, `residual >= 0` → `> 0` | équivalent | branches atteintes seulement pour `|diff| ≥ 1` et `|reste| > tolérance ≥ 2 €` : jamais à zéro |
+| `invoice.ts:229` | `heatCost !== null` → `true` | équivalent | ne vaut `null` que sans prix moyen, cas déjà sorti en « no-price » |
+| `crypto.ts:31` | `typeof iter !== 'number'` retiré | équivalent | `Number.isInteger` refuse déjà tout ce qui n'est pas un nombre |
+| `reconstitute.ts` | 72 mutants des heuristiques | **à lire** | deuxième vague : #392 |
+
+## 8. Fuzz à graine fixe des entrées non sûres (#359)
+
+`web/src/fuzz.test.ts` essaie chaque porte d'entrée sur 2 000 valeurs générées (graine fixe,
+`mulberry32`), biaisées vers les formes réelles (clés connues, jours valides) et les formes imprévues
+(`__proto__`, `constructor`, NaN, 1e308, 5 000 caractères, demi-paire UTF-16, 2026-02-30, types croisés).
+L'échec donne la graine et le numéro du cas ; toute la suite tourne en moins d'une seconde.
+
+| Porte | Invariant |
+|---|---|
+| Préférences relues (`parseColdDraft`, `parseEvInput`, `parseHeatPumpInputs`, `parseHaLinks`, votes, premier lancement, locataire, pièces arrêtées, Shelly, volets, marque « rester connecté », raison du verrouillage) | ne lève jamais ; chaque champ du bon type et borné, ou la valeur par défaut ; `Object.prototype` intact |
+| Routes (`parseRoute`) | `null`, ou une route connue (clé propre, pas `constructor`) que `routeKey` redonne à l'identique |
+| Invitation (`inviteUrl`) | `null`, ou une adresse `https:` (ou locale) sans identifiants, requête ni autre fragment que `#installer` |
+| Cellules CSV (`textCell`) | jamais `= + - @`, tabulation ou retour chariot en tête ; `untextCell` redonne le texte |
+| Facture (`validInvoice`) | `null`, ou des montants finis et des jours qui existent |
+| Enveloppes (`checkEnvelope`, `loadNote`) | refus par `BadEnvelope`, jamais une autre exception ; une note forgée rend la valeur de repli |
+
+Défauts trouvés le 10/11 et corrigés dans la même PR : route `#parametres-constructor` ou
+`#compteur-hasOwnProperty` acceptée (`in` lit la chaîne des prototypes : `Object.hasOwn`) ; demi-paire
+UTF-16 dans `#piece-…` qui faisait lever `routeKey` ; raison d'arrêt `__proto__` gardée ; facture du 30
+février acceptée (lue comme le 2 mars) ; nombre de jours du brouillon de l'alerte froid repris tel quel
+(une chaîne passait) ; `parseColdConfig` qui levait sur un objet avec son propre `toString`. Chaque
+invariant a été vu rouge en retirant sa garde (regex `FORMULA` de `csv.ts`, contrôle des jours du
+brouillon…).
+
+## 9. Sources publiques réelles (#363)
+
+`tests/test_sources_reelles.py` appelle pour de vrai les sources sans clé et vérifie qu'elles répondent
+dans le format que le code lit : une journée d'archive Open-Meteo (variables de `weather.py`, pour un
+lieu public, jamais le logement), l'en-tête et les lignes des trois CSV de la CRE (colonnes lues par
+`analysis.ts` et `insights.py`), une saison Tempo complète (`scripts/tempo_jours.py`).
+
+- Marqué `reseau` et exclu par défaut : `pytest -q` (et la CI) n'appelle rien ; `pytest -m reseau` ou le
+  workflow `Sources publiques` (à la demande) les lance.
+- Source injoignable (DNS, délai, 5xx, 429) : test **ignoré** avec la raison ; format changé : **échec**
+  en nommant la colonne ou la variable, et le workflow ouvre une issue (fermée au premier passage vert).
+- Les contrôles de format sont des fonctions pures, testées hors réseau sur les copies du dépôt
+  (`web/public/tarifs/`) : une colonne renommée fait échouer le contrôle en la nommant.
+- Journal : noms de colonnes, comptes et codes HTTP seulement.
