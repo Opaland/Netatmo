@@ -5,6 +5,7 @@ import {
   axisHour,
   axisText,
   buildTheme,
+  categoryLabels,
   endLabelsFit,
   legendHeight,
   legendRows,
@@ -310,6 +311,17 @@ function axisFmt(el: HTMLElement, axis: string, suffix = '') {
     return suffix ? `${label} ${suffix}` : label;
   };
 }
+/**
+ * #413: notes on the chart element, for the sweep (e2e/sweep.mjs, invariant
+ * « etiquettes-axe-recouvertes »), the neighbouring category labels whose estimated boxes cross
+ * (`data-axis-overlap-y`, absent when they all fit): the canvas has no text the sweep can read.
+ */
+function noteOverlap(el: HTMLElement, overlaps: string[]) {
+  if (overlaps.length) el.setAttribute('data-axis-overlap-y', overlaps.join(' | '));
+  else el.removeAttribute('data-axis-overlap-y');
+}
+/** Width of the category labels of a horizontal bar chart (they wrap inside it). */
+const hLabelWidth = (width: number) => Math.round(Math.min(140, width * 0.32));
 /** Typographic minus (« −15 € », never « -15 € »), § 7.2. */
 const minus = (s: string) => s.replace(/^-/, '−');
 
@@ -568,10 +580,14 @@ export function hbarChart(
     opts.series.map((s) => s.name),
     el,
   );
+  const top = Math.max(8, leg.height + 4);
+  // plot height: the grid less the value axis written under it (labels and unit, one line)
+  const plot = (el.clientHeight || 220) - top - 4 - (axisPx() + 16);
+  noteOverlap(el, categoryLabels(opts.labels, { labelWidth: hLabelWidth(width), plot, px: axisPx() }).overlaps);
   chart.setOption(
     {
       animationDuration: 300,
-      grid: { left: 8, right: 56, top: Math.max(8, leg.height + 4), bottom: 4, ...FIT },
+      grid: { left: 8, right: 56, top, bottom: 4, ...FIT },
       legend: leg.option,
       tooltip: { ...tooltip(opts.price, false, unit), axisPointer: { type: 'shadow' as const } },
       yAxis: {
@@ -581,7 +597,7 @@ export function hbarChart(
         axisLine: { show: false },
         axisTick: { show: false },
         // every room named (a label hidden by overlap left a bar without a name)
-        axisLabel: { color: cssVar('--text'), width: Math.round(Math.min(140, width * 0.32)), overflow: 'break', interval: 0, hideOverlap: false },
+        axisLabel: { color: cssVar('--text'), width: hLabelWidth(width), overflow: 'break', interval: 0, hideOverlap: false },
       },
       // #304: 3 ticks at most (« 0 300 600 9001 2001 500 » overlapped at 360 px)
       xAxis: {
@@ -1006,7 +1022,9 @@ export function waterfallChart(
   const maxUp = Math.max(0, ...steps.map((s) => s.delta));
   const maxDown = Math.max(0, ...steps.map((s) => -s.delta));
   const width = el.clientWidth || 360;
-  el.style.height = `${Math.max(160, steps.length * 34 + 60)}px`;
+  const height = Math.max(160, steps.length * 34 + 60);
+  el.style.height = `${height}px`;
+  noteOverlap(el, categoryLabels(steps.map((s) => s.name), { labelWidth: hLabelWidth(width), plot: height - 16, px: axisPx() }).overlaps);
   chart.setOption(
     {
       animationDuration: 300,
@@ -1026,7 +1044,7 @@ export function waterfallChart(
         inverse: true,
         axisLine: { show: false },
         axisTick: { show: false },
-        axisLabel: { color: cssVar('--text'), width: Math.round(Math.min(140, width * 0.32)), overflow: 'break', interval: 0, hideOverlap: false },
+        axisLabel: { color: cssVar('--text'), width: hLabelWidth(width), overflow: 'break', interval: 0, hideOverlap: false },
       },
       xAxis: {
         type: 'value',
