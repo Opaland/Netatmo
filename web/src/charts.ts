@@ -486,6 +486,8 @@ export function barChart(
     legend?: boolean;
     /** A reference line (subscribed power, alert threshold), dashed, labelled on the line. */
     mark?: { value: number; label: string };
+    /** #394: per bucket, an icon above the bar (a power or Internet cut), said in the summary by `text`. */
+    flags?: { icons: (string | null)[]; text: string };
   },
 ) {
   const surface = cssVar('--surface-card');
@@ -507,6 +509,22 @@ export function barChart(
   const chart = instance(el);
   const all = opts.line ? [...opts.series, opts.line] : opts.series;
   describe(el, opts.labels, all, unit);
+  const flags = opts.flags;
+  if (flags) el.setAttribute('aria-label', `${el.getAttribute('aria-label')} ${flags.text}.`);
+  // #394: a dotted vertical line through the bucket, its icon on top (a day at 0 kWh has no bar to carry it)
+  const flagLines = flags
+    ? flags.icons.flatMap((f, j) =>
+        f
+          ? [{ xAxis: j, lineStyle: { color: cssVar('--text-muted'), type: 'dotted' as const, width: 1 }, label: { show: true, formatter: f, position: 'end' as const, fontSize: axisPx() } }]
+          : [],
+      )
+    : [];
+  const markLines = (i: number) => {
+    const ref = i === 0 && opts.mark ? refLine(opts.mark) : null;
+    const extra = i === n - 1 ? flagLines : [];
+    if (!extra.length) return ref ?? undefined;
+    return { ...(ref ?? { silent: true, symbol: 'none' }), data: [...(ref?.data ?? []), ...extra] };
+  };
   const leg = legendLayout(
     all.map((s) => s.name),
     el,
@@ -550,7 +568,7 @@ export function barChart(
           decal: decal(i),
         },
         emphasis: { focus: 'none', itemStyle: { opacity: 0.85 } },
-        markLine: i === 0 && opts.mark ? refLine(opts.mark) : undefined,
+        markLine: markLines(i),
       })).concat(
         line
           ? [

@@ -121,7 +121,8 @@ const median = (v: number[]) => {
  * Days that look empty. On clear heating days (outdoor < 12 °C, signature ≥ 3 kWh):
  * heating below 20 % of the signature. Otherwise, with the Linky meter: the other uses
  * (meter minus radiators and water heater) below half their median of the 60 previous
- * days. Days with no data, or nothing to judge, are "unknown" and break a run.
+ * days. Days with no data, or nothing to judge, are "unknown" and break a run; so are the
+ * `exclude` days (#394: a day of power or Internet cut is low for another reason than an absence).
  */
 export function lowDays(
   records: DayRecord[],
@@ -129,6 +130,7 @@ export function lowDays(
   linky: Map<string, number>,
   from: string,
   to: string,
+  exclude: Set<string> = new Set(),
 ): Map<string, boolean> {
   const heat = new Map<string, number>();
   const all = new Map<string, number>();
@@ -140,7 +142,7 @@ export function lowDays(
   const other = (d: string) => (linky.has(d) && all.has(d) ? linky.get(d)! - all.get(d)! : null);
   const out = new Map<string, boolean>();
   for (let d = from; d <= to; d = addDays(d, 1)) {
-    if (!all.has(d)) continue; // no data that day
+    if (!all.has(d) || exclude.has(d)) continue; // no data that day, or a cut
     const w = weather?.get(d);
     const e = expect(d);
     if (w && e !== null && w[2] < HEAT_MAX_TEMP && e >= HEAT_MIN_EXPECTED) {

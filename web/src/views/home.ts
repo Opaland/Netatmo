@@ -361,6 +361,7 @@ function drawChart(records: DayRecord[], r: HomeRange) {
     stacked: true,
     price: avgPrice(records),
     ...marks,
+    flags: undefined, // #394: a cut is a day; Historique marks it, a month bar would only add noise
     legend: false,
     line: hasTemp ? { name: TEMP.outdoor, color: cssVar('--text'), data: d.temp, unit: '°C' } : undefined,
   });
