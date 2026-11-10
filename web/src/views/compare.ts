@@ -18,6 +18,7 @@ import { type Series, barChart, chartCaption, cssVar, lineChart } from '../chart
 import { SEASON_DEFINITION, dayLong, monthLong, monthShort, seasonLabel, signedPct } from '../glossary';
 import { routeKey } from '../router';
 import { uncertainDays } from '../checks';
+import { cutDays } from './quality';
 import { WITH_SUBSCRIPTION } from '../synthese';
 import { bucketMarks, monthKeys, shortDate, yoyCaveat, yoyWindow } from '../periods';
 import { periodAt } from '../offers';
@@ -117,7 +118,7 @@ export function renderCompare(view: HTMLElement, records: DayRecord[], part: 'hi
       );
       const isCurrent = y === lastYear;
       const d = win ? pctChange(total(records, win.from, win.to), total(records, win.prevFrom, win.prevTo)) : null;
-      const caveat = yoyCaveat(win, uncertain);
+      const caveat = yoyCaveat(win, uncertain, { cuts: cutDays() });
       const end = isCurrent ? last : `${y}-12-31`;
       const since = y === firstYear && first > `${y}-01-01` ? ` <small class="muted">depuis le ${shortDate(first)}</small>` : '';
       const cost = costOf(records, `${y}-01-01`, end, true);

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { byMonth, cutDays, hourRuns, incidents, monthSummary, simpleSentence } from './incidents';
+import { byMonth, cutCauses, cutCausesOf, cutDays, hourRuns, incidents, monthSummary, simpleSentence } from './incidents';
+import { cutText } from './periods';
 
 const base = {
   devices: {
@@ -68,5 +69,37 @@ describe('incident log (#280)', () => {
     expect(incidents({ devices: { gateway: { boots: ['2026-01-01T00:00', '2026-11-02T03:40'] } }, last: '2026-11-08' })).toHaveLength(1);
     expect(incidents({ last: '2026-11-08' })).toEqual([]);
     expect(byMonth([])).toEqual([]);
+  });
+});
+
+describe('#394: days touched by a cut', () => {
+  it('dates each cut day with its cause, a power cut winning the same day, a cut past midnight on both days', () => {
+    const causes = cutCausesOf({
+      gateway: {
+        boots: ['2025-01-01T00:00', '2026-10-14T14:07', '2026-11-02T03:40', '2026-11-08T01:10'],
+        offline: ['2026-10-14T13', '2026-11-02T01', '2026-11-05T23', '2026-11-06T00', '2026-11-06T01', '2026-11-07T22', '2026-11-07T23', '2026-11-08T00'],
+      },
+    });
+    expect([...causes].sort()).toEqual([
+      ['2026-10-14', 'power'],
+      ['2026-11-02', 'power'], // Internet at 1 h, then a restart alone at 3:40: power wins
+      ['2026-11-05', 'internet'],
+      ['2026-11-06', 'internet'],
+      ['2026-11-07', 'power'], // 22 h → restart at 1:10: both days
+      ['2026-11-08', 'power'],
+    ]);
+    expect(cutCauses([])).toEqual(new Map());
+    expect(cutCausesOf(base.devices)).toEqual(new Map([['2026-10-14', 'power'], ['2026-11-02', 'power'], ['2026-11-05', 'internet']])); // modules ignored
+    expect(cutCausesOf(null)).toEqual(new Map());
+  });
+  it('says the cut days of a period', () => {
+    const causes = new Map([
+      ['2026-10-14', 'power' as const],
+      ['2026-11-05', 'internet' as const],
+    ]);
+    expect(cutText([], causes)).toBe('');
+    expect(cutText(['2026-10-14'], causes)).toBe('1 jour de coupure de courant');
+    expect(cutText(['2026-11-05'], causes)).toBe('1 jour de coupure Internet');
+    expect(cutText(['2026-10-14', '2026-11-05'], causes)).toBe('2 jours de coupure (courant, Internet)');
   });
 });

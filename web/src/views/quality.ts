@@ -1,10 +1,12 @@
 // S-1.10: data quality per month. Days estimated from a monthly total (Intuis kept the
 // month but lost the days) vs days lost at Intuis (neither the day nor the month).
-import { type DayRecord, type Granularity, MONTHS_LONG, minusYears } from '../aggregate';
-import { ds, onDatasetLoaded, state } from '../app';
+import { type DayRecord, type Granularity, MONTHS_LONG, bucketKey, minusYears } from '../aggregate';
+import { ds, onDatasetLoaded, rawDataset, state } from '../app';
+import type { Dataset } from '../data';
+import { CUT_ICON, type CutKind, cutCausesOf } from '../incidents';
 import type { Handlers } from '../events';
 import { type Coverage, computeCoverage, gapMonths, uncertainDays } from '../checks';
-import { bucketMarks, countIn, shortDate, uncertainText } from '../periods';
+import { bucketMarks, countIn, cutText, shortDate, uncertainText } from '../periods';
 import { activeRooms, esc, lastDay, roomName, table } from '../ui';
 import { html } from '../trusted';
 import { lsKey } from '../scope';
@@ -24,6 +26,29 @@ export function coverage(): Coverage {
 }
 
 export { uncertainDays };
+
+// #394: days touched by a power or Internet cut (journal des incidents), per dataset shown.
+const cutMemo = new WeakMap<Dataset, Map<string, CutKind>>();
+/** The days touched by a cut, with their probable cause (empty without the devices document). */
+export function cutDays(): Map<string, CutKind> {
+  const d = ds!;
+  let m = cutMemo.get(d);
+  if (!m) cutMemo.set(d, (m = cutCausesOf((rawDataset() ?? d).devices)));
+  return m;
+}
+/** The cut days of [from, to], sorted. */
+export const cutDaysIn = (from: string, to: string): string[] => [...cutDays().keys()].filter((d) => d >= from && d <= to).sort();
+
+/**
+ * #394: days that must not be judged (signature, unusual days, absences, « Expliquer un mois »):
+ * the lost or estimated days (S-1.10) and the days touched by a cut — a day at 0 kWh during a
+ * power cut is not an « économe » day.
+ */
+export function judgedOut(records: DayRecord[], from: string, to: string): Set<string> {
+  const out = uncertainDays(records, ds!.estimated, from, to);
+  for (const d of cutDaysIn(from, to)) out.add(d);
+  return out;
+}
 
 // S-1.10: rebuilding lost days is opt-in (remembered on this device) and lazily loaded.
 const RECON_KEY = lsKey('recon');
@@ -59,6 +84,12 @@ export function drawReconstitution() {
 }
 
 const monthLabel = (m: string) => `${MONTHS_LONG[Number(m.slice(5, 7)) - 1]} ${m.slice(0, 4)}`;
+
+/** #394: what a screen reader hears of the cut days of a chart (the 6 latest named). */
+function cutSummary(days: string[], cuts: Map<string, CutKind>): string {
+  const named = days.slice(-6).map((d) => `${shortDate(d)} (${cuts.get(d) === 'power' ? 'courant' : 'Internet'})`);
+  return `Jours de coupure, marqués ${CUT_ICON.power} ou ${CUT_ICON.internet} et d’un trait pointillé : ${days.length > 6 ? `${days.length}, dont ` : ''}${named.join(', ')}`;
+}
 
 /** Collapsible card under the main chart; empty when every month is complete and no device event is known. */
 export function qualityCard(open = false): string {
@@ -110,10 +141,16 @@ export function yoyGapNote(records: DayRecord[], from: string, to: string): stri
   const now = countIn(days, from, to);
   const before = countIn(days, pf, pt);
   const first = records.reduce((a, r) => (r.day < a ? r.day : a), records[0]?.day ?? pf);
+  // #394: a cut lowers the consumption of its day without saying anything of the household
+  const cuts = cutDays();
+  const cutNow = cutText(cutDaysIn(from, to), cuts);
+  const cutBefore = cutText(cutDaysIn(pf, pt), cuts);
   const parts = [
     ...(first > pf && first <= pt ? [`an dernier incomplet : collecte depuis le ${shortDate(first, true)}`] : []),
     ...(now ? [`${from.slice(0, 4)} : ${uncertainText(now)}`] : []),
     ...(before ? [`${pf.slice(0, 4)} : ${uncertainText(before)}`] : []),
+    ...(cutNow ? [`${from.slice(0, 4)} : ${cutNow}`] : []),
+    ...(cutBefore ? [`${pf.slice(0, 4)} : ${cutBefore}`] : []),
   ];
   return parts.length ? `<br><small class="muted">${esc(parts.join(' · '))}</small>` : '';
 }
@@ -129,9 +166,24 @@ export function chartMarks(records: DayRecord[], keys: string[], from: string, t
   const lo = first > from ? first : from;
   const hi = lastDay() < to ? lastDay() : to;
   const marks = bucketMarks(keys, g, lo, hi, uncertainDays(records, ds!.estimated, lo, hi));
+  // #394: buckets touched by a cut get its icon above the bar and the cause in the tooltip
+  const cuts = cutDays();
+  const byKey = new Map<string, string[]>();
+  for (const d of cutDaysIn(lo, hi)) byKey.set(bucketKey(d, g), [...(byKey.get(bucketKey(d, g)) ?? []), d]);
+  const cutOf = keys.map((k) => byKey.get(k) ?? []);
+  const cutNote = (days: string[]) =>
+    days.length ? (g === 'day' ? `${cuts.get(days[0]) === 'power' ? 'coupure de courant' : 'coupure Internet'} ce jour-là : consommation plus basse, pas une économie` : `${cutText(days, cuts)} (${days.map((d) => shortDate(d)).join(', ')})`) : null;
+  const notes = marks.map((m, i) => [m.note, cutNote(cutOf[i])].filter(Boolean).join(' · ') || null);
+  const flagged = cutOf.some((x) => x.length);
   return {
     muted: marks.some((m) => m.uncertain) ? marks.map((m) => m.uncertain > 0) : undefined,
     partial: marks.some((m) => m.partial) ? marks.map((m) => m.partial) : undefined,
-    notes: marks.some((m) => m.note) ? marks.map((m) => m.note) : undefined,
+    notes: notes.some(Boolean) ? notes : undefined,
+    flags: flagged
+      ? {
+          icons: cutOf.map((x) => (x.length ? CUT_ICON[x.some((d) => cuts.get(d) === 'power') ? 'power' : 'internet'] : null)),
+          text: cutSummary(cutOf.flat(), cuts),
+        }
+      : undefined,
   };
 }

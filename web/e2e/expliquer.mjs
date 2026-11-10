@@ -177,6 +177,15 @@ try {
       check((await wide(page)) <= 1, `${name} : défilement horizontal sur Historique (${await wide(page)} px)`);
     }
 
+    // #394: October 2026 has two cuts in the incident log (14 Oct. power, 31 Oct. Internet): left out of both months
+    if (name === 'clair' || big) {
+      await page.evaluate(() => (location.hash = '#outils-expliquer-2026-10'));
+      await shown(page, 'outils-expliquer-2026-10');
+      const oct = await page.locator('#view .periodbar .scope').innerText();
+      check(/sans le 14 oct\. \(coupure de courant\) ni le 31 oct\. \(coupure Internet\) : jours retirés des deux mois$/.test(oct), `${name} : octobre 2026 compte les jours de coupure (« ${oct} »)`);
+      check((await wide(page)) <= 1, `${name} : défilement horizontal sur octobre 2026 (${await wide(page)} px)`);
+    }
+
     // ---------------------------------------------------------------- Outils, Pièces and the room pages
     if (name === 'clair' || big) {
       await go(page, 'outils');

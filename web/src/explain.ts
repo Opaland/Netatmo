@@ -11,10 +11,11 @@
 // With the Linky meter the total is the whole home; without it, radiators and water heater only.
 // Pure functions, no DOM (explain.test.ts).
 import { type DayRecord, addDays, minusYears } from './aggregate';
-import { type Weather, djuBetween } from './analysis';
+import { type Weather, dju } from './analysis';
 import { ADEME_PER_DEGREE } from './checks';
 import { MONTHS_LONG, monthLong, signedPct } from './glossary';
-import { type OfflineEstimate, type OfflineRun, type StoppedRoom, estimatedIn, offlineDaysIn, offlineText } from './room-offline';
+import type { CutKind } from './incidents';
+import { type OfflineEstimate, type OfflineRun, type StoppedRoom, offlineDaysIn, offlineText } from './room-offline';
 
 export type StepKey = 'meteo' | 'consignes' | 'mode' | 'pieces' | 'horsligne' | 'eau' | 'autres';
 export const STEP_LABEL: Record<StepKey, string> = {
@@ -75,6 +76,8 @@ export interface Explanation {
   offline: { id: string; name: string; since: string; ongoing: boolean; estimated: number | null }[];
   /** Rooms switched off on purpose over the month or a year earlier. */
   stopped: { id: string; name: string; text: string; stop: StoppedRoom }[];
+  /** #394: days of the month left out with their day a year earlier (a cut on either), and the cause. */
+  cuts: { day: string; ref: string; kind: CutKind; on: 'now' | 'ref' }[];
 }
 
 export interface ExplainInput {
@@ -87,6 +90,8 @@ export interface ExplainInput {
   temps: Map<string, Map<string, [number, number | null]>>;
   runs: OfflineRun[];
   estimate: OfflineEstimate;
+  /** #394: days touched by a power or Internet cut (incidents.ts). */
+  cuts?: Map<string, CutKind>;
 }
 
 const monthEnd = (ym: string) => addDays(`${nextMonth(ym)}-01`, -1);
@@ -104,19 +109,20 @@ export function explainableMonths(records: DayRecord[], last: string): string[] 
   return [...months].filter((m) => months.has(`${Number(m.slice(0, 4)) - 1}${m.slice(4)}`)).sort().reverse();
 }
 
-/** Mean setpoint of a room over [from, to] (days with one), or null. */
-function meanSetpoint(t: Map<string, [number, number | null]> | undefined, from: string, to: string): { mean: number; days: number } | null {
+/** Mean setpoint of a room over [from, to] (days with one, `skip` left out), or null. */
+function meanSetpoint(t: Map<string, [number, number | null]> | undefined, from: string, to: string, skip: Set<string>): { mean: number; days: number } | null {
   if (!t) return null;
   let s = 0;
   let n = 0;
-  for (const [d, v] of t) if (d >= from && d <= to && v[1] !== null) (s += v[1]), n++;
+  for (const [d, v] of t) if (d >= from && d <= to && v[1] !== null && !skip.has(d)) (s += v[1]), n++;
   return n ? { mean: s / n, days: n } : null;
 }
 
-/** Linky covers every day of [from, to]. */
-function linkySum(linky: Map<string, number>, from: string, to: string): number | null {
+/** Linky covers every day of [from, to] (`skip` left out). */
+function linkySum(linky: Map<string, number>, from: string, to: string, skip: Set<string>): number | null {
   let s = 0;
   for (let d = from; d <= to; d = addDays(d, 1)) {
+    if (skip.has(d)) continue;
     const v = linky.get(d);
     if (v === undefined) return null;
     s += v;
@@ -132,7 +138,32 @@ export function explainMonth(i: ExplainInput): Explanation | null {
   if (to < from) return null;
   const refFrom = minusYears(from);
   const refTo = minusYears(to);
-  const sum = (room: string, f: string, t: string) => i.records.reduce((s, r) => s + (r.room === room && r.day >= f && r.day <= t ? r.kwh : 0), 0);
+  // #394: a day touched by a cut, this year or a year earlier, is left out of both periods
+  const cuts: Explanation['cuts'] = [];
+  for (let d = from; d <= to; d = addDays(d, 1)) {
+    const ref = minusYears(d);
+    const kind = i.cuts?.get(d) ?? i.cuts?.get(ref);
+    if (kind) cuts.push({ day: d, ref, kind, on: i.cuts?.has(d) ? 'now' : 'ref' });
+  }
+  const skip = new Set(cuts.flatMap((c) => [c.day, c.ref]));
+  const sum = (room: string, f: string, t: string) => i.records.reduce((s, r) => s + (r.room === room && r.day >= f && r.day <= t && !skip.has(r.day) ? r.kwh : 0), 0);
+  const estimatedIn = (est: OfflineEstimate, room: string, f: string, t: string): number | null => {
+    const days = est.days.get(room);
+    if (!days) return null;
+    let s = 0;
+    let n = 0;
+    for (const [d, v] of days) if (d >= f && d <= t && !skip.has(d)) (s += v), n++;
+    return n ? s : null;
+  };
+  const djuBetween = (w: Weather, f: string, t: string) => {
+    let s = 0;
+    let n = 0;
+    for (let d = f; d <= t; d = addDays(d, 1)) {
+      const v = w.get(d);
+      if (v && !skip.has(d)) (s += dju(v)), n++;
+    }
+    return { dju: s, days: n };
+  };
   const followed = i.rooms.filter((r) => r.category !== 'ignore');
   const refAny = i.records.some((r) => r.day >= refFrom && r.day <= refTo);
   if (!refAny) return null;
@@ -141,7 +172,7 @@ export function explainMonth(i: ExplainInput): Explanation | null {
   // weather: the degree days of both periods, when every day is known
   const wNow = i.weather ? djuBetween(i.weather, from, to) : null;
   const wRef = i.weather ? djuBetween(i.weather, refFrom, refTo) : null;
-  const days = dayCount(from, to);
+  const days = dayCount(from, to) - cuts.length;
   const weather = wNow && wRef && wNow.days === days && wRef.days === days && wRef.dju > 5 ? { now: wNow.dju, ref: wRef.dju } : null;
   const wf = weather ? weather.now / weather.ref : 1;
   // rooms: measured + estimated (offline days)
@@ -163,8 +194,8 @@ export function explainMonth(i: ExplainInput): Explanation | null {
     const expected = ref * wf;
     let setpoint = 0;
     if (!offline) {
-      const a = meanSetpoint(i.temps.get(r.id), from, to);
-      const b = meanSetpoint(i.temps.get(r.id), refFrom, refTo);
+      const a = meanSetpoint(i.temps.get(r.id), from, to, skip);
+      const b = meanSetpoint(i.temps.get(r.id), refFrom, refTo, skip);
       if (a && b && a.days >= days / 2 && b.days >= days / 2) {
         setpoint = expected * ADEME_PER_DEGREE * (a.mean - b.mean);
         spNow += a.mean * ref;
@@ -180,8 +211,8 @@ export function explainMonth(i: ExplainInput): Explanation | null {
     now: waterRooms.reduce((s, r) => s + sum(r.id, from, to) + (estimatedIn(i.estimate, r.id, from, to) ?? 0), 0),
     ref: waterRooms.reduce((s, r) => s + sum(r.id, refFrom, refTo) + (estimatedIn(i.estimate, r.id, refFrom, refTo) ?? 0), 0),
   };
-  const lNow = linkySum(i.linky, from, to);
-  const lRef = linkySum(i.linky, refFrom, refTo);
+  const lNow = linkySum(i.linky, from, to, skip);
+  const lRef = linkySum(i.linky, refFrom, refTo, skip);
   const basis = lNow !== null && lRef !== null ? 'linky' : 'intuis';
   const now = basis === 'linky' ? lNow! : H('now') + water.now;
   const ref = basis === 'linky' ? lRef! : H('ref') + water.ref;
@@ -226,6 +257,7 @@ export function explainMonth(i: ExplainInput): Explanation | null {
     water,
     offline,
     stopped: changed.map((r) => ({ id: r.id, name: r.name, stop: r.stopped!, text: offlineText({ from: r.stopped!.from, to, ongoing: true, stopped: r.stopped }) })),
+    cuts,
   };
 }
 
