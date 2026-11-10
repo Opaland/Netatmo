@@ -191,7 +191,10 @@ export function reconcile(inv: Invoice, d: InvoiceData): Reconciliation {
         kind: 'kwh',
         eur: e,
         text: !hasLinky
-          ? `La facture compte ${kwh(diff)} de plus que les radiateurs et le chauffe-eau : les autres usages du logement (${diff > 0 ? '+' : '−'}${eur(e)}).`
+          ? diff > 0
+            ? `La facture compte ${kwh(diff)} de plus que les radiateurs et le chauffe-eau : les autres usages du logement (+${eur(e)}).`
+            : // #358 (mutation): fewer kWh than the radiators alone used to read « de plus »
+              `La facture compte ${kwh(diff)} de moins que les radiateurs et le chauffe-eau (−${eur(e)}) : relevé estimé ou dates de relevé décalées.`
           : inv.estimated
           ? `Relevé estimé : la facture compte ${kwh(diff)} ${diff > 0 ? 'de plus' : 'de moins'} que le compteur Linky (${diff > 0 ? '+' : '−'}${eur(e)}). Ils seront régularisés sur la prochaine facture relevée.`
           : `La facture compte ${kwh(diff)} ${diff > 0 ? 'de plus' : 'de moins'} que le compteur Linky (${diff > 0 ? '+' : '−'}${eur(e)}) : dates de relevé décalées d'un jour ou deux, ou index estimé non signalé.`,
