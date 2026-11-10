@@ -54,10 +54,10 @@ qui travaillent sur le dépôt.
 
 ## 5. Revue multi-personas (obligatoire à chaque version)
 
-- **62 personas** depuis le cadrage v1.4 (50 initiaux, 2 ajoutés en v1.2, 10 en v1.4), répartis en
+- **72 personas** depuis la fin de la v1.6 (50 initiaux, 2 ajoutés en v1.2, 10 en v1.4, 10 en fin de v1.6), répartis en
   familles (foyer, énergie, domotique, UX et accessibilité, sécurité et juridique, dev et exploitation,
   diffusion, IA et données). La liste de référence est dans `docs/bmad/02-revue-50-personas.md`
-  (§ 12 pour les ajouts) ; on peut en ajouter, jamais en retirer sans le noter.
+  (§ 12 et § 13 pour les ajouts) ; on peut en ajouter, jamais en retirer sans le noter.
 - À chaque version : un fichier `docs/bmad/revues/vX.Y.md` avec, pour chaque persona, son verdict sur
   la version livrée (👍/👎) et une proposition ; puis la synthèse « besoins × impact ».
 - **Chaque persona a son issue** (étiquette `persona` + famille, titre « Persona #N · … ») : elle porte
