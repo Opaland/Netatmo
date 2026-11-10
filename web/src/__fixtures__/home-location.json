@@ -1,0 +1,50 @@
+{
+  "_comment": "#204: the rule of a valid home location, shared by web/src/solar.ts parseLocation and collector/solar.py parse_location (fictitious coordinates only).",
+  "valid": [
+    {
+      "in": { "v": 1, "lat": 45.12345, "lon": 4.56789, "precision": 2, "commune": "  Exemple\u0007ville ", "roofs": [{ "name": "Grand abri", "azimuth": 180.4, "tilt": 15, "kwc": 3.6, "loss": 14 }] },
+      "out": { "v": 1, "lat": 45.12, "lon": 4.57, "precision": 2, "commune": "Exemple ville", "roofs": [{ "name": "Grand abri", "azimuth": 180, "tilt": 15, "kwc": 3.6, "loss": 14 }] }
+    },
+    {
+      "in": { "v": 1, "lat": -12.98765, "lon": -179.5, "precision": 3, "roofs": [{ "name": "Est", "azimuth": 90, "tilt": 0, "kwc": 0.5, "loss": 0 }, { "name": "Ouest", "azimuth": 359.4, "tilt": 90, "kwc": 36, "loss": 60 }] },
+      "out": { "v": 1, "lat": -12.988, "lon": -179.5, "precision": 3, "commune": "", "roofs": [{ "name": "Est", "azimuth": 90, "tilt": 0, "kwc": 0.5, "loss": 0 }, { "name": "Ouest", "azimuth": 359, "tilt": 90, "kwc": 36, "loss": 60 }] }
+    },
+    {
+      "in": { "v": 1, "lat": 46.06, "lon": 4.04, "precision": 1, "commune": "", "roofs": [{ "name": "Toit", "azimuth": 0, "tilt": 30, "kwc": 1.234, "loss": 12.34 }] },
+      "out": { "v": 1, "lat": 46.1, "lon": 4, "precision": 1, "commune": "", "roofs": [{ "name": "Toit", "azimuth": 0, "tilt": 30, "kwc": 1.23, "loss": 12.3 }] }
+    }
+  ],
+  "invalid": [
+    null,
+    [],
+    "texte",
+    { "v": 2, "lat": 45, "lon": 4, "precision": 2, "roofs": [{ "name": "A", "azimuth": 180, "tilt": 15, "kwc": 3, "loss": 14 }] },
+    { "v": 1, "lat": 91, "lon": 4, "precision": 2, "roofs": [{ "name": "A", "azimuth": 180, "tilt": 15, "kwc": 3, "loss": 14 }] },
+    { "v": 1, "lat": 45, "lon": 181, "precision": 2, "roofs": [{ "name": "A", "azimuth": 180, "tilt": 15, "kwc": 3, "loss": 14 }] },
+    { "v": 1, "lat": "45", "lon": 4, "precision": 2, "roofs": [{ "name": "A", "azimuth": 180, "tilt": 15, "kwc": 3, "loss": 14 }] },
+    { "v": 1, "lat": 45, "lon": 4, "precision": 4, "roofs": [{ "name": "A", "azimuth": 180, "tilt": 15, "kwc": 3, "loss": 14 }] },
+    { "v": 1, "lat": 45, "lon": 4, "precision": true, "roofs": [{ "name": "A", "azimuth": 180, "tilt": 15, "kwc": 3, "loss": 14 }] },
+    { "v": 1, "lat": 45, "lon": 4, "precision": 2, "roofs": [] },
+    { "v": 1, "lat": 45, "lon": 4, "precision": 2, "commune": 12, "roofs": [{ "name": "A", "azimuth": 180, "tilt": 15, "kwc": 3, "loss": 14 }] },
+    { "v": 1, "lat": 45, "lon": 4, "precision": 2, "roofs": [{ "name": "", "azimuth": 180, "tilt": 15, "kwc": 3, "loss": 14 }] },
+    { "v": 1, "lat": 45, "lon": 4, "precision": 2, "roofs": [{ "name": "A", "azimuth": 360, "tilt": 15, "kwc": 3, "loss": 14 }] },
+    { "v": 1, "lat": 45, "lon": 4, "precision": 2, "roofs": [{ "name": "A", "azimuth": 180, "tilt": 91, "kwc": 3, "loss": 14 }] },
+    { "v": 1, "lat": 45, "lon": 4, "precision": 2, "roofs": [{ "name": "A", "azimuth": 180, "tilt": 15, "kwc": 0, "loss": 14 }] },
+    { "v": 1, "lat": 45, "lon": 4, "precision": 2, "roofs": [{ "name": "A", "azimuth": 180, "tilt": 15, "kwc": 3, "loss": 61 }] },
+    { "v": 1, "lat": 45, "lon": 4, "precision": 2, "roofs": [{ "name": "A", "azimuth": 180, "tilt": 15, "kwc": 3 }] },
+    { "v": 1, "lat": 45, "lon": 4, "precision": 2, "roofs": [{ "name": "A", "azimuth": true, "tilt": 15, "kwc": 3, "loss": 14 }] },
+    { "v": 1, "lat": true, "lon": 4, "precision": 2, "roofs": [{ "name": "A", "azimuth": 180, "tilt": 15, "kwc": 3, "loss": 14 }] },
+    {
+      "v": 1, "lat": 45, "lon": 4, "precision": 2,
+      "roofs": [
+        { "name": "A", "azimuth": 180, "tilt": 15, "kwc": 3, "loss": 14 },
+        { "name": "B", "azimuth": 180, "tilt": 15, "kwc": 3, "loss": 14 },
+        { "name": "C", "azimuth": 180, "tilt": 15, "kwc": 3, "loss": 14 },
+        { "name": "D", "azimuth": 180, "tilt": 15, "kwc": 3, "loss": 14 },
+        { "name": "E", "azimuth": 180, "tilt": 15, "kwc": 3, "loss": 14 },
+        { "name": "F", "azimuth": 180, "tilt": 15, "kwc": 3, "loss": 14 },
+        { "name": "G", "azimuth": 180, "tilt": 15, "kwc": 3, "loss": 14 }
+      ]
+    }
+  ]
+}

@@ -147,8 +147,14 @@ export async function listSecrets(repo: string): Promise<Set<string>> {
 /** Secrets the app must never write: changing them here would break existing data. */
 export const FORBIDDEN = new Set(['DATA_PASSPHRASE']);
 
+/**
+ * #204: secrets the app writes from a card of its own (not from « Sources de données »): the
+ * home's location and roofs, sealed like the others, never readable back.
+ */
+export const APP_SECRETS = new Set(['HOME_LOCATION_JSON']);
+
 export async function putSecret(repo: string, name: string, value: string): Promise<void> {
-  if (FORBIDDEN.has(name) || !GROUPS.some((g) => g.fields.some((f) => f.name === name))) {
+  if (FORBIDDEN.has(name) || !(APP_SECRETS.has(name) || GROUPS.some((g) => g.fields.some((f) => f.name === name)))) {
     throw new GitHubError(`${name} ne peut pas être modifié depuis l'application`, 400);
   }
   const { default: sodium } = await import('libsodium-wrappers');

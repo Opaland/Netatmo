@@ -197,3 +197,18 @@ def test_tempo_derniere_saison_complete():
     except json.JSONDecodeError:
         pytest.fail("Tempo : la réponse n'est pas du JSON")
     assert tempo_problems(payload, start) == []
+
+
+@pytest.mark.reseau
+def test_pvgis_profil_horaire_d_un_lieu_public():
+    """#356: the hourly PVGIS series of one roof, asked with the collector's own query for a public
+    place (Paris, Hôtel de Ville), never the home: the shape the collector reads, a full year of
+    days and a plausible yearly production of 1 kWc."""
+    from collector.solar import PVGIS, hours_of, pvgis_params
+
+    roof = {"name": "Toit", "azimuth": 180, "tilt": 30, "kwc": 1, "loss": 14}
+    r = _get(PVGIS, **pvgis_params({"lat": PLACE["latitude"], "lon": PLACE["longitude"]}, roof))
+    hours = hours_of(schema.check("PVGIS", "seriescalc", schema.PVGIS_SERIES, r.json()))
+    assert len(hours) >= 365
+    kwh = sum(sum(v) for v in hours.values()) / 1000
+    assert 700 < kwh < 1600, f"{kwh:.0f} kWh par kWc et par an : hors de ce que la France produit"
