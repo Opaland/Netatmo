@@ -71,6 +71,25 @@ describe('nouvelle version (#357)', () => {
     expect(reload).not.toHaveBeenCalled();
   });
 
+  it('says nothing at the first visit when clients.claim() is seen before « installed » (WebKit under load, PR #438)', () => {
+    const { reg, sw, updates } = setup(null);
+    const w = new FakeWorker();
+    reg.installing = w;
+    reg.dispatchEvent(new Event('updatefound'));
+    // the first worker already took the page before its « installed » event reached it
+    sw.controller = w;
+    sw.dispatchEvent(new Event('controllerchange'));
+    w.state = 'installed';
+    reg.installing = null;
+    reg.waiting = w;
+    w.dispatchEvent(new Event('statechange'));
+    expect(updates).toEqual([]);
+    // a real new version later in the same page is still announced
+    reg.waiting = null;
+    reg.newVersion();
+    expect(updates).toEqual(['waiting']);
+  });
+
   it('says nothing at the first visit (no controller yet), even when clients.claim() takes over', () => {
     const { reg, sw, updates, reload } = setup(null);
     reg.newVersion();

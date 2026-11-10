@@ -56,7 +56,9 @@ le propriétaire.**
   NAS, journal chiffré envoyé par un workflow, soirs relevés dans l'appli à la place des notes
   (#417).
 - **Revue de fin de version** : captures de référence régénérées ; radiateur arrêté à la couleur de
-  sa pièce (#436) ; « règle ADR-5 » retirée de ⚙ Sources (#437).
+  sa pièce (#436) ; « règle ADR-5 » retirée de ⚙ Sources (#437) ; plus de
+  bandeau « Nouvelle version disponible » à la première visite quand le premier service worker prend
+  la page avant son événement « installé » (vu en WebKit sur la CI).
 - **Reste ouvert** (raison dans chaque issue) : verdict de l'Accueil en électricité seule avec un
   poêle (#433, bloquant) ; césure à 360 px (#434) et couleurs des heures pleines / creuses (#435),
   en v1.8 ; volets (#200) en attente du NAS ; plan de la maison (#202) et pince (#281) à sortir du
