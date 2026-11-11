@@ -146,15 +146,11 @@ export function selectRestyles(files: Record<string, string>): string[] {
 
 /**
  * #409: the accent (iris) is for actions and selection, never for data. The colours given to a
- * gauge, a share bar, a legend or a chart series in the views: `file: text`. The exceptions are
- * the setpoint lines: what was asked of a radiator, drawn next to the measure; their colour is a
- * design decision left to the owner (PR of #409).
+ * gauge, a share bar, a legend or a chart series in the views: `file: text`. No exception: the
+ * setpoint lines, the last data in iris, are a reference (`--series-reference`, dashed) since the
+ * owner's decision closing the v1.7 (docs/bmad/revues/v1.7.md, § 5, decision 2).
  */
-const ACCENT_DATA_ALLOWED: { file: string; literal: string }[] = [
-  { file: 'views/analyse.ts', literal: "{ name: TEMP.setpointShort, color: cssVar('--accent')" },
-  { file: 'views/piece.ts', literal: "{ label: TEMP.setpointShort, color: '--accent', kind: 'line' }" },
-  { file: 'views/piece.ts', literal: "{ name: 'Demandée (consigne)', color: cssVar('--accent')" },
-];
+const ACCENT_DATA_ALLOWED: { file: string; literal: string }[] = [];
 export function accentData(files: Record<string, string>): string[] {
   const found: string[] = [];
   for (const [file, text] of Object.entries(files)) {
@@ -285,7 +281,7 @@ describe('design system usage (#317)', () => {
     expect(selectRestyles(files)).toEqual([]);
   });
 
-  it('#409: no data in the accent colour (gauges, bars, ramps), the setpoint lines aside', () => {
+  it('#409: no data in the accent colour (gauges, bars, ramps, setpoint lines)', () => {
     expect(accentData({ ...files, 'styles/tokens.css': read('styles/tokens.css') })).toEqual([]);
     for (const a of ACCENT_DATA_ALLOWED) expect(files[a.file]?.includes(a.literal), `${a.file}: ${a.literal}`).toBe(true);
   });
