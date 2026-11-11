@@ -11,7 +11,7 @@ import { homeAwayHours } from '../away';
 import { alert, card, legend, list, scheduleBand, tile, countedText } from '../components';
 import { loadRoom30, loadRoomState } from '../data';
 import { dayShort, fmt1, hourMin, hourRange } from '../glossary';
-import { type HcRange, rangesFromR30, rangesText, slotMask, toHours } from '../offpeak';
+import { type HcPeriod, periodsFromR30, periodsText, rangesOn, rangesText, slotMask, toHours } from '../offpeak';
 import { scheduleOf } from '../piece';
 import {
   LATE_SLOTS,
@@ -89,8 +89,10 @@ function render(r30: Room30, away: Map<string, number>): string {
   if (!to) return card({ title: 'Mes plannings et les heures creuses', body: '<p class="hint">Pas encore de relevé à la demi-heure.</p>' });
   const from = addDays(to, -(DAYS - 1));
   const skip = new Set([...away].filter(([day, h]) => h >= 12 && day >= from && day <= to).map(([day]) => day));
-  // #428: the off-peak hours read in the half hours, shared with the simulators (offpeak.ts)
-  const off = rangesFromR30(r30, from, to) ?? [];
+  // #428: the off-peak hours read in the half hours, shared with the simulators (offpeak.ts);
+  // #441: dated, the suggestions take those in force on the last day, each band those of its day
+  const periods = periodsFromR30(r30, from, to) ?? [];
+  const off = rangesOn(periods, to);
   const mask = off.length ? slotMask(off) : null;
   const p = hcHpAt(to);
   const prices = mask && p && p.hp > p.hc ? { hp: p.hp, hc: p.hc } : null;
@@ -113,7 +115,7 @@ function render(r30: Room30, away: Map<string, number>): string {
         if (x.reached !== null) res.useful += x.reached;
         else res.wasted += x.span;
       }
-      res.band = band(r30, ids[0], from, to, skip, off, r.name);
+      res.band = band(r30, ids[0], from, to, skip, periods, r.name);
     }
     results.push(res);
   }
@@ -136,7 +138,7 @@ function render(r30: Room30, away: Map<string, number>): string {
             sub: `<small class="muted">${shifts.length ? 'par mois de chauffe, en décalant des relances' : 'les relances sont déjà bien placées'}</small>`,
           })}</div>`
         : alert('info', 'Pas d’heures creuses sur cette période', 'Tout le chauffage est payé au même prix : seul le gain réel de température est analysé ci-dessous.')
-    }
+    }${periods.length > 1 ? `<p class="hint muted" id="plannings-hc-periods">Vos heures creuses ont changé : ${esc(periodsText(periods))}.</p>` : ''}
     ${list(
       results.map((r) => {
         const s = r.groups.map((x) => x.shift).filter((x): x is Shift => !!x);
@@ -156,11 +158,12 @@ function render(r30: Room30, away: Map<string, number>): string {
 }
 
 /** The schedule of the most recent day with one, over the off-peak hours. */
-function band(r30: Room30, id: string, from: string, to: string, skip: Set<string>, off: HcRange[], name: string): string {
+function band(r30: Room30, id: string, from: string, to: string, skip: Set<string>, periods: HcPeriod[], name: string): string {
   const days = [...(r30.get(id) ?? new Map()).keys()].filter((d) => d >= from && d <= to && !skip.has(d)).sort().reverse();
   for (const day of days) {
     const sched = scheduleOf(unpack(r30.get(id)!.get(day)![3]));
     if (!sched) continue;
+    const off = rangesOn(periods, day); // #441: the ranges in force that day
     const comfort = sched.slots.filter((s) => s.kind === 'comfort').map((s) => hourRange(s.from, s.to));
     return `${scheduleBand({
       slots: sched.slots,

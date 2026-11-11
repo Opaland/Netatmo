@@ -1,10 +1,30 @@
 // #428: one source of the off-peak hours. Fictitious ranges only (never a real contract): a night
 // one and an afternoon one, bounds inside a half hour, one over midnight, and the fallback.
 import { describe, expect, it } from 'vitest';
-import { evPlan } from './ev';
-import { type HcRange, FALLBACK_RANGES, parseHcRanges, rangesFromR30, rangesText, resolveOffPeak, slotMask, slotShares, toHours } from './offpeak';
+import { addDays } from './aggregate';
+import { addCharge, evPlan, evPlanOn } from './ev';
+import {
+  type HcRange,
+  FALLBACK_RANGES,
+  MAX_RANGES,
+  STABLE_DAYS,
+  changesFromR30,
+  offPeakSentence,
+  parseHcRanges,
+  periodsFromR30,
+  periodsOfTyped,
+  rangesFromR30,
+  rangesOn,
+  rangesText,
+  resolveOffPeak,
+  shareOn,
+  slotMask,
+  slotShares,
+  toHours,
+} from './offpeak';
+import { offPeakMask } from './plannings';
 import type { Day30, Room30 } from './room30';
-import { simulate } from './solar';
+import { runAll, simulate } from './solar';
 
 const hm = (h: number, m = 0) => h * 60 + m;
 /** Two fictitious ranges: 2 h 15 → 7 h 45 at night, 13 h 15 → 15 h 45 in the afternoon. */
@@ -107,7 +127,7 @@ describe('#428 heures creuses : une seule source, dans l’ordre', () => {
     expect(parseHcRanges([{ from: 600, to: 600 }, { from: 1440, to: 3 }, { from: '7:45', to: '08:00' }, { from: 1.5, to: 3 }, null, [1, 2]])).toEqual([]);
     expect(parseHcRanges('[{"from":1,"to":2}]')).toEqual([]);
     expect(parseHcRanges(JSON.parse('[{"__proto__":{"from":1,"to":2}}]'))).toEqual([]);
-    expect(parseHcRanges(Array.from({ length: 9 }, (_, i) => ({ from: i * 60, to: i * 60 + 30 })))).toHaveLength(4);
+    expect(parseHcRanges(Array.from({ length: 12 }, (_, i) => ({ from: i * 60, to: i * 60 + 30 })))).toHaveLength(MAX_RANGES);
   });
 });
 
@@ -150,5 +170,208 @@ describe('#428 les simulateurs prennent les plages fournies', () => {
     const pilot = { ...opts, pilotKw: 10, scenario: { pilot: true, battery: 0 } };
     expect(simulate({ days: [h] }, { ...pilot, offPeak: slotShares(TWO) }).moved).toBeCloseTo(2); // kWh
     expect(simulate({ days: [h] }, { ...pilot, offPeak: slotShares(FALLBACK_RANGES) }).moved).toBeCloseTo(0);
+  });
+});
+
+// ------------------------------------------------------------------ #441 dated ranges
+// Fictitious ranges only (never a real contract): one night range before, then a shorter night
+// one and an afternoon one « à compter du » a day, as the CRE reform does.
+/** Before: 23 h 10 → 7 h 10. */
+const OLD: HcRange[] = [{ from: hm(23, 10), to: hm(7, 10) }];
+/** After: 1 h 40 → 6 h 40 and 11 h 40 → 14 h 40 (noon is peak before, off-peak after). */
+const NEW: HcRange[] = [
+  { from: hm(1, 40), to: hm(6, 40) },
+  { from: hm(11, 40), to: hm(14, 40) },
+];
+const START = '2026-01-01';
+type Spec = HcRange[] | 'none' | 'night';
+/**
+ * Half hours of one room from START, a day per entry: heated all day (10 Wh a minute) and counted
+ * HC on the minutes of its ranges; 'none' not heated (summer); 'night' heated 2 h 30 → 5 h only,
+ * off-peak with both OLD and NEW (a day that tells nothing about the change).
+ */
+function history(spec: Spec[]): Room30 {
+  const days = new Map<string, Day30>();
+  spec.forEach((s, k) => {
+    const day = addDays(START, k);
+    if (s === 'none') return void days.set(day, [new Array(48).fill(0), new Array(48).fill(0), 20, 19] as Day30);
+    if (s === 'night') {
+      const hc = new Array<number>(48).fill(0).map((_, i) => (i >= 5 && i < 10 ? 300 : 0));
+      return void days.set(day, [new Array(48).fill(0), hc, 20, 19] as Day30);
+    }
+    const hc = slotShares(s).map((f) => Math.round(f * 30) * 10);
+    days.set(day, [hc.map((v) => 300 - v), hc, 20, 19] as Day30);
+  });
+  return new Map([['a', days]]);
+}
+const times = (n: number, x: Spec): Spec[] => Array<Spec>(n).fill(x);
+const lastOf = (n: number) => addDays(START, n - 1);
+
+describe('#441 heures creuses datées : la date du changement lue dans les relevés', () => {
+  it('un changement au milieu : deux périodes, chacune avec ses plages', () => {
+    const r = history([...times(30, OLD), ...times(30, NEW)]);
+    expect(changesFromR30(r, START, lastOf(60))).toEqual(['2026-01-31']);
+    expect(periodsFromR30(r, START, lastOf(60))).toEqual([
+      { since: null, ranges: OLD },
+      { since: '2026-01-31', ranges: NEW },
+    ]);
+    // the single reading of #428 mixed them over the same window
+    expect(rangesFromR30(r, START, lastOf(60))).not.toEqual(NEW);
+  });
+
+  it(`moins de ${STABLE_DAYS} jours d’écart ne coupent pas l’historique ; ${STABLE_DAYS} jours, si`, () => {
+    const odd = history([...times(30, OLD), ...times(STABLE_DAYS - 1, NEW), ...times(30, OLD)]);
+    expect(changesFromR30(odd, START, lastOf(70))).toEqual([]);
+    expect(periodsFromR30(odd, START, lastOf(70))).toHaveLength(1);
+    const run = history([...times(30, OLD), ...times(STABLE_DAYS, NEW), ...times(30, OLD)]);
+    expect(changesFromR30(run, START, lastOf(70))).toEqual(['2026-01-31', addDays('2026-01-31', STABLE_DAYS)]);
+    expect(periodsFromR30(run, START, lastOf(70))!.map((p) => p.ranges)).toEqual([OLD, NEW, OLD]);
+  });
+
+  it('des jours sans chauffage ou qui ne disent rien ne comptent pas et ne coupent pas la série', () => {
+    // summer between the two: the change is dated on the first heated day that shows it
+    const summer = history([...times(30, OLD), ...times(20, 'none'), NEW, NEW, 'night', NEW, 'night', NEW, NEW, ...times(10, NEW)]);
+    expect(changesFromR30(summer, START, lastOf(69))).toEqual([addDays(START, 50)]);
+    expect(periodsFromR30(summer, START, lastOf(69))!.map((p) => p.ranges)).toEqual([OLD, NEW]);
+  });
+
+  it('une demi-heure coupée par une borne, chauffée tantôt avant tantôt après, ne fait pas un changement', () => {
+    const r = history(times(40, OLD));
+    // 23:00–23:30 is cut at 23:10: ten days in a row the radiator only runs 23:00–23:10 (all HP)
+    for (const [day, cols] of r.get('a')!) {
+      if (day < '2026-01-21' || day > '2026-01-30') continue;
+      (cols[0] as number[])[46] = 100;
+      (cols[1] as number[])[46] = 0;
+    }
+    expect(changesFromR30(r, START, lastOf(40))).toEqual([]);
+  });
+
+  it('un changement trop récent pour être sûr n’est pas encore vu', () => {
+    const r = history([...times(30, OLD), ...times(STABLE_DAYS - 1, NEW)]);
+    expect(changesFromR30(r, START, lastOf(30 + STABLE_DAYS - 1))).toEqual([]);
+  });
+
+  it('les plannings prennent les plages en vigueur le jour, pas un mélange', () => {
+    const r = history([...times(10, OLD), ...times(18, NEW)]);
+    expect(rangesOn(periodsFromR30(r, START, lastOf(28))!, lastOf(28))).toEqual(NEW);
+    expect(rangesOn(periodsFromR30(r, START, lastOf(28))!, lastOf(5))).toEqual(OLD);
+    expect(offPeakMask(r, START, lastOf(28))).toEqual(slotMask(NEW));
+  });
+});
+
+/** 365 fictitious days (2026), the ranges changing on 1 July: 181 days before, 184 after. */
+const YEAR = Array.from({ length: 365 }, (_, k) => addDays(START, k));
+const CHANGE = '2026-07-01';
+const DATED = resolveOffPeak(
+  [
+    { since: null, ranges: OLD },
+    { since: CHANGE, ranges: NEW },
+  ],
+  null,
+);
+
+describe('#441 chaque jour compté avec ses plages, sur 365 jours', () => {
+  const a = { priceHp: 0.25, priceHc: 0.2, feedIn: 0, costPerKwc: 0, batteryCostPerKwh: 0, batteryEfficiency: 0.9 };
+  const at = (i: number, wh: number) => new Array<number>(48).fill(0).map((_, j) => (j === i ? wh : 0));
+
+  it('le simulateur solaire : le prix de midi suit le changement', () => {
+    // 1 kWh drawn and produced at noon each day: not bought, at the price of noon that day
+    const days = YEAR.map((day) => ({ day, wh: at(24, 1000), prod: at(24, 1000), shiftable: 0, rebuilt: false }));
+    const opts = { kwc: 1, pilotKw: 0, scenario: { pilot: false, battery: 0 }, a };
+    expect(YEAR.filter((d) => d < CHANGE)).toHaveLength(181);
+    expect(simulate({ days }, { ...opts, offPeak: (d) => shareOn(DATED, d) }).saving).toBeCloseTo(181 * 0.25 + 184 * 0.2);
+    // the ranges of today applied to the whole year (#428): every noon off-peak
+    expect(simulate({ days }, { ...opts, offPeak: DATED.share }).saving).toBeCloseTo(365 * 0.2);
+    // runAll, as the view calls it
+    const w = { days, from: YEAR[0], to: YEAR[364], curveDays: 365, rebuiltDays: 0 };
+    const inputs = { priceHp: 0.25, priceHc: 0.2, feedIn: 0, costPerKwc: 1000, batteryCostPerKwh: 500, batteryEfficiency: 90, heaterKw: null, evKwhWeek: null, evKw: null };
+    expect(runAll(w, inputs, (d) => shareOn(DATED, d), [1])[0].rows[0].saving).toBeCloseTo(181 * 0.25 + 184 * 0.2);
+  });
+
+  it('le simulateur solaire : le pilotage ne déplace que ce que les heures creuses du jour ont tiré', () => {
+    // the water heater runs 1 h → 1 h 30: off-peak before the change, peak after
+    const days = YEAR.map((day) => ({ day, wh: at(2, 2000), prod: at(24, 5000), shiftable: 2000, rebuilt: false }));
+    const pilot = { kwc: 1, pilotKw: 10, scenario: { pilot: true, battery: 0 }, a };
+    expect(simulate({ days }, { ...pilot, offPeak: (d) => shareOn(DATED, d) }).moved).toBeCloseTo(181 * 2);
+    expect(simulate({ days }, { ...pilot, offPeak: DATED.share }).moved).toBeCloseTo(0);
+  });
+
+  it('la recharge : 1 kWh à midi chaque jour, en heures pleines avant, creuses après', () => {
+    const splits = YEAR.map((day) => ({ day, hc: 0, hp: 0 }));
+    const input = { kwhWeek: 7, powerKw: 2, startHour: 12 }; // 12:00–12:30
+    const dated = addCharge(splits, evPlanOn(input, DATED)!);
+    expect(dated.reduce((s, x) => s + x.hp, 0)).toBeCloseTo(181);
+    expect(dated.reduce((s, x) => s + x.hc, 0)).toBeCloseTo(184);
+    const flat = addCharge(splits, evPlan(input, DATED.share)!);
+    expect(flat.reduce((s, x) => s + x.hc, 0)).toBeCloseTo(365);
+    expect(evPlanOn({ kwhWeek: 7, powerKw: 0, startHour: 12 }, DATED)).toBeNull();
+  });
+});
+
+describe('#441 heures creuses saisies « à compter du »', () => {
+  const typed = parseHcRanges([
+    { from: '23:10', to: '07:10' },
+    { from: '11:40', to: '14:40', since: CHANGE },
+    { from: '01:40', to: '06:40', since: CHANGE },
+  ]);
+
+  it('deux périodes, la date en tête de la seconde', () => {
+    expect(periodsOfTyped(typed)).toEqual([
+      { since: null, ranges: OLD },
+      { since: CHANGE, ranges: NEW },
+    ]);
+    const o = resolveOffPeak(null, typed);
+    expect(o.source).toBe('saisies');
+    expect(o.ranges).toEqual(NEW);
+    expect(rangesOn(o.periods, '2026-06-30')).toEqual(OLD);
+    expect(rangesOn(o.periods, CHANGE)).toEqual(NEW);
+    expect(shareOn(o, '2026-06-30')).toEqual(slotShares(OLD));
+    expect(offPeakSentence(o)).toBe(
+      `Heures creuses saisies dans ⚙ Mon contrat : ${rangesText(NEW)} depuis le 1er juillet 2026 ; avant le 1er juillet 2026, ${rangesText(OLD)}`,
+    );
+  });
+
+  it('trois périodes : celle du milieu bornée par ses deux dates', () => {
+    const o = resolveOffPeak(null, [...typed, { from: hm(0, 20), to: hm(5, 20), since: '2026-10-15' }]);
+    expect(offPeakSentence(o)).toContain(`du 1er juillet 2026 au 14 octobre 2026, ${rangesText(NEW)}`);
+    expect(offPeakSentence(o)).toContain('depuis le 15 octobre 2026');
+  });
+
+  it('une saisie d’avant #441, sans date, reste valide ; une date fausse écarte la plage', () => {
+    const old = parseHcRanges([{ from: 1390, to: 430 }]);
+    expect(old).toEqual(OLD);
+    const o = resolveOffPeak(null, old);
+    expect(o.periods).toEqual([{ since: null, ranges: OLD, share: slotShares(OLD) }]);
+    expect(offPeakSentence(o)).toBe(`Heures creuses saisies dans ⚙ Mon contrat : ${rangesText(OLD)}`);
+    expect(parseHcRanges([{ from: 100, to: 400, since: '2026-02-30' }, { from: 100, to: 400, since: '2026-7-1' }, { from: 100, to: 400, since: 20260701 }])).toEqual([]);
+    expect(parseHcRanges([{ from: 100, to: 400, since: '' }, { from: 500, to: 600, since: null }])).toEqual([
+      { from: 100, to: 400 },
+      { from: 500, to: 600 },
+    ]);
+  });
+
+  it('toutes datées : avant la première date, la première connue', () => {
+    const o = resolveOffPeak(null, [{ ...NEW[0], since: CHANGE }]);
+    expect(rangesOn(o.periods, '2026-01-01')).toEqual([NEW[0]]);
+  });
+});
+
+describe('#441 le repli', () => {
+  it('sans relevé ni saisie : 22 h → 6 h tous les jours, une seule période', () => {
+    const o = resolveOffPeak(null, []);
+    expect(o.periods).toHaveLength(1);
+    for (const d of [YEAR[0], CHANGE, YEAR[364]]) expect(shareOn(o, d)).toEqual(slotShares(FALLBACK_RANGES));
+  });
+
+  it('des périodes lues sans plage laissent la place à la saisie', () => {
+    const o = resolveOffPeak([{ since: null, ranges: [] }], [{ ...NEW[1] }]);
+    expect(o.source).toBe('saisies');
+    expect(o.ranges).toEqual([NEW[1]]);
+  });
+
+  it('les relevés datés passent avant la saisie', () => {
+    const o = resolveOffPeak(DATED.periods, [{ ...NEW[1] }]);
+    expect(o.source).toBe('releves');
+    expect(rangesOn(o.periods, YEAR[0])).toEqual(OLD);
   });
 });

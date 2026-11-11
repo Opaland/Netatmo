@@ -12,7 +12,7 @@ import { alert, comparison, countedNote, howDetails, legend, listRow, periodBar,
 import { type Dataset, loadRoom30, loadRoomState } from '../data';
 import type { DatasetDoc } from '../loader';
 import { BEDROOMS_ID } from '../household';
-import { rangesFromR30, rangesText, toHours } from '../offpeak';
+import { periodsFromR30, rangesOn, rangesText, toHours } from '../offpeak';
 import { NO_REFERENCE, TEMP, dayLong, dayShort, fmt1, fmtTemp, hourMin, hourRange, plural, vsLabel } from '../glossary';
 import { HOME_PERIODS, type HomeRange, homePeriod, homeRange, scopeTitle } from '../home';
 import { daysBetween } from '../periods';
@@ -317,7 +317,8 @@ function nowCard(
     else if (sched) facts.push(['Mode', modeText(sched, reading.slot)]);
     else if (sp && sp.some((v) => v !== null)) facts.push(['Mode', 'température demandée constante']);
     if (sched) {
-      const off = rangesFromR30(r30!, addDays(day, -6), day) ?? []; // #428: the shared reading
+      // #428: the shared reading; #441: dated, the ranges in force on the day of the band
+      const off = rangesOn(periodsFromR30(r30!, addDays(day, -27), day) ?? [], day);
       const comfort = sched.slots.filter((s) => s.kind === 'comfort').map((s) => hourRange(s.from, s.to));
       const now = reading.slot / 2 + 0.25;
       band = `<p class="section-title">Planning du ${esc(dayShort(day))}</p>${scheduleBand({
