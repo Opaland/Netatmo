@@ -50,7 +50,7 @@ function input(): QualityInput {
     station: d.station,
     devices: {
       offline: offlineDays(doc),
-      offlineNow: splitStopped(offlineModules(doc), stoppedRooms()).off,
+      offlineNow: splitStopped(offlineModules(doc), stoppedRooms(), d.meta.last_day ?? '').off,
       boots: restarts(doc).map((b) => b.slice(0, 10)),
       waterSetup: setupDates(doc)
         .filter((s) => s.type === 'NMW')
@@ -61,7 +61,7 @@ function input(): QualityInput {
     stopped: stoppedRooms().map((x) => ({
       room: x.room,
       from: x.from,
-      text: `radiateur arrêté volontairement depuis le ${dayShort(x.from, true)}${x.label ? ` (${x.label})` : ''}`,
+      text: `${x.reason === 'retires' ? 'radiateurs retirés' : 'radiateur arrêté volontairement'} depuis le ${dayShort(x.from, true)}${x.label ? ` (${x.label})` : ''}`,
     })),
   };
 }

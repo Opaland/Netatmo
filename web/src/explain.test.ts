@@ -172,6 +172,22 @@ describe('a change of heating (a radiator switched off on purpose)', () => {
     expect(stepNote(e, mode)).toBe('radiateur arrêté depuis le 1er janv. 2026 (poêle) : chauffée par un poêle');
     expect(explainSentence(e)).toMatch(/le poêle \(Cuisine\) \(−101 kWh\)/);
   });
+
+  it('#440: radiators taken down: same split, said as a change of heating, never a saving', () => {
+    const i = input({ offline: true, cold: 2 });
+    const stop = { room: 'b', from: '2026-01-01', reason: 'retires' as const, label: '' };
+    const runs = applyStopped(i.runs, [stop]);
+    const linky = new Map([...i.linky].map(([d, v]) => [d, d >= '2026-01-01' ? v - 0.25 * (18 - i.weather!.get(d)![2]) * 1.5 : v]));
+    const e = explainMonth({ ...i, runs, linky, estimate: estimateOffline(i.records, runs, linky, i.weather) })!;
+    const mode = e.steps.find((x) => x.key === 'mode')!;
+    expect(mode.label).toBe('Changement de mode de chauffage (radiateurs retirés : Cuisine)');
+    expect(mode.kwh).toBeCloseTo(-0.25 * 13 * 31, 6);
+    expect(e.steps.find((x) => x.key === 'horsligne')).toBeUndefined();
+    expect(sumSteps(e)).toBeCloseTo(e.delta, 6);
+    expect(stepNote(e, mode)).toBe('radiateur arrêté depuis le 1er janv. 2026 (radiateurs retirés)');
+    expect(explainSentence(e)).toMatch(/le retrait des radiateurs \(Cuisine\) \(−101 kWh\)/);
+    expect(explainSentence(e)).not.toMatch(/économi/);
+  });
 });
 
 describe('on the demo: January 2026, the owner’s question', () => {

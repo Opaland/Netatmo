@@ -11,6 +11,7 @@ import { esc, lastDay, longDate, table } from '../ui';
 import { html } from '../trusted';
 import { devicesQualityHtml, f1, intuisContractLine, plural, roomLabel } from './devices-quality';
 import { stoppedRooms } from './offline-rooms';
+import { stoppedOn } from '../room-offline';
 import { alertHtml } from '../components';
 
 const stationName = (key: string) => ds!.station?.modules?.[key]?.name ?? key;
@@ -33,7 +34,7 @@ export function mountDevices(el: HTMLElement | null) {
   const parts: string[] = [];
   // #214
   // #346: a radiator switched off on purpose (⚙ Mon logement) is silent as expected, not « injoignable »
-  const { off, stopped } = splitStopped(offlineModules(doc), stoppedRooms());
+  const { off, stopped } = splitStopped(offlineModules(doc), stoppedRooms(), last);
   for (const m of stopped) {
     parts.push(
       `<p class="hint">${esc(typeLabel(m.type).charAt(0).toUpperCase() + typeLabel(m.type).slice(1))} arrêté volontairement : ${esc(roomLabel(m.room))}, depuis le ${esc(longDate(m.stop.from))}${
@@ -121,7 +122,8 @@ export function mountDevices(el: HTMLElement | null) {
     void loadRoomState(d).then((rs) => {
       const zone = document.getElementById('devices-rooms');
       if (!zone || ds !== d || !rs?.rooms) return;
-      const rows = roomStateHours(rs.rooms as never, addDays(last, -30), last).filter((r) => r.anticipating || r.lowering || r.offline);
+      const stopped = stoppedRooms();
+      const rows = roomStateHours(rs.rooms as never, addDays(last, -30), last, (room, day) => !!stoppedOn(stopped, room, day)).filter((r) => r.anticipating || r.lowering || r.offline);
       if (!rows.length) return;
       zone.innerHTML = html(
         `<h3>Anticipation et abaissement (30 jours)</h3>${table(

@@ -280,8 +280,9 @@ export function explainMonth(i: ExplainInput): Explanation | null {
 /** « Changement de mode de chauffage (poêle : Salon) », « … (Bureau arrêté) ». */
 function modeLabel(rooms: RoomPart[]): string {
   const stove = rooms.filter((r) => r.stopped!.reason === 'poele').map((r) => r.name);
-  const other = rooms.filter((r) => r.stopped!.reason !== 'poele').map((r) => r.name);
-  const parts = [stove.length ? `poêle : ${and(stove)}` : '', other.length ? `${and(other)} arrêté${other.length > 1 ? 's' : ''}` : ''].filter(Boolean);
+  const gone = rooms.filter((r) => r.stopped!.reason === 'retires').map((r) => r.name); // #440
+  const other = rooms.filter((r) => r.stopped!.reason !== 'poele' && r.stopped!.reason !== 'retires').map((r) => r.name);
+  const parts = [stove.length ? `poêle : ${and(stove)}` : '', gone.length ? `radiateurs retirés : ${and(gone)}` : '', other.length ? `${and(other)} arrêté${other.length > 1 ? 's' : ''}` : ''].filter(Boolean);
   return `${STEP_LABEL.mode} (${parts.join(', ')})`;
 }
 
@@ -323,7 +324,10 @@ function stepPhrase(e: Explanation, s: Step): string {
       return s.kwh > 0 ? 'des températures demandées plus hautes' : 'des températures demandées plus basses';
     case 'mode': {
       const stove = e.stopped.filter((x) => x.stop.reason === 'poele').map((x) => x.name);
-      return stove.length === e.stopped.length ? `le poêle (${and(stove)})` : `l’arrêt des radiateurs (${and(e.stopped.map((x) => x.name))})`;
+      if (stove.length === e.stopped.length) return `le poêle (${and(stove)})`;
+      // #440: radiators taken down, the room heated otherwise: a change of heating, not a saving
+      if (e.stopped.every((x) => x.stop.reason === 'retires')) return `le retrait des radiateurs (${and(e.stopped.map((x) => x.name))})`;
+      return `l’arrêt des radiateurs (${and(e.stopped.map((x) => x.name))})`;
     }
     case 'pieces': {
       const top = e.rooms.filter((r) => !r.offline && !r.stopped && Math.sign(r.rest) === Math.sign(s.kwh)).slice(0, 2);

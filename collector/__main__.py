@@ -168,6 +168,7 @@ def _devices(store: Store, syncer: Syncer, sources: Sources) -> tuple[list[str],
             payload,
             home.timezone,
             module_rooms(syncer.last_homesdata, home.water_heaters),
+            stopped=stopped_config(),  # #440: no alert for a room switched off on purpose
         )
     except (ApiError, FormatError, CallCapReached, httpx.HTTPError) as err:
         sources.error("appareils", err)

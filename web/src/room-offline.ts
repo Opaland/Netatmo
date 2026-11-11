@@ -32,15 +32,19 @@ export interface OfflineRun {
 }
 
 // ------------------------------------------------------------------ stopped on purpose
-export type StopReason = 'poele' | 'autre-chauffage' | 'inoccupee' | 'autre';
+// The keys are checked by the collector as well (collector/devices.py STOPPED_REASONS): one list,
+// held in agreement by tests/test_donnees_v15.py (AGENTS.md §5).
+export type StopReason = 'poele' | 'retires' | 'autre-chauffage' | 'inoccupee' | 'autre';
 export const STOP_REASONS: Record<StopReason, string> = {
   poele: 'Chauffée par un poêle (bois, granulés)',
+  // #440: the radiators were taken down; the room is heated otherwise (a stove…)
+  retires: 'Radiateurs retirés (chauffée autrement)',
   'autre-chauffage': 'Chauffée autrement (sans électricité)',
   inoccupee: 'Pièce inoccupée, non chauffée',
   autre: 'Autre raison',
 };
 /** In parentheses after « arrêté depuis le … ». */
-const STOP_SHORT: Record<StopReason, string> = { poele: 'poêle', 'autre-chauffage': 'autre chauffage', inoccupee: 'inoccupée', autre: '' };
+const STOP_SHORT: Record<StopReason, string> = { poele: 'poêle', retires: 'radiateurs retirés', 'autre-chauffage': 'autre chauffage', inoccupee: 'inoccupée', autre: '' };
 
 export interface StoppedRoom {
   room: string;
@@ -69,6 +73,18 @@ export const stoppedJson = (list: StoppedRoom[]) => JSON.stringify(parseStopped(
 
 /** « poêle », « inoccupée »… (empty for « autre »). */
 export const stopShort = (s: Pick<StoppedRoom, 'reason'>) => STOP_SHORT[s.reason] ?? '';
+
+/**
+ * #440: the one rule for the alerts of the modules of a room switched off on purpose, whatever the
+ * reason (poêle, radiateurs retirés…): from the declared day on, its modules raise nothing (not
+ * answering, firmware, offline hours); the days before keep their alerts. The declaration of the
+ * room on `day`, or undefined. Same rule in the collector (collector/devices.py stopped_on).
+ */
+export function stoppedOn<S extends { room: string; from: string }>(stopped: readonly S[] | undefined, room: string | undefined, day: string): S | undefined {
+  if (!room || !stopped) return undefined;
+  const s = stopped.find((x) => x.room === room);
+  return s && s.from <= day ? s : undefined;
+}
 
 /**
  * The runs with the rooms switched off on purpose: from the declared day on, a run is « arrêté »

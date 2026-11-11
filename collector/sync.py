@@ -322,7 +322,7 @@ class Syncer:
         self.store.update_coverage()
         return self.store.save(
             {"id": home.id, "name": home.name, "timezone": home.timezone},
-            [asdict(r) for r in home.rooms],
+            keep_gone_rooms(self.store, [asdict(r) for r in home.rooms]),
             meta_extra,
         )
 
@@ -360,3 +360,19 @@ def _month_days(month: str) -> list[str]:
         out.append(d.strftime("%Y-%m-%d"))
         d += timedelta(days=1)
     return out
+
+
+def keep_gone_rooms(store: Store, rooms: list[dict]) -> list[dict]:
+    """#440: the rooms of the meta, plus those Intuis no longer lists (radiators taken down and
+    dissociated in the Intuis app, room deleted) that still have days in the archive: their entry
+    of the previous meta is kept as it was (same id, name and category), so that their history
+    stays visible and comparable instead of losing its name. Nothing is requested for them (the
+    measure requests follow homesdata), and nothing of the archive is ever deleted here."""
+    ids = {r.get("id") for r in rooms}
+    with_data = {rid for y in store.years() for rid, days in store.year(y).items() if days}
+    gone = [
+        r
+        for r in store.meta.get("rooms") or []
+        if isinstance(r, dict) and r.get("id") not in ids and r.get("id") in with_data
+    ]
+    return [*rooms, *gone]
