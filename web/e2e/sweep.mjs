@@ -301,13 +301,16 @@ function pageChecks() {
       }
     }
     // #384, #397: an ordinary word broken in the middle without a hyphen (« Salo / n », « Maiso /
-    // n »): a column squeezed until overflow-wrap breaks it anywhere. Left aside: a hyphenation
-    // (hyphens: auto, lang="fr": the browser draws its hyphen), code and identifiers (« onError »)
-    // and a word wider than its whole card (a name made of data, #372: it must break somewhere).
+    // n »): a column squeezed until overflow-wrap breaks it anywhere. #434: with text at 100 %, a
+    // hyphenation is a broken word too (« Histo- / rique » in the tab bar, « utilise- / rait » in a
+    // title: FALC, design system § 5.7); with large text (from about 120 %) the browser may still
+    // hyphenate a long word (#397, style.css). Left aside: code and identifiers (« onError ») and a
+    // word wider than its whole card (a name made of data, #372: it must break somewhere).
+    const largeText = parseFloat(style(document.documentElement).fontSize) >= 19;
     let broken = 0;
     for (const n of new Set(boxes.map((b) => b.n))) {
       if (broken >= 3) break;
-      if (n.parentElement.closest('code, pre, kbd, samp') || style(n.parentElement).hyphens === 'auto') continue;
+      if (n.parentElement.closest('code, pre, kbd, samp') || (largeText && style(n.parentElement).hyphens === 'auto')) continue;
       for (const m of n.textContent.matchAll(/(?<![\p{L}\d_])\p{L}{2,12}(?![\p{L}\d_])/gu)) {
         if (/\p{Ll}\p{Lu}/u.test(m[0])) continue;
         range.setStart(n, m.index);
@@ -480,10 +483,11 @@ class Session {
     if (SOURCE === 'data') await openData(this.page, base, env.DATA_PASSPHRASE, hash);
     else if (this.run.asData) await openData(this.page, base, 'demo', hash); // fixtures: made-up data, passphrase « demo »
     else await openDemo(this.page, base, this.run.data, hash);
-    // text at 200 %, in a wide system font (DejaVu Sans, Linux's and the CI's): the worst case
-    // everywhere, so that a page that fits here fits on the CI runner too
-    if (DISPLAYS[this.display].big)
-      await this.page.addStyleTag({ content: 'html { font-size: 200% !important; } html, body, button, input, select, textarea { font-family: "DejaVu Sans", system-ui, sans-serif !important; }' });
+    // a wide system font (DejaVu Sans, Linux's and the CI's) on every display, and text at 200 %:
+    // the worst case everywhere, so that a page that fits here fits on the CI runner too (A6;
+    // #434: « Histo- / rique » in the tab bar was only seen in this font, at 100 %)
+    const font = 'html, body, button, input, select, textarea { font-family: "DejaVu Sans", system-ui, sans-serif !important; }';
+    await this.page.addStyleTag({ content: `${DISPLAYS[this.display].big ? 'html { font-size: 200% !important; } ' : ''}${font}` });
     await frames(this.page);
   }
   async close() {
@@ -830,6 +834,10 @@ async function selfTest(browser, run, display) {
       const narrow = Object.assign(document.createElement('p'), { textContent: 'Salon' });
       Object.assign(narrow.style, { width: '2ch', overflowWrap: 'anywhere' });
       view.append(narrow);
+      // #434: and a word that fits its card, hyphenated at the end of a narrow line (text at 100 %)
+      const hyphen = Object.assign(document.createElement('p'), { textContent: 'Historique', lang: 'fr' });
+      Object.assign(hyphen.style, { width: '6ch', hyphens: 'auto' });
+      view.append(hyphen);
       // #398: a chart whose axis wrote « 20 » for two values (as charts.ts notes it)
       const chart = document.createElement('div');
       chart.className = 'chart';
@@ -843,6 +851,7 @@ async function selfTest(browser, run, display) {
     const found = await s.page.evaluate(pageChecks);
     const kinds = found.map((f) => f.kind);
     const missing = ['texte-interdit', 'carte-vide', 'defilement-horizontal', 'textes-recouverts', 'texte-coupe', 'mot-coupe', 'etiquettes-axe-en-double', 'etiquettes-axe-recouvertes'].filter((k) => !kinds.includes(k));
+    if (kinds.filter((k) => k === 'mot-coupe').length < 2) missing.push('mot-coupe (césure par trait, #434)');
     if (found.some((f) => /recouver|coupe/.test(f.kind) && /secret|Salon/i.test(f.quiet ?? ''))) throw new Error('auto-contrôle : le diagnostic discret d’un texte recouvert ou coupé cite un contenu');
     if (missing.length) throw new Error(`auto-contrôle : invariants muets (${missing.join(', ')})`);
     const quiet = found.find((f) => f.kind === 'defilement-horizontal').quiet ?? '';
@@ -923,7 +932,7 @@ try {
     const browser = await chromium.launch();
     try {
       await selfTest(browser, runs[0], displays[0]);
-      console.log('Auto-contrôle : les invariants voient un « NaN », une carte vide, un débordement, deux textes l’un sur l’autre, un texte coupé par sa carte, un mot coupé en son milieu, un axe aux étiquettes en double et des noms d’axe l’un sur l’autre ; le diagnostic discret ne cite aucun contenu.');
+      console.log('Auto-contrôle : les invariants voient un « NaN », une carte vide, un débordement, deux textes l’un sur l’autre, un texte coupé par sa carte, un mot coupé en son milieu ou par un trait de césure, un axe aux étiquettes en double et des noms d’axe l’un sur l’autre ; le diagnostic discret ne cite aucun contenu.');
     } finally {
       await browser.close();
     }

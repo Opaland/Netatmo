@@ -268,8 +268,6 @@ html {
   font-size: min(var(--font-xs), 3.3vw);
   line-height: 1.15;
   overflow-wrap: anywhere;
-  /* #397: a label too wide for its tab (« Historique » in bold at 200 %) breaks between syllables */
-  hyphens: auto;
 }
 /* #389 (WCAG 1.4.4): five labels side by side only fit up to about 120 % of text on a phone
    (the min() above keeps them within the width until then, a 9 % shrink at most). Larger, the bar
@@ -294,9 +292,14 @@ html {
   width: 22px;
   height: 22px;
 }
+/* #434: on a phone, the current tab is shown by its icon pill and its colour, its label in the
+   regular weight, not bold (as in the simple view, #407): « Historique » in bold (DejaVu Sans,
+   70 px) does not fit its 67 px tab at 360 px and was hyphenated (« Histo- / rique »); in the
+   regular weight it holds (61 px; 54 px in a 59 px tab at 320 px). The labels are never
+   hyphenated: from about 120 % of text only the current one is shown, as wide as it needs (the
+   container query above). Bold with the tabs at the top (760 px), where they have room. */
 .tabs a[aria-current='page'] {
   color: var(--accent-text);
-  font-weight: 600;
 }
 .tabs a[aria-current='page'] .icon {
   background: var(--accent-soft);
@@ -328,6 +331,7 @@ html {
   }
   .tabs a[aria-current='page'] {
     background: var(--accent-soft);
+    font-weight: 600;
   }
   .tabs a[aria-current='page'] .icon {
     padding: 0;
@@ -933,16 +937,33 @@ details.fold[open] > summary {
 .card-head > * {
   min-width: 0;
 }
-/* #397: a word of a title wider than its whole card (« Consommation » at 200 %) breaks between
-   syllables, with its hyphen (lang="fr"), not anywhere; only long words (9 letters, 4 each side):
-   a short word goes whole to the next line. Names and labels keep their words (no hyphens). */
-.card-head h2,
-.page-title,
-.subhead h1,
-.verdict-title,
-.kpi h3 {
-  hyphens: auto;
-  hyphenate-limit-chars: 9 4 4;
+/* #434: hyphenation only with large text. With text at 100 %, a word is never cut at the end of a
+   line, not even with a hyphen (FALC, design system § 5.7): `hyphens: auto` cuts every long word
+   that falls at the end of a line, not only a word too wide for its box (« utilise- / rait » in a
+   title that had room for it). From about 120 % of text (a container under 17.5em: the 328 px of
+   the view on a 360 px phone from 117 %; never at 100 %, down to a 320 px phone, 288 px = 18em),
+   a word may no longer fit its line: a title (« Consommation » at
+   200 %, #397), a name in a list (#384) or a label beside a switch (« Bibliothèque », #397)
+   breaks between syllables, with its hyphen (lang="fr"), rather than anywhere. The view and the
+   sub-page title are the containers (nothing in them is position: fixed). */
+#view,
+.subhead {
+  container-type: inline-size;
+}
+@container (max-width: 17.5em) {
+  /* titles: only long words (9 letters, 4 each side), a short word goes whole to the next line */
+  .card-head h2,
+  .page-title,
+  .subhead h1,
+  .verdict-title,
+  .kpi h3 {
+    hyphens: auto;
+    hyphenate-limit-chars: 9 4 4;
+  }
+  .row .t,
+  .switch > span {
+    hyphens: auto;
+  }
 }
 .card-sub {
   margin: 0 0 var(--space-2);
@@ -2046,14 +2067,13 @@ code.hash {
 :is(a, button).row {
   cursor: pointer;
 }
-/* #384: a name breaks between syllables (lang="fr"), never in the middle of a short word
-   (« Salo / n »): the column of the name is not squeezed below its words (break-word, not
-   anywhere), the amount goes under it when the row is narrow (below). */
+/* #384: a name breaks between syllables (lang="fr", with large text only: #434, above), never in
+   the middle of a short word (« Salo / n »): the column of the name is not squeezed below its
+   words (break-word, not anywhere), the amount goes under it when the row is narrow (below). */
 .row .t {
   display: block;
   font-weight: 600;
   overflow-wrap: break-word;
-  hyphens: auto;
 }
 .row .s {
   display: block;
@@ -2097,10 +2117,10 @@ code.hash {
   min-height: var(--target-min);
   cursor: pointer;
 }
-/* #397: a long label beside the switch (« Bibliothèque » at 200 %) breaks between syllables */
+/* #397: a long label beside the switch (« Bibliothèque » at 200 %) breaks between syllables (with
+   large text only, #434: the container query of the titles) */
 .switch > span {
   min-width: 0;
-  hyphens: auto;
 }
 .switch input {
   appearance: none;

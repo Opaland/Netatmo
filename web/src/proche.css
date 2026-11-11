@@ -32,16 +32,13 @@ body.simple-nav .tabs a span {
   letter-spacing: -0.02em;
 }
 /* three wide tabs: the whole width goes to the labels (the current one is shown by its icon pill
-   and its colour, not by a wider bold text) */
+   and its colour, not by a wider bold text: style.css, #434, for every tab bar on a phone) */
 @media (max-width: 759px) {
   body.simple-nav .tabs {
     padding-inline: 0;
   }
   body.simple-nav .tabs a {
     padding-inline: 0;
-  }
-  body.simple-nav .tabs a[aria-current='page'] {
-    font-weight: 500;
   }
 }
 @media (min-width: 760px) {
