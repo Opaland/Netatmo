@@ -29,7 +29,7 @@ import {
 } from '../comfort';
 import { comboChart, cssVar, lineChart, seqRamp } from '../charts';
 import { type Station, loadStationHourly } from '../data';
-import { activeRooms, esc, lastDay, longDate, moduleColor, nf0, series, stationMapping, table, tableToggle, measureColor } from '../ui';
+import { activeRooms, esc, lastDay, longDate, moduleColor, nf0, stationMapping, table, tableToggle, measureColor, referenceColor } from '../ui';
 import { html } from '../trusted';
 import * as windows from './windows';
 import * as ha from './ha';
@@ -269,10 +269,12 @@ function drawCellar(st: Station, map: Map<string, string>) {
       labels: ds90.map(dayLabel),
       bars: [{ name: `Heures > ${HUMID_HOURS}\u00a0%`, color: seqRamp()[2], data: ds90.map((d) => hrs[d]?.humid ?? null) }],
       lines: [
-        { name: 'Température moyenne', color: series(3), data: ds90.map((d) => daily[d]?.[2] ?? null) },
+        { name: 'Température moyenne', color: measureColor(), data: ds90.map((d) => daily[d]?.[2] ?? null) },
         {
           name: 'Point de rosée',
-          color: series(6),
+          // #446: a threshold computed from the measure (condensation below it), not a room
+          color: referenceColor(),
+          dashed: true,
           data: ds90.map((d) => {
             const v = daily[d];
             const dp = v && v[3] !== null ? dewPoint(v[2], v[3]) : null;

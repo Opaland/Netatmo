@@ -179,14 +179,11 @@ export function accentData(files: Record<string, string>): string[] {
 /**
  * #435: the colours of the rooms (`--room-n`, `series()` of ui.ts) belong to the rooms: only ui.ts
  * hands them out (roomColor, moduleColor). Peak and off-peak hours have their own tokens
- * (`--tariff-*`, tariffColor). The other series that still take a room colour are listed here,
- * each with its literal, until #446 gives them their own; the list cannot grow stale.
+ * (`--tariff-*`, tariffColor); the other series take a series token (#446: a measure in
+ * `--series-measure`, an estimate or a reference in `--series-reference`). The only exception is
+ * the component gallery; the list cannot grow stale.
  */
 const ROOM_COLOUR_ALLOWED: { file: string; literal: string }[] = [
-  { file: 'views/comfort.ts', literal: "{ name: 'Température moyenne', color: series(3)" },
-  { file: 'views/comfort.ts', literal: 'color: series(6),' },
-  { file: 'views/reconstitution.ts', literal: "{ name: 'Reconstitué', color: series(0)" },
-  { file: 'views/breakdown.ts', literal: ': series(i + 2));' },
   // the component gallery shows a list of rooms (composants.html)
   { file: 'demo-composants.ts', literal: "{ title: 'Chambres'" },
   { file: 'demo-composants.ts', literal: "{ title: 'Salon'" },

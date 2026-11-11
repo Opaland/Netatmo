@@ -51,7 +51,8 @@
   --room-7: var(--cyan-9);
   --room-8: var(--red-11);
   /* tariffs (#435): heures pleines / creuses, never the colour of a room */
-  --tariff-peak: var(--slate-11);
+  /* #446: slate 11 b, ≥ 20 apart (ΔE*ab) from the sand 9 of --series-reference (slate 11: 18.5) */
+  --tariff-peak: var(--slate-11b);
   --tariff-offpeak: var(--indigo-11);
   /* sequential ramp (calendar, heat maps): light → dark. #409: in ink (warm grey), like a measure
      on its own (--series-measure), never in the iris of the accent, kept for actions */
@@ -275,7 +276,9 @@
     --room-6: var(--brown-d9);
     --room-7: var(--cyan-d9);
     --room-8: var(--red-d9);
-    --tariff-offpeak: var(--indigo-d12); /* #435: apart from the deeper water blue of high contrast */
+    /* #435: apart from the deeper water blue of high contrast; #446: indigo 12 b, ≥ 20 apart
+       (ΔE*ab) from the near white of --series-measure too (indigo 12: 17.5) */
+    --tariff-offpeak: var(--indigo-d12b);
     --state-good: var(--grass-d12);
     --state-warn: var(--amber-d12);
     --state-bad: var(--tomato-d12);
@@ -316,7 +319,9 @@
     --room-6: var(--brown-d9);
     --room-7: var(--cyan-d9);
     --room-8: var(--red-d9);
-    --tariff-offpeak: var(--indigo-d12); /* #435: apart from the deeper water blue of high contrast */
+    /* #435: apart from the deeper water blue of high contrast; #446: indigo 12 b, ≥ 20 apart
+       (ΔE*ab) from the near white of --series-measure too (indigo 12: 17.5) */
+    --tariff-offpeak: var(--indigo-d12b);
     --state-good: var(--grass-d12);
     --state-warn: var(--amber-d12);
     --state-bad: var(--tomato-d12);
