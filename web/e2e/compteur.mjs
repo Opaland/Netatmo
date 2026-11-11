@@ -130,6 +130,38 @@ try {
     await ctx.close();
   }
 
+  // #439: leaving a page while a chart is still painting. zrender paints a layer of « incremental »
+  // elements (ECharts 6.1 marks every heatmap cell so: « Par jour et par heure » of Journée type)
+  // in slices of 15 ms, the next one in a requestAnimationFrame that dispose() does not cancel; on
+  // a loaded CI runner a slice ran out, the page changed, and the next slice painted a disposed
+  // chart: « Cannot read properties of null (reading 'layerStack') ». Made certain here: a clock
+  // 20 ms later at every read, so each slice paints one cell and the heatmap is still painting
+  // when the page changes.
+  {
+    const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 }, serviceWorkers: 'block' });
+    const page = await ctx.newPage();
+    const before = errors.length;
+    page.on('pageerror', (e) => errors.push(`#439 : ${e.message}`));
+    page.on('console', (m) => m.type() === 'error' && errors.push(`#439 : ${m.text()}`));
+    progress('graphique quitté pendant qu’il se peint (#439)');
+    await openDemo(page);
+    await go(page, 'compteur');
+    await page.evaluate(() => {
+      let t = Date.now();
+      Date.now = () => (t += 20);
+    });
+    await page.evaluate(() => (location.hash = '#compteur-journee'));
+    await page.waitForSelector('#hour-grid canvas', { timeout: 30000 });
+    // the precondition: the heatmap paints on an incremental layer (a canvas of its own), unfinished
+    check((await page.locator('#hour-grid canvas').count()) > 1, '#439 : la carte de chaleur n’a pas de calque incrémental, le test ne prouve plus rien');
+    await go(page, 'compteur');
+    // the slice that was due runs in the next frames
+    await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(() => requestAnimationFrame(() => r())))));
+    await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(() => r()))));
+    check(errors.length === before, '#439 : erreur en quittant un graphique en cours de rendu');
+    await ctx.close();
+  }
+
   // 360 px phone, text at 200 %
   {
     const ctx = await browser.newContext({ viewport: { width: 360, height: 780 }, deviceScaleFactor: 1, hasTouch: true, serviceWorkers: 'block' });
