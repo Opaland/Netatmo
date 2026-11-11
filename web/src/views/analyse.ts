@@ -5,7 +5,7 @@ import { type DayRecord, addDays, bucketLabel, minusYears, seasonOf } from '../a
 import { anomalies, dayProfile, daysAbove, weekHourGrid } from '../analysis';
 import { type CiFit, MIN_DAYS, type SeasonSignatures, seasonSignatures, signatureDays } from '../indoorsig';
 import { datasetDoc, ds, rerender, setState, state } from '../app';
-import { calendarChart, cssVar, gridHeatmap, lineChart, scatterChart } from '../charts';
+import { calendarChart, gridHeatmap, lineChart, scatterChart } from '../charts';
 import { loadHourly, loadRoom30, loadRoomState } from '../data';
 import { lazyCard } from '../lazy';
 import { unavailable } from '../offline';
@@ -225,7 +225,8 @@ export function renderAnalyse(view: HTMLElement, records: DayRecord[], part: Ana
       labels: days.map((d) => bucketLabel(d, 'day')),
       series: [
         { name: TEMP.measured, color: measureColor(), data: days.map((d) => t.get(d)?.[0] ?? null) },
-        { name: TEMP.setpointShort, color: cssVar('--accent'), data: days.map((d) => t.get(d)?.[1] ?? null) },
+        // decision of the owner (v1.7): the setpoint is a reference, dashed (the outdoor line, same ink, is solid)
+        { name: TEMP.setpointShort, color: referenceColor(), data: days.map((d) => t.get(d)?.[1] ?? null), dashed: true },
         ...(ds!.weather ? [{ name: TEMP.outdoor, color: referenceColor(), data: days.map((d) => ds!.weather!.get(d)?.[2] ?? null) }] : []),
       ],
       price: null,

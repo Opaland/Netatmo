@@ -27,6 +27,9 @@ le propriétaire.**
     en 4 écrans à 360 px, mesuré à 360 × 800 en DejaVu Sans ; la ligne « électricité + bois »
     d'« Hiver contre hiver » est repliée sous son écart, écrit en couleur de texte normale
     (#426, #432 ; décision du propriétaire).
+  - Lignes de consigne (« Température demandée ») en `--series-reference`, en tirets, et non plus en
+    iris : l'iris est réservé aux actions, sans exception dans `design-usage.test.ts` (décision du
+    propriétaire ; la rampe d'encre des cartes de chaleur ne change pas).
   - État des données : une ligne par source en tête (« complet depuis 2022 », « muet depuis
     4 jours »), le détail replié, plus de formulaire dans la page, un seul bilan (13 → 3,3 écrans à
     360 px) (#387, #419).
