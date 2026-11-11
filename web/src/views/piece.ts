@@ -240,7 +240,7 @@ export function renderPiece(view: HTMLElement, id: string) {
       <p class="card-sub">Moyenne par jour, °C.</p>
       ${legend([
         { label: `Mesurée (${sourceLabel(m.source)})`, color: '--series-measure' },
-        { label: TEMP.setpointShort, color: '--accent', kind: 'line' },
+        { label: TEMP.setpointShort, color: '--series-reference', kind: 'line' }, // decision of the owner (v1.7): a reference, not an action
         { label: `Jour sous ${fmt1(thr)}\u00a0°C`, color: '--state-warn' },
       ])}
       <div class="chart" id="piece-temp-chart" role="img" aria-label="${esc(room.name)} : température mesurée et ${esc(TEMP.setpoint)}, par jour"></div>
@@ -437,7 +437,7 @@ function drawTemp(el: HTMLElement, name: string, m: ReturnType<typeof measured>,
     labels,
     series: [
       { name: `Mesurée (${sourceLabel(m.source)})`, color: cssVar('--series-measure'), data: meas },
-      { name: 'Demandée (consigne)', color: cssVar('--accent'), data: req },
+      { name: 'Demandée (consigne)', color: cssVar('--series-reference'), data: req, dashed: true },
     ],
     price: null,
     unit: '°C',

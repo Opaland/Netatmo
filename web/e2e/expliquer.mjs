@@ -177,6 +177,18 @@ try {
       const fold = page.locator('#wood-seasons');
       const headline = (await fold.count()) ? await fold.locator('summary').innerText() : '';
       check(/^Électricité \+ bois : [−+]\d+\s% en énergie, [−+]\d+\s% en euros$/.test(headline), `${name} : hiver contre hiver, l'écart électricité + bois absent du titre replié (« ${headline} »)`);
+      // #432 (decision of the owner): its headline in the text colour, not muted
+      const [head, text] = (await fold.count())
+        ? await fold.locator('summary').evaluate((s) => {
+            const probe = document.createElement('span');
+            probe.style.color = 'var(--text)';
+            s.parentElement.append(probe);
+            const out = [getComputedStyle(s).color, getComputedStyle(probe).color];
+            probe.remove();
+            return out;
+          })
+        : ['', '?'];
+      check(head === text, `${name} : hiver contre hiver, le titre replié n'est pas en couleur de texte (${head} au lieu de ${text})`);
       if (await fold.count()) await fold.locator('summary').click();
       const seasons = (await fold.count()) ? await fold.innerText() : '';
       check(/2025–2026 : ≈ [\d\s ]+\skWh dont [\d\s ]+\skWh de bois, ≈ [\d\s ]+\s€/.test(seasons) && /en énergie, [−+]\d+\s% en euros/.test(seasons), `${name} : hiver contre hiver sans le bois (« ${seasons.slice(0, 200)} »)`);

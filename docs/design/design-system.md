@@ -86,7 +86,9 @@ contrôler au validateur de contraste lors de S-7.18).
 | `--focus` | iris 8 + anneau 3 px | iris 8 | contour de focus |
 
 **Accent iris (bleu-violet)** à la place de l'orange brûlé : l'orange est réservé au chauffage et le
-bleu à l'eau chaude (constat C1 de l'audit) ; l'iris ne se confond avec aucun usage ni état.
+bleu à l'eau chaude (constat C1 de l'audit) ; l'iris ne se confond avec aucun usage ni état. Il est
+réservé aux actions et à la sélection : aucune donnée en iris, consignes comprises (#409, décision
+du propriétaire en clôture de v1.7 ; `design-usage.test.ts`, sans exception).
 
 ### 3.2 Couleurs de données (un sens = une couleur)
 
@@ -97,7 +99,7 @@ bleu à l'eau chaude (constat C1 de l'audit) ; l'iris ne se confond avec aucun u
 | `--usage-other` | sand 8 `#bcbbb5` | autres usages |
 | `--usage-standby` | sand 10 `#82827c` + hachures | veille |
 | `--series-measure` | sand 12 (trait) | une mesure isolée (puissance, température mesurée) ; aussi : Air et confort › cave, « Température moyenne » ; Compteur › Autres usages en détail, chaque appareil, mesuré par une prise ou saisi (#446) |
-| `--series-reference` | sand 9, pointillé | référence (puissance souscrite, signature, attendu) ; aussi : Air et confort › cave, « Point de rosée » (pointillé) ; Reconstitution, « Reconstitué » (empilé sur « Mesuré ») (#446) |
+| `--series-reference` | sand 9, pointillé | référence (puissance souscrite, signature, attendu) ; **consigne** (« Température demandée », en tirets : page Pièce, températures d'une pièce ; décision du propriétaire en clôture de v1.7 : la dernière donnée en iris) ; aussi : Air et confort › cave, « Point de rosée » (pointillé) ; Reconstitution, « Reconstitué » (empilé sur « Mesuré ») (#446) |
 | `--year-0` … `--year-3` | iris 9, iris 7, sand 9, sand 7 | **années** : la plus récente en iris plein, puis éclaircies ; jamais orange ni bleu |
 | `--room-1` … `--room-8` | sarcelle, cramoisi, jaune, prune, herbe, brun, cyan, rouge (Radix), **sans** orange, bleu ni iris ; deux pièces à ΔE*ab ≥ 20 entre elles et des usages, dans chaque thème (#399, `tokens.test.ts`) | pièces, une couleur fixe par pièce (`roomColor`) ; un module de la station prend celle de sa pièce (`moduleColor`), l'extérieur `--series-reference` pointillé |
 | `--tariff-peak` / `--tariff-offpeak` | slate 11 b `#52565e` (gris bleuté, un cinquième du chemin vers slate 12) / indigo 11 (bleu nuit) ; sombre : slate 11 / indigo 11 sombres ; contraste élevé : indigo 12 pour les heures creuses (#435), en sombre indigo 12 b `#cbd7ff` (un cinquième du chemin vers indigo 11) ; à ΔE*ab ≥ 20 des pièces, des usages, des encres de série (#446) et entre eux, heures creuses ≥ 3:1 sur le fond d'un planning (`tokens.test.ts`) | **heures pleines / creuses** : Compteur › Heures pleines / creuses (barre de parts, graphique), hachures « Heures creuses » des plannings (page Pièce, Outils › Mes plannings) ; couleur par sens du tarif (`tariffColor`), jamais une couleur de pièce (`design-usage.test.ts`) |
