@@ -31,6 +31,7 @@ import { costOf, esc, lastDay } from '../ui';
 import { offlineNow } from './offline-rooms';
 import { meanTemp } from './pinned';
 import { homeScope, yoy } from './verdict-scope';
+import { verdictWood } from './wood-state';
 import '../proche.css';
 
 const fmtTemp = new Intl.NumberFormat('fr-FR', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
@@ -50,11 +51,12 @@ export function simpleExit(): string {
  * d'habitude » (writtenGap), the same change on last year as the month tile (yoy).
  */
 function verdictCard(from: string, to: string): string {
-  const sc = homeScope(wholeHome(), from, to);
+  // #433: with the stove's wood, as the Accueil counts it with nothing narrowed
+  const sc = homeScope(wholeHome(), from, to, verdictWood('all', null));
   const v = sc.v;
   if (!v || !sc.m) return '';
   const eur = sc.m.unit === '€' ? writtenGap(sc.m) : null;
-  const sentences = verdictSentences({ ...v, eur }, from, '{kwh}');
+  const sentences = verdictSentences({ ...v, eur, wood: sc.wood }, from, '{kwh}');
   // the euros say it all; without prices, the two figures in kWh
   const shown = eur !== null && Math.round(Math.abs(eur)) >= 1 ? [sentences[sentences.length - 1]] : sentences.slice(0, 2);
   const mark = { low: '▼', normal: '=', high: '▲' }[v.level];

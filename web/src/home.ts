@@ -4,9 +4,10 @@
 // period, the rooms that counted and the monthly series of the chart (with the outdoor
 // temperature). The view (views/home.ts) only lays them out.
 import { type DayRecord, addDays, bucketKeys, minusYears, pctChange } from './aggregate';
-import type { Verdict, Weather } from './analysis';
+import { type Verdict, type Weather, verdict } from './analysis';
 import { MONTHS_LONG, MONTHS_SHORT, PERIOD, dayShort, seasonLabel, signedPct, withUnit } from './glossary';
 import { daysBetween } from './periods';
+import { woodIn, woodRecords } from './wood';
 
 export type HomePeriod = 'month' | 'season' | '12m' | 'year';
 /** The segmented control of Accueil, in its order (the swipe on the header follows it). */
@@ -129,6 +130,41 @@ export function moneyVerdict(v: Verdict, cost: number | null): MoneyVerdict {
   return { level: v.level, gap: (v.actual - v.expected) * price, unit: '€', actual: cost!, expected: v.expected * price, kwh: v.actual, pct: v.pct, climate: v.climate };
 }
 
+/** #433: the verdict of a scope, with the stove's wood when it counts. */
+export interface HeatVerdict {
+  v: Verdict | null;
+  m: MoneyVerdict | null;
+  /** The wood counted over [from, to] (null: not counted). */
+  wood: { kwh: number; eur: number } | null;
+  /** The records the verdict counted: the electricity, and the wood as day records. */
+  records: DayRecord[];
+}
+
+/**
+ * #433 (decision of the owner, option A): with a stove declared and wood bought, the verdict
+ * compares the heating electricity + wood of the period to the one expected: the wood of each day
+ * (`daily`, woodDaily: the degree-day split of « Hiver contre hiver » and « Expliquer un mois »)
+ * is added to the electricity of that day, this year and in the reference years, so the heat moved
+ * to the stove no longer reads as a saving. Euros: the electricity's cost (`cost`, null without
+ * prices) plus the price of the wood; the expected kWh at the price paid for both. Without `daily`,
+ * the verdict of the electricity alone, unchanged.
+ */
+export function heatVerdict(
+  records: DayRecord[],
+  from: string,
+  to: string,
+  weather: Weather | null,
+  cost: number | null,
+  daily: Map<string, [number, number]> | null,
+): HeatVerdict {
+  const first = records.reduce((a, r) => (!a || r.day < a ? r.day : a), '');
+  const wood = daily ? woodIn(daily, from, to) : null;
+  const counted = daily ? [...records, ...woodRecords(daily, first)] : records;
+  const v = verdict(counted, from, to, weather, first);
+  const m = v ? moneyVerdict(v, cost === null ? null : cost + (wood?.eur ?? 0)) : null;
+  return { v, m, wood, records: counted };
+}
+
 const nf0 = new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 0 });
 const amount = (v: number, unit: '€' | 'kWh') => withUnit(nf0.format(Math.round(Math.abs(v))), unit);
 
@@ -151,13 +187,16 @@ const andList = (a: string[]) => (a.length < 2 ? (a[0] ?? '') : `${a.slice(0, -1
 /** #383: the scope of the verdict when rooms are left out: « hors Chambre enfant, hors ligne ». */
 export const leftOut = (left: string[]) => (left.length ? `hors ${andList(left)}, hors ligne` : '');
 
+/** #433: what the verdict counts when the stove's wood is in it, after the amount (« 26 € d’électricité + bois »). */
+export const WOOD_WORDS = 'd’électricité + bois';
+
 export interface VerdictWords {
   headline: string;
   /** « 24 € » (in bold on screen). */
   spent: string;
   /** « (130 kWh) dépensés hors Chambre enfant, hors ligne, en novembre (au 8) ». */
   spentRest: string;
-  /** « (130 kWh) dépensés » (the screen inserts the scope, with its alert, before the period). */
+  /** « (130 kWh) dépensés », « d’électricité + bois (175 kWh) » (the screen inserts the scope, with its alert, before the period). */
   spentVerb: string;
   /** « 29 € ». */
   expectedAmount: string;
@@ -170,9 +209,10 @@ export interface VerdictWords {
  * one scope, whose rooms left out are named (`left`). No other figure may enter: the spent
  * amount taken over all the rooms gave « 5 € de moins » over « 26 € pour 29 € (−16 %) ».
  */
-export function verdictWords(m: MoneyVerdict, left: string[], phrase: string, ref: string): VerdictWords {
+export function verdictWords(m: MoneyVerdict, left: string[], phrase: string, ref: string, wood = false): VerdictWords {
   const out = leftOut(left);
-  const verb = m.unit === '€' ? `(${amount(m.kwh, 'kWh')}) dépensés` : 'consommés';
+  // #433: with the stove's wood, the spent amount says what it adds up (#311: no extra word, the screen holds in three)
+  const verb = wood ? `${WOOD_WORDS}${m.unit === '€' ? ` (${amount(m.kwh, 'kWh')})` : ''}` : m.unit === '€' ? `(${amount(m.kwh, 'kWh')}) dépensés` : 'consommés';
   return {
     headline: verdictHeadline(m),
     spent: amount(m.actual, m.unit),

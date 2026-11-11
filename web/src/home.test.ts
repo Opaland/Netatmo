@@ -22,9 +22,12 @@ import {
   periodPhrase,
   restOfPeriod,
   scopeTitle,
+  WOOD_WORDS,
+  heatVerdict,
   verdictHeadline,
   verdictWords,
 } from './home';
+import { WOOD_ROOM, parseWood, woodDaily, woodIn } from './wood';
 
 const LAST = '2026-11-08';
 const rec = (day: string, kwh: number, cat: DayRecord['cat'] = 'heating', room = 'r'): DayRecord => ({ day, kwh, cat, room }) as DayRecord;
@@ -215,5 +218,61 @@ describe('verdict words: one scope, figures that add up (#383)', () => {
   it('several rooms left out are listed « A, B et C »', () => {
     expect(leftOut(['A', 'B', 'C'])).toBe('hors A, B et C, hors ligne');
     expect(leftOut([])).toBe('');
+  });
+});
+
+// #433 (decision of the owner, option A): with the stove of the demo (Cuisine switched off for it
+// on 14 Oct. 2025, three fictitious purchases), the verdict compares the heating electricity +
+// wood to the one expected: the heat moved to the stove no longer reads as a saving.
+describe('verdict over electricity + wood (#433)', () => {
+  const PRICE = 0.1952;
+  let ds: Dataset;
+  let daily: Map<string, [number, number]>;
+  let records: DayRecord[];
+  const r = homeRange('month', LAST);
+  beforeAll(async () => {
+    ds = await demoDataset();
+    daily = woodDaily(parseWood((ds.meta as { wood?: unknown }).wood), ds.weather, LAST);
+    const runs = applyStopped(offlineRuns(ds.records, ds.meta.rooms, LAST), parseStopped((ds.meta as { stopped_rooms?: unknown }).stopped_rooms));
+    const left = notComparable(runs, r.from, r.to);
+    records = ds.records.filter((x) => x.cat !== 'ignore' && !left.has(x.room));
+  });
+  const cost = () => records.reduce((s, x) => s + (x.day >= r.from && x.day <= r.to ? x.kwh : 0), 0) * PRICE;
+
+  it('without wood: the verdict of the electricity alone, unchanged', () => {
+    const h = heatVerdict(records, r.from, r.to, ds.weather, cost(), null);
+    expect(h.v).toEqual(verdict(records, r.from, r.to, ds.weather));
+    expect(h.m).toEqual(moneyVerdict(h.v!, cost()));
+    expect(h.wood).toBeNull();
+    expect(h.records).toBe(records);
+  });
+  it('the demo month: spent = electricity + wood, the wood of the reference years in the expected', () => {
+    const elec = heatVerdict(records, r.from, r.to, ds.weather, cost(), null);
+    const h = heatVerdict(records, r.from, r.to, ds.weather, cost(), daily);
+    const wood = woodIn(daily, r.from, r.to);
+    expect(wood.kwh).toBeGreaterThan(1);
+    expect(h.wood).toEqual(wood);
+    expect(h.v!.actual).toBeCloseTo(elec.v!.actual + wood.kwh, 6);
+    expect(h.m!.actual).toBeCloseTo(cost() + wood.eur, 6);
+    // November 2025 was already heated by the stove: its wood is in the expected too
+    expect(h.v!.expected).toBeGreaterThan(elec.v!.expected);
+    // the electricity alone reads as « 5 € de moins »; with the wood, as usual (the stove moved the heat)
+    expect(elec.m!.level).toBe('low');
+    expect(h.m!.level).toBe('normal');
+    expect(Math.abs(h.v!.pct)).toBeLessThan(Math.abs(elec.v!.pct));
+    // the wood as day records of heating, never before the first day of the electricity
+    const first = records.reduce((a, x) => (!a || x.day < a ? x.day : a), '');
+    const w = h.records.filter((x) => x.room === WOOD_ROOM);
+    expect(w.length).toBeGreaterThan(0);
+    expect(w.every((x) => x.cat === 'heating' && x.day >= first)).toBe(true);
+  });
+  it('the sentence says « électricité + bois », the electricity alone keeps its words', () => {
+    const h = heatVerdict(records, r.from, r.to, ds.weather, cost(), daily);
+    const w = verdictWords(h.m!, [], 'en novembre (au 8)', 'à météo comparable', true);
+    expect(WOOD_WORDS).toBe('d’électricité + bois');
+    expect(w.spentRest).toMatch(/^d’électricité \+ bois \(\d+\skWh\) en novembre \(au 8\)$/);
+    expect(verdictWords(h.m!, [], 'en novembre (au 8)', 'à météo comparable').spentRest).toMatch(/^\(\d+\skWh\) dépensés en novembre/);
+    const kwhOnly = verdictWords(moneyVerdict(h.v!, null), [], 'en novembre (au 8)', 'à météo comparable', true);
+    expect(kwhOnly.spentVerb).toBe(WOOD_WORDS);
   });
 });
