@@ -135,3 +135,15 @@ quand un outil la rend impossible à refaire.
   temps ou d'ordre qui l'ouvre, puis **forcer cette condition** dans le test (horloge, ordre des
   événements) plutôt que répéter sous charge ; le test doit vérifier sa propre précondition (ici,
   le calque incrémental existe).
+
+### A14 · 11/11/2026 — Le balayage ne voyait ni la vue Proche à 200 %, ni le texte des canvas (#451)
+
+- **Ce qui s'est passé** : la CI balayait la vue Proche à 360 px seulement ; à 200 %, où son texte
+  courant passe à 40 px, le Rapport débordait de 33 px et un titre passait sous le plancher de
+  `--font-xs`, vus par hasard par un balayage complet lancé à la main. Et aucune vue, à 200 %, ne
+  pouvait signaler une légende de graphique coupée : le canvas n'a pas de texte à lire (cinq
+  graphiques d'Air et confort, la signature de l'Historique).
+- **Conduite** : un mode d'affichage qui change la taille du texte (vue Proche, 200 %) est balayé
+  dans ce mode-là en CI (`SWEEP_SCOPE=ci`, `e2e/sweep.mjs`) ; ce qu'un graphique dessine se
+  mesure sur ce que zrender a posé et se note sur l'élément (`data-legend-cut`, comme
+  `data-axis-overlap-y`), pour que le balayage le lise.
