@@ -331,7 +331,7 @@ function nowCard(
       })}${legend([
         { label: `Confort ${fmt1(sched.comfort)}\u00a0°C`, color: '--usage-heating' },
         { label: `Économie ${fmt1(sched.eco)}\u00a0°C`, color: '--usage-other' },
-        ...(off.length ? [{ label: 'Heures creuses', color: '--accent-text', kind: 'hatch' as const }] : []),
+        ...(off.length ? [{ label: 'Heures creuses', color: '--tariff-offpeak', kind: 'hatch' as const }] : []),
       ])}<p class="hint muted">Lu dans les températures demandées de la journée, demi-heure par demi-heure.</p>`;
     }
   } else {
