@@ -940,18 +940,17 @@ details.fold[open] > summary {
 /* #434: hyphenation only with large text. With text at 100 %, a word is never cut at the end of a
    line, not even with a hyphen (FALC, design system § 5.7): `hyphens: auto` cuts every long word
    that falls at the end of a line, not only a word too wide for its box (« utilise- / rait » in a
-   title that had room for it). From about 120 % of text (a container under 17.5em: the 328 px of
-   the view on a 360 px phone from 117 %; never at 100 %, down to a 320 px phone, 288 px = 18em),
-   a word may no longer fit its line: a title (« Consommation » at
-   200 %, #397), a name in a list (#384) or a label beside a switch (« Bibliothèque », #397)
-   breaks between syllables, with its hyphen (lang="fr"), rather than anywhere. The view and the
-   sub-page title are the containers (nothing in them is position: fixed). */
+   title that had room for it). From about 120 % of text (a container under 17.5rem, the text size
+   of the system: the 328 px of the view on a 360 px phone from 117 %; never at 100 %, down to a
+   320 px phone, 288 px), a word of a title may no longer fit its line (« Consommation » at 200 %,
+   #397): it breaks between syllables, with its hyphen (lang="fr"), rather than anywhere. The view
+   and the sub-page title are the containers (nothing in them is position: fixed). */
 #view,
 .subhead {
   container-type: inline-size;
 }
-@container (max-width: 17.5em) {
-  /* titles: only long words (9 letters, 4 each side), a short word goes whole to the next line */
+@container (max-width: 17.5rem) {
+  /* only long words (9 letters, 4 each side): a short word goes whole to the next line */
   .card-head h2,
   .page-title,
   .subhead h1,
@@ -960,6 +959,11 @@ details.fold[open] > summary {
     hyphens: auto;
     hyphenate-limit-chars: 9 4 4;
   }
+}
+/* A name in a list (#384) and a label beside a switch (« Bibliothèque », #397) sit in a narrower
+   column: they are hyphenated when the text of their container is large (17.5em: from about 120 %
+   of text, and in the simple view, whose text is 125 % of the system's: #442 tracks it, FALC). */
+@container (max-width: 17.5em) {
   .row .t,
   .switch > span {
     hyphens: auto;

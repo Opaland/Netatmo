@@ -304,9 +304,10 @@ function pageChecks() {
     // n »): a column squeezed until overflow-wrap breaks it anywhere. #434: with text at 100 %, a
     // hyphenation is a broken word too (« Histo- / rique » in the tab bar, « utilise- / rait » in a
     // title: FALC, design system § 5.7); with large text (from about 120 %) the browser may still
-    // hyphenate a long word (#397, style.css). Left aside: code and identifiers (« onError ») and a
-    // word wider than its whole card (a name made of data, #372: it must break somewhere).
-    const largeText = parseFloat(style(document.documentElement).fontSize) >= 19;
+    // hyphenate a long word (#397, style.css), and the simple view still does in its list names and
+    // switch labels (#442: to be removed with it). Left aside: code and identifiers (« onError »)
+    // and a word wider than its whole card (a name made of data, #372: it must break somewhere).
+    const largeText = parseFloat(style(document.documentElement).fontSize) >= 19 || document.body.classList.contains('simple-nav');
     let broken = 0;
     for (const n of new Set(boxes.map((b) => b.n))) {
       if (broken >= 3) break;
