@@ -70,8 +70,14 @@ le propriétaire.**
   sa pièce (#436) ; « règle ADR-5 » retirée de ⚙ Sources (#437) ; plus de
   bandeau « Nouvelle version disponible » à la première visite quand le premier service worker prend
   la page avant son événement « installé » (vu en WebKit sur la CI).
-- **Reste ouvert** (raison dans chaque issue) : verdict de l'Accueil en électricité seule avec un
-  poêle (#433, bloquant) ; césure à 360 px (#434) et couleurs des heures pleines / creuses (#435),
+- **Verdict de l'Accueil en électricité + bois** (#433, décision du propriétaire, option A) : avec un
+  poêle déclaré et des achats de bois, le verdict, sa jauge, la tuile du mois et la vue Proche comparent le chauffage
+  électricité + bois à celui attendu (« 27 € d’électricité + bois (160 kWh) … pour 27 € attendus »
+  sur la démo, au lieu de « 5 € de moins » en électricité seule) ; le bois de chaque jour vient de la
+  même répartition par degrés-jours qu'« Hiver contre hiver » et « Expliquer un mois », compté
+  aussi dans les années de référence. Une pièce aux radiateurs retirés compte comme chauffée par le
+  poêle quand des achats de bois existent (#440, `stoveHeated`).
+- **Reste ouvert** (raison dans chaque issue) : césure à 360 px (#434) et couleurs des heures pleines / creuses (#435),
   en v1.8 ; volets (#200) en attente du NAS ; plan de la maison (#202) et pince (#281) à sortir du
   jalon.
 

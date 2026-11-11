@@ -364,7 +364,11 @@ try {
     check(h <= 3 * screenH, `#311 : l'Accueil fait ${h} px, plus de 3 écrans (${3 * screenH} px)`);
     const tiles = await page.locator('.home-tiles').innerText();
     check(/vs nov\. \d{4} au \d+/.test(tiles) && /vs attendu à météo comparable/.test(tiles), `#302 : tuile du mois sans ses deux références nommées (« ${tiles.replace(/\s+/g, ' ').slice(0, 200)} »)`);
-    check(/attendus à météo comparable/.test(await page.locator('.verdict').innerText()), '#302 : verdict sans sa référence');
+    const verdictText = await page.locator('.verdict').innerText();
+    check(/attendus à météo comparable/.test(verdictText), '#302 : verdict sans sa référence');
+    // #433: the demo's Cuisine is heated by a stove, with three fictitious purchases: the verdict
+    // compares the heating electricity + wood, and says so
+    check(/\d\s€ d’électricité \+ bois \(\d+\skWh\)/.test(verdictText), `#433 : verdict sans « électricité + bois » (« ${verdictText.replace(/\s+/g, ' ').slice(0, 160)} »)`);
     check(!/N-1/.test(await page.locator('#view').innerText()), '#302 : « N-1 » encore affiché');
     for (const [p, want] of [['season', /^Saison de chauffe/], ['12m', /^12 derniers mois/], ['year', /^Année \d{4}/], ['month', /^[A-Z][a-zéû]+ \d{4}, du 1er au/]]) {
       await page.click(`.periodbar [data-value="${p}"]`);
