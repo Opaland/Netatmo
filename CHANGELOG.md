@@ -25,7 +25,8 @@ le propriétaire.**
     une période et « Compté : » sous chaque carte, dates locales, couleurs de l'année dans la
     légende, « An » seulement sur des années entières (#299, #300, #301, #306, #420). L'onglet tient
     en 4 écrans à 360 px, mesuré à 360 × 800 en DejaVu Sans ; la ligne « électricité + bois »
-    d'« Hiver contre hiver » est repliée sous son écart (#426, #432).
+    d'« Hiver contre hiver » est repliée sous son écart, écrit en couleur de texte normale
+    (#426, #432 ; décision du propriétaire).
   - État des données : une ligne par source en tête (« complet depuis 2022 », « muet depuis
     4 jours »), le détail replié, plus de formulaire dans la page, un seul bilan (13 → 3,3 écrans à
     360 px) (#387, #419).
