@@ -70,7 +70,7 @@ le propriétaire.**
   bandeau « Nouvelle version disponible » à la première visite quand le premier service worker prend
   la page avant son événement « installé » (vu en WebKit sur la CI).
 - **Verdict de l'Accueil en électricité + bois** (#433, décision du propriétaire, option A) : avec un
-  poêle déclaré et des achats de bois, le verdict, sa jauge et la tuile du mois comparent le chauffage
+  poêle déclaré et des achats de bois, le verdict, sa jauge, la tuile du mois et la vue Proche comparent le chauffage
   électricité + bois à celui attendu (« 27 € d’électricité + bois (160 kWh) … pour 27 € attendus »
   sur la démo, au lieu de « 5 € de moins » en électricité seule) ; le bois de chaque jour vient de la
   même répartition par degrés-jours qu'« Hiver contre hiver » et « Expliquer un mois », compté

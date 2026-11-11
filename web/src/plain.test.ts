@@ -125,3 +125,13 @@ describe('figures shared with the Accueil (#400)', () => {
     for (const n of sentenceLengths(s)) expect(n).toBeLessThanOrEqual(15);
   });
 });
+
+// #433: the vue Proche counts the stove's wood as the Accueil does, and says so
+describe('verdict sentences with the stove’s wood (#433)', () => {
+  it('names the wood in the amount and in the euros', () => {
+    const s = verdictSentences({ level: 'normal', actual: 160, expected: 158, climate: true, eur: 2, wood: true }, '2026-11-01');
+    expect(s[0]).toBe("Depuis le 1er novembre : 160\u00a0kWh d'électricité et de bois.");
+    expect(s.at(-1)).toMatch(/^Cela fait environ 2\s€ de plus, bois compris\.$/);
+    expect(verdictSentences({ level: 'normal', actual: 160, expected: 158, climate: true, eur: 2 }, '2026-11-01')[0]).toMatch(/consommés\.$/);
+  });
+});
