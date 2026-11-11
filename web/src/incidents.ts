@@ -14,6 +14,7 @@ import { plural } from './glossary';
 import type { CutKind } from './periods';
 export type { CutKind };
 import { type DevicesDoc, LOW_BATTERY, type StationHealth, typeLabel } from './devices';
+import { stoppedOn } from './room-offline';
 
 export type IncidentKind = 'power' | 'internet' | 'module' | 'station' | 'battery' | 'collect';
 
@@ -114,9 +115,8 @@ export function incidents(input: IncidentInput): Incident[] {
   for (const [key, days] of Object.entries(doc.reach ?? {})) {
     const m = doc.modules?.[key];
     if (m?.type === 'NMG' || /^m\d+$/.test(key)) continue;
-    const stop = input.stopped?.find((s) => s.room === m?.room);
     const sorted = Object.keys(days).sort();
-    for (const [a, b] of dayRuns(days, (v, d) => v === 0 && !(stop && d >= stop.from))) {
+    for (const [a, b] of dayRuns(days, (v, d) => v === 0 && !stoppedOn(input.stopped, m?.room, d))) {
       const name = roomName(m?.room);
       const what = typeLabel(m?.type);
       out.push({

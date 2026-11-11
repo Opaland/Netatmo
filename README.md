@@ -318,6 +318,15 @@ degrés-jours, et compte électricité **et** bois dans le coût du chauffage (A
 « Expliquer un mois »). Enregistré pour le foyer dans la variable du dépôt `WOOD_JSON`, recopiée
 chiffrée par la collecte ; le journal public n'en dit rien.
 
+**Radiateur arrêté ou retiré.** Une pièce chauffée autrement dont les radiateurs sont coupés ou
+démontés se déclare dans ⚙ Paramètres → Mon logement → *Radiateurs arrêtés volontairement*, avec une
+date et un motif (poêle, radiateurs retirés, autre chauffage, pièce inoccupée, autre). À partir de cette
+date, ses modules ne déclenchent plus d'alerte (« ne répond plus », firmware, heures hors ligne, issue
+de la collecte), la pièce n'est pas « hors ligne », et une comparaison avec l'an dernier qui couvre la
+date parle d'un changement de mode de chauffage, pas d'une économie. Son historique d'avant reste
+visible : si ses modules, ou la pièce, disparaissent de l'application Intuis, la collecte garde la pièce
+et ses jours (variable du dépôt `STOPPED_ROOMS_JSON`).
+
 **Fenêtres ouvertes, boost et état des radiateurs** (relevé horaire, facultatif) : l'API Intuis ne
 donne l'état des pièces qu'en instantané. Pour en garder l'historique :
 1. D'abord, **Actions → Diagnostic → Run workflow**, case « Chercher un historique des fenêtres /
