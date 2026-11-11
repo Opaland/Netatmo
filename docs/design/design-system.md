@@ -141,7 +141,7 @@ donc sensibles au texte système. Mode simple : `--font-md` passe à 1,25 rem pa
 
 | Composant | Anatomie | Variantes | Remplace (inventaire § 5) |
 |---|---|---|---|
-| **Barre d'onglets** | 5 boutons icône + libellé, `aria-current="page"`, fond `--accent-soft` sur l'actif | bas (mobile), haut (≥ 760 px) | `.tabs` |
+| **Barre d'onglets** | 5 boutons icône + libellé, `aria-current="page"`, fond `--accent-soft` sur l'actif ; sur téléphone, libellé de l'actif en graisse normale (il tient dans son onglet à 320 px, #434) | bas (mobile), haut (≥ 760 px) | `.tabs` |
 | **En-tête** | titre, **pastille d'état** (point coloré + « Données du 8 nov. »), bouton ⚙ ; en sous-page : flèche retour + titre | page, sous-page | `.top`, menu ⋮ |
 | **Carte** | titre (`--font-lg`), sous-titre gris (période · source), contenu, pied « Comment c'est calculé » | standard, **simulation** (bordure pointillée + étiquette « Simulation »), **à activer** (grise, action) | `.card` (défini 2 ×), sous-cartes |
 | **Tuile chiffrée** | libellé, chiffre (`--font-2xl`), ligne d'écart (▲▼ + texte « que l'an dernier ») | standard, mise en avant, compacte (grille 2 × 2) | `.kpi` |
@@ -171,7 +171,10 @@ donc sensibles au texte système. Mode simple : `--font-md` passe à 1,25 rem pa
    déclencheur ; en ouvrant une sous-page, le focus va sur son titre.
 6. `prefers-reduced-motion`, `forced-colors` (mots-clés système), `prefers-contrast` gérés par jetons.
 7. Langage : phrases de 20 mots au plus (15 en mode simple), glossaire partout, dates et heures
-   locales, sigles expliqués.
+   locales, sigles expliqués. **Aucune césure à 100 % de texte** (#407, #434) : un mot passe entier
+   à la ligne ; la coupe par trait n'est permise qu'en gros texte (dès ~120 %), où un mot peut ne
+   plus tenir sur sa ligne (titres, noms de liste, libellés d'interrupteur). Le balayage
+   (`web/e2e/sweep.mjs`, « mot-coupe ») le vérifie.
 8. **Aucune couleur, taille, marge ou rayon hors jetons** : un test (grep sur `style.css` et les
    gabarits) échoue sur un `#hex`, un `px` de taille de police ou un `style=` hors liste blanche.
 
