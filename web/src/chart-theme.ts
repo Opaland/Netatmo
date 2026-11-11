@@ -85,6 +85,27 @@ export function legendRows(names: string[], width: number, px: number, icon = 14
   }
   return rows;
 }
+
+/**
+ * #451: height in px of a legend stacked one item per row (charts.ts legendLayout, when a name has
+ * to wrap): every line of every name, and the gap of 12 px between two items.
+ */
+export const legendStackHeight = (names: string[], width: number, px: number, icon = 14) =>
+  names.reduce((h, n) => h + Math.max(1, legendLines(n, width, px, icon)) * lineHeightPx(px), 0) + (names.length - 1) * 12 + 4;
+
+/** #451: width in px left to the name of a legend item that has a row to itself. */
+export const legendTextWidth = (width: number, icon = 14) => Math.max(1, width - icon - 5 - 4);
+
+/**
+ * #451: lines of a legend name too wide for a row (« Température moyenne » at 360 px and text
+ * 200 %), wrapped word by word inside its item; 0 when it holds on one row (no wrap). The
+ * estimate is widened by 15 % (textPx is an average and the CI's DejaVu Sans is wider, A6): a name
+ * near the edge is wrapped rather than cut, and the lines counted are never fewer than drawn.
+ */
+export function legendLines(name: string, width: number, px: number, icon = 14): number {
+  const max = legendTextWidth(width, icon) / 1.15;
+  return textPx(name, px) <= max ? 0 : wrappedLines(name, max, px);
+}
 /** Height in px of a legend of `rows` rows. */
 export const legendHeight = (rows: number, px: number) => (rows ? rows * (px + 9) + 4 : 0);
 
