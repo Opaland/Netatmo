@@ -703,6 +703,7 @@ export interface YearVerdict {
   counts: string;
 }
 
+const int = (n: number) => n.toLocaleString('fr-FR');
 const pctText = (v: number) => withUnit(String(Math.floor(v * 100)), '%');
 
 /** One answer per year, radiators first: « est-ce normal ? », « quelle qualité ? ». */
@@ -747,7 +748,7 @@ export function yearVerdicts(r: QualityReport): YearVerdict[] {
         : 'Rien à signaler.';
     const headline = h && c !== null ? `${pctText(c)} des jours complets pour les radiateurs (${h.full + h.estimated} sur ${h.expected})` : 'pas de relevé des radiateurs cette année';
     const counts = rd
-      ? `En jours × pièces : ${[`${rd.real} relevés`, rd.estimated ? `${rd.estimated} estimés` : '', rd.missing ? `${rd.missing} manquants` : '', rd.stopped ? `${rd.stopped} arrêtés volontairement` : ''].filter(Boolean).join(', ')}.`
+      ? `En jours × pièces : ${[`${int(rd.real)} relevés`, rd.estimated ? `${int(rd.estimated)} estimés` : '', rd.missing ? `${int(rd.missing)} manquants` : '', rd.stopped ? `${int(rd.stopped)} arrêtés volontairement` : ''].filter(Boolean).join(', ')}.`
       : '';
     return { year, level, headline, reasons, answer, counts };
   });
