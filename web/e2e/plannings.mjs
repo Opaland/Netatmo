@@ -115,6 +115,20 @@ try {
       .waitForFunction(() => /Saisies : 2 h 15 → 7 h 45, 13 h 15 → 15 h 45/.test((document.querySelector('#hc-form')?.textContent ?? '').replace(/\s+/g, ' ')), null, { timeout: 10000 })
       .catch(() => errors.push('⚙ Mon contrat : les plages saisies ne sont pas relues'));
     check(/lues dans vos relevés/.test(await text(page, '#hc-now')), '⚙ Mon contrat : les plages saisies passent avant celles des relevés');
+    // #441: a new fictitious range « à compter du » a day, next to the old ones
+    check((await rows.count()) === 3, `⚙ Mon contrat : ${await rows.count()} ligne(s) après deux plages, 3 attendues`);
+    await rows.nth(2).locator('[data-hc=from]').fill('00:20');
+    await rows.nth(2).locator('[data-hc=to]').fill('05:20');
+    await rows.nth(2).locator('[data-hc=since]').fill('2026-10-01');
+    await page.locator('#hc-save').click();
+    await page
+      .waitForFunction(
+        () => /Saisies : 0 h 20 → 5 h 20 depuis le 1er octobre 2026 ; avant le 1er octobre 2026, 2 h 15 → 7 h 45, 13 h 15 → 15 h 45/.test((document.querySelector('#hc-form')?.textContent ?? '').replace(/\s+/g, ' ')),
+        null,
+        { timeout: 10000 },
+      )
+      .catch(() => errors.push('⚙ Mon contrat : la plage « à compter du » n’est pas relue avec sa date'));
+    check((await rows.nth(2).locator('[data-hc=since]').inputValue()) === '2026-10-01', '⚙ Mon contrat : la date « à compter du » n’est pas remise dans le formulaire');
     await page.screenshot({ path: `${OUT}/heures-creuses-mobile.png`, fullPage: true });
     await go(page, 'outils-voiture');
     check(/Heures creuses lues dans vos relevés : 22 h → 6 h/.test(await text(page, '#ev-result')), 'recharge : la source des heures creuses n’est pas dite');

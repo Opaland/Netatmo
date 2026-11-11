@@ -9,7 +9,7 @@ import { alert, alertHtml, list } from '../components';
 import { lastCurveDay } from '../curve';
 import { loadCurve, loadSolarDoc } from '../data';
 import { loadNote, saveNote } from '../local-store';
-import { type OffPeak, offPeakSentence } from '../offpeak';
+import { type OffPeak, offPeakSentence, shareOn } from '../offpeak';
 import { offPeakNow } from './offpeak-state';
 import { lsKey } from '../scope';
 import {
@@ -177,9 +177,10 @@ function draw(view: HTMLElement, d: NonNullable<typeof ds>) {
     zone.innerHTML = html('<p class="hint">Pas une seule journée complète dans la courbe de charge : rien à simuler pour l’instant.</p>');
     return;
   }
-  // #428: the shared off-peak hours (read, typed or assumed), a bound inside a half hour pro rata
+  // #428: the shared off-peak hours (read, typed or assumed), a bound inside a half hour pro rata;
+  // #441: each day with the ranges in force that day
   const hc = offPeakNow()!;
-  const rows = runAll(w, inputs, hc.share);
+  const rows = runAll(w, inputs, (day) => shareOn(hc, day));
   zone.innerHTML = html(result(rows, inputs, w, doc, profile ? yearlyPerKwc(profile) : 0, heater.size > 0, hc));
 }
 

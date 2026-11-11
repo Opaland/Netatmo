@@ -6,7 +6,7 @@ import { KVA_STEPS, compareOffers, daySplits, offPeakShares } from '../analysis'
 import { datasetDoc, ds, state } from '../app';
 import { lastCurveDay } from '../curve';
 import { loadCurve } from '../data';
-import { EV_DEFAULT, type EvInput, addCharge, chargePeaks, evPlan, kmPerYear, parseEvInput } from '../ev';
+import { EV_DEFAULT, type EvInput, addCharge, chargePeaks, evPlan, evPlanOn, kmPerYear, parseEvInput } from '../ev';
 import { periodAt } from '../offers';
 import { tenant } from '../tenant';
 import { contracts, fmtEur, lastDay, longDate, nf0, offCol, table } from '../ui';
@@ -106,6 +106,7 @@ export function mountEv(view: HTMLElement) {
       return;
     }
     const plan = evPlan(v, hc.share);
+    const planOn = evPlanOn(v, hc); // #441: each day with the ranges in force that day
     const zone = card.querySelector<HTMLElement>('#ev-result')!;
     const peakZone = card.querySelector<HTMLElement>('#ev-peak')!;
     if (!plan || v.kwhWeek > 500) {
@@ -114,7 +115,7 @@ export function mountEv(view: HTMLElement) {
       return;
     }
     save(v);
-    const withEv = compareOffers(addCharge(splits, plan), kvaAt, base, hphc, d.tempo.rows, d.tempo.days);
+    const withEv = compareOffers(addCharge(splits, planOn ?? plan), kvaAt, base, hphc, d.tempo.rows, d.tempo.days);
     const keys = ['base', 'hphc', 'tempo'] as const;
     const names = { base: 'Base', hphc: 'Heures creuses', tempo: 'Tempo' };
     const tot = (r: typeof without, k: (typeof keys)[number]) => r[k].energy + r[k].subscription;
