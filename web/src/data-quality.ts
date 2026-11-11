@@ -3,7 +3,8 @@
 // collector/quality.py). Pure: no DOM, no state, unit-tested. For each source and each year:
 // days covered, gaps with their probable cause when it is known, and what can be recovered.
 import { type DayRecord, MONTHS_SHORT, addDays, rawRecords } from './aggregate';
-import { dayShort, rangeLabel, withUnit } from './glossary';
+import { dayShort, plural, rangeLabel, withUnit } from './glossary';
+import type { CutKind } from './periods';
 
 export type SourceId = 'heating' | 'water' | 'linky' | 'station' | 'room30' | 'linky30' | 'roomstate';
 
@@ -142,6 +143,10 @@ export interface DevicesInfo {
   boots?: string[];
   /** Days a water heater was set up (« mise en service »). */
   waterSetup?: string[];
+  /** #394: days touched by a power or Internet cut (incidents.ts `cutCauses`). */
+  cuts?: Map<string, CutKind>;
+  /** #280: night -> sources whose collection failed (« linky », « netatmo », « intuis »…). */
+  failures?: Record<string, string[]>;
 }
 
 export interface QualityInput {
@@ -165,7 +170,41 @@ function stoppedDays(input: Pick<QualityInput, 'stopped' | 'last'>, room: string
   return s && s.from <= input.last ? days(s.from, input.last) : [];
 }
 
+/** The first cut (power wins) on the days [from - 1, to]: a cut the evening before counts. */
+function cutIn(cuts: Map<string, CutKind> | undefined, from: string, to: string): { day: string; kind: CutKind } | null {
+  if (!cuts?.size) return null;
+  const list = days(addDays(from, -1), to).filter((d) => cuts.has(d));
+  const day = list.find((d) => cuts.get(d) === 'power') ?? list[0];
+  return day ? { day, kind: cuts.get(day)! } : null;
+}
+const cutCause = (c: { day: string; kind: CutKind }, what: string) =>
+  c.kind === 'power' ? `coupure de courant le ${dayShort(c.day, true)} : ${what}` : `coupure Internet le ${dayShort(c.day, true)} : ${what}`;
+
+/**
+ * Nights whose collection of `source` failed and could have fetched these days: the collection
+ * asks again for the 10 days before it (Linky, station), so a day is lost when the nights up to
+ * 10 days after it all failed.
+ */
+function failedNights(input: QualityInput, source: string, from: string, to: string): number {
+  const f = input.devices?.failures;
+  if (!f) return 0;
+  const end = addDays(to, 10);
+  return Object.entries(f).filter(([d, list]) => d >= from && d <= end && list.includes(source)).length;
+}
+/** At least 80 % of [from, to] in `set`. */
+const mostlyIn = (set: Set<string> | null, from: string, to: string) => {
+  if (!set?.size) return false;
+  const list = days(from, to);
+  return list.filter((d) => set.has(d)).length >= 0.8 * list.length;
+};
+
 const NOT_AT_INTUIS = 'Non chez Intuis (ni les jours ni le total du mois) ; une estimation à part reste possible (« Reconstituer », plus bas).';
+
+/** Days of [from, to] a module of one of `rooms` did not answer (nightly status). */
+function offlineIn(input: QualityInput, rooms: { id: string }[], from: string, to: string): number {
+  const off = rooms.map((r) => input.devices?.offline?.get(r.id)).filter((x): x is Set<string> => !!x);
+  return off.length ? days(from, to).filter((d) => off.some((s) => s.has(d))).length : 0;
+}
 
 // ------------------------------------------------------------------ Intuis (radiators, water heater)
 function intuis(input: QualityInput, kind: 'heating' | 'water'): SourceQuality | null {
@@ -215,11 +254,17 @@ function intuis(input: QualityInput, kind: 'heating' | 'water'): SourceQuality |
     }
     const boot = input.devices?.boots?.find((b) => b >= addDays(from, -1) && b <= to);
     const setup = kind === 'water' ? input.devices?.waterSetup?.find((s) => s >= addDays(to, -30) && s <= addDays(to, 30)) : undefined;
+    const cut = cutIn(input.devices?.cuts, from, to);
+    const waterOff = kind === 'water' ? offlineIn(input, rooms, from, to) : 0;
     let cause = "l'historique Intuis n'a rien renvoyé pour ces jours (ni les jours, ni le total du mois)";
+    const sameAsRadiators = !!heatingLost && days(from, to).some((d) => heatingLost.has(d));
     if (setup) cause = `chauffe-eau absent, puis remis en service le ${dayShort(setup, true)} (réinstallé)`;
-    else if (heatingLost && !days(from, to).some((d) => heatingLost.has(d))) cause = 'seul le chauffe-eau manque : il ne renvoyait rien (débranché, retiré ou hors ligne ?)';
-    else if (heatingLost) cause = "même trou que les radiateurs : l'historique Intuis n'a rien renvoyé pour ces jours";
+    else if (sameAsRadiators) cause = "même trou que les radiateurs : l'historique Intuis n'a rien renvoyé pour ces jours";
+    else if (waterOff) cause = `chauffe-eau injoignable ${waterOff > 1 ? `${waterOff} de ces jours` : 'ce jour-là'} (il ne répondait pas à la passerelle)`;
+    else if (heatingLost) cause = 'seul le chauffe-eau manque : il ne renvoyait rien (débranché, retiré ou hors ligne ?)';
+    // radiators: a cut of the whole home (a cut cannot explain the water heater alone)
     else if (boot) cause = `coupure de courant probable (la passerelle Intuis a redémarré le ${dayShort(boot, true)})`;
+    else if (cut) cause = cutCause(cut, 'la passerelle Intuis ne pouvait plus envoyer ses relevés');
     gaps.push({
       from,
       to,
@@ -229,6 +274,7 @@ function intuis(input: QualityInput, kind: 'heating' | 'water'): SourceQuality |
       ongoing: false,
       cause,
       same: !setup && !!heatingLost && days(from, to).every((d) => heatingLost.has(d)),
+      link: waterOff && !setup ? '#parametres-sources' : undefined,
       recover: setup ? 'Non : le chauffe-eau ne mesurait rien pendant cette période.' : `${NOT_AT_INTUIS}${linkyHas(from, to) ? ' Le compteur Linky a ces jours : la reconstitution s’appuie dessus.' : ''}`,
     });
   }
@@ -321,6 +367,7 @@ function linky(input: QualityInput): SourceQuality | null {
       continue;
     }
     const old = to < limit;
+    const failed = failedNights(input, 'linky', from, to);
     gaps.push({
       from,
       to,
@@ -328,12 +375,33 @@ function linky(input: QualityInput): SourceQuality | null {
       who: 'compteur',
       all: true,
       ongoing: false,
-      cause: 'Enedis n’a pas transmis ces jours',
+      cause: failed
+        ? `collecte Linky en échec (${failed} nuit${failed > 1 ? 's' : ''}) : ces jours n’ont pas été redemandés à temps`
+        : mostlyIn(absentWithin(stationDays(input), from, to), from, to)
+          ? 'collecte arrêtée : la station manque aussi ces jours-là'
+          : 'Enedis n’a pas transmis ces jours',
       recover: old ? 'Non : Enedis ne garde que 3 ans.' : 'Encore chez Enedis (moins de 3 ans), mais la collecte ne redemande que les 10 derniers jours.',
     });
   }
   const notes = last < addDays(input.last, -3) ? [`Dernier relevé Linky le ${dayShort(last, true)} : la collecte Linky est peut-être en échec (voir l’état des sources).`] : [];
   return { id: 'linky', label: 'Compteur Linky (par jour)', first: cov.first, last, years: cov.years, gaps: sortGaps(gaps), scattered, notes };
+}
+
+/** Days with at least one station module (null: no station). */
+function stationDays(input: QualityInput): Set<string> | null {
+  const daily = input.station?.daily;
+  return daily ? new Set(Object.values(daily).flatMap((d) => Object.keys(d))) : null;
+}
+/** Days of [from, to] absent from `have`, within its own first and last day (null: no source). */
+function absentWithin(have: Set<string> | null, from: string, to: string): Set<string> | null {
+  if (!have?.size) return null;
+  let lo = '9999';
+  let hi = '';
+  for (const d of have) {
+    if (d < lo) lo = d;
+    if (d > hi) hi = d;
+  }
+  return new Set(days(from, to).filter((d) => d >= lo && d <= hi && !have.has(d)));
 }
 
 // ------------------------------------------------------------------ station
@@ -356,7 +424,13 @@ function station(input: QualityInput): SourceQuality | null {
       scattered += n;
       continue;
     }
-    gaps.push({ from, to, days: n, who: 'tous les modules', all: true, ongoing: false, cause: 'collecte de la station interrompue (connexion Netatmo à renouveler ?)', recover });
+    const failed = failedNights(input, 'netatmo', from, to);
+    const cause = failed
+      ? `collecte de la station en échec (${failed} nuit${failed > 1 ? 's' : ''}) : connexion Netatmo à renouveler ?`
+      : mostlyIn(absentWithin(input.linky ? new Set(input.linky.keys()) : null, from, to), from, to)
+        ? 'collecte arrêtée : le compteur Linky manque aussi ces jours-là'
+        : 'collecte de la station interrompue (connexion Netatmo à renouveler ?)';
+    gaps.push({ from, to, days: n, who: 'tous les modules', all: true, ongoing: false, cause, recover });
   }
   for (const [key, missing] of cov.partMissing) {
     const health = s.health?.[key] ?? {};
@@ -396,7 +470,13 @@ export interface FineInput {
   last: string;
 }
 
-export function fineSource(id: 'room30' | 'linky30' | 'roomstate', f: FineInput, intuisFirst: string | null, rooms: { id: string; name: string }[] = []): SourceQuality | null {
+export function fineSource(
+  id: 'room30' | 'linky30' | 'roomstate',
+  f: FineInput,
+  intuisFirst: string | null,
+  rooms: { id: string; name: string }[] = [],
+  cuts?: Map<string, CutKind>,
+): SourceQuality | null {
   if (!f.parts.some((p) => p.days.size)) return null;
   const cov = coverParts(f.parts, f.last);
   const label = { room30: 'Pièces à la demi-heure (Intuis)', linky30: 'Compteur Linky à la demi-heure', roomstate: 'Relevé horaire de l’état des pièces' }[id];
@@ -416,7 +496,11 @@ export function fineSource(id: 'room30' | 'linky30' | 'roomstate', f: FineInput,
   for (const [from, to] of runs(cov.allMissing)) {
     const n = span(from, to);
     if (n < MIN_GAP) scattered += n;
-    else gaps.push({ from, to, days: n, who: id === 'room30' ? 'toutes les pièces' : 'tout', all: true, ongoing: false, cause, recover });
+    else {
+      // #394: the hourly snapshot needs the home online; a cut explains its gap (not Intuis history)
+      const cut = id === 'roomstate' ? cutIn(cuts, from, to) : null;
+      gaps.push({ from, to, days: n, who: id === 'room30' ? 'toutes les pièces' : 'tout', all: true, ongoing: false, cause: cut ? cutCause(cut, 'la maison était injoignable') : cause, recover });
+    }
   }
   for (const [part, missing] of cov.partMissing) {
     for (const [from, to] of runs(missing)) {
@@ -494,11 +578,86 @@ export function lowYears(records: DayRecord[], linkyDaily: Map<string, number>, 
     .filter((s) => s.usual > 0 && s.share < 0.6 * s.usual);
 }
 
-/** Days where the radiators and water heater recorded more than the whole home's meter (impossible). */
-export function aboveMeter(records: DayRecord[], linkyDaily: Map<string, number>): string[] {
+// #336: the rule of a room-day, shared with `diagnose --qualite` (collector/quality.py). Both test
+// suites read web/src/__fixtures__/quality-rule.json and must find the same counts (AGENTS.md §5).
+/** A room using more than this in a day (3.3 kW for 24 h) is not credible. */
+export const SUSPECT_KWH_DAY = 80;
+/** Intuis above Linky by more than this is impossible (Intuis counts a part of what the meter sees). */
+export const ABOVE_RATIO = 1.1;
+export const ABOVE_MARGIN_KWH = 0.5;
+/** A daily value that can be: a number, not negative, at most SUSPECT_KWH_DAY. */
+export const plausibleKwh = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v) && v >= 0 && v <= SUSPECT_KWH_DAY;
+
+/**
+ * Days where the radiators and water heater recorded more than the whole home's meter
+ * (impossible). Measured values of the followed rooms only: an estimated day (spread from a
+ * monthly total), an impossible value or an ignored room says nothing about this day.
+ */
+export function aboveMeter(records: DayRecord[], linkyDaily: Map<string, number>, estimated: Set<string> = new Set()): string[] {
   const tot = new Map<string, number>();
-  for (const r of rawRecords(records)) tot.set(r.day, (tot.get(r.day) ?? 0) + r.kwh);
-  return [...tot].filter(([d, v]) => linkyDaily.has(d) && v > 1.1 * linkyDaily.get(d)! + 0.5).map(([d]) => d).sort();
+  for (const r of rawRecords(records)) if (r.cat !== 'ignore' && !estimated.has(`${r.room}|${r.day}`) && plausibleKwh(r.kwh)) tot.set(r.day, (tot.get(r.day) ?? 0) + r.kwh);
+  return [...tot]
+    .filter(([d, v]) => {
+      const l = linkyDaily.get(d);
+      return typeof l === 'number' && Number.isFinite(l) && l >= 0 && v > ABOVE_RATIO * l + ABOVE_MARGIN_KWH;
+    })
+    .map(([d]) => d)
+    .sort();
+}
+
+/** Room-days of a month: « réel », « estimé », « manquant », « suspect » (also real), « arrêté ». */
+export interface RoomDays {
+  real: number;
+  estimated: number;
+  missing: number;
+  /** A real value that cannot be (negative, not a number, above SUSPECT_KWH_DAY): counted in `real` too. */
+  suspect: number;
+  /** #346 / #440: a room switched off on purpose, from its declared day: not expected, not missing. */
+  stopped: number;
+}
+export type RoomKind = 'heating' | 'water';
+export const emptyRoomDays = (): RoomDays => ({ real: 0, estimated: 0, missing: 0, suspect: 0, stopped: 0 });
+
+/**
+ * #336: every room-day from the room's first value to the last day of the archive, per month
+ * (« YYYY-MM ») and kind: estimated (flagged), else real (a value), else stopped (declared off),
+ * else missing. The same rule as `diagnose --qualite`.
+ */
+export function roomDays(input: Pick<QualityInput, 'last' | 'rooms' | 'records' | 'estimated' | 'stopped'>): Map<string, Partial<Record<RoomKind, RoomDays>>> {
+  const kind = new Map<string, RoomKind>();
+  for (const r of input.rooms) if (r.category === 'heating' || r.category === 'water_heater') kind.set(r.id, r.category === 'heating' ? 'heating' : 'water');
+  const values = new Map<string, Map<string, number>>();
+  for (const r of rawRecords(input.records)) if (kind.has(r.room)) (values.get(r.room) ?? values.set(r.room, new Map()).get(r.room)!).set(r.day, r.kwh);
+  const out = new Map<string, Partial<Record<RoomKind, RoomDays>>>();
+  for (const [room, vals] of values) {
+    let first = '9999';
+    for (const d of vals.keys()) if (d < first) first = d;
+    const k = kind.get(room)!;
+    const stop = input.stopped?.find((s) => s.room === room);
+    for (const d of days(first, input.last)) {
+      const month = out.get(d.slice(0, 7)) ?? out.set(d.slice(0, 7), {}).get(d.slice(0, 7))!;
+      const c = (month[k] ??= emptyRoomDays());
+      if (input.estimated.has(`${room}|${d}`)) c.estimated++;
+      else if (vals.has(d)) {
+        c.real++;
+        if (!plausibleKwh(vals.get(d))) c.suspect++;
+      } else if (stop && stop.from <= d) c.stopped++;
+      else c.missing++;
+    }
+  }
+  return out;
+}
+
+/** The room-days of a year, added up over its months. */
+export function yearRoomDays(cells: Map<string, Partial<Record<RoomKind, RoomDays>>>, year: number, k: RoomKind): RoomDays | null {
+  let out: RoomDays | null = null;
+  for (const [m, c] of cells) {
+    const v = c[k];
+    if (!v || m.slice(0, 4) !== String(year)) continue;
+    out ??= emptyRoomDays();
+    for (const key of Object.keys(out) as (keyof RoomDays)[]) out[key] += v[key];
+  }
+  return out;
 }
 
 // ------------------------------------------------------------------ report
@@ -507,6 +666,10 @@ export interface QualityReport {
   low: LowYear[];
   above: string[];
   suspects: string[];
+  /** #336: room-days per month, as counted by `diagnose --qualite`. */
+  roomDays: Map<string, Partial<Record<RoomKind, RoomDays>>>;
+  /** #346 / #440: rooms switched off on purpose (name, first day, sentence). */
+  stopped: { who: string; from: string; text: string }[];
 }
 
 export function qualityReport(input: QualityInput): QualityReport {
@@ -514,7 +677,14 @@ export function qualityReport(input: QualityInput): QualityReport {
   const lost = new Set(sources.filter((s) => s.id === 'heating').flatMap((s) => s.gaps.filter((g) => g.kind !== 'zero').flatMap((g) => days(g.from, g.to))));
   for (const k of input.estimated) lost.add(k.slice(k.indexOf('|') + 1));
   const linkyDaily = input.linky ?? new Map<string, number>();
-  return { sources, low: lowYears(input.records, linkyDaily, lost), above: aboveMeter(input.records, linkyDaily), suspects: [...(input.suspects ?? [])].sort() };
+  return {
+    sources,
+    low: lowYears(input.records, linkyDaily, lost),
+    above: aboveMeter(input.records, linkyDaily, input.estimated),
+    suspects: [...(input.suspects ?? [])].sort(),
+    roomDays: roomDays(input),
+    stopped: (input.stopped ?? []).map((s) => ({ who: input.rooms.find((r) => r.id === s.room)?.name ?? 'une pièce', from: s.from, text: s.text })),
+  };
 }
 
 export type Level = 'good' | 'fair' | 'poor';
@@ -529,6 +699,8 @@ export interface YearVerdict {
   reasons: string[];
   /** « Est-ce normal ? » in one sentence. */
   answer: string;
+  /** #336: the radiators' room-days of the year, as `diagnose --qualite` counts them ('' when none). */
+  counts: string;
 }
 
 const pctText = (v: number) => withUnit(String(Math.floor(v * 100)), '%');
@@ -563,6 +735,10 @@ export function yearVerdicts(r: QualityReport): YearVerdict[] {
     }
     const above = r.above.filter((d) => d.startsWith(String(year))).length;
     if (above) reasons.push(`${above} jour${above > 1 ? 's' : ''} où les radiateurs dépassent le compteur Linky (impossible : valeurs Intuis douteuses ces jours-là).`);
+    const rd = yearRoomDays(r.roomDays, year, 'heating');
+    if (rd?.suspect) reasons.push(`${plural(rd.suspect, 'valeur impossible', 'valeurs impossibles')} (négative ou au-dessus de ${withUnit(String(SUSPECT_KWH_DAY), 'kWh')} pour une pièce en un jour) : comptée${rd.suspect > 1 ? 's' : ''} comme relevée${rd.suspect > 1 ? 's' : ''} mais douteuse${rd.suspect > 1 ? 's' : ''}.`);
+    // #346 / #440: a room switched off on purpose is not a hole: said once per year it covers
+    for (const st of r.stopped) if (st.from.slice(0, 4) <= String(year)) reasons.push(`${st.who} : ${st.text} : pas de données attendues, ce n’est pas un trou.`);
     const intuisLost = r.sources.some((s) => (s.id === 'heating' || s.id === 'water') && s.gaps.some((g) => inYear(g) && g.kind !== 'zero' && /Intuis n'a rien renvoyé/.test(g.cause)));
     const answer = intuisLost
       ? 'Ce n’est pas une panne de l’application : ces jours n’existent plus chez Intuis. Ils ne peuvent pas être récupérés, seulement estimés à part (« Reconstituer », plus bas).'
@@ -570,7 +746,10 @@ export function yearVerdicts(r: QualityReport): YearVerdict[] {
         ? ''
         : 'Rien à signaler.';
     const headline = h && c !== null ? `${pctText(c)} des jours complets pour les radiateurs (${h.full + h.estimated} sur ${h.expected})` : 'pas de relevé des radiateurs cette année';
-    return { year, level, headline, reasons, answer };
+    const counts = rd
+      ? `En jours × pièces : ${[`${rd.real} relevés`, rd.estimated ? `${rd.estimated} estimés` : '', rd.missing ? `${rd.missing} manquants` : '', rd.stopped ? `${rd.stopped} arrêtés volontairement` : ''].filter(Boolean).join(', ')}.`
+      : '';
+    return { year, level, headline, reasons, answer, counts };
   });
 }
 
