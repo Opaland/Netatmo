@@ -17,7 +17,10 @@ import {
   offlineText,
   parseStopped,
   runIn,
+  STOP_REASONS,
+  type StopReason,
   stoppedJson,
+  stoppedOn,
 } from './room-offline';
 
 const rec = (day: string, room: string, kwh = 1): DayRecord => ({ day, room, kwh, cat: room === 'ce' ? 'water_heater' : 'heating' });
@@ -141,6 +144,25 @@ describe('radiators switched off on purpose (⚙ Mon logement)', () => {
     expect(applyStopped([run], [{ ...stove, from: '2026-01-07' }])).toHaveLength(1); // 1 day before: not a run
     expect(applyStopped([run], [{ ...stove, room: 'z' }])).toEqual([run]);
     expect(offlineText({ ...run, stopped: { ...stove, reason: 'autre' } })).toBe('arrêté depuis le 6 janv. 2026');
+  });
+
+  it('#440: « radiateurs retirés » is a reason of its own, kept by the reader, said in the text', () => {
+    const gone = { ...stove, reason: 'retires' as const, label: '' };
+    expect(parseStopped([{ room: 'b', from: '2026-01-10', reason: 'retires' }])[0].reason).toBe('retires');
+    expect(STOP_REASONS.retires).toBe('Radiateurs retirés (chauffée autrement)');
+    expect(offlineText(applyStopped([run], [gone])[1])).toBe('arrêté depuis le 10 janv. 2026 (radiateurs retirés)');
+  });
+
+  it('#440: one rule for every module alert: quiet from the declared day on, whatever the reason', () => {
+    for (const reason of Object.keys(STOP_REASONS) as StopReason[]) {
+      const s = { ...stove, reason };
+      expect(stoppedOn([s], 'b', '2026-01-10')).toBe(s);
+      expect(stoppedOn([s], 'b', '2026-02-01')).toBe(s);
+      expect(stoppedOn([s], 'b', '2026-01-09')).toBeUndefined();
+      expect(stoppedOn([s], 'a', '2026-01-10')).toBeUndefined();
+    }
+    expect(stoppedOn([stove], undefined, '2026-01-10')).toBeUndefined();
+    expect(stoppedOn(undefined, 'b', '2026-01-10')).toBeUndefined();
   });
 
   it('no estimate and still compared: its fall is a change of heating', () => {

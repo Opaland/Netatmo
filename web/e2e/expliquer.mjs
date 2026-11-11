@@ -257,11 +257,22 @@ try {
       await audit(page, `${name}/logement`, enhanced);
       if (!big) {
         await page.selectOption('#stop-room', 'r-ch2');
-        await page.selectOption('#stop-reason', 'inoccupee');
+        // #440: radiators taken down: listed with their reason, and their module raises nothing
+        await page.selectOption('#stop-reason', 'retires');
         await page.click('#stop-add');
         await page.waitForSelector('#stopped-card [data-stop-remove="r-ch2"]', { timeout: 10000 });
+        check(/Chambre enfant\s*arrêté depuis le 5 nov\. 2026 \(radiateurs retirés\)/.test(await card.locator('ul[aria-label="Radiateurs arrêtés"]').innerText()), `${name} : la Chambre enfant n'est pas listée « radiateurs retirés »`);
+        await page.screenshot({ path: `${OUT}/expliquer-${BROWSER}-${name}-radiateurs-retires.png`, fullPage: true });
         await go(page, 'accueil');
         check(!/Chambre enfant, hors ligne/.test(await page.locator('.verdict').innerText()), `${name} : alerte toujours là après « arrêté volontairement »`);
+        await go(page, 'etat');
+        await page.waitForSelector('#devices-card:not([hidden])', { state: 'attached', timeout: 15000 });
+        await page.click('#devices-fold > summary');
+        const devGone = await page.locator('#devices-card').innerText();
+        check(/Radiateur arrêté volontairement : Chambre enfant/.test(devGone) && !/ne répond plus\s+Radiateur \(Chambre enfant\)/.test(devGone), `${name} : État des appareils dit encore la Chambre enfant injoignable (« ${devGone.slice(0, 300)} »)`);
+        // the incidents from the declared day on are gone (an older one, 19 Oct., stays: before the date)
+        const after = (await page.locator('#view').innerText()).split('\n').filter((l) => /Chambre enfant injoignable/.test(l) && /\bnov\./.test(l));
+        check(!after.length, `${name} : incident « Chambre enfant injoignable » après le retrait (« ${after.join(' | ')} »)`);
         await go(page, 'parametres-logement');
         await page.click('#stopped-card [data-stop-remove="r-ch2"]');
         await page.waitForSelector('#stopped-card #stop-room option[value="r-ch2"]', { state: 'attached', timeout: 10000 });

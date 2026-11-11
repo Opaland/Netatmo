@@ -217,10 +217,19 @@ def since_day(reach: dict[str, int], day: str) -> str:
 
 
 def collect_status(
-    store: Store, homesdata: dict, homestatus: dict, tz: str, mod_room: dict[str, str], now: float | None = None
+    store: Store,
+    homesdata: dict,
+    homestatus: dict,
+    tz: str,
+    mod_room: dict[str, str],
+    now: float | None = None,
+    stopped: list[dict] | None = None,
 ) -> dict:
     """Nightly read of `homestatus`: daily status, firmware and gateway. Returns counts only,
-    plus `alerts`: lines for the optional public issue (module types and dates only)."""
+    plus `alerts`: lines for the optional public issue (module types and dates only). #440: a
+    module of a room switched off on purpose (`stopped`, STOPPED_ROOMS_JSON: a stove, radiators
+    taken down…) is still recorded (its daily status is data) but raises no alert from the
+    declared day on (`stopped_on`, the rule of the app as well)."""
     now = float(now if now is not None else datetime.now(UTC).timestamp())
     zone = ZoneInfo(tz)
     day = datetime.fromtimestamp(now, zone).date().isoformat()
@@ -261,7 +270,8 @@ def collect_status(
         store.put(DOC, "reach", key, day, int(ok))
         if not is_gateway(m):
             links.append(m.get("reachable") is False)
-        if not ok:
+        room = mod_room.get(mid) or (store.doc(DOC)["modules"].get(key) or {}).get("room")
+        if not ok and not stopped_on(stopped, room, day):
             counts["unreachable"] += 1
             reach = store.doc(DOC)["reach"][key]
             by_type.setdefault(type_label(kind), []).append(since_day(reach, day))
@@ -277,7 +287,9 @@ def collect_status(
 SILENT_DAYS = 2  # 48 h without a daily reading of a room while the others have theirs
 
 
-STOPPED_REASONS = ("poele", "autre-chauffage", "inoccupee", "autre")
+# The same keys as STOP_REASONS in web/src/room-offline.ts (tests/test_donnees_v15.py holds them
+# in agreement). #440: « retires », radiators taken down, the room heated otherwise.
+STOPPED_REASONS = ("poele", "retires", "autre-chauffage", "inoccupee", "autre")
 MAX_STOPPED = 20
 
 
@@ -313,6 +325,15 @@ def parse_stopped(raw: str) -> list[dict]:
 
 
 _DAY = re.compile(r"\d{4}-\d{2}-\d{2}")
+
+
+def stopped_on(stopped: list[dict] | None, room: str | None, day: str) -> bool:
+    """#440: the one rule for the alerts of a room switched off on purpose, whatever the reason:
+    from the declared day on (`from` <= `day`), its modules raise nothing. Same rule in the app
+    (web/src/room-offline.ts stoppedOn)."""
+    if not room:
+        return False
+    return any(s["room"] == room and s["from"] <= day for s in stopped or [])
 
 
 WOOD_SPECIES = ("chene", "hetre", "charme", "frene", "melange", "resineux")
@@ -382,7 +403,6 @@ def silent_rooms(
     (public issue), never a room name. `today`: the last day of the archive by default. A room
     switched off on purpose (`stopped`, STOPPED_ROOMS_JSON) is expected to be silent: no alert."""
     category = {str(r.get("id")): r.get("category") for r in rooms if isinstance(r, dict)}
-    off = {s["room"]: s["from"] for s in stopped or []}
     last: dict[str, str] = {}
     for y in store.years():
         for rid, days in store.year(y).items():
@@ -394,10 +414,10 @@ def silent_rooms(
     limit = (datetime.fromisoformat(ref).date() - timedelta(days=SILENT_DAYS)).isoformat()
     by_type: dict[str, list[str]] = {}
     for rid, day in last.items():
-        if rid in off and off[rid] <= (datetime.fromisoformat(day).date() + timedelta(days=1)).isoformat():
+        since = (datetime.fromisoformat(day).date() + timedelta(days=1)).isoformat()
+        if stopped_on(stopped, rid, since):
             continue  # switched off on purpose from then on
         if day <= limit:
-            since = (datetime.fromisoformat(day).date() + timedelta(days=1)).isoformat()
             label = "chauffe-eau" if category[rid] == "water_heater" else "radiateur"
             by_type.setdefault(label, []).append(since)
     out = []

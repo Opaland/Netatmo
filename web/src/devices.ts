@@ -5,6 +5,7 @@
 //   and lowering hours · #219 time of the Linky peak · #276 gateway restarts and Wi-Fi ·
 //   #277 Linky index per rate period · #278 contract and Tempo colour seen by Intuis.
 import type { ContractPeriod } from './offers';
+import { stoppedOn } from './room-offline';
 
 export interface DevicesDoc {
   modules?: Record<string, { type?: string; room?: string; setup?: string; fw?: string }>;
@@ -64,14 +65,14 @@ export function offlineModules(doc: DevicesDoc | null | undefined): { key: strin
 }
 
 /**
- * #346: the modules not answering, split between the rooms whose radiator was switched off on
- * purpose (⚙ Mon logement: a stove…), silent as expected, and the others (out of reach).
+ * #346: the modules not answering on `day` (the last night), split between the rooms whose
+ * radiator was switched off on purpose by then (⚙ Mon logement: a stove, radiators taken down…),
+ * silent as expected, and the others (out of reach). #440: same rule as every module alert (stoppedOn).
  */
-export function splitStopped<T extends { room?: string }, S extends { room: string; from: string }>(mods: T[], stopped: S[]): { off: T[]; stopped: (T & { stop: S })[] } {
-  const by = new Map(stopped.map((s) => [s.room, s]));
+export function splitStopped<T extends { room?: string }, S extends { room: string; from: string }>(mods: T[], stopped: S[], day: string): { off: T[]; stopped: (T & { stop: S })[] } {
   const out: { off: T[]; stopped: (T & { stop: S })[] } = { off: [], stopped: [] };
   for (const m of mods) {
-    const s = m.room ? by.get(m.room) : undefined;
+    const s = stoppedOn(stopped, m.room, day);
     if (s) out.stopped.push({ ...m, stop: s });
     else out.off.push(m);
   }
@@ -100,12 +101,12 @@ export interface FirmwareEvent {
   to: string;
 }
 
-/** #216: firmware changes (newest first). */
-export function firmwareLog(doc: DevicesDoc | null | undefined): FirmwareEvent[] {
+/** #216: firmware changes (newest first); #440: none for a room switched off on purpose from that day on. */
+export function firmwareLog(doc: DevicesDoc | null | undefined, stopped: { room: string; from: string }[] = []): FirmwareEvent[] {
   const out: FirmwareEvent[] = [];
   for (const [key, changes] of Object.entries(doc?.firmware ?? {})) {
     const m = doc?.modules?.[key];
-    for (const [day, from, to] of changes) out.push({ day, key, type: m?.type, room: m?.room, from, to });
+    for (const [day, from, to] of changes) if (!stoppedOn(stopped, m?.room, day)) out.push({ day, key, type: m?.type, room: m?.room, from, to });
   }
   return out.sort((a, b) => (a.day < b.day ? 1 : a.day > b.day ? -1 : a.key.localeCompare(b.key)));
 }
@@ -327,6 +328,8 @@ export function roomStateHours(
   rooms: Record<string, Record<string, StateHoursCell>> | undefined,
   from: string,
   to: string,
+  /** #440: days whose offline hours are expected (a room switched off on purpose): not counted. */
+  quiet: (room: string, day: string) => boolean = () => false,
 ): { room: string; days: number; anticipating: number; lowering: number; offline: number; offlineDays: string[] }[] {
   const out = [];
   for (const [room, days] of Object.entries(rooms ?? {})) {
@@ -341,8 +344,9 @@ export function roomStateHours(
       n++;
       a += c.anticipating_h ?? 0;
       l += c.lowering_h ?? 0;
-      o += c.offline_h ?? 0;
-      if ((c.offline_h ?? 0) >= 1) offDays.push(d);
+      const off = quiet(room, d) ? 0 : (c.offline_h ?? 0);
+      o += off;
+      if (off >= 1) offDays.push(d);
     }
     if (n) out.push({ room, days: n, anticipating: Math.round(a * 10) / 10, lowering: Math.round(l * 10) / 10, offline: Math.round(o * 10) / 10, offlineDays: offDays.sort() });
   }
