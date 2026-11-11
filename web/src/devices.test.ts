@@ -17,6 +17,7 @@ import {
   wifiSummary,
 } from './devices';
 import { plugsFrom } from './breakdown';
+import { stoppedOn } from './room-offline';
 
 const doc: DevicesDoc = {
   modules: { i1: { type: 'NMH', room: 'r1', fw: '106', setup: '2021-11-15' }, i2: { type: 'NMH', room: 'r2', fw: '106' }, i0: { type: 'NMG' } },
@@ -161,9 +162,25 @@ describe('#346: a radiator switched off on purpose is not « injoignable »', ()
       { key: 'i3', type: 'NMG', since: '2026-11-07' },
     ];
     const stop = { room: 'r-cuisine', from: '2025-10-14', reason: 'poele', label: 'poêle à bois' };
-    const r = splitStopped(mods, [stop]);
+    const r = splitStopped(mods, [stop], '2026-11-07');
     expect(r.stopped).toEqual([{ ...mods[0], stop }]);
     expect(r.off.map((m) => m.key)).toEqual(['i2', 'i3']);
-    expect(splitStopped(mods, []).off).toHaveLength(3);
+    expect(splitStopped(mods, [], '2026-11-07').off).toHaveLength(3);
+  });
+  it('#440: radiators taken down: quiet from the declared day only, whatever the reason', () => {
+    const mods = [{ key: 'i1', type: 'NMH', room: 'r-salon', since: '2026-11-01' }];
+    const gone = { room: 'r-salon', from: '2026-11-05', reason: 'retires', label: '' };
+    expect(splitStopped(mods, [gone], '2026-11-07').stopped).toHaveLength(1);
+    // declared for a later day: still « injoignable » tonight
+    expect(splitStopped(mods, [{ ...gone, from: '2026-11-08' }], '2026-11-07').off).toHaveLength(1);
+    // offline hours of the snapshots: not counted from the declared day on
+    const rooms = { 'r-salon': { '2026-11-04': { n: 24, offline_h: 3 }, '2026-11-05': { n: 24, offline_h: 24 }, '2026-11-06': { n: 24, offline_h: 24 } } };
+    const quiet = (room: string, day: string) => !!stoppedOn([gone], room, day);
+    expect(roomStateHours(rooms, '2026-11-01', '2026-11-07', quiet)).toEqual([{ room: 'r-salon', days: 3, anticipating: 0, lowering: 0, offline: 3, offlineDays: ['2026-11-04'] }]);
+    expect(roomStateHours(rooms, '2026-11-01', '2026-11-07')[0].offline).toBe(51);
+    // firmware: an update seen after the declared day is not reported
+    const fw: DevicesDoc = { modules: { i1: { type: 'NMH', room: 'r-salon' } }, firmware: { i1: [['2026-11-04', '105', '106'], ['2026-11-06', '106', '107']] } };
+    expect(firmwareLog(fw, [gone]).map((e) => e.day)).toEqual(['2026-11-04']);
+    expect(firmwareLog(fw).map((e) => e.day)).toEqual(['2026-11-06', '2026-11-04']);
   });
 });

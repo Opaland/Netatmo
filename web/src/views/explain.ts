@@ -104,7 +104,7 @@ export function cutScope(e: Explanation, wood = false): string {
 
 /** Short name of a part on the chart (the full one, with its note, is in the list under it). */
 export function shortLabel(e: Explanation, s: Step): string {
-  if (s.key === 'mode') return e.stopped.every((x) => x.stop.reason === 'poele') ? 'Poêle' : 'Arrêts';
+  if (s.key === 'mode') return e.stopped.every((x) => x.stop.reason === 'poele') ? 'Poêle' : e.stopped.every((x) => x.stop.reason === 'retires') ? 'Retrait' : 'Arrêts';
   return ({ meteo: 'Météo', consignes: 'Consignes', pieces: 'Pièces', horsligne: 'Hors ligne', eau: 'Eau chaude', autres: 'Autres' } as const)[s.key];
 }
 

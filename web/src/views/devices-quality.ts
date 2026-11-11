@@ -17,6 +17,7 @@ import { OFFERS, periodAt } from '../offers';
 import { contracts, esc, lastDay, longDate, table } from '../ui';
 import { fmt1, plural } from '../glossary';
 import { stoppedRooms } from './offline-rooms';
+import { stoppedOn } from '../room-offline';
 import { alertHtml } from '../components';
 
 export const roomLabel = (id?: string) => (id ? ((rawDataset() ?? ds!).meta.rooms.find((r) => r.id === id)?.name ?? 'pièce inconnue') : '—');
@@ -48,7 +49,9 @@ export function devicesQualityHtml(): string {
   const d = ds!;
   const doc = d.devices;
   const out: string[] = [];
-  const fw = firmwareSummary(firmwareLog(doc));
+  // #440: a module of a room switched off on purpose raises nothing from that day on (stoppedOn)
+  const stopped = stoppedRooms();
+  const fw = firmwareSummary(firmwareLog(doc, stopped));
   const setup = setupDates(doc);
   if (fw.length || setup.length) {
     out.push(
@@ -69,11 +72,9 @@ export function devicesQualityHtml(): string {
   }
   const off = new Map<string, string[]>();
   // #346: the days of a radiator switched off on purpose are expected, not « module hors ligne »
-  const stoppedFrom = new Map(stoppedRooms().map((s) => [s.room, s.from]));
   for (const [key, days] of Object.entries(doc?.reach ?? {})) {
     const room = doc?.modules?.[key]?.room;
-    const from = room ? stoppedFrom.get(room) : undefined;
-    const zero = Object.keys(days).filter((x) => days[x] === 0 && !(from && x >= from));
+    const zero = Object.keys(days).filter((x) => days[x] === 0 && !stoppedOn(stopped, room, x));
     if (room && zero.length) off.set(room, [...(off.get(room) ?? []), ...zero]);
   }
   if (off.size) {

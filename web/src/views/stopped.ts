@@ -36,7 +36,7 @@ export function mountStopped(card: HTMLElement | null, repo: () => string) {
   const firstSilent = (id: string) => offlineInfo().raw.runs.find((r) => r.room === id && r.ongoing)?.from ?? lastDay();
   card.innerHTML = html(`<section class="card" id="stopped-card" aria-labelledby="stopped-title">
     <div class="card-head"><h2 id="stopped-title">Radiateurs arrêtés volontairement</h2><span class="tag scope">foyer</span></div>
-    <p class="hint muted">Une pièce chauffée autrement (un poêle, par exemple) dont vous avez coupé le radiateur : elle n’envoie plus rien, et c’est normal. Elle est alors « arrêtée » et non « hors ligne » : pas d’alerte, pas d’estimation depuis le compteur, et sa baisse compte comme un changement de mode de chauffage, pas comme vos réglages.</p>
+    <p class="hint muted">Une pièce chauffée autrement (un poêle, par exemple) dont vous avez coupé ou retiré les radiateurs : elle n’envoie plus rien, et c’est normal. Elle est alors « arrêtée » et non « hors ligne » : pas d’alerte, pas d’estimation depuis le compteur, et sa baisse compte comme un changement de mode de chauffage, pas comme vos réglages.</p>
     ${
       list.length
         ? `<ul class="list" aria-label="Radiateurs arrêtés">${list

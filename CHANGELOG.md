@@ -1,5 +1,15 @@
 # Historique des versions
 
+## v1.8 — en cours
+
+- **Radiateurs retirés** (#440) : motif « Radiateurs retirés » dans ⚙ Mon logement › Radiateurs
+  arrêtés volontairement (appli et collecte, une seule liste tenue d'accord par un test). Pour tout
+  motif, une seule règle (`stoppedOn` / `stopped_on`) : à partir de la date déclarée, plus d'alerte de
+  module (« ne répond plus » de la nuit, issue de la collecte, firmware, heures hors ligne) ; avant, les
+  alertes restent. Une pièce et ses modules qui disparaissent de l'application Intuis gardent leur
+  historique (entrée de la pièce conservée dans la méta, clés pseudonymes des modules inchangées).
+  « Expliquer un mois » : « Changement de mode de chauffage (radiateurs retirés : Salon) ».
+
 ## v1.7 — en cours : finitions et données de la maison
 
 Version de finitions de la refonte v1.6 et de données de la maison, sans nouvel onglet (cadrage :
