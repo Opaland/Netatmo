@@ -56,4 +56,6 @@ jobs:
         if: ${{ inputs.qualite }}
         env:
           DATA_PASSPHRASE: ${{ inputs.qualite && secrets.DATA_PASSPHRASE || '' }}
+          # #346 / #440: rooms switched off on purpose are « arrêtés », not missing (only their count is printed)
+          STOPPED_ROOMS_JSON: ${{ vars.STOPPED_ROOMS_JSON }}
         run: python -m collector diagnose --qualite

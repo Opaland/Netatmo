@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { type DayRecord, addDays } from './aggregate';
+import vector from './__fixtures__/quality-rule.json';
 import {
+  ABOVE_MARGIN_KWH,
+  ABOVE_RATIO,
+  SUSPECT_KWH_DAY,
   aboveMeter,
   coverParts,
   covered,
@@ -10,6 +14,7 @@ import {
   monthSpan,
   monthStatus,
   qualityReport,
+  roomDays,
   runs,
   seenParts,
   sourceVerdict,
@@ -204,7 +209,7 @@ describe('values that look wrong', () => {
     const low = lowYears(records, linky, new Set());
     expect(low.map((l) => l.year)).toEqual([2024]);
     expect(low[0].share).toBeCloseTo(9 / 40);
-    const v = yearVerdicts({ sources: [], low, above: [], suspects: [] });
+    const v = yearVerdicts({ sources: [], low, above: [], suspects: [], roomDays: new Map(), stopped: [] });
     expect(v).toEqual([]); // no source: no year
   });
   it('days above the meter', () => {
@@ -289,5 +294,98 @@ describe('freshness (header pill)', () => {
   });
   it('no data yet', () => {
     expect(freshness({ last: null, now, demo: false }).level).toBe('warn');
+  });
+});
+
+describe('#336: one room-day rule with `diagnose --qualite` (quality-rule.json)', () => {
+  type Run = [string, string, string, number];
+  const V = vector as unknown as {
+    suspect_kwh_day: number;
+    above_ratio: number;
+    above_margin_kwh: number;
+    last: string;
+    rooms: { id: string; category: string }[];
+    stopped: { room: string; from: string }[];
+    runs: Run[];
+    remove: [string, string, string][];
+    estimated: [string, string, string][];
+    linky: { from: string; to: string; kwh: number; days: Record<string, number> };
+    expected: { months: Record<string, Record<string, number[]>>; above: string[] };
+  };
+  const cells = new Map<string, number>();
+  for (const [room, from, to, kwh] of V.runs) for (const d of span(from, to)) cells.set(`${room}|${d}`, kwh);
+  for (const [room, from, to] of V.remove) for (const d of span(from, to)) cells.delete(`${room}|${d}`);
+  const cat = (id: string) => V.rooms.find((r) => r.id === id)!.category as DayRecord['cat'];
+  const records: DayRecord[] = [...cells].map(([k, kwh]) => ({ room: k.split('|')[0], day: k.split('|')[1], cat: cat(k.split('|')[0]), kwh }));
+  const estimated = new Set(V.estimated.flatMap(([room, from, to]) => span(from, to).map((d) => `${room}|${d}`)));
+  const linkyDaily = new Map(span(V.linky.from, V.linky.to).map((d) => [d, V.linky.days[d] ?? V.linky.kwh]));
+  const input = { last: V.last, rooms: V.rooms.map((r) => ({ ...r, name: r.id })), records, estimated, stopped: V.stopped.map((s) => ({ ...s, text: '' })) };
+
+  it('the thresholds are the ones of the shared file', () => {
+    expect([SUSPECT_KWH_DAY, ABOVE_RATIO, ABOVE_MARGIN_KWH]).toEqual([V.suspect_kwh_day, V.above_ratio, V.above_margin_kwh]);
+  });
+  it('room-days per month: real / estimated / missing / suspect / stopped', () => {
+    const got = roomDays(input);
+    const asLists = Object.fromEntries(
+      [...got].map(([m, c]) => [m, Object.fromEntries(Object.entries(c).map(([k, v]) => [k, [v.real, v.estimated, v.missing, v.suspect, v.stopped]]))]),
+    );
+    expect(asLists).toEqual(V.expected.months);
+  });
+  it('days above the meter: measured values of the followed rooms only', () => {
+    expect(aboveMeter(records, linkyDaily, estimated)).toEqual(V.expected.above);
+  });
+  it('the year verdict says the room-days and the room stopped on purpose (#440)', () => {
+    const r = qualityReport({
+      ...input,
+      rooms: input.rooms.map((x) => (x.id === 's' ? { ...x, name: 'Pièce S' } : x)),
+      stopped: [{ room: 's', from: '2024-02-01', text: 'radiateurs retirés depuis le 1er févr. 2024' }],
+    });
+    const v = yearVerdicts(r).find((y) => y.year === 2024)!;
+    expect(v.counts).toBe('En jours × pièces : 130 relevés, 5 estimés, 3 manquants, 28 arrêtés volontairement.');
+    expect(v.reasons).toContain('Pièce S : radiateurs retirés depuis le 1er févr. 2024 : pas de données attendues, ce n’est pas un trou.');
+    expect(v.reasons.some((x) => x.startsWith('2 valeurs impossibles'))).toBe(true);
+  });
+});
+
+describe('#336: the known cause of each gap', () => {
+  const daily = (list: string[]) => Object.fromEntries(list.map((d) => [d, 1]));
+  it('a power or an Internet cut explains a gap on every room (#394)', () => {
+    const lost = new Set(span('2024-03-10', '2024-03-14'));
+    const records = recs('2024-01-01', '2024-06-30', { a: lost, b: lost, c: lost, w: lost });
+    const power = qualityReport(base(records, { last: '2024-06-30', devices: { cuts: new Map([['2024-03-10', 'power']]) } }));
+    expect(power.sources.find((s) => s.id === 'heating')!.gaps[0].cause).toBe('coupure de courant le 10 mars 2024 : la passerelle Intuis ne pouvait plus envoyer ses relevés');
+    const net = qualityReport(base(records, { last: '2024-06-30', devices: { cuts: new Map([['2024-03-09', 'internet']]) } }));
+    expect(net.sources.find((s) => s.id === 'heating')!.gaps[0].cause).toMatch(/^coupure Internet le 9 mars 2024/);
+    const far = qualityReport(base(records, { last: '2024-06-30', devices: { cuts: new Map([['2024-03-20', 'power']]) } }));
+    expect(far.sources.find((s) => s.id === 'heating')!.gaps[0].cause).toMatch(/historique Intuis n'a rien renvoyé/);
+  });
+  it('a water heater out of reach (nightly status), alone', () => {
+    const off = new Set(span('2024-04-01', '2024-04-09'));
+    const r = qualityReport(base(recs('2024-01-01', '2024-06-30', { w: off }), { last: '2024-06-30', devices: { offline: new Map([['w', new Set(['2024-04-02', '2024-04-03'])]]) } }));
+    const g = r.sources.find((s) => s.id === 'water')!.gaps[0];
+    expect(g.cause).toBe('chauffe-eau injoignable 2 de ces jours (il ne répondait pas à la passerelle)');
+    expect(g.link).toBe('#parametres-sources');
+  });
+  it('Linky: a failed collection, a stopped collection (the station is missing too), or Enedis', () => {
+    const all = span('2024-01-01', '2024-06-30');
+    const hole = (d: string) => d >= '2024-03-01' && d <= '2024-03-20';
+    const linky = new Map(all.filter((d) => !hole(d)).map((d) => [d, 20]));
+    const cause = (extra: Partial<QualityInput>) => qualityReport(base(recs('2024-01-01', '2024-06-30'), { last: '2024-06-30', linky, ...extra })).sources.find((s) => s.id === 'linky')!.gaps[0].cause;
+    expect(cause({})).toBe('Enedis n’a pas transmis ces jours');
+    expect(cause({ devices: { failures: { '2024-03-05': ['linky'], '2024-03-28': ['linky', 'netatmo'], '2024-04-15': ['linky'] } } })).toBe(
+      'collecte Linky en échec (2 nuits) : ces jours n’ont pas été redemandés à temps',
+    );
+    const station = { modules: { m0: { name: 'Intérieur' } }, daily: { m0: daily(all.filter((d) => !hole(d))) } };
+    expect(cause({ station })).toBe('collecte arrêtée : la station manque aussi ces jours-là');
+    const s = qualityReport(base(recs('2024-01-01', '2024-06-30'), { last: '2024-06-30', linky, station })).sources.find((x) => x.id === 'station')!;
+    expect(s.gaps[0].cause).toBe('collecte arrêtée : le compteur Linky manque aussi ces jours-là');
+    const failed = qualityReport(base(recs('2024-01-01', '2024-06-30'), { last: '2024-06-30', station, devices: { failures: { '2024-03-02': ['netatmo'] } } }));
+    expect(failed.sources.find((x) => x.id === 'station')!.gaps[0].cause).toMatch(/^collecte de la station en échec \(1 nuit\)/);
+  });
+  it('the hourly snapshot: a cut made the home unreachable', () => {
+    const seen = Object.fromEntries(span('2026-01-01', '2026-01-20').filter((d) => d < '2026-01-08' || d > '2026-01-11').map((d) => [d, 0xffffff]));
+    expect(fineSource('roomstate', seenParts(seen), null)!.gaps[0].cause).toMatch(/relevé horaire non passé/);
+    const s = fineSource('roomstate', seenParts(seen), null, [], new Map([['2026-01-08', 'internet']]))!;
+    expect(s.gaps[0].cause).toBe('coupure Internet le 8 janv. 2026 : la maison était injoignable');
   });
 });
