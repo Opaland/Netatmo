@@ -32,7 +32,7 @@ import { usageLabel } from '../glossary';
 import type { MeterPage, Route } from '../router';
 import { tenant, tenantNote } from '../tenant';
 import { html } from '../trusted';
-import { activeRooms, avgPrice, catColor, contracts, esc, fmtKwh, lastDay, longDate, nf0, series, tariffNames } from '../ui';
+import { activeRooms, avgPrice, catColor, contracts, esc, fmtKwh, lastDay, longDate, nf0, tariffColor, tariffNames } from '../ui';
 import * as analyse from './analyse';
 
 const hasCurve = () => !!((ds!.meta as { linky_curve_years?: number[] }).linky_curve_years ?? []).length;
@@ -260,8 +260,8 @@ function offPeakCard(r: HomeRange): string {
   if (!hasTariffs() || split[1] + split[2] <= 0) return `${start}<p class="hint muted">Pas de relevé heures pleines / creuses sur la période.</p></section>`;
   const hp = offPeakShare(split, offPeakCol());
   const items: LegendItem[] = [
-    { label: `${n1} ${fmtKwh(split[1])}`, color: series(0) },
-    { label: `${n2} ${fmtKwh(split[2])}`, color: series(2) },
+    { label: `${n1} ${fmtKwh(split[1])}`, color: tariffColor(1) },
+    { label: `${n2} ${fmtKwh(split[2])}`, color: tariffColor(2) },
     ...(split[0] + split[3] > 0 ? [{ label: `Sans détail ${fmtKwh(split[0] + split[3])}`, color: cssVar('--usage-other') }] : []),
   ];
   const days = coverage(
@@ -270,7 +270,7 @@ function offPeakCard(r: HomeRange): string {
     r.to,
   );
   return `${start}${hp ? `<p class="meter-big"><span class="big num">${nf0.format(hp.pct)} %</span> <span class="muted">en ${term('hc')}</span></p>` : ''}
-    <div class="share" role="img" aria-label="${esc(items.map((i) => i.label).join(', '))}"><span style="flex:${split[1]};background:${series(0)}"></span><span style="flex:${split[2]};background:${series(2)}"></span>${
+    <div class="share" role="img" aria-label="${esc(items.map((i) => i.label).join(', '))}"><span style="flex:${split[1]};background:${tariffColor(1)}"></span><span style="flex:${split[2]};background:${tariffColor(2)}"></span>${
       split[0] + split[3] > 0 ? `<span style="flex:${split[0] + split[3]};background:${cssVar('--usage-other')}"></span>` : ''
     }</div>
     ${legend(items)}
@@ -297,8 +297,8 @@ function drawOffPeak(r: HomeRange) {
   barChart(el, {
     labels: keys.map((k) => bucketLabel(k, 'month')),
     series: [
-      { name: n1, color: series(0), data: splits.map((s) => Math.round(s[1])) },
-      { name: n2, color: series(2), data: splits.map((s) => Math.round(s[2])) },
+      { name: n1, color: tariffColor(1), data: splits.map((s) => Math.round(s[1])) },
+      { name: n2, color: tariffColor(2), data: splits.map((s) => Math.round(s[2])) },
     ],
     stacked: true,
     price: null,

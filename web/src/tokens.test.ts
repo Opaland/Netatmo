@@ -160,6 +160,8 @@ const GRAPHIC = [
   '--year-0',
   '--year-1',
   ...Array.from({ length: 8 }, (_, i) => `--room-${i + 1}`),
+  '--tariff-peak',
+  '--tariff-offpeak',
 ];
 
 /** Lowest ratio of each theme, printed at the end (npx vitest run src/tokens.test.ts). */
@@ -212,6 +214,23 @@ describe('jetons du design system (#310)', () => {
         }
       report.push(`${name} : pièces à ΔE ≥ ${lowest.toFixed(1)}`);
       expect(fails).toEqual([]);
+    });
+  }
+  // #435: peak and off-peak hours were drawn in the colours of Salon and Chambre parentale. Their
+  // own two tokens stay at least 20 apart from every room, from the two usages and from each
+  // other, in each theme (the rule of the rooms, #399).
+  for (const [name, env] of THEMES) {
+    it(`${name} : couleurs des heures pleines / creuses à ΔE ≥ 20 des pièces, des usages et entre elles`, () => {
+      const t = tokens(env);
+      const others = [...Array.from({ length: 8 }, (_, i) => `--room-${i + 1}`), '--usage-heating', '--usage-water'];
+      const fails: string[] = [];
+      for (const [a, b] of [['--tariff-peak', '--tariff-offpeak'], ...['--tariff-peak', '--tariff-offpeak'].flatMap((x) => others.map((o) => [x, o]))]) {
+        const d = deltaE(resolve(t, a), resolve(t, b));
+        if (d < 20) fails.push(`${a} / ${b} : ΔE ${d.toFixed(1)}`);
+      }
+      expect(fails).toEqual([]);
+      // the off-peak stripes of a schedule are drawn on its lane (#313: ≥ 3:1)
+      expect(contrast(resolve(t, '--tariff-offpeak'), resolve(t, '--surface-sunken'))).toBeGreaterThanOrEqual(3);
     });
   }
   it('ΔE*ab : valeurs de référence', () => {

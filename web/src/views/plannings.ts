@@ -172,7 +172,7 @@ function band(r30: Room30, id: string, from: string, to: string, skip: Set<strin
     })}${legend([
       { label: `Confort ${fmt1(sched.comfort)} °C`, color: '--usage-heating' },
       { label: `Économie ${fmt1(sched.eco)} °C`, color: '--usage-other' },
-      ...(off.length ? [{ label: 'Heures creuses', color: '--accent-text', kind: 'hatch' as const }] : []),
+      ...(off.length ? [{ label: 'Heures creuses', color: '--tariff-offpeak', kind: 'hatch' as const }] : []),
     ])}<p class="hint muted">Planning du ${esc(dayShort(day))}, lu dans les températures demandées.</p>`;
   }
   return '';

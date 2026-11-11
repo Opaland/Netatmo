@@ -2331,8 +2331,9 @@ code.hash {
   bottom: 0;
 }
 .sched .hc {
-  /* #313: --accent-text stripes, ≥ 3:1 on the lane in light and dark (accent-soft was too faint) */
-  background: repeating-linear-gradient(135deg, var(--accent-text) 0 2px, transparent 2px 6px);
+  /* #313: stripes ≥ 3:1 on the lane in light and dark (accent-soft was too faint); #435: in the
+     off-peak colour of the meter, not the iris of the actions (tokens.test.ts) */
+  background: repeating-linear-gradient(135deg, var(--tariff-offpeak) 0 2px, transparent 2px 6px);
 }
 .sched .comfort {
   inset-block: 6px !important;
