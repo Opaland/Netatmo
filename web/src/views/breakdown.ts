@@ -15,7 +15,7 @@ import { memo } from '../memo';
 import { readPref, writePref } from '../money';
 import { html } from '../trusted';
 import { coverage, coveredText } from '../meter';
-import { activeRooms, avgPrice, esc, fmtEur, lastDay, nf0, series, table, tableToggle } from '../ui';
+import { activeRooms, avgPrice, esc, fmtEur, lastDay, nf0, table, tableToggle } from '../ui';
 import { NS } from '../scope';
 
 // #247: what the card needs, loaded for the dataset shown (a late result of another one is dropped).
@@ -240,13 +240,17 @@ function declaredList(): string {
  * électrique · canal 1 », « Veille ») wrap on one or two lines at 360 px and 200 % text.
  */
 function partsList(b: Breakdown): string {
-  const color = (k: string, i: number) => (k === 'talon' ? '--usage-standby' : k === 'unexplained' ? '--usage-other' : series(i + 2));
+  // #446: one colour per meaning, never a room's. An appliance, measured by a plug or declared, is
+  // ink (--series-measure, the colour of a value on its own); its name and « mesuré » / « saisi »
+  // tell them apart. Not --series-reference for a declared one: sand 9 is 5 apart (ΔE*ab) from the
+  // sand 10 of « Veille » in light, the same step in dark (tokens.test.ts).
+  const COLOR: Record<Part['kind'], string> = { plug: '--series-measure', declared: '--series-measure', talon: '--usage-standby', unexplained: '--usage-other' };
   return list(
-    b.parts.map((p, i) => ({
+    b.parts.map((p) => ({
       title: p.name,
       sub: p.kind === 'talon' ? talonSub(b, p) : `${KIND_LABEL[p.kind]} · ≈ ${nf0.format(p.watts)} W`,
       value: kwh(p.kwh),
-      color: color(p.kind, i),
+      color: COLOR[p.kind],
       share: b.rest ? Math.min(100, (p.kwh / b.rest) * 100) : 0,
     })),
     `Décomposition des autres usages, ${b.days.length} jours`,

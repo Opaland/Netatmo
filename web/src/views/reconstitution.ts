@@ -6,7 +6,7 @@ import { ds } from '../app';
 import { barChart } from '../charts';
 import { displayId } from '../household';
 import { rebuildLost, rebuildTotals, suspectDays } from '../reconstitute';
-import { activeRooms, esc, fmtKwh, longDate, roomName, series, table, measureColor } from '../ui';
+import { activeRooms, esc, fmtKwh, longDate, roomName, table, measureColor, referenceColor } from '../ui';
 import { html } from '../trusted';
 import { alertHtml } from '../components';
 
@@ -67,7 +67,7 @@ export function renderReconstitution(zone: HTMLElement) {
     labels: months.map(monthLabel),
     series: [
       { name: 'Mesuré', color: measureColor(), data: months.map((m) => round(measured.get(m))) },
-      { name: 'Reconstitué', color: series(0), data: months.map((m) => round(rebuiltM.get(m))) },
+      { name: 'Reconstitué', color: referenceColor(), data: months.map((m) => round(rebuiltM.get(m))) },
     ],
     stacked: true,
     price: null,
