@@ -122,3 +122,16 @@ quand un outil la rend impossible à refaire.
 - **Conduite** : un e2e qui échoue sur la CI seulement se lit d'abord sur sa **capture** (artefact),
   avant toute hypothèse ; l'ordre des événements du service worker ne se suppose pas d'un moteur à
   l'autre (`createUpdater` retient le premier worker, test « claim avant installed » vu rouge).
+
+### A13 · 11/11/2026 — Une erreur intermittente ne se reproduit pas en répétant, mais en tenant sa cause (#439)
+
+- **Ce qui s'est passé** : « Cannot read properties of null (reading 'layerStack') » est apparu une
+  fois au balayage de la CI ; 4 balayages, 240 navigations et des changements de thème en local
+  n'ont rien donné. La lecture de zrender a montré la seule fenêtre : une tranche de peinture de
+  15 ms qui déborde (calque « incrémental », toutes les cases d'une carte de chaleur en ECharts 6.1)
+  reprend au `requestAnimationFrame` suivant, que `dispose()` n'annule pas. Une horloge qui avance
+  de 20 ms à chaque lecture rend le débordement certain : l'erreur sort à chaque fois.
+- **Conduite** : devant une erreur intermittente, lire la bibliothèque jusqu'à la condition de
+  temps ou d'ordre qui l'ouvre, puis **forcer cette condition** dans le test (horloge, ordre des
+  événements) plutôt que répéter sous charge ; le test doit vérifier sa propre précondition (ici,
+  le calque incrémental existe).

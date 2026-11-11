@@ -142,11 +142,27 @@ function currentTheme(l: Lib): string {
 /** Size of the axis texts in px (--font-xs, follows the system text size). */
 export const axisPx = () => Math.max(11, Math.round(remPx(cssVar('--font-xs'), rootPx())));
 
+/**
+ * #439: dispose a chart that may still be painting. zrender paints a layer of « incremental »
+ * elements in slices of 15 ms and schedules the next slice with requestAnimationFrame; dispose()
+ * does not cancel it, and the slice then paints a disposed painter (« Cannot read properties of
+ * null (reading 'layerStack') », zrender 6.1 Painter._paintList). ECharts 6.1 marks every heatmap
+ * cell incremental, so a slow device (a loaded CI runner) leaving « Journée type » mid-paint threw.
+ * A pending slice stops when the painter's redraw id is no longer its own (the check _paintList
+ * makes first): clearing it before dispose() ends the slice instead of painting nothing into null.
+ * Seen red without it in e2e/compteur.mjs (a clock that makes every slice run out).
+ */
+function disposeChart(chart: ECharts) {
+  const painter = (chart.getZr() as unknown as { painter?: { _redrawId?: unknown } } | null)?.painter;
+  if (painter) painter._redrawId = null;
+  chart.dispose();
+}
+
 function real(el: HTMLElement, l: Lib): ECharts {
   const key = currentTheme(l);
   let chart = l.getInstanceByDom(el);
   if (chart && themeOf.get(chart) !== key) {
-    chart.dispose();
+    disposeChart(chart);
     chart = undefined;
   }
   if (!chart) {
@@ -154,7 +170,11 @@ function real(el: HTMLElement, l: Lib): ECharts {
     themeOf.set(chart, key);
   }
   if (!observed.has(el)) {
-    new ResizeObserver(() => chart.resize()).observe(el);
+    // #439: the chart of the element now (one recreated for another theme replaces the first),
+    // never a disposed one, nothing once the element has left the page
+    new ResizeObserver(() => {
+      if (el.isConnected) l.getInstanceByDom(el)?.resize();
+    }).observe(el);
     observed.add(el);
   }
   return chart;
@@ -219,7 +239,10 @@ function instance(el: HTMLElement): ChartHandle {
 export function disposeAll(root: HTMLElement) {
   const l = lib;
   if (!l) return;
-  root.querySelectorAll<HTMLElement>('.chart').forEach((el) => l.getInstanceByDom(el)?.dispose());
+  root.querySelectorAll<HTMLElement>('.chart').forEach((el) => {
+    const chart = l.getInstanceByDom(el);
+    if (chart) disposeChart(chart);
+  });
 }
 
 function tooltip(price: number | null, showTotal: boolean, unit = 'kWh', series: Series[] = [], notes?: (string | null)[]) {
@@ -375,7 +398,8 @@ function barRows(
   rows: BarRow[],
   opts: { min: number; max: number; valueWidth: string; legend?: { name: string; color: string }[]; onClick?: (index: number) => void },
 ) {
-  lib?.getInstanceByDom(el)?.dispose();
+  const drawn = lib?.getInstanceByDom(el);
+  if (drawn) disposeChart(drawn); // #439: it may still be painting
   el.setAttribute('data-rows', '');
   el.removeAttribute('data-axis-overlap-y');
   if (el.dataset.canvasHeight === undefined) el.dataset.canvasHeight = el.style.height;
