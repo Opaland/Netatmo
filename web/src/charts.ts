@@ -8,7 +8,11 @@ import {
   categoryLabels,
   endLabelsFit,
   legendHeight,
+  lineHeightPx,
+  legendLines,
   legendRows,
+  legendStackHeight,
+  legendTextWidth,
   pointsToShow,
   remPx,
   scaleText,
@@ -197,10 +201,40 @@ function run(el: HTMLElement, f: (c: ECharts) => void) {
   );
 }
 
+/**
+ * #451: notes on the chart element, for the sweep (e2e/sweep.mjs, invariant « legende-coupee »),
+ * a legend drawn past the left or right edge of its canvas (`data-legend-cut`, absent when it
+ * fits): « Température moyenne » was cut at 360 px and text 200 %, and the canvas has no text the
+ * sweep can read. Measured on what zrender laid out (the legend's group, after setOption, which
+ * lays out synchronously), not estimated.
+ */
+function noteLegend(el: HTMLElement, chart: ECharts) {
+  type Rect = { x: number; width: number };
+  type Group = { ignore?: boolean; x: number; getBoundingRect(): Rect };
+  const c = chart as unknown as {
+    getModel?: () => { findComponents?: (q: { mainType: string }) => { get(k: string): unknown }[] } | null;
+    getViewOfComponentModel?: (m: unknown) => { group?: Group } | undefined;
+  };
+  const width = chart.getWidth();
+  let out = 0;
+  for (const m of c.getModel?.()?.findComponents?.({ mainType: 'legend' }) ?? []) {
+    const g = m.get('show') === false ? undefined : c.getViewOfComponentModel?.(m)?.group;
+    if (!g || g.ignore) continue;
+    const r = g.getBoundingRect();
+    if (r.width > 0) out = Math.max(out, Math.ceil(g.x + r.x + r.width - width), Math.ceil(-(g.x + r.x)));
+  }
+  if (out > 1) el.setAttribute('data-legend-cut', `${out} px`);
+  else el.removeAttribute('data-legend-cut');
+}
+
 /** The chart of an element (created on first use), e.g. to add marks after a builder. */
 export function chartOf(el: HTMLElement): ChartHandle {
   return {
-    setOption: (o, opts) => run(el, (c) => c.setOption(o, opts)),
+    setOption: (o, opts) =>
+      run(el, (c) => {
+        c.setOption(o, opts);
+        noteLegend(el, c);
+      }),
     on: (ev, h) => run(el, (c) => c.on(ev, (p) => h(p as { dataIndex: number }))),
     off: (ev) => run(el, (c) => c.off(ev)),
   };
@@ -299,9 +333,26 @@ const legendPx = () => Math.max(11, Math.round(remPx(cssVar('--font-sm'), rootPx
 export function legendLayout(names: string[], el: HTMLElement, line = false) {
   const width = (el.clientWidth || 360) - 8;
   const icon = line ? 20 : 12;
-  const rows = names.length > 1 ? legendRows(names, width, legendPx(), icon) : 0;
+  const px = legendPx();
+  const rows = names.length > 1 ? legendRows(names, width, px, icon) : 0;
+  // #451: a name too wide for a row (« Température moyenne » at 360 px and text 200 %) ran past the
+  // edge of the canvas. It wraps inside its item (a text width only on that item: it makes the item
+  // that wide), and the legend then stacks its items, one per row: ECharts lays the rows of a
+  // horizontal legend out from the top of each item's box and ignores how far a two-line name,
+  // centred on its key, goes above it (layout.js boxLayout, « FIXME: consider rect.y is not 0 »:
+  // the name drew over the row above), whereas a vertical legend chains the boxes.
+  const stack = rows > 0 && names.some((n) => legendLines(n, width, px, icon) > 0);
+  const lineHeight = lineHeightPx(px);
+  const height = stack ? legendStackHeight(names, width, px, icon) : legendHeight(rows, px);
+  // the plot keeps its height: the chart grows by what the stacked legend takes more
+  growForLegend(el, stack ? height - legendHeight(rows, px) : 0);
+  const item = (name: string) =>
+    stack && legendLines(name, width, px, icon) ? { name, textStyle: { width: legendTextWidth(width, icon), overflow: 'break' as const } } : { name };
   return {
+    /** One entry of `legend.data`, for a builder that writes its own (an icon per series). */
+    item,
     option: {
+      ...(stack ? { orient: 'vertical' as const, data: names.map(item), textStyle: { lineHeight } } : {}),
       show: rows > 0,
       type: 'plain' as const,
       top: 0,
@@ -312,8 +363,21 @@ export function legendLayout(names: string[], el: HTMLElement, line = false) {
       itemHeight: line ? 4 : 12,
       itemGap: 12,
     },
-    height: legendHeight(rows, legendPx()),
+    height,
   };
+}
+
+/**
+ * #451: a chart whose legend is stacked grows by `extra` px (its height before, inline or from
+ * the CSS, is kept on the element); back to it when the legend fits on its rows again.
+ */
+function growForLegend(el: HTMLElement, extra: number) {
+  if (el.dataset.legendBase === undefined) {
+    if (extra <= 0 || !el.clientHeight) return;
+    el.dataset.legendBase = String(el.clientHeight);
+    el.dataset.legendStyle = el.style.height;
+  }
+  el.style.height = extra > 0 ? `${Number(el.dataset.legendBase) + Math.ceil(extra)}px` : (el.dataset.legendStyle ?? '');
 }
 
 /** 1 456 → 1 500, 23 → 25: a round axis end above a value. */
@@ -873,7 +937,7 @@ export function comboChart(
       ],
       // #446: a dashed line (dew point) says so in its key too: two dashes instead of a square,
       // never mistaken for the grey of the bars above it
-      legend: { ...leg.option, data: all.map((s) => (s.dashed ? { name: s.name, icon: DASHED_KEY } : s.name)) },
+      legend: { ...leg.option, data: all.map((s) => (s.dashed ? { ...leg.item(s.name), icon: DASHED_KEY } : leg.item(s.name))) },
       tooltip: {
         ...tooltip(null, false, opts.barUnit),
         formatter: tip((params: unknown) => {

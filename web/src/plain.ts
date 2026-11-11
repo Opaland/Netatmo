@@ -72,6 +72,8 @@ export interface PlainVerdict {
   climate: boolean;
   /** Euros of difference (actual − expected), or null without prices. */
   eur: number | null;
+  /** #433: the stove's wood is counted with the electricity (as on the Accueil). */
+  wood?: boolean;
 }
 
 export function verdictTitle(level: PlainVerdict['level']): string {
@@ -86,12 +88,12 @@ export function verdictTitle(level: PlainVerdict['level']): string {
 export function verdictSentences(v: PlainVerdict, from: string, kwh = 'kWh'): string[] {
   const out = [
     // the unit is never last: a touchable term followed by a lone "." would wrap badly
-    `Depuis le ${dayOf(from)} ${monthOf(from)} : ${plainNum(v.actual)}\u00a0${kwh} consommés.`,
+    `Depuis le ${dayOf(from)} ${monthOf(from)} : ${plainNum(v.actual)}\u00a0${kwh} ${v.wood ? "d'électricité et de bois" : 'consommés'}.`,
     `D'habitude, à cette date : ${plainNum(v.expected)}\u00a0kWh.`,
   ];
   if (v.climate) out.push('Ce calcul tient compte du froid de ce mois.');
   if (v.eur !== null && Math.round(Math.abs(v.eur)) >= 1) {
-    out.push(`Cela fait environ ${plainEur(Math.abs(v.eur))} ${v.eur > 0 ? 'de plus' : 'de moins'}.`);
+    out.push(`Cela fait environ ${plainEur(Math.abs(v.eur))} ${v.eur > 0 ? 'de plus' : 'de moins'}${v.wood ? ', bois compris' : ''}.`);
   }
   return out;
 }

@@ -6,6 +6,10 @@ import {
   categoryLabels,
   endLabelsFit,
   legendHeight,
+  legendLines,
+  legendStackHeight,
+  legendTextWidth,
+  lineHeightPx,
   legendRows,
   pointsToShow,
   remPx,
@@ -60,6 +64,20 @@ describe('règles de lisibilité (#304, #306)', () => {
     expect(legendRows(['2025', '2026'], 300, 13)).toBe(1);
     expect(legendRows(['Heures > 1 000 ppm', 'Heures > 1 400 ppm', 'Maximum de la nuit'], 300, 13)).toBeGreaterThan(1);
     expect(legendHeight(2, 13)).toBeGreaterThan(legendHeight(1, 13));
+  });
+  it('un nom de légende plus large que le graphique passe à la ligne au lieu d’être coupé (#451)', () => {
+    // 360 px, texte 200 % : 286 px de légende, textes à 28 px
+    expect(legendLines('Heures > 65 %', 286, 28, 12)).toBe(0);
+    expect(legendLines('Température moyenne', 286, 28, 12)).toBe(2);
+    expect(legendLines('2026–2027 (provisoire, 30 jours)', 286, 28, 12)).toBe(3);
+    // à 100 %, rien ne passe à la ligne
+    expect(legendLines('Température moyenne', 286, 14, 12)).toBe(0);
+    // un mot plus large que la ligne compte autant de lignes que ses morceaux
+    expect(legendLines('x'.repeat(40), 286, 28, 12)).toBe(3);
+    // empilée : chaque ligne de chaque nom, et l'écart entre deux éléments
+    const one = legendStackHeight(['Heures > 65 %', 'Point de rosée'], 286, 28, 12);
+    expect(legendStackHeight(['Heures > 65 %', 'Température moyenne', 'Point de rosée'], 286, 28, 12)).toBe(one + 2 * lineHeightPx(28) + 12);
+    expect(legendTextWidth(286, 12)).toBeLessThan(286 - 12);
   });
   it('étiquettes de fin seulement si elles ne se chevauchent pas', () => {
     const opts = { width: 360, height: 300, px: 13 };

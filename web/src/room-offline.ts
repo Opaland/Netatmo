@@ -71,6 +71,13 @@ export function parseStopped(v: unknown): StoppedRoom[] {
 /** Value of the repository variable STOPPED_ROOMS_JSON. */
 export const stoppedJson = (list: StoppedRoom[]) => JSON.stringify(parseStopped(list));
 
+/**
+ * #440, #433: a room heated by the stove: declared « chauffée par un poêle », or « radiateurs
+ * retirés » when wood is bought (the radiators taken down, the stove heats the room). The one
+ * rule for every screen that names the stove's room or counts its wood (AGENTS.md §5).
+ */
+export const stoveHeated = (s: Pick<StoppedRoom, 'reason'>, woodBought: boolean) => s.reason === 'poele' || (woodBought && s.reason === 'retires');
+
 /** « poêle », « inoccupée »… (empty for « autre »). */
 export const stopShort = (s: Pick<StoppedRoom, 'reason'>) => STOP_SHORT[s.reason] ?? '';
 
