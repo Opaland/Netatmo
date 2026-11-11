@@ -794,6 +794,9 @@ export function hbarChart(
   if (opts.onClick) chart.on('click', (p) => opts.onClick!(p.dataIndex));
 }
 
+/** The key of a dashed line in a legend: two dashes (12 × 2, kept flat by symbolKeepAspect). */
+const DASHED_KEY = 'path://M0,0h5v2h-5zM7,0h5v2h-5z';
+
 /**
  * #306: two measures of different units on the same days, drawn as two charts aligned on the
  * same date axis (never a double axis whose scales cross at random): bars on top (hours over a
@@ -868,7 +871,9 @@ export function comboChart(
           axisLabel: { formatter: axisFmt(el, 'y2') },
         },
       ],
-      legend: leg.option,
+      // #446: a dashed line (dew point) says so in its key too: two dashes instead of a square,
+      // never mistaken for the grey of the bars above it
+      legend: { ...leg.option, data: all.map((s) => (s.dashed ? { name: s.name, icon: DASHED_KEY } : s.name)) },
       tooltip: {
         ...tooltip(null, false, opts.barUnit),
         formatter: tip((params: unknown) => {
@@ -909,7 +914,7 @@ export function comboChart(
             symbol: 'circle',
             symbolSize: (_: unknown, p: { dataIndex: number }) => (pts[p.dataIndex] ? 6 : 0),
             connectNulls: false,
-            lineStyle: { width: 2, color: s.color },
+            lineStyle: { width: 2, color: s.color, type: s.dashed ? ('dashed' as const) : ('solid' as const) },
             itemStyle: { color: s.color },
             markLine: i === 0 && opts.lineMark ? refLine(opts.lineMark) : undefined,
           };

@@ -157,6 +157,7 @@ const GRAPHIC = [
   '--focus',
   '--border-strong',
   '--series-measure',
+  '--series-reference',
   '--year-0',
   '--year-1',
   ...Array.from({ length: 8 }, (_, i) => `--room-${i + 1}`),
@@ -231,6 +232,28 @@ describe('jetons du design system (#310)', () => {
       expect(fails).toEqual([]);
       // the off-peak stripes of a schedule are drawn on its lane (#313: ≥ 3:1)
       expect(contrast(resolve(t, '--tariff-offpeak'), resolve(t, '--surface-sunken'))).toBeGreaterThanOrEqual(3);
+    });
+  }
+  // #446: the series that are not rooms (a measure, a reference, an estimate) take the two ink
+  // tokens, never a room colour. Both stay at least 20 apart from every room, usage and tariff and
+  // from each other; the ink of an appliance also from « Veille » and « Non attribué », its
+  // neighbours in Compteur › Autres usages en détail.
+  for (const [name, env] of THEMES) {
+    it(`${name} : jetons de série à ΔE ≥ 20 des pièces, des usages, des tarifs et entre eux`, () => {
+      const t = tokens(env);
+      const others = [...Array.from({ length: 8 }, (_, i) => `--room-${i + 1}`), '--usage-heating', '--usage-water', '--tariff-peak', '--tariff-offpeak'];
+      const pairs = [
+        ['--series-measure', '--series-reference'],
+        ['--series-measure', '--usage-standby'],
+        ['--series-measure', '--usage-other'],
+        ...['--series-measure', '--series-reference'].flatMap((x) => others.map((o) => [x, o])),
+      ];
+      const fails: string[] = [];
+      for (const [a, b] of pairs) {
+        const d = deltaE(resolve(t, a), resolve(t, b));
+        if (d < 20) fails.push(`${a} / ${b} : ΔE ${d.toFixed(1)}`);
+      }
+      expect(fails).toEqual([]);
     });
   }
   it('ΔE*ab : valeurs de référence', () => {
