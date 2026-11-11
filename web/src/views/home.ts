@@ -27,6 +27,7 @@ import {
   restOfPeriod,
   scopeTitle,
   leftOut,
+  WOOD_WORDS,
   verdictWords,
   writtenGap,
 } from '../home';
@@ -39,7 +40,7 @@ import { chartMarks, yoyGapNote } from './quality';
 import { offlineEstimate, offlineLine, offlineNow, offlineRun, stoppedIn } from './offline-rooms';
 import { offlineText } from '../room-offline';
 import { type Scope, fmtMoney, homeScope, money, yoy } from './verdict-scope';
-import { stoveName, woodOver } from './wood-state';
+import { stoveName, verdictWood, woodOver } from './wood-state';
 
 const ord = (day: string) => (Number(day.slice(8, 10)) === 1 ? '1er' : String(Number(day.slice(8, 10))));
 const END_LABEL = { month: 'fin du mois', season: 'fin de saison', year: "fin d'année", '12m': '' } as const;
@@ -51,15 +52,17 @@ export function renderHome(view: HTMLElement, records: DayRecord[]) {
   const n = state.rooms ? state.rooms.length : all;
   const narrowed = state.cat !== 'all' || n !== all;
   const scope = `${scopeTitle(r)} · ${countedLine({ cat: state.cat, rooms: n, allRooms: all, euros: costAvailable() })}`;
-  // #346, #383: the verdict leaves out the rooms offline over the period or a year earlier
-  const sc = homeScope(records, r.from, r.to);
+  // #346, #383: the verdict leaves out the rooms offline over the period or a year earlier;
+  // #433: with a stove declared and wood bought, it counts the heating electricity + wood
+  const wood = verdictWood(state.cat, state.rooms);
+  const sc = homeScope(records, r.from, r.to, wood);
   view.innerHTML = html`
   <h1 class="sr-only" id="page-title" tabindex="-1">Accueil</h1>
   <div class="periodbar">${seg('home', r.period, HOME_PERIODS, 'Période')}<p class="scope" aria-live="polite">${esc(scope)}${
     narrowed ? ` <button type="button" class="link" data-filter-reset>Tout compter</button>` : ''
   }</p></div>
   ${verdictBlock(r, sc)}
-  ${tiles(records, last)}
+  ${tiles(records, last, wood)}
   <div id="budget-zone"></div>
   <div class="alerts" id="alerts"><div id="grid-zone"></div><div id="cold-alert-zone"></div></div>
   ${countedCard(records, r)}
@@ -110,7 +113,9 @@ function verdictBlock(r: HomeRange, sc: Scope): string {
   const end = projection(records, r, v, spent);
   if (!v || !sc.m) {
     const amount = spent.unit === '€' ? fmtEur(spent.value) : fmtKwh(spent.kwh);
-    const what = `<b class="num">${esc(amount)}</b>${spent.unit === '€' ? ` (${esc(fmtKwh(spent.kwh))})` : ''} ${spent.unit === '€' ? 'dépensés' : 'consommés'}${left.length ? ` ${scopeHtml(left)},` : ''} ${esc(periodPhrase(r))}`;
+    const what = `<b class="num">${esc(amount)}</b>${
+      sc.wood ? ` ${WOOD_WORDS}${spent.unit === '€' ? ` (${esc(fmtKwh(spent.kwh))})` : ''}` : `${spent.unit === '€' ? ` (${esc(fmtKwh(spent.kwh))})` : ''} ${spent.unit === '€' ? 'dépensés' : 'consommés'}`
+    }${left.length ? ` ${scopeHtml(left)},` : ''} ${esc(periodPhrase(r))}`;
     return `<section class="verdict" aria-labelledby="verdict-title">
     <span class="verdict-icon" aria-hidden="true">·</span>
     <div><h2 class="verdict-title" id="verdict-title">${esc(amount)} ${esc(periodPhrase(r))}</h2>
@@ -123,10 +128,10 @@ function verdictBlock(r: HomeRange, sc: Scope): string {
   const ref = v.climate ? 'à météo comparable' : 'd’après les années passées';
   const max = Math.max(m.actual, m.expected, end ?? 0) || 1;
   const endTxt = end !== null && END_LABEL[r.period] ? `${END_LABEL[r.period]} ≈ ${fmtMoney(end, m.unit)}` : '';
-  const w = verdictWords(m, left, periodPhrase(r), ref);
+  const w = verdictWords(m, left, periodPhrase(r), ref, sc.wood);
   const out = leftOut(left);
   const g = gauge({
-    label: `${scopeTitle(r)}${out ? `, ${out}` : ''} : ${w.spent} ${m.unit === '€' ? 'dépensés' : 'consommés'}, ${w.expectedAmount} attendus à cette date${
+    label: `${scopeTitle(r)}${out ? `, ${out}` : ''} : ${w.spent} ${sc.wood ? WOOD_WORDS : m.unit === '€' ? 'dépensés' : 'consommés'}, ${w.expectedAmount} attendus à cette date${
       endTxt ? `, environ ${fmtMoney(end!, m.unit)} prévus à la ${END_LABEL[r.period]}` : ''
     }`,
     value: m.actual,
@@ -147,6 +152,8 @@ function verdictBlock(r: HomeRange, sc: Scope): string {
         `<p class="hint">Attendu = consommation des mêmes dates des années passées (jusqu'à quatre)${
           v.climate ? ', le chauffage corrigé des degrés-jours (le froid réellement constaté)' : ''
         }, ${m.unit === '€' ? 'au prix payé sur la période' : 'en kWh (prix non renseignés)'}. ${
+          sc.wood ? 'Avec le poêle, le bois de vos achats (⚙ Mon logement), réparti selon le froid de chaque jour, s’ajoute à l’électricité, cette année comme les années passées. ' : ''
+        }${
           endTxt ? `La projection ajoute le reste de la période comme les années passées, au rythme constaté ; elle suppose un hiver normal. ` : ''
         }${m.unit === '€' ? 'Prix du contrat en vigueur chaque jour, hors abonnement.' : ''}</p>`,
       )}
@@ -155,13 +162,14 @@ function verdictBlock(r: HomeRange, sc: Scope): string {
 }
 
 // ------------------------------------------------------------------ tiles (#302: each reference named)
-function tiles(records: DayRecord[], last: string): string {
+function tiles(records: DayRecord[], last: string, wood: Map<string, [number, number]> | null): string {
   const monthFrom = `${last.slice(0, 8)}01`;
   const yearFrom = `${last.slice(0, 4)}-01-01`;
   const year = Number(last.slice(0, 4));
   // #383: the month tile over the scope of its comparisons (and of the verdict on « Mois »)
-  const ms = homeScope(records, monthFrom, last);
-  const mo = ms.spent;
+  // #433: its « vs attendu » is the verdict's (electricity + wood with a stove), its amount the electricity
+  const ms = homeScope(records, monthFrom, last, wood);
+  const mo = ms.elec;
   const yr = money(records, yearFrom, last);
   const mv = ms.v;
   const mOut = leftOut(ms.left);

@@ -3,9 +3,9 @@
 // the period or a year earlier (#346) are left out of EVERY figure (spent, expected, gap, %,
 // year-over-year) and named — so that two screens never give two numbers for one question.
 import { type DayRecord, minusYears, pctChange, total } from '../aggregate';
-import { type Verdict, verdict } from '../analysis';
+import type { Verdict } from '../analysis';
 import { ds } from '../app';
-import { type MoneyVerdict, moneyVerdict } from '../home';
+import { type MoneyVerdict, heatVerdict } from '../home';
 import { costAvailable, costOf, fmtEur, fmtKwh } from '../ui';
 import { comparableRecords } from './offline-rooms';
 
@@ -33,22 +33,31 @@ export function yoy(all: DayRecord[], from: string, to: string): number | null {
 }
 
 export interface Scope {
-  /** The records counted: without the rooms left out. */
+  /** The records counted: without the rooms left out (#433: with the wood as day records when it counts). */
   records: DayRecord[];
   /** Names of the rooms left out (offline over the period or a year earlier). */
   left: string[];
-  /** Spent over the period, on that scope. */
+  /** Spent over the period, on that scope (#433: electricity + wood when the wood counts). */
   spent: Money;
+  /** The electricity alone over the period, on that scope. */
+  elec: Money;
+  /** #433: the stove's wood is counted in `spent` and in the verdict. */
+  wood: boolean;
   /** The verdict against the previous years (null: no previous year yet). */
   v: Verdict | null;
   /** The same, priced: what the screens write. */
   m: MoneyVerdict | null;
 }
 
-/** The verdict of [from, to] as the Accueil says it, on its one scope. */
-export function homeScope(all: DayRecord[], from: string, to: string): Scope {
+/**
+ * The verdict of [from, to] as the Accueil says it, on its one scope; #433: with the stove's wood
+ * of each day (`wood`, verdictWood) counted as heating, this year and in the reference years.
+ */
+export function homeScope(all: DayRecord[], from: string, to: string, wood: Map<string, [number, number]> | null = null): Scope {
   const cmp = comparableRecords(all, from, to);
-  const spent = money(cmp.records, from, to);
-  const v = verdict(cmp.records, from, to, ds!.weather);
-  return { records: cmp.records, left: cmp.left, spent, v, m: v ? moneyVerdict(v, spent.unit === '€' ? spent.value : null) : null };
+  const elec = money(cmp.records, from, to);
+  const h = heatVerdict(cmp.records, from, to, ds!.weather, elec.unit === '€' ? elec.value : null, wood);
+  const w = h.wood;
+  const spent = w ? { value: elec.value + (elec.unit === '€' ? w.eur : w.kwh), unit: elec.unit, kwh: elec.kwh + w.kwh } : elec;
+  return { records: h.records, left: cmp.left, spent, elec, wood: !!w, v: h.v, m: h.m };
 }
