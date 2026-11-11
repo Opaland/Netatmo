@@ -95,8 +95,9 @@ try {
       const num = (s) => Number(s.replace(/[\s  ]/g, '').replace('−', '-'));
       const title = (await page.locator('#verdict-title').innerText()).trim();
       const said = (await page.locator('.verdict .verdict-sub').first().innerText()).replace(/\s+/g, ' ');
-      const h = /^([\d\s  ]+)\s€ de (moins|plus) que d'habitude$/.exec(title);
-      const s = /^([\d\s  ]+)\s€ \(([\d\s  ]+)\skWh\) dépensés ⚠ hors Chambre enfant, hors ligne depuis le 5 nov\. \(que faire \?\), en novembre \(au 8\), pour ([\d\s  ]+)\s€ attendus .*?\(([−+]?[\d\s  ]+)\s%\)/.exec(said);
+      // #433: the demo's stove: the verdict counts the heating electricity + wood, and says so
+      const h = title === "Comme d'habitude" ? ['', '0', 'plus'] : /^([\d\s  ]+)\s€ de (moins|plus) que d'habitude$/.exec(title);
+      const s = /^([\d\s  ]+)\s€ d’électricité \+ bois \(([\d\s  ]+)\skWh\) ⚠ hors Chambre enfant, hors ligne depuis le 5 nov\. \(que faire \?\), en novembre \(au 8\), pour ([\d\s  ]+)\s€ attendus .*?\(([−+]?[\d\s  ]+)\s%\)/.exec(said);
       check(h && s, `${name} : verdict illisible (« ${title} » / « ${said.slice(0, 200)} »)`);
       if (h && s) {
         const gap = num(h[1]) * (h[2] === 'moins' ? -1 : 1);
