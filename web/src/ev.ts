@@ -2,9 +2,10 @@
 // The charge of each day starts at the same local time, at constant power, until the daily
 // energy is delivered (it may run past midnight). The off-peak hours are the shared ones of
 // offpeak.ts (#428): read in the half hours, else typed, else 22 h → 6 h stated as an assumption.
+// #441: dated: each day of the year compared is charged with the ranges in force that day.
 import type { DaySplit } from './analysis';
 import { type Curve, SLOTS, watts } from './curve';
-import { FALLBACK_RANGES, slotShares } from './offpeak';
+import { FALLBACK_RANGES, type OffPeak, periodOn, slotShares } from './offpeak';
 
 export interface EvInput {
   kwhWeek: number; // energy taken from the grid per week (charging losses included)
@@ -65,9 +66,29 @@ export function evPlan({ kwhWeek, powerKw, startHour }: EvInput, offPeak: readon
   return { kwhDay, hc, hp, hours: kwhDay / powerKw, same, next };
 }
 
-/** The same days with the charge added (each day carries the charge started that evening). */
-export function addCharge(splits: DaySplit[], plan: EvPlan): DaySplit[] {
-  return splits.map((s) => ({ day: s.day, hc: s.hc + plan.hc, hp: s.hp + plan.hp }));
+/**
+ * #441: the plan of each day, with the off-peak ranges in force that day (one plan per period).
+ * Null as evPlan (the charge never ends: it does not depend on the ranges).
+ */
+export function evPlanOn(input: EvInput, o: OffPeak): ((day: string) => EvPlan) | null {
+  const now = evPlan(input, o.share);
+  if (!now) return null;
+  const plans = new Map(o.periods.map((p) => [p, evPlan(input, p.share) ?? now]));
+  return (day) => {
+    const p = periodOn(o.periods, day);
+    return (p && plans.get(p)) ?? now;
+  };
+}
+
+/**
+ * The same days with the charge added (each day carries the charge started that evening). #441:
+ * `plan` may give the plan of each day (evPlanOn), the ranges changing in time.
+ */
+export function addCharge(splits: DaySplit[], plan: EvPlan | ((day: string) => EvPlan)): DaySplit[] {
+  return splits.map((s) => {
+    const p = typeof plan === 'function' ? plan(s.day) : plan;
+    return { day: s.day, hc: s.hc + p.hc, hp: s.hp + p.hp };
+  });
 }
 
 export interface PeakResult {

@@ -19,7 +19,7 @@ import { loadVotes } from './insight';
 import { INSTALL_HASH, inviteUrl } from './invite';
 import { validInvoice } from './invoice';
 import { loadNote } from './local-store';
-import { MAX_RANGES, parseHcRanges, slotShares } from './offpeak';
+import { MAX_RANGES, parseHcRanges, periodsOfTyped, resolveOffPeak, shareOn, slotShares } from './offpeak';
 import { agreePlurals } from './glossary';
 import { parseFlags } from './onboarding';
 import { STOP_REASONS, parseStopped } from './room-offline';
@@ -195,19 +195,35 @@ describe('#359 fuzz : préférences relues de cet appareil', () => {
     });
   });
 
-  it('#428 heures creuses saisies : des minutes entières bornées, début ≠ fin, 4 plages au plus', () => {
+  it('#428 #441 heures creuses saisies : des minutes entières bornées, début ≠ fin, une vraie date ou aucune, 8 plages au plus', () => {
     const m = (r: Rng) => (r() < 0.5 ? pick(r, [...NUMBERS, 0, 135, 465, 1439, 1440, 795]) : pick(r, ['02:15', '07:45', '23:59', '24:00', '7:45', '13:15', '13:60', ...STRINGS]));
+    // #441: « à compter du », a real day or nothing (2026-02-30 and 2026-1-5 are among STRINGS)
+    const since = (r: Rng) => (r() < 0.5 ? pick(r, ['2026-03-01', '2025-12-28', '2024-02-29', '2025-02-29', '', null, undefined]) : anyValue(r));
     fuzz('parseHcRanges', (r) => {
-      const raw = r() < 0.4 ? anyValue(r) : Array.from({ length: Math.floor(r() * 7) }, () => (r() < 0.7 ? { from: m(r), to: m(r) } : anyValue(r)));
+      const raw =
+        r() < 0.4
+          ? anyValue(r)
+          : Array.from({ length: Math.floor(r() * 11) }, () => (r() < 0.7 ? (r() < 0.5 ? { from: m(r), to: m(r) } : { from: m(r), to: m(r), since: since(r) }) : anyValue(r)));
       const v = parseHcRanges(raw);
       assert(Array.isArray(v) && v.length <= MAX_RANGES, `longueur ${v.length}`);
       for (const x of v) {
-        assert(Object.keys(x).join() === 'from,to', 'clés');
+        const keys = Object.keys(x).join();
+        assert(keys === 'from,to' || keys === 'from,to,since', `clés ${keys}`);
         for (const k of [x.from, x.to]) assert(Number.isInteger(k) && k >= 0 && k < 1440, `minute ${k}`);
         assert(x.from !== x.to, 'début = fin');
+        if (x.since !== undefined) {
+          assert(typeof x.since === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(x.since), `date ${String(x.since)}`);
+          assert(new Date(`${x.since}T00:00:00Z`).toISOString().slice(0, 10) === x.since, `date réelle ${x.since}`);
+        }
       }
       const share = slotShares(v);
       assert(share.length === 48 && share.every((f) => f >= 0 && f <= 1), 'parts');
+      // the periods: every range kept once, sorted by day, the undated one first
+      const ps = periodsOfTyped(v);
+      assert(ps.reduce((s, p) => s + p.ranges.length, 0) === v.length, 'plages perdues');
+      for (let k = 1; k < ps.length; k++) assert(ps[k].since !== null && (ps[k - 1].since === null || ps[k - 1].since! < ps[k].since!), 'ordre des périodes');
+      const o = resolveOffPeak(null, v);
+      for (const day of ['1990-01-01', '2026-03-01', '2099-12-31']) assert(shareOn(o, day).length === 48, 'parts du jour');
       notPolluted();
     });
   });
