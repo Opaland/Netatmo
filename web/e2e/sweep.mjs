@@ -10,6 +10,7 @@
 //     in the middle without a hyphen (#384, #397: what the horizontal scroll does not see);
 //   - no value axis writing the same label twice (« 21, 21, 20, 20 », #398);
 //   - no category label of a horizontal bar chart drawn over its neighbour (#413);
+//   - no chart legend drawn past the edge of its canvas (#451);
 //   - the floors of the design system (v1.7, revue design v1.6): no text under --font-xs (#404),
 //     no control under --target-min (#405), no button outside the components (#402), one h1
 //     per screen, the page title, no h2 larger than it (#403);
@@ -23,7 +24,7 @@
 //
 // Run after `npm run build`: node e2e/sweep.mjs   (starts `vite preview` itself)
 //   SWEEP_SCOPE=ci (default: every route on the plain demo in the four displays and in the
-//     explorer, the other fixtures at 360 px) | full (every fixture × every display, axe and
+//     explorer, the other fixtures at 360 px, the vue Proche at 360 px and text 200 %, #451) | full (every fixture × every display, axe and
 //     explorer everywhere: manual or nightly run)
 //   SWEEP_FIXTURES=demo,sans-prix…  SWEEP_DISPLAYS=360,sombre…  SWEEP_ROUTES=<regex>
 //   SWEEP_EXPLORE=0 (no explorer)  SWEEP_WORKERS=4  E2E_PORT=4196
@@ -419,6 +420,10 @@ function pageChecks() {
     // boxes it estimates for them; the names stay out of the quiet diagnosis (real data)
     if (chart.hasAttribute('data-axis-overlap-y'))
       out.push({ kind: 'etiquettes-axe-recouvertes', detail: `${chart.id || '(sans id)'} : « ${chart.getAttribute('data-axis-overlap-y')} »`, quiet: `${chart.id || '(sans id)'}, axe y` });
+    // #451: a legend drawn past the edge of its canvas (« Température moyenne » cut at 360 px,
+    // text 200 %), measured by charts.ts (noteLegend) on what zrender laid out; only px in it
+    if (chart.hasAttribute('data-legend-cut'))
+      out.push({ kind: 'legende-coupee', detail: `${chart.id || '(sans id)'} : ${chart.getAttribute('data-legend-cut')}`, quiet: `${chart.id || '(sans id)'} : ${chart.getAttribute('data-legend-cut')}` });
   }
   return out;
 }
@@ -847,11 +852,13 @@ async function selfTest(browser, run, display) {
       chart.setAttribute('data-axis-dup-y', '20');
       // #413: and whose category labels overlap (names of « data »: never in the quiet diagnosis)
       chart.setAttribute('data-axis-overlap-y', 'secret-piece-42 / secret-piece-43');
+      // #451: and whose legend runs past its right edge
+      chart.setAttribute('data-legend-cut', '33 px');
       view.append(chart);
     });
     const found = await s.page.evaluate(pageChecks);
     const kinds = found.map((f) => f.kind);
-    const missing = ['texte-interdit', 'carte-vide', 'defilement-horizontal', 'textes-recouverts', 'texte-coupe', 'mot-coupe', 'etiquettes-axe-en-double', 'etiquettes-axe-recouvertes'].filter((k) => !kinds.includes(k));
+    const missing = ['texte-interdit', 'carte-vide', 'defilement-horizontal', 'textes-recouverts', 'texte-coupe', 'mot-coupe', 'etiquettes-axe-en-double', 'etiquettes-axe-recouvertes', 'legende-coupee'].filter((k) => !kinds.includes(k));
     if (kinds.filter((k) => k === 'mot-coupe').length < 2) missing.push('mot-coupe (césure par trait, #434)');
     if (found.some((f) => /recouver|coupe/.test(f.kind) && /secret|Salon/i.test(f.quiet ?? ''))) throw new Error('auto-contrôle : le diagnostic discret d’un texte recouvert ou coupé cite un contenu');
     if (missing.length) throw new Error(`auto-contrôle : invariants muets (${missing.join(', ')})`);
@@ -914,9 +921,12 @@ try {
   for (const run of runs) {
     for (const display of displays) {
       // CI: the plain demo (or real data) and the fuller account (RICH) in every display, axe
-      // included; the other fixtures at 360 px.
-      if (!FULL && !main(run) && display !== displays[0]) continue;
-      jobs.push({ type: 'sweep', run, display, axe: FULL || main(run) });
+      // included; the other fixtures at 360 px; the vue Proche at 360 px and at text 200 % too,
+      // axe included (#451: its bigger body text overflowed the Rapport and cut a legend only
+      // there; every route, about 25 s on one browser).
+      const bigProche = run.name === 'proche' && display === 'texte-200';
+      if (!FULL && !main(run) && !bigProche && display !== displays[0]) continue;
+      jobs.push({ type: 'sweep', run, display, axe: FULL || main(run) || bigProche });
     }
   }
   if (EXPLORE) {
@@ -933,7 +943,7 @@ try {
     const browser = await chromium.launch();
     try {
       await selfTest(browser, runs[0], displays[0]);
-      console.log('Auto-contrôle : les invariants voient un « NaN », une carte vide, un débordement, deux textes l’un sur l’autre, un texte coupé par sa carte, un mot coupé en son milieu ou par un trait de césure, un axe aux étiquettes en double et des noms d’axe l’un sur l’autre ; le diagnostic discret ne cite aucun contenu.');
+      console.log('Auto-contrôle : les invariants voient un « NaN », une carte vide, un débordement, deux textes l’un sur l’autre, un texte coupé par sa carte, un mot coupé en son milieu ou par un trait de césure, un axe aux étiquettes en double, des noms d’axe l’un sur l’autre et une légende coupée ; le diagnostic discret ne cite aucun contenu.');
     } finally {
       await browser.close();
     }

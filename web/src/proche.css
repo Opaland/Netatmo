@@ -46,11 +46,22 @@ body.simple-nav .tabs a span {
     font-size: var(--font-md);
   }
 }
+/* #451: never under the floor of the design system (--font-xs): 7vw is 25.2 px at 360 px, under
+   the 26 px of --font-xs at text 200 % */
 body.simple-nav #view .card h3.muted {
   margin: 0 0 var(--space-1);
-  font-size: min(var(--font-md), 7vw);
+  font-size: max(var(--font-xs), min(var(--font-md), 7vw));
   font-weight: 400;
   color: var(--text-muted);
+}
+/* #451: the Rapport's « Faits marquants » at 360 px and text 200 %: at the 40 px of the view's
+   body text, « (consommation), » (340 px in DejaVu Sans) was wider than the list, whose grid track
+   took its width and pushed the page 33 px sideways. Capped by the width like the titles, so that
+   each word fits on a line (8vw: 28.8 px at 360 px, « (consommation), » 245 px for 274 px), and a
+   track that never grows past the list (a word made of data, a room name, wraps instead). */
+body.simple-nav #view .facts {
+  font-size: min(var(--font-md), 8vw);
+  grid-template-columns: minmax(0, 1fr);
 }
 .proche-big {
   margin: 0;
