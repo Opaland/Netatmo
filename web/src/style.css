@@ -961,9 +961,11 @@ details.fold[open] > summary {
   }
 }
 /* A name in a list (#384) and a label beside a switch (« Bibliothèque », #397) sit in a narrower
-   column: they are hyphenated when the text of their container is large (17.5em: from about 120 %
-   of text, and in the simple view, whose text is 125 % of the system's: #442 tracks it, FALC). */
-@container (max-width: 17.5em) {
+   column: they are hyphenated when the SYSTEM text is large (17.5rem, like the titles above: from
+   about 120 %). Not in em: the simple view writes its text at 125 % of the system's, and at 100 %
+   it hyphenated « loge- / ment » (#442, FALC); its names have the width of the row instead (the
+   query in em of .list, below). */
+@container (max-width: 17.5rem) {
   .row .t,
   .switch > span {
     hyphens: auto;
@@ -2092,13 +2094,15 @@ code.hash {
 .row .chev {
   color: var(--text-muted);
 }
-/* #384: a narrow list (under 18rem: 288 px at normal size, so never at 360 px with normal text;
+/* #384: a narrow list (under 18em: 288 px at normal size, so never at 360 px with normal text;
    576 px with text at 200 %): the amount under the name, left-aligned, the chevron on the right
-   of both lines; the name keeps the width of the row. */
+   of both lines; the name keeps the width of the row. In em, the text size of the list: #442, the
+   simple view (text at 125 %, 360 px under 18em) puts the amount under the name on a phone, and
+   its names keep the width of their words without a hyphen. */
 .list {
   container-type: inline-size;
 }
-@container (max-width: 18rem) {
+@container (max-width: 18em) {
   .row {
     grid-template-columns: auto minmax(0, 1fr) auto;
   }
