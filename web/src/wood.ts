@@ -8,7 +8,7 @@
 //                        × moisture factor × efficiency of the stove
 //   in time            = the season the purchase feeds (Sept → Aug), spread over its days in
 //                        proportion to the degree days (the colder, the more wood burnt).
-import { addDays } from './aggregate';
+import { type DayRecord, addDays } from './aggregate';
 import { type Weather, dju } from './analysis';
 
 export type Species = 'chene' | 'hetre' | 'charme' | 'frene' | 'melange' | 'resineux';
@@ -189,6 +189,18 @@ export function woodIn(daily: Map<string, [number, number]>, from: string, to: s
   let eur = 0;
   for (const [d, v] of daily) if (d >= from && d <= to && !skip?.has(d)) (kwh += v[0]), (eur += v[1]);
   return { kwh, eur };
+}
+
+/** Room id of the wood as day records: no room of the home has it (a NUL cannot come from the API). */
+export const WOOD_ROOM = '\u0000bois';
+/**
+ * #433: the wood of each day from `first` on, as heating day records, to be counted with the
+ * electricity of the same days (the Accueil verdict: this year and the reference years alike).
+ */
+export function woodRecords(daily: Map<string, [number, number]>, first = ''): DayRecord[] {
+  const out: DayRecord[] = [];
+  for (const [day, [kwh]] of daily) if (day >= first && kwh > 0) out.push({ day, room: WOOD_ROOM, cat: 'heating', kwh });
+  return out;
 }
 
 /** « 4 stères de chêne à 20 % » (the assumptions behind a heat figure, said in words). */

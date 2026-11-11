@@ -8,6 +8,7 @@ import { loadNote, saveNote } from '../local-store';
 import { type WoodSettings, parseWood, woodDaily, woodIn, woodJson } from '../wood';
 import { lastDay } from '../ui';
 import { stoppedRooms } from './offline-rooms';
+import { stoveHeated } from '../room-offline';
 
 const NOTE = 'wood-draft';
 let draft: WoodSettings | null = null;
@@ -67,12 +68,33 @@ export function woodOver(from: string, to: string): { kwh: number; eur: number }
   return woodIn(woodDays(), from, to);
 }
 
-/** « Poêle à bois (Cuisine) »: the rooms declared heated by a stove (#346), if any. */
+/** Raw ids of the rooms the stove heats (#346; #440: radiators taken down, with wood bought). */
+export function stoveRooms(): string[] {
+  const bought = woodSettings().purchases.length > 0;
+  return stoppedRooms()
+    .filter((s) => stoveHeated(s, bought))
+    .map((s) => s.room);
+}
+
+/** « Poêle à bois (Cuisine) »: the rooms heated by the stove (stoveRooms), if any. */
 export function stoveName(): string {
   const rooms = (rawDataset() ?? ds)!.meta.rooms;
-  const names = stoppedRooms()
-    .filter((s) => s.reason === 'poele')
-    .map((s) => rooms.find((r) => r.id === s.room)?.name)
+  const names = stoveRooms()
+    .map((id) => rooms.find((r) => r.id === id)?.name)
     .filter((n): n is string => !!n);
   return `Poêle à bois${names.length ? ` (${names.join(', ')})` : ''}`;
+}
+
+/**
+ * #433: the wood the Accueil verdict counts, day by day (woodDays: the degree-day split of
+ * « Hiver contre hiver » and « Expliquer un mois »), or null: no stove declared, no wood bought,
+ * or a scope without the stove's heating (hot water only, rooms picked without the stove's).
+ */
+export function verdictWood(cat: string, rooms: string[] | null): Map<string, [number, number]> | null {
+  if (cat === 'water_heater') return null;
+  const map = ds!.roomMap;
+  const stove = stoveRooms().map((id) => map?.get(id) ?? id);
+  if (!stove.length || !woodSettings().purchases.length) return null;
+  if (rooms && !stove.some((id) => rooms.includes(id))) return null;
+  return woodDays();
 }
