@@ -50,6 +50,9 @@
   --room-6: var(--brown-11);
   --room-7: var(--cyan-9);
   --room-8: var(--red-11);
+  /* tariffs (#435): heures pleines / creuses, never the colour of a room */
+  --tariff-peak: var(--slate-11);
+  --tariff-offpeak: var(--indigo-11);
   /* sequential ramp (calendar, heat maps): light → dark. #409: in ink (warm grey), like a measure
      on its own (--series-measure), never in the iris of the accent, kept for actions */
   --seq-1: var(--sand-4);
@@ -118,6 +121,8 @@
     --room-6: var(--brown-d9);
     --room-7: var(--cyan-d9);
     --room-8: var(--red-d9);
+    --tariff-peak: var(--slate-d11);
+    --tariff-offpeak: var(--indigo-d11);
     --seq-1: var(--sand-d4);
     --seq-2: var(--sand-d8);
     --seq-3: var(--sand-d10);
@@ -175,6 +180,8 @@
   --room-6: var(--brown-d9);
   --room-7: var(--cyan-d9);
   --room-8: var(--red-d9);
+  --tariff-peak: var(--slate-d11);
+  --tariff-offpeak: var(--indigo-d11);
   --seq-1: var(--sand-d4);
   --seq-2: var(--sand-d8);
   --seq-3: var(--sand-d10);
@@ -227,6 +234,7 @@
     --room-6: var(--brown-11);
     --room-7: var(--cyan-11);
     --room-8: var(--red-11);
+    --tariff-offpeak: var(--indigo-12); /* #435: apart from the deeper water blue of high contrast */
     --state-good: var(--grass-12);
     --state-warn: var(--amber-12);
     --state-bad: var(--tomato-12);
@@ -267,6 +275,7 @@
     --room-6: var(--brown-d9);
     --room-7: var(--cyan-d9);
     --room-8: var(--red-d9);
+    --tariff-offpeak: var(--indigo-d12); /* #435: apart from the deeper water blue of high contrast */
     --state-good: var(--grass-d12);
     --state-warn: var(--amber-d12);
     --state-bad: var(--tomato-d12);
@@ -307,6 +316,7 @@
     --room-6: var(--brown-d9);
     --room-7: var(--cyan-d9);
     --room-8: var(--red-d9);
+    --tariff-offpeak: var(--indigo-d12); /* #435: apart from the deeper water blue of high contrast */
     --state-good: var(--grass-d12);
     --state-warn: var(--amber-d12);
     --state-bad: var(--tomato-d12);

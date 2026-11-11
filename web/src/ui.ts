@@ -178,6 +178,16 @@ export function tariffNames(): [string, string] {
   if (off === 1) return ['Heures creuses', 'Heures pleines'];
   return ['Tarif 1', 'Tarif 2'];
 }
+/**
+ * #435: the colour of a tariff column (1 or 2) of the readings, by its meaning: off-peak hours in
+ * --tariff-offpeak, peak hours in --tariff-peak, never the colour of a room. Names unknown
+ * (« Tarif 1 / 2 »): the first in the peak colour, the second in the off-peak one.
+ */
+export function tariffColor(col: 1 | 2): string {
+  const [n1, n2] = tariffNames();
+  const offPeak = (col === 1 ? n1 : n2) === 'Heures creuses' || (n1 === 'Tarif 1' && col === 2);
+  return cssVar(offPeak ? '--tariff-offpeak' : '--tariff-peak');
+}
 
 // ------------------------------------------------------------------ colours and rooms
 // #300 / #310: colours come from the design tokens. Orange and blue belong to the usages,
