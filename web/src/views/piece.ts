@@ -35,7 +35,7 @@ import { html } from '../trusted';
 import { avgPrice, costOf, esc, fmtEur, fmtKwh, lastDay, nf0, offCol, roomColor } from '../ui';
 import { ABSENCE_MODES, type RoomState, type StateCell, bits, modeLabel } from '../windows';
 import { lazyCard } from '../lazy';
-import { offlineText } from '../room-offline';
+import { lastReadingAfterStop, offlineText } from '../room-offline';
 import { offlineEstimate, offlineLine, offlineRun } from './offline-rooms';
 import { MATCH_DAYS, type ModuleMatch, declinedPairs, linkRoom, pairKey, trackingModules } from '../module-match';
 import { roomPerM2Text } from '../isolation';
@@ -248,12 +248,13 @@ export function renderPiece(view: HTMLElement, id: string) {
   if (run?.stopped) {
     // switched off on purpose (⚙ Mon logement): expected, not a failure
     const st = run.stopped;
+    const last = lastReadingAfterStop(run); // #461: in complement, after the day declared
     parts.push(
       alert(
         'info',
         `Radiateur ${offlineText(run)}`,
         '',
-        `<p>${esc(`${st.label ? `${st.label.charAt(0).toUpperCase()}${st.label.slice(1)}. ` : ''}Pas de données attendues : la baisse de sa consommation électrique vient du changement de mode de chauffage, pas de vos réglages.`)} <a class="link" href="#parametres-logement">Réglage</a></p>`,
+        `<p>${esc(`${st.label ? `${st.label.charAt(0).toUpperCase()}${st.label.slice(1)}. ` : ''}${last ? `Dernière donnée reçue le ${dayShort(last, true)}. ` : ''}Pas de données attendues : la baisse de sa consommation électrique vient du changement de mode de chauffage, pas de vos réglages.`)} <a class="link" href="#parametres-logement">Réglage</a></p>`,
       ),
     );
   } else if (run) {
