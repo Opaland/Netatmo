@@ -12,7 +12,7 @@ export type Term = 'kwh' | 'hc' | 'dju' | 'kva' | 'delestage' | 'veille';
 export const GLOSSARY: Record<Term, { label: string; def: string }> = {
   kwh: { label: 'kWh', def: "Un kWh, c'est l'électricité d'un radiateur de 1 000 watts allumé une heure." },
   hc: { label: 'heures creuses', def: "Les heures creuses sont des heures où l'électricité coûte moins cher, souvent la nuit." },
-  dju: { label: 'degrés-jours', def: 'Les degrés-jours mesurent le froid : plus il y en a, plus on chauffe.' },
+  dju: { label: 'degrés-jours', def: 'Les degrés-jours mesurent le froid : 18 °C moins la température moyenne de chaque jour.' },
   kva: { label: 'kVA', def: 'Le kVA mesure la puissance que votre abonnement autorise en même temps.' },
   delestage: { label: 'délestage', def: 'Le délestage coupe un radiateur un moment pour ne pas dépasser votre puissance.' },
   veille: { label: 'veille', def: 'La veille est ce que la maison consomme sans arrêt, même la nuit.' },

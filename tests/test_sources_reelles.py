@@ -21,8 +21,10 @@ The format checks are pure functions, tested offline below on the copies kept in
 from __future__ import annotations
 
 import csv
+import gzip
 import io
 import json
+import re
 import sys
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
@@ -31,7 +33,7 @@ import httpx
 import pytest
 
 from collector import schema
-from collector.weather import ARCHIVE, DAILY
+from collector.weather import ARCHIVE, DAILY, degree_days
 
 ROOT = Path(__file__).resolve().parent.parent
 TARIFS = ROOT / "web" / "public" / "tarifs"
@@ -117,6 +119,45 @@ def tempo_problems(payload: object, start: int) -> list[str]:
     return problems
 
 
+# #464: the degree days of the app (base 18 °C, méthode météo, collector.weather.degree_days)
+# against the public daily data of Météo-France (data.gouv.fr, « Données climatologiques de base
+# quotidiennes »), at a public station — Lyon-Bron, the reference of the region the issue names —
+# never the home. Open-Meteo is asked at the station's own coordinates.
+MF_DATASET = "https://www.data.gouv.fr/api/1/datasets/donnees-climatologiques-de-base-quotidiennes/"
+MF_STATION = {"num": "69029001", "dept": "69", "latitude": 45.72, "longitude": 4.95, "timezone": "Europe/Paris"}
+MF_FILE = re.compile(r"Q_(\d{2,3})_(?:latest|previous)-(\d{4})-(\d{4})_RR-T-Vent\.csv\.gz$")
+
+
+def mf_degree_days(text: str, station: str, year: int) -> tuple[float, int]:
+    """(degree days, days with TN and TX) of one station and one calendar year in a Météo-France
+    daily file (separator « ; », columns NUM_POSTE, AAAAMMJJ, TN, TX), with the app's rule."""
+    total, days = 0.0, 0
+    for r in csv.DictReader(io.StringIO(text), delimiter=";"):
+        if r.get("NUM_POSTE") != station or not (r.get("AAAAMMJJ") or "").startswith(str(year)):
+            continue
+        if r.get("TN") and r.get("TX"):
+            total += degree_days(float(r["TN"]), float(r["TX"]))
+            days += 1
+    return total, days
+
+
+def om_degree_days(body: dict, year: int) -> tuple[float, int]:
+    """The same rule on an Open-Meteo daily answer (min and max, as web/src/analysis.ts dju)."""
+    d = body["daily"]
+    rows = zip(d["time"], d["temperature_2m_min"], d["temperature_2m_max"], strict=True)
+    vals = [degree_days(a, b) for t, a, b in rows if t.startswith(str(year)) and a is not None and b is not None]
+    return sum(vals), len(vals)
+
+
+def mf_file_for(resources: list[dict], dept: str, year: int) -> str | None:
+    """The URL of the daily file (RR-T-Vent) of one département that covers `year`."""
+    for r in resources:
+        m = MF_FILE.search(r.get("url", ""))
+        if m and m[1] == dept and int(m[2]) <= year <= int(m[3]):
+            return r["url"]
+    return None
+
+
 # ------------------------------------------------------------------ offline: the test of the test
 @pytest.mark.parametrize("name", sorted(CRE_COLUMNS))
 def test_les_copies_du_depot_ont_le_format_attendu(name):
@@ -157,6 +198,30 @@ def test_une_saison_tempo_renommee_echoue():
         "Tempo 2024-2025 : 1 entrée(s) illisibles (clés dateJour / codeJour ?)",
         "Tempo 2024-2025 : 200 jours lus, au moins 300 attendus",
     ]
+
+
+def test_degres_jours_meteo_france_lus_comme_l_appli():
+    head = "NUM_POSTE;NOM_USUEL;AAAAMMJJ;RR;TN;TX"
+    rows = [
+        "69029001;X;20250101;0;2.0;10.0",  # 18 - 6 = 12
+        "69029001;X;20250102;0;15.0;25.0",  # warmer than 18: 0
+        "69029001;X;20250103;0;;8.0",  # no TN: not counted
+        "69029001;X;20240101;0;0.0;0.0",  # another year
+        "69999999;X;20250101;0;0.0;0.0",  # another station
+    ]
+    assert mf_degree_days("\n".join([head, *rows]), "69029001", 2025) == (12.0, 2)
+    days = ["2025-01-01", "2025-01-02"]
+    body = {"daily": {"time": days, "temperature_2m_min": [2.0, None], "temperature_2m_max": [10.0, 5.0]}}
+    assert om_degree_days(body, 2025) == (12.0, 1)
+    assert degree_days(-4, 0) == 20
+    assert degree_days(20, 30) == 0
+    res = [
+        {"url": "https://x/Q_69_previous-1950-2024_RR-T-Vent.csv.gz"},
+        {"url": "https://x/Q_69_latest-2025-2026_RR-T-Vent.csv.gz"},
+    ]
+    assert mf_file_for(res, "69", 2025) == res[1]["url"]
+    assert mf_file_for(res, "69", 2003) == res[0]["url"]
+    assert mf_file_for(res, "38", 2025) is None
 
 
 # ------------------------------------------------------------------ network (pytest -m reseau)
@@ -212,3 +277,27 @@ def test_pvgis_profil_horaire_d_un_lieu_public():
     assert len(hours) >= 365
     kwh = sum(sum(v) for v in hours.values()) / 1000
     assert 700 < kwh < 1600, f"{kwh:.0f} kWh par kWc et par an : hors de ce que la France produit"
+
+
+@pytest.mark.reseau
+def test_degres_jours_comme_meteo_france_a_une_station_publique():
+    """#464: the last complete year at Lyon-Bron, Météo-France data against Open-Meteo at the
+    same place, both counted with the app's rule. Measured on 12/11/2026 for 2025: 2 030 DJ from
+    Météo-France, 2 138 from Open-Meteo (+5 %). A gap of more than 10 % would mean the source or
+    the rule has changed. The expected « 2 300 à 2 500 » of the issue is the 1981-2010 average
+    (2 379 at Bron, 2 226 over 1991-2020), not a year of the 2020s."""
+    year = datetime.now(UTC).date().year - 1
+    meta = _get(MF_DATASET)
+    url = mf_file_for(meta.json().get("resources", []), MF_STATION["dept"], year)
+    assert url, f"Météo-France : aucun fichier quotidien du {MF_STATION['dept']} pour {year} (noms changés ?)"
+    text = gzip.decompress(_get(url).content).decode("utf-8", errors="replace")
+    mf, mf_days = mf_degree_days(text, MF_STATION["num"], year)
+    assert mf_days >= 360, f"Météo-France : {mf_days} jours lus pour {year} (colonnes TN / TX ?)"
+    place = {k: MF_STATION[k] for k in ("latitude", "longitude", "timezone")}
+    body = _get(ARCHIVE, **place, daily=DAILY, start_date=f"{year}-01-01", end_date=f"{year}-12-31").json()
+    assert meteo_problems(body) == []
+    om, om_days = om_degree_days(body, year)
+    assert om_days >= 365
+    assert 1500 < mf < 3200, f"{mf:.0f} DJ à Lyon-Bron en {year} : hors de ce que la station a connu"
+    gap = om / mf - 1
+    assert abs(gap) <= 0.10, f"Open-Meteo {om:.0f} DJ contre Météo-France {mf:.0f} ({gap:+.0%}) en {year}"

@@ -4,6 +4,7 @@
 // Left out on purpose: home name, ids, room names, hourly data, the weather station
 // (a bedroom module tells when people sleep), room temperatures.
 import type { Category } from './aggregate';
+import { DJU_BASE } from './analysis';
 
 export interface AnonRoomInput {
   id: string;
@@ -90,7 +91,7 @@ export function anonReportHtml(r: AnonReport): string {
       <article class="kpi"><h3>Consommation</h3><p class="kpi-value">${kwh(r.total)}</p>${lease ? '' : `<p class="kpi-sub">${change(r.total, r.prevTotal)} vs ${r.year - 1}</p>`}</article>
       ${r.cost !== null ? `<article class="kpi"><h3>Coût estimé (abonnement inclus)</h3><p class="kpi-value">${nf0.format(r.cost)} €</p></article>` : ''}
       <article class="kpi"><h3>Chauffage / chauffe-eau</h3><p class="kpi-value">${share(r.heating)} % / ${share(r.water)} %</p><p class="kpi-sub">${kwh(r.heating)} · ${kwh(r.water)}</p></article>
-      ${r.dju !== null ? `<article class="kpi"><h3>Rigueur de l'hiver (DJU)</h3><p class="kpi-value">${nf0.format(r.dju)}</p>${r.djuPrev && !lease ? `<p class="kpi-sub">${change(r.dju, r.djuPrev)} vs ${r.year - 1}</p>` : ''}</article>` : ''}
+      ${r.dju !== null ? `<article class="kpi"><h3>Rigueur de l'hiver (DJU, base ${DJU_BASE} °C)</h3><p class="kpi-value">${nf0.format(r.dju)}</p>${r.djuPrev && !lease ? `<p class="kpi-sub">${change(r.dju, r.djuPrev)} vs ${r.year - 1}</p>` : ''}</article>` : ''}
     </div>
     <h3>Faits marquants</h3>
     <ul class="facts">
