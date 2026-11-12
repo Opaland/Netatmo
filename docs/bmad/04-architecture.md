@@ -90,7 +90,7 @@ cron mensuel (ou étape du job nocturne le 2 du mois)
 | Envoyé à l'API | Jamais envoyé |
 |---|---|
 | Agrégats mensuels par pièce et par usage (kWh, €), comparaison N-1, DJU, température extérieure moyenne, liste des jours atypiques avec leur écart, prix du kWh | Coordonnées, adresse, identifiants de maison / pièce / module, e-mail, jetons, phrase de passe, données horaires brutes, noms de personnes |
-| Noms de pièces (« Séjour », « Chambre 2 ») pour un texte lisible ; option de pseudonymisation (« Pièce A ») | Fichiers chiffrés ou clés |
+| Pièces et capteurs sous pseudonyme (« Pièce A », « Capteur B », S-5.7) ; les vrais noms sont remis dans le texte localement | Noms de pièces et de modules (`tests/test_promesses.py`), fichiers chiffrés ou clés |
 
 Choix du modèle : un modèle Claude d'entrée ou de milieu de gamme suffit pour reformuler des faits ;
 le nom exact du modèle est stocké dans `model`. Coût : un appel par mois de quelques milliers de jetons,
