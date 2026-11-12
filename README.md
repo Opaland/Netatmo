@@ -473,7 +473,9 @@ période du bail, sans comparaison avec l'année d'avant.
   remplacement : baisser la consigne, tout chauffer en heures creuses (celles en vigueur chaque jour,
   dans la limite de la puissance saisie), ou un chauffe-eau thermodynamique d'un COP saisi (2,5 est
   proposé comme hypothèse) ; kWh et euros économisés par an, retour sur le surcoût face à un chauffe-eau
-  électrique neuf. Toutes les hypothèses sont saisies et rappelées sous le résultat.
+  électrique neuf. Toutes les hypothèses sont saisies et rappelées sous le résultat. Les jours relevés à
+  0 kWh (chauffe-eau coupé, absence) sont écartés et l'année ramenée à 365 jours à partir des autres ;
+  le résultat le dit, avec leur nombre (#502).
 - **Localisation de la maison** (⚙ Mon logement, #204) : commune ou coordonnées, à la précision
   choisie, et chaque toit (orientation, pente, puissance, pertes). Gardée **seulement chiffrée** (secret
   `HOME_LOCATION_JSON`, puis `solar.enc.json`) ; PVGIS la reçoit arrondie à environ 1 km ; jamais dans

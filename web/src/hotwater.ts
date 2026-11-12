@@ -76,7 +76,13 @@ export interface HwRow {
 }
 
 export interface HwSim {
-  days: number; // days of the window with a reading
+  days: number; // days of the window with energy (the ones simulated)
+  /**
+   * #502: days of the window read at 0 kWh (heater switched off, absence…), left out of the
+   * simulation: the year is the `days` with energy scaled to 365, so each of them counts as an
+   * average day. Said under the result; which rule to keep is the owner's decision (#502).
+   */
+  zeroDays: number;
   splitDays: number; // of which with the off-peak / peak split read
   share: number | null; // off-peak share of the window (used for the days without split)
   rows: HwRow[];
@@ -170,8 +176,24 @@ export function simulateHotWater(
 
   return {
     days: used.length,
+    zeroDays: days.length - used.length,
     splitDays: split.length,
     share,
     rows: [{ key: 'now', year: now.year, savedKwh: 0, savedEur: now.year.eur === null ? null : 0, overflowDays: 0, missing: [], payback: null }, setpoint, offpeak, thermo],
   };
+}
+
+const int = new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 0 });
+
+/** « 12 jours à 0 kWh »: the days read at zero (#502). */
+export const zeroText = (n: number) => `${int.format(n)} jour${n > 1 ? 's' : ''} à 0\u00a0kWh`;
+
+/**
+ * #502: what happens to the days read at 0 kWh, said plainly: they are left out, and the year is
+ * the days with energy scaled to 365, so each one counts as an average day. Whether they should
+ * count as days of the year (absences included) is the owner's decision, not settled here.
+ */
+export function zeroAssumption(sim: Pick<HwSim, 'days' | 'zeroDays'>): string {
+  const s = sim.zeroDays > 1 ? 's' : '';
+  return `${zeroText(sim.zeroDays)} relevé${s} dans la période (chauffe-eau coupé, absence ?) ${sim.zeroDays > 1 ? 'sont écartés' : 'est écarté'} : l’année est ramenée à 365 jours à partir des ${int.format(sim.days)} jours avec de l’énergie, comme si ${sim.zeroDays > 1 ? 'chacun était un jour moyen' : 'c’était un jour moyen'}. Une année avec ses absences consommerait moins, et les économies de chaque piste seraient plus petites d’autant.`;
 }
