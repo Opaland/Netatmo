@@ -58,10 +58,16 @@ def test_the_collection_reads_each_household_setting_from_a_secret():
         assert collect[name] == f"${{{{ secrets.{name} }}}}", name
     for name in cli.HOUSEHOLD_SETTINGS:  # the migration: the old variable under another name only
         assert collect[name + cli.PLAIN_SUFFIX] == f"${{{{ vars.{name} }}}}"
-    # No workflow passes a household setting from a plaintext variable under its own name.
+    # Every workflow that passes a household setting under its own name takes it from a secret
+    # (Diagnostic's quality report too, #456).
+    seen = set()
     for wf in (ROOT / ".github" / "workflows").glob("*.yml"):
-        for name in (*cli.HOUSEHOLD_SETTINGS, "HOME_LOCATION_JSON"):
-            assert f"{name}: ${{{{ vars." not in wf.read_text(), (wf.name, name)
+        for line in wf.read_text().splitlines():
+            for name in (*cli.HOUSEHOLD_SETTINGS, "HOME_LOCATION_JSON"):
+                if line.strip().startswith(f"{name}:"):
+                    assert f"secrets.{name}" in line and "vars." not in line, (wf.name, line)
+                    seen.add(wf.name)
+    assert {"collect.yml", "diagnostic.yml"} <= seen
 
 
 def test_the_same_household_settings_as_the_app():

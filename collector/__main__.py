@@ -89,8 +89,9 @@ def cmd_quality(s: Settings) -> None:
         raise SystemExit("Bilan qualité : aucune archive chiffrée (keyinfo.json absent).")
     try:
         store = Store(s.data_dir, s.passphrase)
-        # #346 / #440: a room switched off on purpose is not missing (the variable, else the archive)
-        lines = report(store, stopped_of(store, os.environ.get("STOPPED_ROOMS_JSON")))
+        # #346 / #440: a room switched off on purpose is not missing (the secret, else the old
+        # plaintext variable #459, else the archive)
+        lines = report(store, stopped_of(store, household_setting("STOPPED_ROOMS_JSON")))
     except DecryptError as err:
         raise SystemExit("Bilan qualité : déchiffrement impossible (DATA_PASSPHRASE ?).") from err
     print("\n".join(lines))
