@@ -39,7 +39,8 @@ import { lastReadingAfterStop, offlineText } from '../room-offline';
 import { offlineEstimate, offlineLine, offlineRun } from './offline-rooms';
 import { MATCH_DAYS, type ModuleMatch, declinedPairs, linkRoom, pairKey, trackingModules } from '../module-match';
 import { roomPerM2Text } from '../isolation';
-import { stoveRooms } from './wood-state';
+import { stoveRooms, woodDays, woodSettings } from './wood-state';
+import { stoveWarm, stoveWarmText, woodSeasons } from '../wood';
 
 // ------------------------------------------------------------------ documents (loaded on demand)
 /** Hourly room states (window, load shedding, modes): one document, a year of daily aggregates. */
@@ -268,6 +269,14 @@ export function renderPiece(view: HTMLElement, id: string) {
         }Les comparaisons avec l’an dernier ne comptent pas cette pièce.${run.ongoing ? ' Hors ligne, le radiateur ne reçoit plus le planning ni le mode absence : vérifier son alimentation, le redémarrer, puis l’associer de nouveau dans l’application Intuis.' : ''}`,
       ),
     );
+  }
+  // #468: the stove's room kept above 22 °C, and the wood it costs (assumptions said in the text)
+  if (heating && !group && stoveRooms().some((s) => (ds!.roomMap?.get(s) ?? s) === id)) {
+    const warm = stoveWarm(m.days, woodDays(), woodSeasons(woodSettings()), last);
+    if (warm) {
+      const t = stoveWarmText(warm);
+      parts.push(alertHtml('info', `<p>${esc(t.text)}</p>`, { id: 'stove-warm' }, t.title));
+    }
   }
   const proposal = heating && !group ? proposedModule(id) : undefined;
   if (proposal) parts.push(proposalAlert(proposal));
