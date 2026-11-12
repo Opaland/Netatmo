@@ -1,6 +1,7 @@
 """S-12.5: prolonged cold in a living room, checked by the nightly collection.
 
-Configuration: the repository variable COLD_ALERT_JSON (not a secret, disabled when unset),
+Configuration: the repository secret COLD_ALERT_JSON (#497: sealed in the browser like the other
+household settings, read by the collector through ``household_setting``; disabled when unset),
 for example ``{"threshold": 14, "days": 1, "rooms": ["1234567890", "70:ee:50:00:00:01"]}``:
 Intuis room ids (radiator probe, daily mean) or indoor station modules (daily mean).
 
@@ -53,15 +54,15 @@ def parse_cold_alert(raw: str) -> dict | None:
     return {"threshold": threshold, "days": days, "rooms": rooms}
 
 
-def cold_config(warn) -> dict | None:
+def cold_config(raw: str, warn) -> dict | None:
     """COLD_ALERT_JSON if set and valid; None otherwise (an invalid value is reported, not quoted)."""
-    raw = os.environ.get("COLD_ALERT_JSON", "").strip()
+    raw = raw.strip()
     if not raw:
         return None
     try:
         return parse_cold_alert(raw)
     except ColdError as err:
-        warn(f"Variable COLD_ALERT_JSON ignorée ({err}) : alerte froid désactivée")
+        warn(f"Réglage COLD_ALERT_JSON ignoré ({err}) : alerte froid désactivée")
         return None
 
 
