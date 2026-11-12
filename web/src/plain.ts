@@ -4,6 +4,7 @@
 // definition, also announced to screen readers. Pure text builders, tested in plain.test.ts.
 import { MONTHS_LONG } from './aggregate';
 import { escapeHtml as esc } from './charts';
+import { countedWhat } from './home';
 
 const nf0 = new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 0 });
 
@@ -131,6 +132,18 @@ export function kpiTitle(kind: 'month' | 'year' | '12m' | 'projection', last: st
   if (kind === '12m') return 'Sur les 12 derniers mois';
   return `Estimation pour toute l'année ${year}`;
 }
+
+/** « Novembre, jusqu'au 8 » (maquette simple.html: the year is that of today). */
+export function monthLabel(last: string): string {
+  const t = kpiTitle('month', last).replace(/ \d{4},/, ',');
+  return t.charAt(0).toUpperCase() + t.slice(1);
+}
+
+/**
+ * #488: the title of the month of the home in the vue Proche, which counts the heating and the hot
+ * water (the Accueil with nothing narrowed): it says so with the words of the Accueil (countedWhat).
+ */
+export const homeMonthTitle = (last: string) => `${monthLabel(last)}, ${countedWhat('all')}`;
 
 /** Pinned room (S-7.8): mean temperature, rounded to the degree, and cold days. */
 export function pinnedTemp(temp: number, coldDays: number, threshold: number): { value: string; sub: string } {

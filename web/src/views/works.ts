@@ -27,6 +27,7 @@ import {
   surfaceOf,
   validWorks,
   worksHeat,
+  worksMonthly,
 } from '../works';
 
 const NOTE = 'works';
@@ -151,6 +152,8 @@ function card(): string {
   const wood = verdictWood(state.cat, state.rooms);
   const stove = new Set(stoveRooms().map((id) => ds!.roomMap?.get(id) ?? id));
   const home = homePerM2(lastRecords, shown, rooms.map((r) => r.id), [...stove], wood, from12, last);
+  // #488: the monthly chart counts the wood as the before / after does (worksMonthly), and says so
+  const monthlyTitle = `Chauffage${worksMonthly(lastRecords, wood).wood ? ' électricité + bois' : ''} par mois`;
   const perRoomRows = rooms.filter((r) => perRoom.has(r.id) || (stove.has(r.id) && shown[r.id] > 0));
   return `<section class="card" id="works-card">
     <div class="card-head"><h2>Travaux et surfaces <small class="muted">avant / après</small></h2>
@@ -176,8 +179,8 @@ function card(): string {
     ${table(['Période', 'Jours', 'Pente', 'Chauffage', 'Par m²', 'Par degré-jour'], [sideRow('Avant', c!.r.before, c!.m2), sideRow('Après', c!.r.after, c!.m2)])}
     ${c!.m2 === null ? `<p class="hint muted">Renseignez la surface de ${rooms.length > 1 ? 'toutes les pièces chauffées' : 'la pièce'} (ci-dessous) pour avoir les kWh/m²${surf.known ? ` (${surf.known}/${rooms.length} renseignées)` : ''}.</p>` : ''}`
     }
-    <h3 class="money-h">Chauffage par mois <small class="muted">les travaux en traits verticaux</small></h3>
-    <div class="chart" id="works-chart" role="img" aria-label="Chauffage par mois et dates des travaux"></div>
+    <h3 class="money-h">${monthlyTitle} <small class="muted">les travaux en traits verticaux</small></h3>
+    <div class="chart" id="works-chart" role="img" aria-label="${monthlyTitle} et dates des travaux"></div>
     ${
       w.markers.length
         ? `<ul class="absence-list">${w.markers
@@ -251,12 +254,12 @@ function drawCharts() {
   const el = document.getElementById('works-chart');
   if (!el) return;
   const keys = bucketKeys(firstDay(), lastDay(), 'month');
-  const perMonth = new Map<string, number>();
-  for (const r of lastRecords) if (r.cat === 'heating') perMonth.set(bucketKey(r.day, 'month'), (perMonth.get(bucketKey(r.day, 'month')) ?? 0) + r.kwh);
+  // #488: the electricity + the stove's wood, as the before / after above (worksHeat)
+  const { perMonth, wood } = worksMonthly(lastRecords, verdictWood(state.cat, state.rooms));
   const labels = keys.map((k) => bucketLabel(k, 'month'));
   barChart(el, {
     labels,
-    series: [{ name: 'Chauffage', color: catColor('heating'), data: keys.map((k) => (perMonth.has(k) ? Math.round(perMonth.get(k)!) : null)) }],
+    series: [{ name: wood ? 'Chauffage électricité + bois' : 'Chauffage', color: catColor('heating'), data: keys.map((k) => (perMonth.has(k) ? Math.round(perMonth.get(k)!) : null)) }],
     stacked: false,
     price: null,
   });
