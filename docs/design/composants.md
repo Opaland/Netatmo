@@ -61,6 +61,7 @@ doivent déjà être sûrs. Couleur : un nom de jeton (`'--usage-heating'`) ou u
 | Jauge | `gauge({ label, value, max, expected, projected, color, scale })` | `role="img"` + phrase complète ; repère « attendu », projection hachurée |
 | Barre de part | `shareBar(pct, color)` | décorative (`aria-hidden`), la valeur est écrite à côté |
 | Liste | `list(rows)`, `listRow({ title, sub, value, color, share, href \| attrs })` | ligne ≥ 56 px ; lien, bouton ou ligne simple |
+| Tableau en cartes | `cardTable(head, rows, label)` | une carte par ligne, la première cellule en titre, les autres sous le nom de leur colonne (liste de définitions) ; pour un tableau dont aucune colonne ne doit se cacher derrière un défilement (#484 : ce qui part chez des tiers) ; le bloc porte `data-whole`, que le balayage vérifie (`colonne-cachee`) |
 | Segment | `seg(name, value, options, label)` | `role="radiogroup"` ; passe à la ligne au lieu de déborder (#319) |
 | Sélecteur de période | `periodBar(segHtml, scope)` | ligne de portée annoncée (`aria-live`) |
 | Puce | `chip(label, pressed, attrs, swatch)` | `aria-pressed`, 44 px |
