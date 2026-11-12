@@ -9,8 +9,10 @@ faille a donc du poids ici, même sans serveur ni compte.
 Par le **signalement privé de GitHub** : onglet **Security** du dépôt, puis
 **Report a vulnerability**. Seul le mainteneur (@Opaland) lit ce que vous y écrivez.
 
-Tant que ce bouton n'apparaît pas (son activation est un réglage du dépôt, fait par le mainteneur),
-ouvrez une issue qui demande **seulement** un moyen de contact privé, sans aucun détail sur la faille.
+Tant que ce bouton n'apparaît pas (son activation est un réglage du dépôt, laissé au mainteneur ;
+le lien « Signaler une faille » de « New issue » ne sert qu'une fois ce réglage activé), ouvrez
+une issue qui demande **seulement** un moyen de contact privé, sans aucun détail sur la faille :
+ni composant visé, ni gravité, ni le mot « faille » dans le titre.
 
 **Ne publiez jamais** dans une issue, une PR, un commentaire ou un journal : preuve de concept,
 étapes pour reproduire, adresse de page piégée, phrase de passe, jeton, extrait de données
@@ -18,10 +20,10 @@ déchiffrées.
 
 ## Délais
 
-Projet personnel, maintenu sur le temps libre : un accusé de réception est visé sous une semaine,
-puis un correctif selon la gravité (une fuite de données en clair ou de secrets passe avant tout le
-reste). Aucun délai n'est garanti ; vous serez tenu au courant dans le signalement privé, et cité
-dans la PR du correctif si vous le souhaitez.
+Projet personnel, maintenu sur le temps libre : **aucun délai n'est promis**, ni pour l'accusé de
+réception ni pour le correctif. Les signalements sont traités selon leur gravité (une fuite de
+données en clair ou de secrets passe avant tout le reste) ; vous serez tenu au courant dans le
+signalement privé, et cité dans la PR du correctif si vous le souhaitez.
 
 ## Périmètre
 
