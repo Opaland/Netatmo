@@ -125,6 +125,17 @@ ignorés (57 survivants, 16 non couverts). `periods.ts`, modifié depuis le 10/1
 283 mutants (277 hors ignorés) et passe de 92,8 % à 86,3 % : 38 mutants non tués, surtout l. 144-148
 et 25 ; à lire dans une vague suivante.
 
+**`periods.ts` relu (#495, 12/11/2026).** `npx stryker run --mutate src/periods.ts` : **86,3 % → 94,2 %**
+(22 survivants et 16 non couverts → 13 survivants et 3 non couverts, tous équivalents, tableau
+ci-dessous). Deux tests dans `web/src/periods.test.ts` (« #495 »), vus rouges par la vague (les
+22 mutants qu'ils visent ont disparu à la suivante) : les jours de coupure (#394) de part et d'autre
+de la fenêtre, premier et dernier jour compris, nommés par cause (`yoyCaveat`, l. 144-148, qu'aucun
+test n'appelait avec `cuts`) ; une fenêtre qui commence au 1er janvier quand les données ont commencé
+plus d'un an avant, quel que soit leur jour (l. 103). Au passage, `vitest.mutation.config.mjs` trouve
+lui-même les tests qui lisent hors de `web/` (`../../`) au lieu de les lister : la liste écrite à
+la main avait vieilli (`dju.test.ts`, qui lit `collector/weather.py`, faisait échouer le premier
+passage de Stryker).
+
 ### Survivants lus et laissés, avec leur raison
 
 | Fichier : ligne | Mutant | Classement | Raison |
@@ -134,9 +145,10 @@ et 25 ; à lire dans une vague suivante.
 | `money.ts:97` | `kg < 10` → `kg <= 10` | équivalent | à 10 exactement, 0 ou 1 décimale écrivent tous deux « 10 » |
 | `money.ts:111` | `<` → `<=` dans le tri | équivalent | ne change l'ordre que de deux grilles de même date de début |
 | `pricing.ts:51` | `'0000-01-01'` → `''` | équivalent | la ligne de prix manuelle est rendue pour tout jour ; sa date n'est jamais lue |
-| `periods.ts:14` | `isLeap` (9 mutants) | équivalent | n'est appelé que pour un début au 29 février de l'année d'avant : l'année comparée suit une bissextile et ne l'est jamais |
-| `periods.ts:59-60` | `a > from` → `>=`, `b < to` → `<=` | équivalent | à égalité les deux branches donnent la même borne |
-| `periods.ts:92-93, 96` | bornes de `yoyWindow` (6 mutants) | équivalent | rattrapés par le contrôle `from > to`, ou la tranche `slice(5)` donne `01-01` dans les deux cas |
+| `periods.ts:25` | `isLeap` (12 mutants, dont 3 non couverts) | équivalent | n'est appelé que pour un début au 29 février de l'année d'avant : l'année comparée suit une bissextile et ne l'est jamais (toute variante qui rend « non bissextile » pour elle donne le même 1er mars) |
+| `periods.ts:69-70` | `a > from` → `>=`, `b < to` → `<=` | équivalent | à égalité les deux branches donnent la même borne |
+| `periods.ts:102-103, 106` | bornes de `yoyWindow` (4 mutants) | équivalent | rattrapés par le contrôle `from > to`, ou à égalité la tranche `slice(5)` donne `01-01` et `to` la même borne dans les deux cas |
+| `periods.ts:144` | `?? []` → `?? ["Stryker was here"]` | équivalent | sans `cuts`, la chaîne ajoutée n'est pas une date : elle ne tombe jamais entre deux jours `AAAA-MM-JJ` (`d <= t` est faux) |
 | `invoice.ts:27, 31, 35, 37` | contrôles de type de `validInvoice` (8 mutants) | équivalent | `isDay` compare à la chaîne d'origine (`===`) et `Number.isFinite` ne convertit pas : un tableau ou une chaîne ne passent pas |
 | `invoice.ts:127, 157` | `subDays--`, `subDays === 0` → `false` | équivalent | seul `subDays === 0` est lu, et sans jour de prix `avgPrice` est déjà nul |
 | `invoice.ts:194-200, 227` | `diff > 0` → `>= 0`, `residual >= 0` → `> 0` | équivalent | branches atteintes seulement pour `|diff| ≥ 1` et `|reste| > tolérance ≥ 2 €` : jamais à zéro |

@@ -154,6 +154,32 @@ describe('#297 partial buckets and lost days', () => {
   });
 });
 
+// #495: the survivors of the mutation run on periods.ts that change a result (the others are
+// written « équivalent » in docs/bmad/06-qa-strategy.md).
+describe('#495 periods.ts, survivors of the mutation', () => {
+  it('data that started more than a year before: the window starts on 1 January, whatever its day', () => {
+    // a first day in mid-June several years back is not a late start of the previous year
+    expect(yoyWindow(2026, '2020-06-15', '2026-11-08')).toMatchObject({ from: '2026-01-01', cut: false });
+  });
+
+  it('the cut days (#394) on each side of the window, its first and last day included, named by cause', () => {
+    const w = yoyWindow(2026, '2020-06-15', '2026-11-08')!;
+    const cuts = new Map<string, 'power' | 'internet'>([
+      ['2026-01-01', 'power'], // first day of the window
+      ['2026-11-08', 'power'], // last day
+      ['2026-11-09', 'internet'], // after: not counted
+      ['2025-01-01', 'internet'], // first day of the year before
+      ['2025-11-08', 'internet'], // its last day
+      ['2025-11-09', 'power'], // after it: not counted
+      ['2024-12-31', 'power'], // before it: not counted
+    ]);
+    expect(yoyCaveat(w, new Set(), { cuts })).toBe('à date · 2026 : 2 jours de coupure de courant · 2025 : 2 jours de coupure Internet');
+    // both causes in one year
+    expect(yoyCaveat(w, new Set(), { cuts: new Map([['2026-03-01', 'power'], ['2026-03-02', 'internet']]) })).toBe('à date · 2026 : 2 jours de coupure (courant, Internet)');
+    expect(yoyCaveat(w, new Set())).toBe('à date');
+  });
+});
+
 describe('#295 screen-reader summaries by kind of measure', () => {
   const labels = ['1 janv.', '2 janv.', '3 janv.'];
   it('a cumulative series gives the value reached, not the sum of the running total', () => {
