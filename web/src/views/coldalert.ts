@@ -28,7 +28,7 @@ import { lsKey } from '../scope';
 import { fmt1 as num1 } from '../glossary';
 import { alert, alertHtml, switchField } from '../components';
 
-export const COLD_VARIABLE = 'COLD_ALERT_JSON';
+export const COLD_SECRET = 'COLD_ALERT_JSON';
 const LS = lsKey('cold-draft');
 
 /** #242: always the raw rooms and modules, whatever the household view shows. */
@@ -131,7 +131,7 @@ export function mountColdSettings(card: HTMLElement | null, repo: () => string, 
           )
         : '<p class="hint muted">Activez au moins une pièce.</p>'
     }
-    <p class="hint muted">${secretWhere(COLD_VARIABLE)}</p>
+    <p class="hint muted">${secretWhere(COLD_SECRET)}</p>
     <code class="sim-json">${esc(chosen.length ? coldJson(cfg) : '—')}</code>
     <div class="controls">
       <button type="button" class="primary small" id="cold-save" ${canWrite && chosen.length ? '' : 'disabled'}>Enregistrer l'alerte dans GitHub</button>
@@ -140,12 +140,12 @@ export function mountColdSettings(card: HTMLElement | null, repo: () => string, 
     <p class="hint muted">${
       demo ? 'Mode démonstration : rien n\'est enregistré.' : hasToken() ? 'Prise en compte à la prochaine collecte.' : tokenHint
     }</p>
-    ${plainOffer(repo(), COLD_VARIABLE, canWrite)}
+    ${plainOffer(repo(), COLD_SECRET, canWrite)}
     ${message ? alertHtml(message.ok ? 'info' : 'bad', esc(message.text), { role: 'status' }) : ''}`;
   if (focus) card.querySelector<HTMLElement>(focus)?.focus();
   const remount = () => (card.isConnected ? mountColdSettings(card, repo) : rerender());
-  if (canWrite) checkPlain(repo(), COLD_VARIABLE, remount);
-  bindMigrate(card, repo(), COLD_VARIABLE, (m) => (message = m), remount);
+  if (canWrite) checkPlain(repo(), COLD_SECRET, remount);
+  bindMigrate(card, repo(), COLD_SECRET, (m) => (message = m), remount);
   const update = (patch: Partial<ColdConfig>, from: string) => {
     saveDraft({ ...cfg, ...patch });
     message = null;
@@ -164,7 +164,7 @@ export function mountColdSettings(card: HTMLElement | null, repo: () => string, 
   const write = (value: string, done: string) => {
     message = { ok: true, text: 'En cours…' };
     mountColdSettings(card, repo);
-    saveSecretText(repo(), COLD_VARIABLE, value, done)
+    saveSecretText(repo(), COLD_SECRET, value, done)
       .then((text) => (message = { ok: true, text }))
       .catch((err: Error) => (message = { ok: false, text: err.message }))
       .finally(() => (card.isConnected ? mountColdSettings(card, repo) : rerender()));

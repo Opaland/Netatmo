@@ -6,7 +6,7 @@
 import { type DayRecord, addDays, minusYears, seasonOf } from './aggregate';
 import { type Weather, dju } from './analysis';
 import { ADEME_PER_DEGREE } from './checks';
-import { MIN_DJU } from './dju';
+import { MIN_DJU_SPAN } from './dju';
 import { signedPct } from './glossary';
 
 /** The goals offered (% of kWh per degree day less than last winter). */
@@ -56,7 +56,7 @@ export interface GoalProgress {
 /**
  * The way to a goal of `room`: its kWh per degree day of the current heating season to `last`,
  * against the same days a year earlier, on the days with an outdoor temperature both years. Null
- * without enough cold on either side (MIN_DJU) or without heating a year earlier.
+ * without enough cold on either side (MIN_DJU_SPAN) or without heating a year earlier.
  */
 export function goalProgress(records: DayRecord[], room: string, weather: Weather, last: string, goal: number): GoalProgress | null {
   const from = `${seasonOf(last).slice(0, 4)}-09-01`;
@@ -66,6 +66,9 @@ export function goalProgress(records: DayRecord[], room: string, weather: Weathe
   const now = { kwh: 0, dju: 0 };
   const ref = { kwh: 0, dju: 0 };
   for (let d = from; d <= last; d = addDays(d, 1)) {
+    // #517: 29 Feb has no day a year earlier (minusYears gives 28 Feb, already the reference of
+    // 28 Feb): counting it would count that reference day twice. It is left out on both sides.
+    if (d.endsWith('-02-29')) continue;
     const a = weather.get(d);
     const b = weather.get(minusYears(d));
     if (!a || !b) continue;
@@ -79,7 +82,7 @@ export function goalProgress(records: DayRecord[], room: string, weather: Weathe
     if (r.day >= from && r.day <= last) now.kwh += r.kwh;
     else if (r.day >= refFrom && r.day <= refTo) ref.kwh += r.kwh;
   }
-  if (now.dju <= MIN_DJU || ref.dju <= MIN_DJU || ref.kwh <= 0) return null;
+  if (now.dju <= MIN_DJU_SPAN || ref.dju <= MIN_DJU_SPAN || ref.kwh <= 0) return null;
   const change = ((now.kwh / now.dju / (ref.kwh / ref.dju)) - 1) * 100;
   return { goal, from, to: last, refFrom, refTo, days: kept.size / 2, now, ref, change, share: Math.max(0, -change / goal) };
 }
