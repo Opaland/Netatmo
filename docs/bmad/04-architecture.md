@@ -36,6 +36,7 @@
 
 Points clés : aucun serveur, aucune base ; l'enveloppe chiffrée est volontairement simple pour que
 WebCrypto la déchiffre : `{"v":1,"kdf":"PBKDF2-SHA256","iter":N,"salt":b64,"iv":b64,"ct":b64}`
+(ou, après `rekey --kdf argon2id`, `"kdf":"Argon2id","m":65536,"t":2,"p":1` à la place de `iter`, #139)
 (`ct` inclut l'étiquette GCM de 16 octets) ; l'appli refuse une autre version, une autre dérivation ou
 moins de 600 000 itérations. Une écriture n'a lieu que si le texte clair change, ce qui évite un commit
 par nuit sans nouveauté. Le journal des Actions est **public** : rien de personnel n'y est écrit

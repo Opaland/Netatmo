@@ -889,18 +889,25 @@ def cmd_import_ha(s: Settings, args: argparse.Namespace) -> None:
 
 
 def cmd_rekey(s: Settings, args: argparse.Namespace) -> None:
-    from .rekey import rekey, strength_bits, verdict
+    from .crypto import Kdf
+    from .rekey import default_backup, rekey, strength_bits, verdict
 
     s.require("passphrase")
+    kdf = {"argon2id": Kdf.argon2id(), "pbkdf2": Kdf.pbkdf2(), None: None}[args.kdf]
     new = os.environ.get("NEW_DATA_PASSPHRASE", "")
-    if not new:
-        raise SystemExit("Variable manquante : NEW_DATA_PASSPHRASE")
-    bits = strength_bits(new)
-    print(f"Robustesse estimée de la nouvelle phrase : {bits:.0f} bits — {verdict(bits)}")
-    if bits < 50 and not args.force:
-        raise SystemExit("Phrase trop faible : choisissez-en une plus longue (ou --force).")
-    files = rekey(s.data_dir, s.passphrase, new)
-    print(f"{len(files)} fichiers rechiffrés. Mettez maintenant la nouvelle phrase dans le secret DATA_PASSPHRASE.")
+    if not new and kdf is None:
+        raise SystemExit("Variable manquante : NEW_DATA_PASSPHRASE (ou --kdf pour ne changer que la dérivation)")
+    if new:
+        bits = strength_bits(new)
+        print(f"Robustesse estimée de la nouvelle phrase : {bits:.0f} bits — {verdict(bits)}")
+        if bits < 50 and not args.force:
+            raise SystemExit("Phrase trop faible : choisissez-en une plus longue (ou --force).")
+    backup = Path(args.sauvegarde) if args.sauvegarde else default_backup(s.data_dir)
+    files = rekey(s.data_dir, s.passphrase, new or s.passphrase, kdf, backup)
+    # Counts only: the totals compared stay out of the (public) log.
+    print(f"{len(files)} fichiers rechiffrés, relus et totaux identiques. Copie d'avant : {backup}/")
+    if new:
+        print("Mettez maintenant la nouvelle phrase dans le secret DATA_PASSPHRASE.")
 
 
 def cmd_strength(s: Settings, args: argparse.Namespace) -> None:
@@ -914,13 +921,8 @@ def cmd_strength(s: Settings, args: argparse.Namespace) -> None:
 def cmd_verify(s: Settings, args: argparse.Namespace) -> None:
     s.require("passphrase")
     store = Store(s.data_dir, s.passphrase)
-    rooms = {r["id"]: r for r in store.meta.get("rooms", [])}
     print(f"Maison : {store.meta.get('home', {}).get('name')}  — mise à jour {store.meta.get('updated')}")
-    for y in store.years():
-        per_cat: dict[str, float] = {}
-        for rid, days in store.year(y).items():
-            cat = rooms.get(rid, {}).get("category", "?")
-            per_cat[cat] = per_cat.get(cat, 0) + sum(days.values())
+    for y, per_cat in store.totals().items():
         print(f"  {y} : " + ", ".join(f"{c} {v / 1000:.0f} kWh" for c, v in sorted(per_cat.items())))
 
 
@@ -1040,8 +1042,10 @@ def main(argv: list[str] | None = None) -> None:
     vo.add_argument("--certificat", default="scripts/nas/volets-certificat.pem", metavar="FICHIER")
     vo.add_argument("--alerte", metavar="FICHIER", help="écrit ici le message quand le NAS signale un échec")
     sub.add_parser("verify")
-    rk = sub.add_parser("rekey", help="changer la phrase de passe (NEW_DATA_PASSPHRASE)")
+    rk = sub.add_parser("rekey", help="changer la phrase de passe (NEW_DATA_PASSPHRASE) ou la dérivation (--kdf)")
     rk.add_argument("--force", action="store_true")
+    rk.add_argument("--kdf", choices=["argon2id", "pbkdf2"], help="nouvelle dérivation (#139), défaut : inchangée")
+    rk.add_argument("--sauvegarde", metavar="DOSSIER", help="copie des fichiers d'avant (défaut : data-avant-rekey/)")
     sub.add_parser("strength", help="robustesse estimée de DATA_PASSPHRASE")
     ins = sub.add_parser("insights", help="analyse du mois rédigée par Claude (ANTHROPIC_API_KEY)")
     ins.add_argument("--force", action="store_true")

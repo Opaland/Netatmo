@@ -3,7 +3,7 @@
 // content: it can be stored anywhere, and restored with `python -m collector restore-backup`.
 import { downloadBlob } from './download';
 import type { Meta } from './aggregate';
-import type { Envelope, KeyInfo } from './crypto';
+import { type Envelope, type KeyInfo, envelopeFields, keyInfoFields } from './crypto';
 
 export const BACKUP_FORMAT = 'intuis-history-backup/1';
 
@@ -60,10 +60,9 @@ export async function buildBundle(
     const doc = await fetchJson(name);
     if (doc === null) continue;
     if (!isEnvelope(doc)) throw new Error(`${name} n'est pas un fichier chiffré`);
-    const { v, kdf, iter, salt, iv, ct } = doc;
-    files[name] = { v, kdf, iter, salt, iv, ct };
+    files[name] = envelopeFields(doc); // #139: the fields of its derivation (PBKDF2 or Argon2id)
   }
-  return { format: BACKUP_FORMAT, created: created.toISOString(), keyinfo: { salt: keyinfo.salt, iter: keyinfo.iter }, files };
+  return { format: BACKUP_FORMAT, created: created.toISOString(), keyinfo: keyInfoFields(keyinfo), files };
 }
 
 export const backupFileName = (d = new Date()) =>

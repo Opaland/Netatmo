@@ -8,6 +8,7 @@
 import { spawn } from 'node:child_process';
 import { mkdirSync, readFileSync } from 'node:fs';
 import AxeBuilder from '@axe-core/playwright';
+import { argon2Folder } from './argon2-data.mjs';
 import { chromium, devices, webkit } from 'playwright';
 
 const BROWSER = process.env.E2E_BROWSER === 'webkit' ? 'webkit' : 'chromium';
@@ -186,6 +187,43 @@ try {
     await page.reload();
     await page.waitForSelector('#pass');
     check(!(await page.locator('#lock-notice').count()), 'éviction : le message revient après rechargement');
+    await ctx.close();
+  }
+
+  // ---------------------------------------------------------------- #139: a data folder in Argon2id
+  // The demo re-encrypted as after `rekey --kdf argon2id`, served as real data: the app opens it
+  // under its CSP (WebAssembly), a wrong phrase is refused as before, and the Argon2id code is
+  // fetched only once a version 2 keyinfo.json is unlocked (not with the lock screen).
+  {
+    progress('#139 dossier Argon2id');
+    const files = await argon2Folder('dist/demo', 'demo');
+    const ctx = await browser.newContext({ ...iphone, serviceWorkers: 'block' });
+    await ctx.route('**/data/*', (r) => {
+      const body = files.get(new URL(r.request().url()).pathname.split('/').pop());
+      return body ? r.fulfill({ contentType: 'application/json', body }) : r.fulfill({ status: 404, body: '' });
+    });
+    const page = await ctx.newPage();
+    page.on('pageerror', (e) => errors.push(`${BROWSER} argon2id: ${e.message}`));
+    page.on('console', (m) => m.type() === 'error' && errors.push(`${BROWSER} argon2id (console): ${m.text()}`));
+    const chunks = [];
+    page.on('request', (r) => /\/assets\/argon2-[^/]*\.js$/.test(r.url()) && chunks.push(r.url()));
+    try {
+      await page.goto(base);
+      await page.waitForSelector('#pass');
+      check(chunks.length === 0, 'argon2id : le code Argon2id est chargé avec l’écran de déverrouillage');
+      await page.fill('#pass', 'pas la bonne phrase');
+      await page.click('#unlock button.primary');
+      await page.waitForFunction(() => /incorrecte/.test(document.querySelector('#lock-msg')?.textContent ?? ''), null, { timeout: 30000 });
+      check(chunks.length === 1, `argon2id : code Argon2id chargé ${chunks.length} fois`);
+      await page.fill('#pass', 'demo');
+      const t = Date.now();
+      await page.click('#unlock button.primary');
+      await ready(page, 60000);
+      progress(`#139 dossier Argon2id ouvert en ${Date.now() - t} ms (dérivation, déchiffrement et premier écran)`);
+      check(await page.locator('header.top').count(), 'argon2id : l’application ne s’est pas ouverte');
+    } catch (err) {
+      errors.push(`${BROWSER} argon2id : ${err}`);
+    }
     await ctx.close();
   }
 

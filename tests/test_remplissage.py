@@ -67,7 +67,7 @@ def test_store_reads_unpadded_files_and_compares_plaintext(tmp_path):
     doc = s._read("2024")
     raw = json.dumps(doc, separators=(",", ":"), ensure_ascii=False).encode()
     env = json.loads(path.read_text())
-    key = derive_key("pw", s.salt, s.iterations)
+    key = derive_key("pw", s.salt, s.kdf)
     env["ct"] = base64.b64encode(AESGCM(key).encrypt(base64.b64decode(env["iv"]), raw, None)).decode()
     path.write_text(json.dumps(env) + "\n")  # unpadded, as written before #138
     before = path.read_text()
