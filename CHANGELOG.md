@@ -1,63 +1,101 @@
 # Historique des versions
 
-## v1.8 — en cours
+## v1.8 — en cours : le bois et les réglages
 
-- **Flambées du poêle** (#469) : la collecte lit chaque nuit, dans les relevés à la demi-heure, les
-  soirs où au moins deux pièces voisines du poêle se réchauffent radiateur à 0 W, après le coucher
-  du soleil et sans redoux (`collector/stove.py`, fonction pure, `meta.stove_fires` chiffré, rien
-  dans le journal). Seuils calibrés sur la démo (un poêle fictif et deux chambres voisines, d'après
-  les chiffres du propriétaire), écrits dans le code avec la façon de les ajuster sur de vraies
-  données, et tenus par `tests/test_flambees.py`. Historique › « Flambées du poêle » (chargée à la
-  demande) : calendrier, heure de début, durée estimée, pièces témoins, netteté, et « poêle allumé ce
-  soir ? oui / non » gardé chiffré sur l'appareil, qui donne la confiance. Le bois du poêle est
-  réparti sur les soirs de flambée (au prorata de leur durée) dans les jours lisibles, les
-  degrés-jours ailleurs ou sans détection : toujours la seule répartition (`woodDaily`).
-- **Bois : stock et bois réellement brûlé** (#465) : sous ⚙ Mon logement › Poêle à bois, « Bois
-  réellement brûlé (facultatif) » note, par saison, les stères brûlés ou le stock restant au
-  printemps ; le relevé remplace l'hypothèse « tout brûlé », et ce qui reste passe à la saison
-  suivante (le plus ancien d'abord). Chaque saison dit son hypothèse ou son relevé, son report et
-  son reste. Une seule règle de stock (`woodSeasons`), que suit la seule répartition des jours
-  (`woodDaily` → `woodDays`, `verdictWood`, `withWood`). Format `WOOD_JSON` : `burnt` facultatif,
-  mêmes limites dans la collecte (`parse_wood`, test d'accord) et dans l'appli (fuzz).
-- **Radiateurs retirés** (#440) : motif « Radiateurs retirés » dans ⚙ Mon logement › Radiateurs
-  arrêtés volontairement (appli et collecte, une seule liste tenue d'accord par un test). Pour tout
-  motif, une seule règle (`stoppedOn` / `stopped_on`) : à partir de la date déclarée, plus d'alerte de
-  module (« ne répond plus » de la nuit, issue de la collecte, firmware, heures hors ligne) ; avant, les
-  alertes restent. Une pièce et ses modules qui disparaissent de l'application Intuis gardent leur
-  historique (entrée de la pièce conservée dans la méta, clés pseudonymes des modules inchangées).
-  « Expliquer un mois » : « Changement de mode de chauffage (radiateurs retirés : Salon) ».
-- **L'isolation jugée électricité + bois** (#460) : avec un poêle et du bois acheté, « Chauffage
-  selon le froid » compte le bois par défaut (bascule « Électricité seule »), « Année par année »
-  ajoute le chauffage électricité + bois en kWh, par degré-jour et en euros, et le kWh/m² du
-  logement (⚙ Mon logement › Surfaces) compte le bois ; la pièce du poêle dit « chauffée au bois »,
-  jamais 0. Une seule répartition du bois, celle du verdict de l'Accueil (#433). Verdict
-  « Isolation, à titre indicatif » sous « Chauffage selon le froid » : W/°C et kWh/m² par an, grilles indicatives affichées
-  (`web/src/isolation.ts`), jours estimés signalés.
-- **Saisies gardées dans ⚙ Mon logement** (#462) : « Localisation et toits » garde ce qui est tapé
-  dans un brouillon chiffré sur l'appareil (clé des données), qui survit à un changement d'onglet, à
-  un passage par ⚙ Sources de données et à un rechargement, et s'efface après « Enregistrer pour le
-  foyer » ou « Annuler ». Poêle à bois : « Noter un achat de bois » et « Hypothèses » restent
-  ouverts après une action, le rendement s'applique à la sortie du champ, avant le premier achat
-  aussi. Surfaces : une valeur saisie ne reconstruit plus la grille, le focus passe au champ
-  suivant. Parcours e2e `npm run e2e:logement` (Chromium et WebKit).
-- **Ce que l'écran promet, tenu par le code** (#365) : l'IA reçoit les totaux du mois **et au plus
-  cinq jours inhabituels** ; les écrans (Cadre juridique, Paramètres, « où vont vos données ») et la
-  documentation disaient « seuls des totaux mensuels », l'architecture « noms de pièces envoyés ».
-  Toutes ces surfaces disent maintenant la même chose, tenue par `tests/test_promesses.py` : sur la
-  démonstration complète, aucun nom de pièce, de module ni du logement, aucun jour daté hors des cinq
-  jours au plus, ne part chez l'IA. Nouvelle revue de fin de version « promesses »
-  (`docs/revues-agents/revue-promesses.md`, workflow `Revue par agents`, `scripts/revue_issues.py`).
-- **Lier un module de la station qui suit une pièce** (#467) : un module intérieur non lié (un
-  « Cave » posé dans une chambre) dont la moyenne du jour suit celle de la sonde du radiateur sur
-  28 jours (10 jours au moins, corrélation ≥ 0,8, écart stable à 0,5 °C près et de 3 °C au plus) est
-  proposé sur la page de la pièce : « Lier ce module à la pièce ? ». Lié, sa mesure prime sur la
-  sonde ; « Ne pas lier » ne le repropose plus sur cet appareil. Règle et seuils dans
-  `web/src/module-match.ts` ; démo : un module « Grenier » posé dans la chambre parentale.
-- **Erreur du jeton GitHub** (#463) : le message nomme l'appel refusé et la permission qu'il
-  demande (« droits insuffisants pour la lecture de la liste des secrets (HTTP 403) : … « Secrets »
-  en lecture »), jamais une valeur, un nom de secret ni le dépôt ; il s'efface au début de chaque
-  essai, dit l'heure de l'échec et le numéro de l'essai, et propose « Réessayer » (des droits
-  modifiés chez GitHub peuvent mettre une minute à s'appliquer). Parcours e2e `npm run e2e:jeton`.
+Le bois partout où l'on juge l'isolation, les réglages du foyer chiffrés, l'ergonomie de ⚙ Mon
+logement, les degrés-jours, le stock de bois, les heures creuses datées et le bilan qualité
+([feuille de route](docs/bmad/feuille-de-route.md)). Revue de fin de version par les **72 personas**
+et revue design des écrans nouveaux ou changés : [`docs/bmad/revues/v1.8.md`](docs/bmad/revues/v1.8.md).
+Elle reste « en cours » jusqu'à la clôture par le propriétaire.
+
+- **Le bois partout où l'on juge le chauffage**
+  - Isolation jugée électricité + bois (#460, #471) : avec un poêle et du bois acheté, « Chauffage
+    selon le froid » compte le bois par défaut (bascule « Électricité seule »), « Année par année »
+    ajoute le chauffage électricité + bois en kWh, par degré-jour et en euros, et le kWh/m² du
+    logement (⚙ Mon logement › Surfaces) compte le bois ; la pièce du poêle dit « chauffée au bois »,
+    jamais 0. Verdict « Isolation, à titre indicatif » sous « Chauffage selon le froid » : W/°C et
+    kWh/m² par an, grilles indicatives affichées (`web/src/isolation.ts`), jours estimés signalés.
+    Une seule règle qui ajoute le bois à l'électricité (`withWood`), suivie par le verdict de
+    l'Accueil (#433).
+  - Travaux avant / après en électricité + bois (#476, #485), et leur graphique « Chauffage par
+    mois » aussi (#488, #491) : un poêle allumé entre les deux périodes ne passe plus pour une
+    isolation (démo : −16 % en électricité seule, 0 % électricité + bois).
+  - Bois : stock et bois réellement brûlé (#465, #480) : sous ⚙ Mon logement › Poêle à bois,
+    « Bois réellement brûlé (facultatif) » note, par saison, les stères brûlés ou le stock restant
+    au printemps ; ce qui reste passe à la saison suivante (le plus ancien d'abord). Une seule règle
+    de stock (`woodSeasons`), que suit la seule répartition des jours (`woodDaily`). `WOOD_JSON` :
+    `burnt` facultatif, mêmes limites dans la collecte et dans l'appli (test d'accord, fuzz).
+  - Flambées du poêle (#469, #487) : la collecte lit chaque nuit les soirs où au moins deux pièces
+    voisines du poêle se réchauffent radiateur à 0 W, après le coucher du soleil et sans redoux
+    (`collector/stove.py`, `meta.stove_fires` chiffré, rien dans le journal) ; Historique ›
+    « Flambées du poêle » (calendrier, durée, pièces témoins, « poêle allumé ce soir ? ») ; le bois
+    est réparti sur les soirs de flambée dans les jours lisibles. Seuils calibrés sur la démo,
+    écrits dans le code avec la façon de les ajuster.
+  - Pièce du poêle au-dessus de 22 °C (#468, #493) : sa page dit le bois qu'une baisse à 22 °C
+    économiserait sur la saison (7 % par degré, règle de l'ADEME déjà employée par l'appli).
+  - Radiateurs retirés (#440, #443) : nouveau motif d'arrêt volontaire ; pour tout motif, plus
+    d'alerte de module à partir de la date déclarée (une seule règle, appli et collecte) ; une pièce
+    disparue de l'application Intuis garde son historique. « Arrêtée depuis » dit la date déclarée,
+    pas le premier jour muet (#461, #474).
+- **Réglages du foyer chiffrés et ⚙ Mon logement**
+  - Radiateurs arrêtés et bois du poêle scellés en secrets (#459, #472), comme la localisation :
+    plus de variable en clair, migration proposée à l'écran, la collecte lit le secret d'abord et
+    nomme une ancienne variable restante sans sa valeur. Règle écrite dans PROJET.md § 7.
+  - Saisies gardées (#462, #473) : brouillon chiffré de la localisation et des toits qui survit à
+    un changement d'onglet, à ⚙ Sources et à un rechargement ; volets du poêle qui restent ouverts,
+    rendement appliqué à la sortie du champ ; surfaces sans grille reconstruite ni focus perdu
+    (`npm run e2e:logement`, Chromium et WebKit).
+  - Erreur du jeton GitHub (#463, #477) : l'appel refusé et la permission qu'il demande sont nommés,
+    jamais une valeur ni le dépôt ; le message s'efface à chaque essai, dit l'heure et le numéro de
+    l'essai, et propose « Réessayer » (`npm run e2e:jeton`).
+  - Lier un module de la station qui suit une pièce (#467, #478) : un module intérieur non lié dont
+    la moyenne du jour suit la sonde d'un radiateur est proposé sur la page de la pièce ; « Ne pas
+    lier » ne le repropose plus sur cet appareil.
+- **Mesures et méthode**
+  - Degrés-jours (#464, #475) : base 18 °C, méthode de Météo-France et source (Open-Meteo ou station
+    Netatmo) dites sous « Totaux par année », dans le Rapport et le glossaire ; une année incomplète
+    est marquée « au moins » et le chauffage par degré-jour ne compte que les jours mesurés ; une
+    seule formule dans la collecte ; test réel à Lyon-Bron (`pytest -m reseau`).
+  - Heures creuses datées (#441, #444) : chaque jour prend les plages en vigueur ce jour-là, lues dans
+    les relevés (un changement compte après 5 jours de chauffe d'accord) ou saisies avec « à compter
+    du » ; simulateur solaire, recharge, plannings et bandeau d'horaires suivent.
+  - Totaux qui disent ce qu'ils comptent (#466, #482 ; #488, #491) : la tuile du mois de l'Accueil,
+    « Hiver contre hiver » et la carte du mois de la vue Proche disent « chauffage et eau chaude »
+    (`countedWhat`, une seule source des mots).
+  - Niveau inférieur (#452, #479) : carte d'Air et confort qui suit l'énergie des radiateurs des
+    pièces choisies à froid égal, les nuits et jours peu ensoleillés (rayonnement collecté chez
+    Open-Meteo), avec un repère avant / après daté (joints, rideau…).
+  - Simulateur « Un chauffe-eau thermodynamique » (#453, #496) : l'eau chaude réelle des 365 derniers
+    jours face à trois pistes (baisser la consigne, tout chauffer en heures creuses datées, un
+    thermodynamique), en kWh et en euros, avec le retour sur le surcoût ; toutes les hypothèses
+    saisies, seul le COP est proposé (2,5). Champs de simulateur partagés avec le solaire
+    (`sim-inputs.ts`).
+  - Bilan qualité (avance #336, #456) : une seule règle de classement des jours (réel, estimé,
+    suspect, arrêté, manquant) dans l'appli et la collecte, tenue par un vecteur partagé ; pièces
+    arrêtées volontairement comptées à part ; causes connues des trous dans État des données.
+- **Lisibilité et design system** (constats de la revue v1.7 et suites)
+  - Plus de césure à 100 % de texte : onglet actif sans gras sur téléphone, césure des titres et
+    des noms de liste seulement en gros texte (#434, #445), vue Proche comprise (#442, #450) ; le
+    balayage compte une césure par trait comme un mot coupé.
+  - Heures pleines / creuses en deux jetons de tarif (#435, #447) ; plus aucune série hors pièces
+    aux couleurs d'une pièce, encres de série du design system (#446, #449).
+  - Vue Proche à 200 % balayée en CI : Rapport sans débordement, titre au plancher, légendes de
+    graphique qui passent à la ligne, invariant « légende coupée » (#451, #454) ; nom d'axe de la
+    signature lisible à 200 %, invariant « titre d'axe coupé » (#457, #490) ; « Ce qui part chez des
+    tiers » en cartes, lu sans défilement, invariant « colonne cachée » (#484, #489).
+- **Promesses, sécurité, qualité**
+  - Ce qui part chez l'IA (#365, #481) : les totaux du mois **et au plus cinq jours inhabituels**,
+    pièces sous pseudonyme, dit pareil sur toutes les surfaces et tenu par `tests/test_promesses.py` ;
+    troisième angle des revues de fin de version (`docs/revues-agents/revue-promesses.md`).
+  - `SECURITY.md` : aucun délai promis, repli sans détail tant que le signalement privé n'est pas
+    activé (partie de #364, #492).
+  - Plus d'erreur « layerStack » en quittant un graphique en cours de rendu (#439, #448, A13) ;
+    test de l'export de recherche sous 5 s sans relever le délai (#483, #486) ; deuxième vague de
+    mutation sur `reconstitute.ts`, 76,5 % → 98,0 % (#392, #494).
+- **Revue de fin de version** : captures de référence régénérées dans la police de la CI (DejaVu
+  Sans) ; titre du simulateur du chauffe-eau thermodynamique qui ne coupe plus « thermodynamique » au
+  milieu à 360 px ; sous-titres des listes coupés par un trait en gros texte (« autoconsommation »
+  dans Outils à 200 %) ; le balayage regarde aussi les mots de plus de 12 lettres (revue, § 6).
 
 ## v1.7 — novembre 2026 : finitions et données de la maison
 

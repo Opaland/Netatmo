@@ -307,13 +307,15 @@ function pageChecks() {
     // title: FALC, design system § 5.7, the simple view included, #442); with large text (from
     // about 120 % of the system size) the browser may still hyphenate a long word (#397,
     // style.css). Left aside: code and identifiers (« onError ») and a word wider than its whole
-    // card (a name made of data, #372: it must break somewhere).
+    // card (a name made of data, #372: it must break somewhere). Words of every length: a long word
+    // is the one most likely to break, and « thermodynamique » (15 letters) went unseen while the
+    // check stopped at 12 (end-of-version review v1.8).
     const largeText = parseFloat(style(document.documentElement).fontSize) >= 19;
     let broken = 0;
     for (const n of new Set(boxes.map((b) => b.n))) {
       if (broken >= 3) break;
       if (n.parentElement.closest('code, pre, kbd, samp') || (largeText && style(n.parentElement).hyphens === 'auto')) continue;
-      for (const m of n.textContent.matchAll(/(?<![\p{L}\d_])\p{L}{2,12}(?![\p{L}\d_])/gu)) {
+      for (const m of n.textContent.matchAll(/(?<![\p{L}\d_])\p{L}{2,}(?![\p{L}\d_])/gu)) {
         if (/\p{Ll}\p{Lu}/u.test(m[0])) continue;
         range.setStart(n, m.index);
         range.setEnd(n, m.index + m[0].length);

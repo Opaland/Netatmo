@@ -970,6 +970,14 @@ details.fold[open] > summary {
   .switch > span {
     hyphens: auto;
   }
+  /* The subtitle of a row, only for its very long words (12 letters, 5 each side): at 200 %,
+     « autoconsommation » under « Des panneaux solaires » (Outils) was cut anywhere, without a
+     hyphen (end-of-version review v1.8); a shorter word such as « service » still goes whole to
+     the next line, as the simple view asks (#407, e2e/proche.mjs). */
+  .row .s {
+    hyphens: auto;
+    hyphenate-limit-chars: 12 5 5;
+  }
 }
 .card-sub {
   margin: 0 0 var(--space-2);

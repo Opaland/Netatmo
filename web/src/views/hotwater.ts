@@ -129,9 +129,9 @@ function rowSub(r: HwRow, i: HotWaterInputs): string {
 function result(sim: HwSim, i: HotWaterInputs, days: HotWaterDay[], hc: OffPeak, copOffered: boolean): string {
   const [now, , , thermo] = sim.rows;
   const verdict = thermo.year
-    ? `<div class="verdict verdict-low"><span class="verdict-icon" aria-hidden="true">▼</span><div><p class="verdict-title">Un thermodynamique de COP ${nf1.format(i.cop!)} consommerait ${kwh(thermo.year.kwh)} par an au lieu de ${kwh(now.year!.kwh)}${
+    ? `<div class="verdict verdict-low"><span class="verdict-icon" aria-hidden="true">▼</span><div><p class="verdict-title">Avec un COP de ${nf1.format(i.cop!)} : ${kwh(thermo.year.kwh)} par an au lieu de ${kwh(now.year!.kwh)}${
         thermo.savedEur !== null ? `, ${fmtEur(thermo.savedEur)} de moins` : ''
-      }</p><p class="verdict-sub">Sur la même eau chaude que vos ${nf0.format(sim.days)} derniers jours de relevés${copOffered ? ', avec le COP proposé (une hypothèse, à remplacer par celui du modèle)' : ''}.</p></div></div>`
+      }</p><p class="verdict-sub">Un chauffe-eau thermodynamique, sur la même eau chaude que vos ${nf0.format(sim.days)} derniers jours de relevés${copOffered ? ', avec le COP proposé (une hypothèse, à remplacer par celui du modèle)' : ''}.</p></div></div>`
     : '';
   const rows = list(
     sim.rows.map((r) => ({
