@@ -46,6 +46,11 @@ jobs:
       cancel-in-progress: false
     steps:
       - uses: actions/checkout@v5
+      # #23: data/ on main, or in the branch named by the repository variable DATA_BRANCH.
+      - name: Données (branche choisie)
+        env:
+          DATA_BRANCH: ${{ vars.DATA_BRANCH }}
+        run: scripts/donnees.sh ouvrir "$RUNNER_TEMP/donnees"
       - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
@@ -71,11 +76,13 @@ jobs:
         env:
           DERIVATION: ${{ inputs.derivation }}
         run: |
+          cd "$DATA_REPO"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add data/
           git commit -m "data: rechiffrement (dérivation : $DERIVATION)"
-          git push
+          # #23: never forced, to the branch the data was read from (DATA_BRANCH, else this run's).
+          git push origin "HEAD:${DATA_BRANCH:-$GITHUB_REF_NAME}"
       - name: Étape suivante
         env:
           NEW_DATA_PASSPHRASE: ${{ secrets.NEW_DATA_PASSPHRASE }}
@@ -83,6 +90,7 @@ jobs:
           {
             echo "## Données rechiffrées"
             echo "Chaque fichier a été relu et les totaux comparés avant remplacement. Fichiers d'avant : artefact **avant-rekey** (30 jours)."
+            echo "Branche des données : **${DATA_BRANCH:-$GITHUB_REF_NAME}**."
             echo "Retour arrière : \`git revert\` du commit « data: rechiffrement »."
             if [ -n "$NEW_DATA_PASSPHRASE" ]; then
               echo "Remplacez maintenant le secret **DATA_PASSPHRASE** par la nouvelle phrase, puis supprimez **NEW_DATA_PASSPHRASE**."

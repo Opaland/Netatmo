@@ -47,6 +47,12 @@ jobs:
           fi
       - uses: actions/checkout@v5
         if: steps.check.outputs.configured == 'true'
+      # #23: data/ on main, or in the branch named by the repository variable DATA_BRANCH.
+      - name: Données (branche choisie)
+        if: steps.check.outputs.configured == 'true'
+        env:
+          DATA_BRANCH: ${{ vars.DATA_BRANCH }}
+        run: scripts/donnees.sh ouvrir "$RUNNER_TEMP/donnees"
       - uses: actions/setup-python@v7
         if: steps.check.outputs.configured == 'true'
         with:
@@ -147,19 +153,21 @@ jobs:
           # S-1.19: station inventory with the access token of this collection (names and counts only).
           STATION_INVENTORY: ${{ inputs.inventaire && 'true' || '' }}
         run: python -m collector -v ${{ inputs.backfill && 'backfill' || 'sync' }}
-      # #262: the push is retried (fetch + rebase) when main moved during the collection.
+      # #262: the push is retried (fetch + rebase) when the data branch moved during the collection.
       - name: Commit des données chiffrées
         id: commit
         if: steps.check.outputs.configured == 'true'
         run: |
-          scripts/commit-data.sh "data: collecte du $(date -u +%Y-%m-%d)" data/
+          cd "$DATA_REPO"
+          "$GITHUB_WORKSPACE/scripts/commit-data.sh" "data: collecte du $(date -u +%Y-%m-%d)" data/
       # #262: Netatmo rotates its refresh token at every login and the collector writes the new
       # one to data/ at once. When the collection or the commit above failed, it is still
       # committed here: otherwise the next run would reuse a consumed token (invalid_grant).
       - name: Sauvegarde du jeton Netatmo renouvelé
         if: always() && steps.check.outputs.configured == 'true' && steps.commit.outcome != 'success'
         run: |
-          scripts/commit-data.sh "data: jeton Netatmo renouvelé ($(date -u +%Y-%m-%d))" data/netatmo-token.enc.json
+          cd "$DATA_REPO"
+          "$GITHUB_WORKSPACE/scripts/commit-data.sh" "data: jeton Netatmo renouvelé ($(date -u +%Y-%m-%d))" data/netatmo-token.enc.json
 
       # One open issue while the collection fails (GitHub e-mails the owner), closed on success.
       - name: Alerte en cas d'échec

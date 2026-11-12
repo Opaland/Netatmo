@@ -54,6 +54,11 @@ jobs:
             exit 1
           fi
       - uses: actions/checkout@v5
+      # #23: data/ on main, or in the branch named by the repository variable DATA_BRANCH.
+      - name: Données (branche choisie)
+        env:
+          DATA_BRANCH: ${{ vars.DATA_BRANCH }}
+        run: scripts/donnees.sh ouvrir "$RUNNER_TEMP/donnees"
       - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
@@ -69,12 +74,13 @@ jobs:
           VOLETS_JOURNAL: ${{ inputs.journal }}
           VOLETS_ERREUR: ${{ inputs.erreur }}
         run: python -m collector volets --alerte "$RUNNER_TEMP/alerte.txt"
-      # #262: the push is retried (fetch + rebase) when main moved meanwhile.
+      # #262: the push is retried (fetch + rebase) when the data branch moved meanwhile.
       - name: Commit des données chiffrées
         env:
           VOLETS_JOUR: ${{ inputs.jour }}
         run: |
-          scripts/commit-data.sh "data: volets du $VOLETS_JOUR" data/volets.enc.json
+          cd "$DATA_REPO"
+          "$GITHUB_WORKSPACE/scripts/commit-data.sh" "data: volets du $VOLETS_JOUR" data/volets.enc.json
       - name: Échec signalé par le NAS
         run: |
           if [ -s "$RUNNER_TEMP/alerte.txt" ]; then

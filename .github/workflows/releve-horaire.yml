@@ -31,9 +31,15 @@ jobs:
           sparse-checkout: |
             collector
             requirements-lock.txt
+            scripts/donnees.sh
             data/keyinfo.json
             data/meta.enc.json
           sparse-checkout-cone-mode: false
+      # #23: data/ on main, or in the branch named by the repository variable DATA_BRANCH.
+      - name: Données (branche choisie)
+        env:
+          DATA_BRANCH: ${{ vars.DATA_BRANCH }}
+        run: scripts/donnees.sh ouvrir "$RUNNER_TEMP/donnees" data/keyinfo.json data/meta.enc.json
       - uses: actions/setup-python@v7
         with:
           python-version: "3.12"

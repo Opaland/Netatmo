@@ -45,10 +45,16 @@ jobs:
       - run: npm ci
       - run: npx playwright install --with-deps chromium
       - run: npm run build
+      # #23: data/ on main, or in the branch named by the repository variable DATA_BRANCH.
+      - name: Données (branche choisie)
+        working-directory: ${{ github.workspace }}
+        env:
+          DATA_BRANCH: ${{ vars.DATA_BRANCH }}
+        run: scripts/donnees.sh ouvrir "$RUNNER_TEMP/donnees"
       - name: Données chiffrées servies avec l'appli (comme au déploiement)
         run: |
-          test -f ../data/keyinfo.json || { echo "Pas de données chiffrées dans data/"; exit 1; }
-          cp -r ../data dist/data
+          test -f "$DATA_DIR/keyinfo.json" || { echo "Pas de données chiffrées dans data/"; exit 1; }
+          cp -r "$DATA_DIR" dist/data
       # DATA_PASSPHRASE in this step only. The sweep prints no value nor any text of the pages.
       - name: Balayage (assertions seulement)
         env:

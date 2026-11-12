@@ -112,7 +112,7 @@ dans les [issues GitHub](https://github.com/Opaland/Netatmo/issues) (une par ré
 | S-8.6 | En tant que propriétaire, je veux que les Paramètres refusent `DATA_PASSPHRASE`, afin de ne pas rendre l'archive illisible | G une tentative d'écriture · Q j'enregistre · A refus explicite, renvoi vers `rekey` | S | M | Fait (v1.2) |
 | S-8.7 | (réservé) | — | — | — | — |
 | S-8.8 | En tant que personne soucieuse de sa vie privée, je veux une page « ce qui est public / ce qui part chez des tiers », afin de décider en connaissance de cause | G la page Paramètres · Q je l'ouvre · A liste des données publiques (chiffrées), des tiers (Intuis, Netatmo, Enedis via Conso API, Open-Meteo, Anthropic, api-couleur-tempo) et de ce qui leur est envoyé | S | S | Fait (v1.2) |
-| S-8.3 | En tant que mainteneur, je veux les données dans une branche `data`, afin de garder `main` lisible | G la collecte · Q elle commit · A `main` ne reçoit plus de commits de données ; le déploiement lit la branche `data` | M | C | À faire |
+| S-8.3 | En tant que mainteneur, je veux les données dans une branche `data`, afin de garder `main` lisible | G la collecte · Q elle commit · A `main` ne reçoit plus de commits de données ; le déploiement lit la branche `data` | M | C | Livré (#23) : passage par le propriétaire |
 
 ## E9 · Pont local en lecture seule (conditionnel)
 

@@ -4,6 +4,7 @@ discover    Connexion + inventaire de la maison (pièces, modules, catégories)
 sync        Récupère les derniers jours (ou tout l'historique au premier lancement)
 backfill    Force la récupération de tout l'historique disponible
 verify      Déchiffre les données locales et affiche un résumé
+comparer SOURCE COPIE  Vérifie qu'une copie de data/ a les mêmes fichiers et totaux (#23), comptes seulement
 export-csv  Exporte les données déchiffrées en CSV
 demo        Génère des données de démonstration chiffrées (phrase « demo »)
 fixtures    Jeux de démo nommés (cas limites) pour les tests E2E, dans web/dist (#353)
@@ -914,6 +915,15 @@ def cmd_rekey(s: Settings, args: argparse.Namespace) -> None:
         print("Mettez maintenant la nouvelle phrase dans le secret DATA_PASSPHRASE.")
 
 
+def cmd_compare(s: Settings, args: argparse.Namespace) -> None:
+    from .compare import compare_dirs
+
+    s.require("passphrase")
+    files, years = compare_dirs(Path(args.source), Path(args.copie), s.passphrase)
+    # Counts only: the log is public (#23).
+    print(f"{files} fichiers déchiffrés et identiques, totaux identiques sur {years} années.")
+
+
 def cmd_strength(s: Settings, args: argparse.Namespace) -> None:
     from .rekey import strength_bits, verdict
 
@@ -1055,6 +1065,9 @@ def main(argv: list[str] | None = None) -> None:
     rk.add_argument("--force", action="store_true")
     rk.add_argument("--kdf", choices=["argon2id", "pbkdf2"], help="nouvelle dérivation (#139), défaut : inchangée")
     rk.add_argument("--sauvegarde", metavar="DOSSIER", help="copie des fichiers d'avant (défaut : data-avant-rekey/)")
+    cp = sub.add_parser("comparer", help="vérifier qu'une copie de data/ a les mêmes fichiers et totaux (#23)")
+    cp.add_argument("source", metavar="SOURCE")
+    cp.add_argument("copie", metavar="COPIE")
     sub.add_parser("strength", help="robustesse estimée de DATA_PASSPHRASE")
     ins = sub.add_parser("insights", help="analyse du mois rédigée par Claude (ANTHROPIC_API_KEY)")
     ins.add_argument("--force", action="store_true")
@@ -1091,6 +1104,7 @@ def main(argv: list[str] | None = None) -> None:
         "backfill": lambda s, a: cmd_sync(s, a, backfill=True),
         "verify": cmd_verify,
         "rekey": cmd_rekey,
+        "comparer": cmd_compare,
         "strength": cmd_strength,
         "insights": cmd_insights,
         "export-csv": cmd_export,

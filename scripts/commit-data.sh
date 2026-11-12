@@ -7,11 +7,14 @@
 # The push is retried when the branch moved during the collection (a pull request merged,
 # a late run): fetch, rebase onto it (merge if the rebase stops), push again. Never forced.
 # A commit left unpushed by an earlier step is pushed too.
+#
+# Run from $DATA_REPO (scripts/donnees.sh ouvrir): the checkout itself while the data lives on
+# main, a worktree of the data branch otherwise (#23), which then exports DATA_BRANCH.
 set -euo pipefail
 
 msg=$1
 shift
-branch=${GITHUB_REF_NAME:-$(git rev-parse --abbrev-ref HEAD)}
+branch=${DATA_BRANCH:-${GITHUB_REF_NAME:-$(git rev-parse --abbrev-ref HEAD)}}
 attempts=${PUSH_ATTEMPTS:-5}
 pause=${PUSH_PAUSE:-5}
 
