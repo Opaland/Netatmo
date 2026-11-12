@@ -12,6 +12,7 @@ import { loadNote, saveNote } from '../local-store';
 import { type OffPeak, offPeakSentence, shareOn } from '../offpeak';
 import { offPeakNow } from './offpeak-state';
 import { lsKey } from '../scope';
+import { inputStore, readNumberForm } from '../sim-inputs';
 import {
   INPUT_FIELDS,
   type SizeRows,
@@ -55,20 +56,7 @@ const nf2 = new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 3 });
 const pct = (part: number, whole: number) => (whole > 0 ? `${nf0.format((part / whole) * 100)} %` : '—');
 const kwh = (v: number) => `${nf0.format(v)} kWh`;
 
-function loadInputs(): SolarInputs {
-  try {
-    return parseSolarInputs(JSON.parse(localStorage.getItem(LS) ?? '{}'));
-  } catch {
-    return parseSolarInputs({});
-  }
-}
-function saveInputs(v: SolarInputs) {
-  try {
-    localStorage.setItem(LS, JSON.stringify(v));
-  } catch {
-    /* kept for this visit */
-  }
-}
+const { load: loadInputs, save: saveInputs } = inputStore(LS, parseSolarInputs);
 
 const UNITS: Record<keyof SolarInputs, [string, string]> = {
   priceHp: ['Prix du kWh, heures pleines (€)', '0.001'],
@@ -123,12 +111,7 @@ export function mountSolar(view: HTMLElement) {
   </section>`);
   const form = view.querySelector<HTMLElement>('#solar-form')!;
   form.addEventListener('input', () => {
-    const next: Record<string, number> = {};
-    for (const el of form.querySelectorAll<HTMLInputElement>('[data-solar]')) {
-      const raw = el.value.trim().replace(',', '.');
-      if (raw !== '') next[el.dataset.solar!] = Number(raw);
-    }
-    saveInputs(parseSolarInputs(next));
+    saveInputs(parseSolarInputs(readNumberForm(form, 'solar')));
     draw(view, d);
   });
   draw(view, d);
