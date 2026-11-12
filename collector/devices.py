@@ -338,6 +338,10 @@ def stopped_on(stopped: list[dict] | None, room: str | None, day: str) -> bool:
 
 WOOD_SPECIES = ("chene", "hetre", "charme", "frene", "melange", "resineux")
 MAX_PURCHASES = 60
+# #465: bounds of a reading of the wood burnt (stères burnt or left in spring) and of its season;
+# same in the app (web/src/wood.ts MAX_BURNT_STERES, BURNT_SEASONS)
+MAX_BURNT_STERES = 200
+BURNT_SEASONS = (2000, 2100)
 
 
 class WoodError(ValueError):
@@ -350,11 +354,37 @@ def _number(v: object, lo: float, hi: float) -> float | None:
     return float(v) if lo <= v <= hi else None
 
 
+def _parse_burnt(items: object) -> list[dict]:
+    """#465: the readings of the wood burnt, per season (see parse_wood)."""
+    if not isinstance(items, list) or len(items) > MAX_PURCHASES:
+        raise WoodError(f"liste de {MAX_PURCHASES} relevés au plus attendue")
+    out: list[dict] = []
+    for item in items:
+        if not isinstance(item, dict):
+            raise WoodError("relevé attendu")
+        season = item.get("season")
+        lo, hi = BURNT_SEASONS
+        if not isinstance(season, int) or isinstance(season, bool) or not lo <= season <= hi:
+            raise WoodError("saison attendue (année de septembre)")
+        keys = [k for k in ("steres", "left") if k in item]
+        if len(keys) != 1:
+            raise WoodError("stères brûlés ou stock restant attendu, l'un des deux")
+        value = _number(item[keys[0]], 0, MAX_BURNT_STERES)
+        if value is None:
+            raise WoodError("stères relevés hors limites")
+        if any(o["season"] == season for o in out):
+            raise WoodError("un relevé par saison")
+        out.append({"season": season, keys[0]: value})
+    return sorted(out, key=lambda b: b["season"])
+
+
 def parse_wood(raw: str) -> dict:
     """#366: the wood bought for a stove (repository variable WOOD_JSON, set from ⚙ Mon logement):
     {"purchases": [{"day": "YYYY-MM-DD", "steres": 4, "species": "chene", "moisture": 20,
-    "price": 360}], "efficiency": 70, "kwhPerStere": {"chene": 2100}}. Copied into the encrypted
-    meta, read by the app (web/src/wood.ts, same limits); never written to the public log."""
+    "price": 360}], "burnt": [{"season": 2025, "steres": 3}], "efficiency": 70, "kwhPerStere":
+    {"chene": 2100}}. `burnt` (#465, optional): what a season really burnt, as stères burnt or as
+    the stock `left` in spring, exactly one of the two, one reading per season. Copied into the
+    encrypted meta, read by the app (web/src/wood.ts, same limits); never written to the public log."""
     try:
         data = json.loads(raw)
     except ValueError as err:
@@ -385,6 +415,9 @@ def parse_wood(raw: str) -> dict:
             {"day": day, "steres": steres, "species": item["species"], "moisture": moisture, "price": price}
         )
     out: dict = {"purchases": sorted(purchases, key=lambda p: p["day"])}
+    burnt = _parse_burnt(data.get("burnt", []))
+    if burnt:
+        out["burnt"] = burnt
     efficiency = _number(data.get("efficiency"), 10, 100)
     if efficiency is not None:
         out["efficiency"] = efficiency

@@ -12,16 +12,19 @@ import { avgPrice, esc, fmtEur, fmtKwh, lastDay, nf0 } from '../ui';
 import {
   DEFAULT_EFFICIENCY,
   KWH_PER_STERE,
+  MAX_BURNT_STERES,
   REF_MOISTURE,
   SPECIES,
   type Species,
   WET_MOISTURE,
+  type WoodBurnt,
   type WoodPurchase,
   type WoodSettings,
   heatOf,
   moistureFactor,
   parseWood,
   purchaseText,
+  seasonText,
   woodJson,
   woodSeasons,
 } from '../wood';
@@ -49,14 +52,14 @@ export function mountWood(card: HTMLElement | null, repo: () => string) {
   const stove = stoveName() !== 'Poêle à bois'; // a room declared heated by a stove (#346)
   card.innerHTML = html(`<section class="card" id="wood-card" aria-labelledby="wood-title">
     <div class="card-head"><h2 id="wood-title">${esc(stoveName())}</h2><span class="tag scope">foyer</span></div>
-    <p class="hint muted">Le bois ne passe pas par le compteur : notez vos achats pour que le coût du chauffage (Accueil, hiver contre hiver, « Expliquer un mois ») compte l’électricité <strong>et</strong> le bois. Chaque achat est brûlé pendant la saison de chauffe qui suit (acheté de janvier à mars : la saison en cours), réparti selon le froid de chaque jour (degrés-jours).</p>
+    <p class="hint muted">Le bois ne passe pas par le compteur : notez vos achats pour que le coût du chauffage (Accueil, hiver contre hiver, « Expliquer un mois ») compte l’électricité <strong>et</strong> le bois. Chaque achat est brûlé pendant la saison de chauffe qui suit (acheté de janvier à mars : la saison en cours), réparti selon le froid de chaque jour (degrés-jours) ; ce qu’une saison ne brûle pas passe à la suivante.</p>
     ${
       seasons.length
         ? `<ul class="list" aria-label="Bois par saison">${seasons
             .map(
               (s) =>
-                `<li><div class="row"><span class="swatch" style="background:var(--usage-heating)" aria-hidden="true"></span><span><span class="t">Saison ${esc(seasonLabel(s.season))}</span><span class="s">${esc(
-                  `${n1(s.steres)} stère${s.steres >= 2 ? 's' : ''} · ≈ ${fmtKwh(s.kwh)} de chaleur · ${s.kwh > 0 ? `${cents(s.eur / s.kwh)} le kWh` : ''}${elec ? ` (électricité : ${cents(elec)})` : ''}`,
+                `<li><div class="row"><span class="swatch" style="background:var(--usage-heating)" aria-hidden="true"></span><span><span class="t">Saison ${esc(seasonLabel(s.season))}</span><span class="s" data-wood-season="${s.season}">${esc(
+                  `${seasonText(s)} · ≈ ${fmtKwh(s.kwh)} de chaleur${s.kwh > 0 ? ` · ${cents(s.eur / s.kwh)} le kWh${elec ? ` (électricité : ${cents(elec)})` : ''}` : ''}`,
                 )}</span></span><span class="v">${esc(fmtEur(s.eur))}</span><span></span></div></li>`,
             )
             .join('')}</ul>`
@@ -83,6 +86,28 @@ export function mountWood(card: HTMLElement | null, repo: () => string) {
       <label>Prix payé (€)<input type="number" id="wood-price" min="0" max="100000" step="1" value="" inputmode="decimal"></label>
     </div>
     <div class="controls"><button type="button" class="btn secondary" id="wood-add">Noter l’achat</button></div></details>
+    ${
+      seasons.length
+        ? `<details class="table-details" id="wood-burnt"><summary>Bois réellement brûlé (facultatif)</summary>
+    <p class="hint muted">Sans relevé, chaque saison est supposée brûler tout le bois qu’elle a. Notez les stères brûlés, ou le stock restant au printemps : le reste passe à la saison suivante.</p>
+    ${
+      w.burnt.length
+        ? `<ul class="list" aria-label="Relevés du bois brûlé">${w.burnt
+            .map(
+              (b) =>
+                `<li><div class="row"><span></span><span><span class="t">Saison ${esc(seasonLabel(b.season))}</span><span class="s">${esc(b.left !== undefined ? `stock restant au printemps : ${n1(b.left)} stère${b.left >= 2 ? 's' : ''}` : `brûlé : ${n1(b.steres!)} stère${b.steres! >= 2 ? 's' : ''}`)}</span></span><span class="v"><button type="button" class="link" data-wood-unburn="${b.season}">Retirer<span class="sr-only"> le relevé de la saison ${esc(seasonLabel(b.season))}</span></button></span><span></span></div></li>`,
+            )
+            .join('')}</ul>`
+        : ''
+    }
+    <div class="sim-form" role="group" aria-label="Noter le bois brûlé d’une saison">
+      <label>Saison<select id="wood-burnt-season">${seasons.map((s, i) => `<option value="${s.season}"${i === Math.min(1, seasons.length - 1) ? ' selected' : ''}>${esc(seasonLabel(s.season))}</option>`).join('')}</select></label>
+      <label>Relevé<select id="wood-burnt-kind"><option value="steres" selected>Stères brûlés</option><option value="left">Stock restant au printemps (stères)</option></select></label>
+      <label>Stères<input type="number" id="wood-burnt-value" min="0" max="${MAX_BURNT_STERES}" step="0.1" value="" inputmode="decimal"></label>
+    </div>
+    <div class="controls"><button type="button" class="btn secondary" id="wood-burn">Noter le relevé</button></div></details>`
+        : ''
+    }
     ${howDetails(
       'Hypothèses (modifiables)',
       `<p class="hint">Chaleur d’un achat = stères × kWh par stère de l’essence (bûches d’1 m à ${REF_MOISTURE} % d’humidité) × correction d’humidité × rendement du poêle. Valeurs courantes des guides du bois-énergie, à remplacer par celles de votre fournisseur ou de la notice du poêle.</p>
@@ -92,7 +117,7 @@ export function mountWood(card: HTMLElement | null, repo: () => string) {
           .map((k) => `<label>${esc(SPECIES[k])} (kWh par stère)<input type="number" data-wood-kwh="${k}" min="500" max="3000" step="50" value="${w.kwhPerStere[k]}" inputmode="numeric"></label>`)
           .join('')}
       </div>
-      <p class="hint muted">Humidité : la chaleur prise par l’eau à évaporer, à bois sec égal (${n1(moistureFactor(15) * 100)} % de l’énergie à 15 %, ${n1(moistureFactor(30) * 100)} % à 30 %). Au-delà de ${WET_MOISTURE} %, le bois brûle mal : le vrai rendement est bien plus bas que l’hypothèse. Par défaut : rendement ${DEFAULT_EFFICIENCY} % (poêle à bûches récent), ${nf0.format(KWH_PER_STERE.chene)} kWh par stère de chêne, ${nf0.format(KWH_PER_STERE.resineux)} de résineux. Tout le bois d’une saison est supposé brûlé dans cette saison.</p>
+      <p class="hint muted">Humidité : la chaleur prise par l’eau à évaporer, à bois sec égal (${n1(moistureFactor(15) * 100)} % de l’énergie à 15 %, ${n1(moistureFactor(30) * 100)} % à 30 %). Au-delà de ${WET_MOISTURE} %, le bois brûle mal : le vrai rendement est bien plus bas que l’hypothèse. Par défaut : rendement ${DEFAULT_EFFICIENCY} % (poêle à bûches récent), ${nf0.format(KWH_PER_STERE.chene)} kWh par stère de chêne, ${nf0.format(KWH_PER_STERE.resineux)} de résineux. Sans relevé (« Bois réellement brûlé »), une saison est supposée brûler tout le bois qu’elle a, le plus ancien d’abord.</p>
       <div class="controls"><button type="button" class="btn secondary" id="wood-assume">Appliquer les hypothèses</button></div>`,
     )}
     <p class="hint muted">${pending ? 'Appliqué sur cet appareil, pas encore pour le foyer.' : shared.purchases.length ? 'Enregistré pour le foyer.' : 'Rien d’enregistré pour le foyer.'} ${secretWhere(WOOD_VARIABLE)}</p>
@@ -113,7 +138,7 @@ export function mountWood(card: HTMLElement | null, repo: () => string) {
   // #462: « Noter un achat de bois » and « Hypothèses » keep their state across the redraws: a
   // fold closed again under the finger made the next tap land on its title instead of the button
   card.querySelector('#wood-eff')?.closest('details')?.setAttribute('id', 'wood-assumptions');
-  for (const id of ['wood-new', 'wood-assumptions']) {
+  for (const id of ['wood-new', 'wood-burnt', 'wood-assumptions']) {
     const fold = card.querySelector<HTMLDetailsElement>(`#${id}`);
     if (!fold) continue;
     if (folds.has(id)) fold.open = folds.get(id)!;
@@ -141,6 +166,20 @@ export function mountWood(card: HTMLElement | null, repo: () => string) {
   });
   for (const b of card.querySelectorAll<HTMLButtonElement>('[data-wood-remove]'))
     b.addEventListener('click', () => apply({ ...w, purchases: w.purchases.filter((_, i) => String(i) !== b.dataset.woodRemove) }));
+  // #465: a reading of the wood really burnt, one per season (a new one replaces the old)
+  card.querySelector('#wood-burn')?.addEventListener('click', () => {
+    const season = Number(card.querySelector<HTMLSelectElement>('#wood-burnt-season')!.value);
+    const kind = card.querySelector<HTMLSelectElement>('#wood-burnt-kind')!.value === 'left' ? 'left' : 'steres';
+    const raw = card.querySelector<HTMLInputElement>('#wood-burnt-value')!.value.trim();
+    const reading = { season, [kind]: raw === '' ? NaN : Number(raw.replace(',', '.')) };
+    if (!parseWood({ burnt: [reading] }).burnt.length) {
+      message = { ok: false, text: `Relevé non noté : un nombre de stères de 0 à ${MAX_BURNT_STERES} attendu.` };
+      return mountWood(card, repo);
+    }
+    apply({ ...w, burnt: [reading as WoodBurnt, ...w.burnt] });
+  });
+  for (const b of card.querySelectorAll<HTMLButtonElement>('[data-wood-unburn]'))
+    b.addEventListener('click', () => apply({ ...w, burnt: w.burnt.filter((x) => String(x.season) !== b.dataset.woodUnburn) }));
   const assume = (always: boolean) => {
     const kwh = { ...w.kwhPerStere };
     for (const i of card.querySelectorAll<HTMLInputElement>('[data-wood-kwh]')) kwh[i.dataset.woodKwh as Species] = Number(i.value);

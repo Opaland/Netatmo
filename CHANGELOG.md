@@ -2,6 +2,13 @@
 
 ## v1.8 — en cours
 
+- **Bois : stock et bois réellement brûlé** (#465) : sous ⚙ Mon logement › Poêle à bois, « Bois
+  réellement brûlé (facultatif) » note, par saison, les stères brûlés ou le stock restant au
+  printemps ; le relevé remplace l'hypothèse « tout brûlé », et ce qui reste passe à la saison
+  suivante (le plus ancien d'abord). Chaque saison dit son hypothèse ou son relevé, son report et
+  son reste. Une seule règle de stock (`woodSeasons`), que suit la seule répartition des jours
+  (`woodDaily` → `woodDays`, `verdictWood`, `withWood`). Format `WOOD_JSON` : `burnt` facultatif,
+  mêmes limites dans la collecte (`parse_wood`, test d'accord) et dans l'appli (fuzz).
 - **Radiateurs retirés** (#440) : motif « Radiateurs retirés » dans ⚙ Mon logement › Radiateurs
   arrêtés volontairement (appli et collecte, une seule liste tenue d'accord par un test). Pour tout
   motif, une seule règle (`stoppedOn` / `stopped_on`) : à partir de la date déclarée, plus d'alerte de

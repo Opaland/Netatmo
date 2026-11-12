@@ -315,7 +315,10 @@ bois*, notez chaque achat (date, stères, essence, humidité, prix). L'appli le 
 des hypothèses affichées et modifiables (kWh par stère selon l'essence à 20 % d'humidité, correction
 d'humidité, rendement du poêle), le répartit sur la saison de chauffe qui suit l'achat au prorata des
 degrés-jours, et compte électricité **et** bois dans le coût du chauffage (Accueil, hiver contre hiver,
-« Expliquer un mois »). Enregistré pour le foyer dans le **secret** du dépôt `WOOD_JSON`, scellé dans
+« Expliquer un mois »). Sans relevé, une saison est supposée brûler tout le bois qu'elle a ; sous
+*Bois réellement brûlé* (facultatif), notez les stères brûlés d'une saison ou le stock restant au
+printemps : le relevé remplace l'hypothèse et le reste passe à la saison suivante (le plus ancien
+brûle d'abord). Enregistré pour le foyer dans le **secret** du dépôt `WOOD_JSON`, scellé dans
 le navigateur comme la localisation, recopié chiffré par la collecte ; le journal public n'en dit rien.
 
 **Radiateur arrêté ou retiré.** Une pièce chauffée autrement dont les radiateurs sont coupés ou
