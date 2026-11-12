@@ -528,6 +528,11 @@ try {
   await page.locator('#invoice-card').screenshot({ path: `${OUT}/${BROWSER}-facture.png` });
   await audit(page, 'outils-facture');
 
+  // #127: without any surface, the report has no kWh/m²/an mark (checked once the view is ready)
+  progress('rapport sans surface');
+  await go(page, 'rapport');
+  check((await page.locator('#report-dpe').count()) === 0, '#127 : repère kWh/m²/an affiché sans surface saisie');
+
   // S-6.2: works marker and surfaces
   progress('travaux');
   await go(page, 'parametres-logement');
@@ -568,6 +573,13 @@ try {
   await go(page, 'historique-froid');
   const isoM2 = await page.locator('#iso-m2').innerText();
   check(/Chauffage des 12 derniers mois ≈ \d+ kWh\/m², électricité \+ bois, sur \d+ m² : (très bien|bien|moyennement|mal) isolé\./.test(isoM2), `isolation : kWh/m² électricité + bois absent (« ${isoM2} »)`);
+  // #127: with the surfaces, the report situates the home in kWh/m²/an against the DPE thresholds
+  await go(page, 'rapport');
+  const dpe = (await page.locator('#report-dpe').innerText().catch(() => '')).replace(/\s+/g, ' ');
+  check(
+    /Repère en kWh\/m²\/an, pas un DPE/.test(dpe) && /Mesuré : [\d\u202f\u00a0]+ kWh\/m² d’énergie finale \(chauffage, électricité \+ bois, et eau chaude/.test(dpe) && /classe [A-G] à titre indicatif/.test(dpe) && /Pas un DPE/.test(dpe),
+    `#127 : repère kWh/m²/an incomplet (« ${dpe.slice(0, 300)} »)`,
+  );
   await go(page, 'piece-r-cuisine');
   const kitchen = await page.locator('#view').innerText();
   check(/Surface · kWh par m²[\s\S]{0,40}m² · chauffée au bois/.test(kitchen), `pièce Cuisine : surface sans « chauffée au bois » (${kitchen.slice(0, 200)})`);
