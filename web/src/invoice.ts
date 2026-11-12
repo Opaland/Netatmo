@@ -23,7 +23,7 @@ export interface Invoice {
 
 const DAY_RE = /^\d{4}-\d{2}-\d{2}$/;
 /** #359: a day that exists (the pattern alone lets 2026-02-30 through, read by Date as 2 March). */
-const isDay = (s: string) => {
+export const isDay = (s: string) => {
   if (!DAY_RE.test(s)) return false;
   const t = Date.parse(`${s}T00:00:00Z`);
   return Number.isFinite(t) && new Date(t).toISOString().slice(0, 10) === s;

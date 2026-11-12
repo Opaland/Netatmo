@@ -1266,3 +1266,42 @@ def test_noise_threshold_is_the_same_in_the_collector_and_the_app():
 
     src = (Path(__file__).resolve().parents[1] / "web" / "src" / "pressure.ts").read_text(encoding="utf-8")
     assert int(re.search(r"export const NOISY_DB = (\d+);", src).group(1)) == NOISY_ABOVE
+
+
+# ---------------------------------------------------------------- #452 daily radiation
+def test_open_meteo_collects_the_radiation_and_fetches_it_back_once(tmp_path):
+    """#452: the global radiation of each day (MJ/m²) comes with the wind; a home whose wind is
+    already complete still fetches the radiation of its past days, once."""
+    from datetime import datetime, timedelta
+    from zoneinfo import ZoneInfo
+
+    from collector.weather import open_meteo
+
+    asked = []
+    today = datetime.now(ZoneInfo("Europe/Paris")).date()  # the day open_meteo itself reads
+    days = [(today - timedelta(days=i)).isoformat() for i in range(3, 0, -1)]
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        asked.append((request.url.path, request.url.params["daily"], request.url.params.get("start_date")))
+        daily = {
+            "time": days,
+            "temperature_2m_min": [1.0] * 3,
+            "temperature_2m_max": [7.0] * 3,
+            "temperature_2m_mean": [4.0] * 3,
+            "wind_speed_10m_mean": [10.0] * 3,
+            "precipitation_sum": [0.0] * 3,
+            "shortwave_radiation_sum": [2.34, None, 11.0],
+        }
+        return httpx.Response(200, json={"daily": daily})
+
+    store = Store(tmp_path, "pw")
+    first = (today - timedelta(days=15)).isoformat()
+    for i in range(16):  # wind and temperatures already there: before #452, no archive was asked
+        d = (today - timedelta(days=15 - i)).isoformat()
+        store.put("weather", "outdoor", d, None, [1.0, 7.0, 4.0])
+        store.put("weather", "wind", d, None, [10.0, None])
+    http = httpx.Client(transport=httpx.MockTransport(handler))
+    open_meteo(store, 48.85, 2.35, "Europe/Paris", first, http=http)
+    assert all("shortwave_radiation_sum" in a[1] for a in asked)
+    assert any(a[0].endswith("/archive") and a[2] == first for a in asked)
+    assert store.doc("weather")["sun"] == {days[0]: 2.3, days[2]: 11.0}  # a day without value is not kept
