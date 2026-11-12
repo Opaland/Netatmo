@@ -11,12 +11,13 @@ import { type Verdict, projectYear } from '../analysis';
 import { activeRooms, ds, state } from '../app';
 import { barChart, cssVar } from '../charts';
 import { comparison, gauge, howDetails, legend, list, seg, tile } from '../components';
-import { CATEGORY, NO_REFERENCE, PERIOD, TEMP, dayShort, monthLong, rangeLabel, vsLabel, withUnit } from '../glossary';
+import { CATEGORY, NO_REFERENCE, PERIOD, TEMP, dayShort, monthLong, vsLabel, withUnit } from '../glossary';
 import {
   HOME_PERIODS,
   type HomeRange,
   changeText,
   countedLine,
+  countedWhat,
   countedRows,
   expectedLabel,
   homePeriod,
@@ -192,7 +193,8 @@ function tiles(records: DayRecord[], last: string, wood: Map<string, [number, nu
   return `<section class="kpis home-tiles">
     ${tile({
       // #383: the scope in the label (beside the amount, no extra line: #311)
-      label: `${PERIOD.month}, au ${ord(last)}${mOut ? `, ${mOut.replace(/, hors ligne$/, '')}` : ''}`,
+      // #466: and what it counts (« chauffage et eau chaude »), the words of the scope line
+      label: `${PERIOD.month}, au ${ord(last)}, ${countedWhat(state.cat)}${mOut ? `, ${mOut.replace(/, hors ligne$/, '')}` : ''}`,
       value: fmtMoney(mo.value, mo.unit),
       sub: `${versus(monthFrom, last)}${mv ? `<br>${comparison(mv.pct, expectedLabel(mv.climate))}` : ''}`,
     })}
@@ -354,6 +356,8 @@ function chartCard(records: DayRecord[], r: HomeRange): string {
   const days = Number(r.to.slice(8, 10));
   const hp = sum.kwh ? Math.round((heat / sum.kwh) * 100) : 0;
   const hasTemp = d.temp.some((t) => t !== null);
+  // #466: the period is in the heading (« 12 derniers mois », « saison 2026–2027… », « année 2026 »):
+  // the total says only where it stops, on one line — the line the month tile took to say what it counts
   const heading = r.period === 'month' ? `${chartWindow(r)}, pour situer le mois` : chartWindow(r);
   const rows = d.months
     .map((k, i) => (d.heat[i] === null ? null : [esc(monthTick(k, 0)), d.heat[i] ?? 0, d.water[i] ?? 0, (d.heat[i] ?? 0) + (d.water[i] ?? 0), d.temp[i] === null ? '—' : String(d.temp[i]).replace('.', ',')]))
@@ -361,7 +365,7 @@ function chartCard(records: DayRecord[], r: HomeRange): string {
     .reverse();
   return `<section class="card" id="consumption-card" aria-labelledby="consumption-title">
     <div class="card-head"><h2 id="consumption-title">Consommation et froid</h2><span class="sub muted">${esc(heading)}</span></div>
-    <p class="period-total"><strong>${esc(fmtMoney(sum.value, sum.unit))}</strong>${sum.unit === '€' ? ` · ${esc(fmtKwh(sum.kwh))}` : ''} ${esc(rangeLabel(r.chartFrom, to))}</p>
+    <p class="period-total"><strong>${esc(fmtMoney(sum.value, sum.unit))}</strong>${sum.unit === '€' ? ` · ${esc(fmtKwh(sum.kwh))}` : ''} au ${esc(dayShort(to, true))}</p>
     ${heat > 0 && water > 0 ? `<div class="share" aria-hidden="true"><span style="flex:${hp};background:var(--usage-heating)"></span><span style="flex:${100 - hp};background:var(--usage-water)"></span></div>` : ''}
     ${legend([
       ...(heat > 0 ? [{ label: water > 0 ? `${CATEGORY.heating} ${hp} %` : CATEGORY.heating, color: '--usage-heating' }] : []),

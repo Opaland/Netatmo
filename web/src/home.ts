@@ -101,8 +101,17 @@ export function scopeTitle(r: HomeRange): string {
 }
 
 /** What the figures count: « chauffage et eau chaude, hors abonnement », « chauffage seul · 3 pièces sur 7, en kWh ». */
+/**
+ * #466: what a total counts, by the category picked: « chauffage et eau chaude » unless one is
+ * picked alone. The words of the scope line (countedLine) and of every total read as « the
+ * heating » (the month tile of the Accueil, the figure of « Hiver contre hiver »): one place.
+ */
+export function countedWhat(cat: string): string {
+  return cat === 'heating' ? 'chauffage seul' : cat === 'water_heater' ? 'eau chaude seule' : 'chauffage et eau chaude';
+}
+
 export function countedLine(o: { cat: string; rooms: number; allRooms: number; euros: boolean }): string {
-  const what = o.cat === 'heating' ? 'chauffage seul' : o.cat === 'water_heater' ? 'eau chaude seule' : 'chauffage et eau chaude';
+  const what = countedWhat(o.cat);
   const rooms = o.rooms < o.allRooms ? ` · ${o.rooms} pièce${o.rooms > 1 ? 's' : ''} sur ${o.allRooms}` : '';
   return `${what}${rooms}, ${o.euros ? 'hors abonnement' : 'en kWh (prix à renseigner)'}`;
 }
