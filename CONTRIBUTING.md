@@ -90,7 +90,8 @@ Non négociables (détails dans [`docs/PROJET.md`](docs/PROJET.md#7-règles-de-s
   de valeurs ni d'identifiants.
 - **Tests sans réseau** : toute API est simulée (voir `tests/`). Seul `tests/test_sources_reelles.py`
   appelle les sources publiques sans clé, marqué `reseau` et exclu par défaut (`pytest -m reseau`).
-- **IA** : seuls des agrégats mensuels sont envoyés, et l'application montre exactement quoi.
+- **IA** : seuls les totaux du mois et au plus cinq jours inhabituels sont envoyés, pièces et capteurs
+  sous pseudonyme, et l'application montre exactement quoi (`tests/test_promesses.py`).
 - Une faille de sécurité se signale en privé au mainteneur, jamais dans une issue publique : comment,
   et ce qui est déjà vérifié, dans [`SECURITY.md`](SECURITY.md).
 

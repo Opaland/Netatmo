@@ -282,8 +282,8 @@ si un contrat est partagé, °C, degrés-jours, pourcentages), au plus cinq jour
 et la puissance maximale Linky, des compteurs de confort de la station (CO₂, humidité, heures sous
 19 °C) et la couverture des données. Les pièces et capteurs partent sous un **pseudonyme**
 (« Pièce A », « Capteur B ») : leurs vrais noms sont remis dans le texte localement, avant
-l'enregistrement chiffré. Ni nom du logement, ni adresse, ni coordonnées, ni identifiants, ni données
-journalières. La clé reste un secret GitHub : elle n'est jamais dans le site.
+l'enregistrement chiffré. Ni nom du logement, ni adresse, ni coordonnées, ni identifiants, ni autre donnée
+journalière (`tests/test_promesses.py` le vérifie sur la démonstration). La clé reste un secret GitHub : elle n'est jamais dans le site.
 
 Dans l'onglet Analyse, la carte affiche le modèle, les jetons consommés et le **coût estimé** de
 l'analyse ; un bouton « Utile / Pas utile » garde votre avis sur l'appareil, et Paramètres montre la
@@ -315,7 +315,10 @@ bois*, notez chaque achat (date, stères, essence, humidité, prix). L'appli le 
 des hypothèses affichées et modifiables (kWh par stère selon l'essence à 20 % d'humidité, correction
 d'humidité, rendement du poêle), le répartit sur la saison de chauffe qui suit l'achat au prorata des
 degrés-jours, et compte électricité **et** bois dans le coût du chauffage (Accueil, hiver contre hiver,
-« Expliquer un mois »). Enregistré pour le foyer dans le **secret** du dépôt `WOOD_JSON`, scellé dans
+« Expliquer un mois »). Sans relevé, une saison est supposée brûler tout le bois qu'elle a ; sous
+*Bois réellement brûlé* (facultatif), notez les stères brûlés d'une saison ou le stock restant au
+printemps : le relevé remplace l'hypothèse et le reste passe à la saison suivante (le plus ancien
+brûle d'abord). Enregistré pour le foyer dans le **secret** du dépôt `WOOD_JSON`, scellé dans
 le navigateur comme la localisation, recopié chiffré par la collecte ; le journal public n'en dit rien.
 
 **Radiateur arrêté ou retiré.** Une pièce chauffée autrement dont les radiateurs sont coupés ou
@@ -569,7 +572,7 @@ docs/               notes sur l'API, étude de l'existant, feuille de route, rè
   etudes/           études « faut-il le faire ? » (volets Wiser, plateforme domotique, Home Assistant
                     et Zigbee, module intérieur de la station, audit de tous les appareils et achats, origine dédiée)
   design/           inventaire de l'interface (couleurs, typographie, composants), base du design system
-  revues-agents/    consignes des revues de code et design par agents (à chaque version)
+  revues-agents/    consignes des revues de code, design et promesses par agents (à chaque version)
   bmad/             cadrage BMAD : brief, revue des 72 personas, PRD, architecture, epics, QA
 .github/workflows/  CI, collecte quotidienne, déploiement GitHub Pages, revue par agents (à la demande)
 scripts/            outils ponctuels (jours Tempo, constats de revue → issues)

@@ -1,6 +1,6 @@
 name: Revue par agents
 
-# S-1.16: code or design review by a Claude agent, on demand only (fin de version).
+# S-1.16: code, design or promises review (#365) by a Claude agent, on demand only (fin de version).
 # Process and prompts: docs/PROJET.md § 10, docs/revues-agents/.
 #
 # Least privilege:
@@ -21,7 +21,7 @@ on:
       revue:
         description: "Type de revue"
         type: choice
-        options: [code, design]
+        options: [code, design, promesses]
         default: code
       base:
         description: "Référence de départ du diff (étiquette ou commit de la version précédente) ; vide = tout le code"

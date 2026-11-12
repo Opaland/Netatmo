@@ -2,6 +2,13 @@
 
 ## v1.8 — en cours
 
+- **Bois : stock et bois réellement brûlé** (#465) : sous ⚙ Mon logement › Poêle à bois, « Bois
+  réellement brûlé (facultatif) » note, par saison, les stères brûlés ou le stock restant au
+  printemps ; le relevé remplace l'hypothèse « tout brûlé », et ce qui reste passe à la saison
+  suivante (le plus ancien d'abord). Chaque saison dit son hypothèse ou son relevé, son report et
+  son reste. Une seule règle de stock (`woodSeasons`), que suit la seule répartition des jours
+  (`woodDaily` → `woodDays`, `verdictWood`, `withWood`). Format `WOOD_JSON` : `burnt` facultatif,
+  mêmes limites dans la collecte (`parse_wood`, test d'accord) et dans l'appli (fuzz).
 - **Radiateurs retirés** (#440) : motif « Radiateurs retirés » dans ⚙ Mon logement › Radiateurs
   arrêtés volontairement (appli et collecte, une seule liste tenue d'accord par un test). Pour tout
   motif, une seule règle (`stoppedOn` / `stopped_on`) : à partir de la date déclarée, plus d'alerte de
@@ -23,6 +30,13 @@
   ouverts après une action, le rendement s'applique à la sortie du champ, avant le premier achat
   aussi. Surfaces : une valeur saisie ne reconstruit plus la grille, le focus passe au champ
   suivant. Parcours e2e `npm run e2e:logement` (Chromium et WebKit).
+- **Ce que l'écran promet, tenu par le code** (#365) : l'IA reçoit les totaux du mois **et au plus
+  cinq jours inhabituels** ; les écrans (Cadre juridique, Paramètres, « où vont vos données ») et la
+  documentation disaient « seuls des totaux mensuels », l'architecture « noms de pièces envoyés ».
+  Toutes ces surfaces disent maintenant la même chose, tenue par `tests/test_promesses.py` : sur la
+  démonstration complète, aucun nom de pièce, de module ni du logement, aucun jour daté hors des cinq
+  jours au plus, ne part chez l'IA. Nouvelle revue de fin de version « promesses »
+  (`docs/revues-agents/revue-promesses.md`, workflow `Revue par agents`, `scripts/revue_issues.py`).
 - **Lier un module de la station qui suit une pièce** (#467) : un module intérieur non lié (un
   « Cave » posé dans une chambre) dont la moyenne du jour suit celle de la sonde du radiateur sur
   28 jours (10 jours au moins, corrélation ≥ 0,8, écart stable à 0,5 °C près et de 3 °C au plus) est
