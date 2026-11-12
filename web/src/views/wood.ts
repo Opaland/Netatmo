@@ -17,6 +17,8 @@ import {
   SPECIES,
   type Species,
   WET_MOISTURE,
+  readingIgnored,
+  woodSpread,
   type WoodBurnt,
   type WoodPurchase,
   type WoodSettings,
@@ -52,7 +54,7 @@ export function mountWood(card: HTMLElement | null, repo: () => string) {
   const stove = stoveName() !== 'Poêle à bois'; // a room declared heated by a stove (#346)
   card.innerHTML = html(`<section class="card" id="wood-card" aria-labelledby="wood-title">
     <div class="card-head"><h2 id="wood-title">${esc(stoveName())}</h2><span class="tag scope">foyer</span></div>
-    <p class="hint muted">Le bois ne passe pas par le compteur : notez vos achats pour que le coût du chauffage (Accueil, hiver contre hiver, « Expliquer un mois ») compte l’électricité <strong>et</strong> le bois. Chaque achat est brûlé pendant la saison de chauffe qui suit (acheté de janvier à mars : la saison en cours), réparti selon le froid de chaque jour (degrés-jours), ou sur les soirs de flambée que la collecte a trouvés (Historique › Flambées du poêle) ; ce qu’une saison ne brûle pas passe à la suivante.</p>
+    <p class="hint muted">Le bois ne passe pas par le compteur : notez vos achats pour que le coût du chauffage (Accueil, hiver contre hiver, « Expliquer un mois ») compte l’électricité <strong>et</strong> le bois. Chaque achat est brûlé pendant la saison de chauffe qui suit (acheté de janvier à mars : la saison en cours), ${woodSpread()} (Historique › Flambées du poêle) ; ce qu’une saison ne brûle pas passe à la suivante.</p>
     ${
       seasons.length
         ? `<ul class="list" aria-label="Bois par saison">${seasons
@@ -95,7 +97,9 @@ export function mountWood(card: HTMLElement | null, repo: () => string) {
         ? `<ul class="list" aria-label="Relevés du bois brûlé">${w.burnt
             .map(
               (b) =>
-                `<li><div class="row"><span></span><span><span class="t">Saison ${esc(seasonLabel(b.season))}</span><span class="s">${esc(b.left !== undefined ? `stock restant au printemps : ${n1(b.left)} stère${b.left >= 2 ? 's' : ''}` : `brûlé : ${n1(b.steres!)} stère${b.steres! >= 2 ? 's' : ''}`)}</span></span><span class="v"><button type="button" class="link" data-wood-unburn="${b.season}">Retirer<span class="sr-only"> le relevé de la saison ${esc(seasonLabel(b.season))}</span></button></span><span></span></div></li>`,
+                `<li><div class="row"><span></span><span><span class="t">Saison ${esc(seasonLabel(b.season))}</span><span class="s">${esc(b.left !== undefined ? `stock restant au printemps : ${n1(b.left)} stère${b.left >= 2 ? 's' : ''}` : `brûlé : ${n1(b.steres!)} stère${b.steres! >= 2 ? 's' : ''}`)}${
+                  readingIgnored(w, b) ? ` · <strong>ignoré</strong> : aucun achat noté pour cette saison ni avant` : ''
+                }</span></span><span class="v"><button type="button" class="link" data-wood-unburn="${b.season}">Retirer<span class="sr-only"> le relevé de la saison ${esc(seasonLabel(b.season))}</span></button></span><span></span></div></li>`,
             )
             .join('')}</ul>`
         : ''
