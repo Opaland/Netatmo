@@ -54,7 +54,17 @@ SECRETS = {
     "SHELLY_AUTH_KEY": "SHELLYKEY-777",
     "SHELLY_SERVER": "shelly-1-eu.shelly.cloud",
     "HOME_LOCATION_JSON": LOCATION,
+    # #459: the household settings of ⚙ Mon logement, now repository secrets too.
+    "STOPPED_ROOMS_JSON": json.dumps(
+        [{"room": "100", "from": "2025-07-01", "reason": "poele", "label": "Poêle Zorglub"}]
+    ),
 }
+# #459: a plaintext repository variable left from before the migration (read after the secret):
+# the log names it, never its value.
+WOOD = json.dumps(
+    {"purchases": [{"day": "2025-10-01", "steres": 3, "species": "chene", "moisture": 20, "price": 4321}]}
+)
+PLAIN = {"WOOD_JSON_VARIABLE": WOOD}
 ACCESS = "INTUIS-ACCESS-TOK"
 MARKER = "SECRET-BODY-123"
 # An error body that echoes everything a request may carry.
@@ -86,6 +96,8 @@ FORBIDDEN = [
     PRM,
     ACCESS,
     *(v for k, v in SECRETS.items() if k != "SHELLY_SERVER"),
+    *PLAIN.values(),
+    "4321",
 ]
 
 
@@ -150,7 +162,7 @@ def router(intuis_measures_ok: bool = True):
 def all_sources(tmp_path, monkeypatch):
     """Every source configured, every HTTP client routed to the mock, no waiting."""
     monkeypatch.chdir(tmp_path)  # no .env picked up
-    for k, v in SECRETS.items():
+    for k, v in {**SECRETS, **PLAIN}.items():
         monkeypatch.setenv(k, v)
     monkeypatch.setenv("DATA_PASSPHRASE", "pw")
     monkeypatch.setenv("DATA_DIR", str(tmp_path / "data"))
@@ -198,6 +210,7 @@ def test_collection_with_every_source_failing_leaks_nothing(tmp_path, monkeypatc
     assert "Station Netatmo : /oauth2/token → HTTP 400 (requête refusée, invalid_grant)" in out
     assert "Plusieurs maisons trouvées (2)" in out
     assert "PVGIS : /api/v5_3/seriescalc → HTTP 429 (trop de requêtes)" in out
+    assert "Variable en clair WOOD_JSON encore présente : à migrer en secret" in out  # #459, name only
     # The encrypted meta keeps the same safe messages.
     sources = Store(tmp_path / "data", "pw").meta["sources"]
     assert_clean(json.dumps(sources), "sources")

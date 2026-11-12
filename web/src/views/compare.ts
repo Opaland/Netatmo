@@ -13,6 +13,7 @@ import {
   total,
 } from '../aggregate';
 import { compareOffers, daySplits, djuBetween, monthlyDju, offPeakShares } from '../analysis';
+import { djuMethodText, yearCold } from '../dju';
 import { activeRooms, ds, setState, state } from '../app';
 import { type Series, barChart, chartCaption, cssVar, lineChart } from '../charts';
 import { SEASON_DEFINITION, dayLong, dayShort, monthLong, monthShort, plural, seasonLabel, signedPct } from '../glossary';
@@ -47,7 +48,8 @@ import { html } from '../trusted';
 import { alertHtml, countedNote, legend, tile } from '../components';
 import { lazyCard } from '../lazy';
 import { tenant, tenantNote } from '../tenant';
-import { woodOver } from './wood-state';
+import { verdictWood, woodOver } from './wood-state';
+import { woodIn } from '../wood';
 
 /**
  * #337: « Pourquoi ce mois ? » — each of the last 12 months that has the same month a year
@@ -328,14 +330,18 @@ function yearsCard(records: DayRecord[], first: string, last: string, uncertain:
       const end = isCurrent ? last : `${y}-12-31`;
       const since = y === firstYear && first > `${y}-01-01` ? ` <small class="muted">depuis le ${shortDate(first)}</small>` : '';
       const cost = costOf(records, `${y}-01-01`, end, true);
-      const w = ds!.weather ? djuBetween(ds!.weather, `${y}-01-01`, end) : null;
+      // #464: the cold of the year from the first day of data, « au moins » when days are missing
+      const from = y === firstYear && first > `${y}-01-01` ? first : `${y}-01-01`;
+      const heatRecs = records.filter((r) => r.cat === 'heating');
+      const w = ds!.weather ? yearCold(ds!.weather, y, from, end, (has) => total(heatRecs.filter((r) => has(r.day)), from, end)) : null;
+      if (w?.caveat) caveats.push(w.caveat);
       return [
         `<span class="swatch" style="background:${yearColor(y)}"></span>${y}${isCurrent ? ` <small class="muted">en cours, au ${shortDate(last)}</small>` : since}`,
         full,
         heat,
         full - heat,
         ...(cost !== null ? [fmtEur(cost)] : []),
-        ...(w ? [w.days > 300 || isCurrent ? Math.round(w.dju) : '—', w.dju > 50 ? (heat / w.dju).toFixed(2).replace('.', ',') : '—'] : []),
+        ...(w ? [w.cell, w.perDju] : []),
         d === null ? '—' : `${pct(d)}${caveat ? ' *' : ''}`,
       ];
     });
@@ -355,15 +361,49 @@ function yearsCard(records: DayRecord[], first: string, last: string, uncertain:
       ],
       rows,
     )}
+    ${woodYears(records, last)}
     ${caveats.length ? `<p class="hint muted">* À lire avec prudence :</p><ul class="hint muted caveats">${caveats.map((c) => `<li>${esc(c)}</li>`).join('')}</ul>` : ''}
     ${
       withCold
-        ? `<p class="hint muted">Le froid de chaque année se compte en ${term('dju')} : plus il y en a, plus il a fait froid. Le chauffage par degré-jour compare le chauffage d’une année à l’autre sans l’effet de la météo : s’il baisse, le logement chauffe mieux.</p>`
+        ? `<p class="hint muted">Le froid de chaque année se compte en ${term('dju')} : plus il y en a, plus il a fait froid. Calcul : ${esc(djuMethodText(ds!.meta.weather_source))}. Le chauffage par degré-jour compare le chauffage d’une année à l’autre sans l’effet de la météo : s’il baisse, le logement chauffe mieux.</p>`
         : ''
     }
     <p class="hint muted">L'évolution de l'année en cours compare la même période des deux années : du 1er janvier au ${dayLong(last, false)}. Quand l'année précédente a commencé en cours d'année (début de la collecte), l'évolution porte sur la même période des deux années.</p>
     ${countedHtml()}
   </section>`;
+}
+
+/**
+ * #460: with the stove's wood (verdictWood: the one split of #433), the heating of each year
+ * electricity + wood, in kWh, per degree-day and in euros (hors abonnement): the electricity alone
+ * made the home look better insulated than it is. Empty without a stove and wood bought.
+ */
+function woodYears(records: DayRecord[], last: string): string {
+  const daily = verdictWood(state.cat, state.rooms);
+  if (!daily) return '';
+  const heat = records.filter((r) => r.cat === 'heating');
+  const priced = costAvailable();
+  const rows = ds!.meta.years
+    .slice()
+    .reverse()
+    .map((y) => {
+      const end = y === Number(last.slice(0, 4)) ? last : `${y}-12-31`;
+      const w = woodIn(daily, `${y}-01-01`, end);
+      const elec = total(heat, `${y}-01-01`, end);
+      const kwh = elec + w.kwh;
+      const cost = priced ? costOf(heat, `${y}-01-01`, end) : null;
+      const deg = ds!.weather ? djuBetween(ds!.weather, `${y}-01-01`, end).dju : 0;
+      return [
+        String(y),
+        Math.round(kwh),
+        Math.round(w.kwh),
+        ...(ds!.weather ? [deg > 50 ? (kwh / deg).toFixed(2).replace('.', ',') : '—'] : []),
+        ...(priced ? [cost === null ? '—' : fmtEur(cost + w.eur)] : []),
+      ];
+    });
+  return `<h3 class="money-h" id="years-wood-title">Chauffage électricité + bois</h3>
+    ${table(['Année', 'Chauffage (kWh)', 'dont bois', ...(ds!.weather ? ['Par degré-jour (kWh)'] : []), ...(priced ? ['Coût (hors abonnement)'] : [])], rows)}
+    <p class="hint muted">Le bois du poêle, réparti jour par jour selon les degrés-jours (comme le verdict de l’Accueil) ; le coût ajoute le prix payé pour le bois au chauffage électrique. <a class="link" href="#parametres-logement">Bois et hypothèses</a></p>`;
 }
 
 /** The winter / year chips stay unfolded once used (a chip redraws the card). */

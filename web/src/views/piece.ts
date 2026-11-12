@@ -37,6 +37,8 @@ import { ABSENCE_MODES, type RoomState, type StateCell, bits, modeLabel } from '
 import { lazyCard } from '../lazy';
 import { lastReadingAfterStop, offlineText } from '../room-offline';
 import { offlineEstimate, offlineLine, offlineRun } from './offline-rooms';
+import { roomPerM2Text } from '../isolation';
+import { stoveRooms } from './wood-state';
 
 // ------------------------------------------------------------------ documents (loaded on demand)
 /** Hourly room states (window, load shedding, modes): one document, a year of daily aggregates. */
@@ -274,9 +276,11 @@ export function renderPiece(view: HTMLElement, id: string) {
         const el = document.getElementById('piece-surface');
         if (!el) return;
         const kwh = total(mine, from, to);
+        // #460: the stove's room has no electricity: « chauffée au bois », never 0 kWh/m²
+        const stove = stoveRooms().some((r) => (ds!.roomMap?.get(r) ?? r) === id);
         el.outerHTML = html(
           m2
-            ? listRow({ title: 'Surface · kWh par m²', sub: 'sur la période', value: `${fmt1(m2).replace(/,0$/, '')} m² · ${nf0.format(kwh / m2)}\u00a0kWh` })
+            ? listRow({ title: 'Surface · kWh par m²', sub: 'sur la période', value: `${fmt1(m2).replace(/,0$/, '')} m² · ${roomPerM2Text(kwh, m2, stove, (v) => nf0.format(v)).replace(' kWh/m²', '\u00a0kWh/m²')}` })
             : listRow({ title: 'Surface', sub: 'à saisir dans ⚙ Mon logement, pour les kWh par m²', href: '#parametres-logement' }),
         );
       },

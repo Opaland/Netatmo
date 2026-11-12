@@ -9,6 +9,7 @@
 // - S-12.1: the shared contract is not a secret: it goes into the repository VARIABLE
 //   CONTRACT_JSON (token permission « Variables : lecture et écriture »), the only variable
 //   the app may write.
+import { ghCall, ghErrorText } from './gh-call';
 
 export interface SecretField {
   name: string;
@@ -125,15 +126,8 @@ async function gh(path: string, init: RequestInit = {}): Promise<Response> {
       ...(init.body ? { 'Content-Type': 'application/json' } : {}),
     },
   });
-  if (!resp.ok) {
-    const hint =
-      resp.status === 401
-        ? 'jeton invalide ou expiré'
-        : resp.status === 403 || resp.status === 404
-          ? 'droits insuffisants : le jeton doit viser ce dépôt avec « Secrets », « Variables » et « Actions » en lecture et écriture'
-          : `HTTP ${resp.status}`;
-    throw new GitHubError(`GitHub : ${hint}`, resp.status);
-  }
+  // #463: the call and the permission in cause, never a value nor the repository
+  if (!resp.ok) throw new GitHubError(ghErrorText(resp.status, ghCall(path, init.method)), resp.status);
   return resp;
 }
 
@@ -151,7 +145,14 @@ export const FORBIDDEN = new Set(['DATA_PASSPHRASE']);
  * #204: secrets the app writes from a card of its own (not from « Sources de données »): the
  * home's location and roofs, sealed like the others, never readable back.
  */
-export const APP_SECRETS = new Set(['HOME_LOCATION_JSON']);
+export const APP_SECRETS = new Set(['HOME_LOCATION_JSON', 'STOPPED_ROOMS_JSON', 'WOOD_JSON']);
+
+/**
+ * #459: the household settings of ⚙ Mon logement, sealed like HOME_LOCATION_JSON and never
+ * written in clear (they used to be repository variables). Same list as the collector
+ * (collector/__main__.py HOUSEHOLD_SETTINGS, held in agreement by tests/test_reglages_foyer.py).
+ */
+export const HOUSEHOLD_SECRETS = new Set(['STOPPED_ROOMS_JSON', 'WOOD_JSON']);
 
 export async function putSecret(repo: string, name: string, value: string): Promise<void> {
   if (FORBIDDEN.has(name) || !(APP_SECRETS.has(name) || GROUPS.some((g) => g.fields.some((f) => f.name === name)))) {
@@ -171,8 +172,8 @@ export async function putSecret(repo: string, name: string, value: string): Prom
   });
 }
 
-/** Repository variables the app may write (S-12.1). */
-export const VARIABLES = new Set(['CONTRACT_JSON', 'COLD_ALERT_JSON', 'STOPPED_ROOMS_JSON', 'WOOD_JSON']);
+/** Repository variables the app may write (S-12.1). Never a household setting (#459). */
+export const VARIABLES = new Set(['CONTRACT_JSON', 'COLD_ALERT_JSON']);
 
 /** Create or update a repository variable (not secret, so not sealed). */
 export async function putVariable(repo: string, name: string, value: string): Promise<void> {
@@ -183,6 +184,53 @@ export async function putVariable(repo: string, name: string, value: string): Pr
     if (!(err instanceof GitHubError) || err.status !== 404) throw err;
     await gh(`/repos/${repo}/actions/variables`, { method: 'POST', body: JSON.stringify({ name, value }) });
   }
+}
+
+const householdOnly = (name: string) => {
+  if (!HOUSEHOLD_SECRETS.has(name)) throw new GitHubError(`${name} ne peut pas être modifié depuis l'application`, 400);
+};
+
+/** #459: the value of a plaintext variable left from before the migration; null when there is none. */
+export async function plainVariable(repo: string, name: string): Promise<string | null> {
+  householdOnly(name);
+  try {
+    const body = (await (await gh(`/repos/${repo}/actions/variables/${encodeURIComponent(name)}`)).json()) as { value?: unknown };
+    return typeof body.value === 'string' ? body.value : '';
+  } catch (err) {
+    if (err instanceof GitHubError && err.status === 404) return null;
+    throw err;
+  }
+}
+
+/** #459: delete that plaintext variable; false when it was already gone. */
+async function deletePlainVariable(repo: string, name: string): Promise<boolean> {
+  householdOnly(name);
+  try {
+    await gh(`/repos/${repo}/actions/variables/${encodeURIComponent(name)}`, { method: 'DELETE' });
+    return true;
+  } catch (err) {
+    if (err instanceof GitHubError && err.status === 404) return false;
+    throw err;
+  }
+}
+
+/**
+ * #459: save a household setting for the household: sealed in this browser and stored as a
+ * secret, then the plaintext variable of the same name, if one is left, is deleted (the secret
+ * is written first: nothing is lost if the deletion fails). Says whether a variable was deleted.
+ */
+export async function saveHouseholdSecret(repo: string, name: string, value: string): Promise<{ removedPlain: boolean }> {
+  householdOnly(name);
+  await putSecret(repo, name, value);
+  return { removedPlain: await deletePlainVariable(repo, name) };
+}
+
+/** #459: move a plaintext variable, as it is, into the secret of the same name; false when there is none. */
+export async function migratePlainVariable(repo: string, name: string): Promise<boolean> {
+  const value = await plainVariable(repo, name);
+  if (value === null) return false;
+  await saveHouseholdSecret(repo, name, value);
+  return true;
 }
 
 export async function runCollect(repo: string, backfill: boolean): Promise<void> {
