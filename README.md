@@ -19,7 +19,8 @@ Ce que l'application mobile ne fait pas, et que celle-ci fait :
   l'**écart intérieur − extérieur** mesuré par la station, avec intervalles de confiance à 95 % ;
 - un **calendrier** de consommation, des **profils horaires**, les **températures** des pièces ;
 - la **part du chauffage et du chauffe-eau** dans la consommation totale (compteur **Linky**) ;
-- **par pièce** : classement, évolution N-1 → N en cascade, détail mensuel ;
+- **par pièce** : classement, évolution N-1 → N en cascade, détail mensuel, et un **défi** à climat
+  égal (−5, −10 ou −15 % de kWh par degré-jour face à l'hiver dernier), gardé sur l'appareil ;
 - un **rapport annuel** imprimable (PDF), avec le comparateur d'offres et la puissance maximale, et sa
   version **anonymisée** à remettre à un tiers (pièces en pseudonymes, ni nom, ni identifiant, ni
   donnée horaire, ni station) ;
