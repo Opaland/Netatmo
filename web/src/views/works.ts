@@ -3,11 +3,13 @@
 // chosen marker (two lines), kWh/m², monthly heating with the markers drawn on it.
 // Surfaces and markers stay on this device, encrypted with the data key (local-store.ts).
 import { type DayRecord, addDays, bucketKey, bucketKeys, bucketLabel, minusYears } from '../aggregate';
-import { ds, onDatasetLoaded } from '../app';
+import { ds, onDatasetLoaded, state } from '../app';
 import { barChart, chartOf, cssVar, scatterChart } from '../charts';
 import { loadNote, saveNote } from '../local-store';
 import { BEDROOMS_ID, displaySurfaces } from '../household';
 import { html } from '../trusted';
+import { homePerM2, roomPerM2Text } from '../isolation';
+import { stoveRooms, verdictWood } from './wood-state';
 import { onCard } from '../events';
 import { activeRooms, catColor, esc, firstDay, fmtKwh, lastDay, longDate, nf0, pct, table, referenceColor } from '../ui';
 import {
@@ -109,7 +111,12 @@ function card(): string {
   const shown = shownSurfaces();
   const perRoom = perRoomM2(lastRecords, shown, from12, last);
   const surf = surfaceOf(shown, rooms.map((r) => r.id));
-  const heat12 = lastRecords.filter((r) => r.cat === 'heating' && r.day >= from12 && shown[r.room]).reduce((s, r) => s + r.kwh, 0);
+  // #460: the stove's wood counted with the electricity (one split: verdictWood); its rooms say
+  // « chauffée au bois », never 0 kWh/m²
+  const wood = verdictWood(state.cat, state.rooms);
+  const stove = new Set(stoveRooms().map((id) => ds!.roomMap?.get(id) ?? id));
+  const home = homePerM2(lastRecords, shown, rooms.map((r) => r.id), [...stove], wood, from12, last);
+  const perRoomRows = rooms.filter((r) => perRoom.has(r.id) || (stove.has(r.id) && shown[r.id] > 0));
   return `<section class="card" id="works-card">
     <div class="card-head"><h2>Travaux et surfaces <small class="muted">avant / après</small></h2>
       ${
@@ -162,13 +169,13 @@ function card(): string {
         )
         .join('')}</div>
       ${
-        perRoom.size
-          ? `<p>12 derniers mois : <strong>${num1(heat12 / Math.max(1, surf.m2))} kWh/m²</strong> de chauffage sur les pièces renseignées.</p>
+        home && perRoomRows.length
+          ? `<p id="works-home-m2">12 derniers mois : <strong>${num1(home.perM2)} kWh/m²</strong> de chauffage${home.wood ? ' électricité + bois' : ''} sur les pièces renseignées.</p>
         ${table(
           ['Pièce', 'Surface', 'Chauffage 12 mois', 'Par m²'],
-          rooms.filter((r) => perRoom.has(r.id)).map((r) => {
-            const p = perRoom.get(r.id)!;
-            return [esc(r.name), `${num1(p.m2)} m²`, fmtKwh(p.kwh), `${num1(p.perM2)} kWh/m²`];
+          perRoomRows.map((r) => {
+            const kwh = perRoom.get(r.id)?.kwh ?? 0;
+            return [esc(r.name), `${num1(shown[r.id])} m²`, fmtKwh(kwh), roomPerM2Text(kwh, shown[r.id], stove.has(r.id), num1)];
           }),
         )}`
           : ''
