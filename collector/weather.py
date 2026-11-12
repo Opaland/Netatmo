@@ -35,6 +35,16 @@ FORECAST = "https://api.open-meteo.com/v1/forecast"
 DAILY = "temperature_2m_min,temperature_2m_max,temperature_2m_mean"
 WIND = "wind_speed_10m_mean,wind_gusts_10m_max,precipitation_sum,shortwave_radiation_sum"
 
+# #464: degree days, base 18 °C, « méthode météo » of Météo-France: 18 − (min + max) / 2 each
+# day, 0 when warmer. A choice, so that a total reads against public figures; the reasons are in
+# web/src/analysis.ts (DJU_BASE), kept equal to this one by web/src/dju.test.ts.
+DJU_BASE = 18
+
+
+def degree_days(tmin: float, tmax: float, base: float = DJU_BASE) -> float:
+    """The degree days of one day (méthode météo)."""
+    return max(0.0, base - (tmin + tmax) / 2)
+
 
 class WeatherError(SourceError):
     """S-1.16 #261: never httpx's raise_for_status(), whose message holds the URL, hence the

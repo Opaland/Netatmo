@@ -26,6 +26,7 @@ from pathlib import Path
 from statistics import median
 
 from .storage import Store
+from .weather import degree_days
 
 log = logging.getLogger(__name__)
 
@@ -379,7 +380,7 @@ def compute_facts(store: Store, month: str) -> dict:
     weather = store.doc("weather").get("outdoor", {})
 
     def dju(a: str, b: str) -> float | None:
-        vals = [max(0.0, 18 - (w[0] + w[1]) / 2) for d, w in weather.items() if a <= d <= b]
+        vals = [degree_days(w[0], w[1]) for d, w in weather.items() if a <= d <= b]
         return round(sum(vals)) if len(vals) > 20 else None
 
     def tmean(a: str, b: str) -> float | None:
