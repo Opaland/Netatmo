@@ -17,6 +17,8 @@ import {
   splitCount,
   themeKey,
   wrappedLines,
+  textPx,
+  wrapText,
   weeklyMeans,
   zeroBased,
 } from './chart-theme';
@@ -117,6 +119,22 @@ describe('règles de lisibilité (#304, #306)', () => {
     expect(axisHour('nov. 2025')).toBe('nov. 2025');
     expect(axisText('sem. du 3 nov. 2026')).toBe('3 nov. 2026');
     expect(scaleText(48.4, 'kWh')).toEqual(['48 kWh', '0']);
+  });
+});
+
+describe('titre d’axe replié (#457)', () => {
+  it('passe à la ligne entre les mots, chaque ligne tient dans la largeur', () => {
+    const name = 'Température extérieure moyenne (°C)';
+    expect(wrapText(name, 400, 11)).toBe(name); // 100 % : une ligne
+    const big = wrapText(name, 200, 24); // 200 % sur 360 px
+    expect(big.split('\n')).toEqual(['Température', 'extérieure', 'moyenne (°C)']);
+    for (const l of big.split('\n')) expect(textPx(l, 24)).toBeLessThanOrEqual(200);
+  });
+  it('coupe un mot plus large que la ligne (nom fait de données)', () => {
+    const lines = wrapText('Écart Chambre-parentale-du-fond − extérieur (°C)', 120, 24).split('\n');
+    expect(lines.join('').replace(/\s/g, '')).toBe('ÉcartChambre-parentale-du-fond−extérieur(°C)');
+    for (const l of lines) expect(textPx(l, 24)).toBeLessThanOrEqual(120);
+    expect(wrapText('', 120, 24)).toBe('');
   });
 });
 

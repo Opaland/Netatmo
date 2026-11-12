@@ -9,6 +9,7 @@ import {
   GridComponent,
   LegendComponent,
   MarkLineComponent,
+  TitleComponent,
   TooltipComponent,
   VisualMapComponent,
 } from 'echarts/components';
@@ -27,6 +28,7 @@ use([
   CalendarComponent,
   VisualMapComponent,
   MarkLineComponent,
+  TitleComponent, // #457: a long x name of a scatter chart, wrapped under it
   CanvasRenderer,
 ]);
 

@@ -161,6 +161,32 @@ export function wrappedLines(s: string, width: number, px: number): number {
   return lines;
 }
 
+/**
+ * #457: `s` with « \n » where it must break to hold in `width` px (estimated as textPx), between
+ * words; a word wider than the line is cut into pieces that fit (a name made of data, « Écart
+ * Chambre-parentale − extérieur »). For an axis name, which ECharts does not wrap by itself
+ * (AxisBuilder overrides `width` and `overflow` of its nameTextStyle).
+ */
+export function wrapText(s: string, width: number, px: number): string {
+  const per = Math.max(1, Math.floor(width / textPx('x', px)));
+  const lines: string[] = [];
+  let cur = '';
+  for (let w of s.split(/\s+/).filter(Boolean)) {
+    if (cur && textPx(`${cur} ${w}`, px) <= width) {
+      cur = `${cur} ${w}`;
+      continue;
+    }
+    if (cur) lines.push(cur);
+    while (textPx(w, px) > width) {
+      lines.push(w.slice(0, per));
+      w = w.slice(per);
+    }
+    cur = w;
+  }
+  if (cur) lines.push(cur);
+  return lines.join('\n');
+}
+
 /** Line height of a chart text, in px (ECharts: about 1.2 em; rounded up, never optimistic). */
 export const lineHeightPx = (px: number) => Math.ceil(px * 1.25);
 
