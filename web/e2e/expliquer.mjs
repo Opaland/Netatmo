@@ -195,6 +195,35 @@ try {
       check((await wide(page)) <= 1, `${name} : défilement horizontal sur Historique (${await wide(page)} px)`);
     }
 
+    // #460: the screens that judge the insulation count the stove's wood (the one split of #433)
+    if (name === 'clair' || big) {
+      await go(page, 'historique-froid');
+      const pick = page.locator('#sig-card [data-set="sigEnergy"][aria-checked="true"]');
+      check((await pick.count()) === 1 && (await pick.innerText()) === 'Électricité + bois', `${name} : la signature n'est pas en électricité + bois par défaut`);
+      const wk = await page.locator('#iso-wk').innerText();
+      const m = /≈ ([\d\s  ]+) W\/°C, électricité \+ bois \(hiver 2025–2026\) : (très bien|bien|moyennement|mal) isolé\. Électricité seule : ([\d\s  ]+) W\/°C\./.exec(wk);
+      const num = (v) => Number(v.replace(/\s/g, ''));
+      check(!!m && num(m[1]) > num(m[3]), `${name} : verdict d'isolation sans le bois, ou pas plus fort qu'électricité seule (« ${wk} »)`);
+      const isoHint = await page.locator('#sig-isolation').innerText();
+      check(/Repères indicatifs, pas un diagnostic : en W\/°C, < 100 très bien · 100–170 bien · 170–280 moyen · > 280 mal isolé/.test(isoHint), `${name} : grille indicative absente (« ${isoHint.slice(0, 300)} »)`);
+      const slope = async () => num(((await page.locator('#sig-table tbody tr').nth(1).locator('td').nth(2).innerText()).split('[')[0]).replace(',', '.'));
+      const both = await slope();
+      await page.locator('#sig-card [data-set="sigEnergy"][data-value="elec"]').click();
+      await page.waitForSelector('#sig-card [data-set="sigEnergy"][data-value="elec"][aria-checked="true"]', { timeout: 10000 });
+      await shown(page, 'historique-froid');
+      const alone = await slope();
+      check(both > alone && alone > 0, `${name} : la pente électricité + bois (${both}) n'est pas plus forte que l'électricité seule (${alone})`);
+      check((await page.locator('#iso-wk').innerText()) === wk, `${name} : le verdict d'isolation change avec l'affichage électricité seule`);
+      await page.locator('#sig-card [data-set="sigEnergy"][data-value="wood"]').click();
+      await page.waitForSelector('#sig-card [data-set="sigEnergy"][data-value="wood"][aria-checked="true"]', { timeout: 10000 });
+      await shown(page, 'historique-froid');
+      check((await wide(page)) <= 1, `${name} : défilement horizontal sur « Chauffage selon le froid » (${await wide(page)} px)`);
+      await go(page, 'historique-annees');
+      const years = await page.locator('#years-card').innerText();
+      check(/Chauffage électricité \+ bois/.test(years) && /\n2025\t[\d\s  ]+\t[1-9][\d\s  ]*\t\d+,\d\d\t[\d\s  ]+\s€/.test(years), `${name} : « Année par année » sans le chauffage électricité + bois (« ${years.slice(-700)} »)`);
+      check((await wide(page)) <= 1, `${name} : défilement horizontal sur « Année par année » (${await wide(page)} px)`);
+    }
+
     // #394: October 2026 has two cuts in the incident log (14 Oct. power, 31 Oct. Internet): left out of both months
     if (name === 'clair' || big) {
       await page.evaluate(() => (location.hash = '#outils-expliquer-2026-10'));
