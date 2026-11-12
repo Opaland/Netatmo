@@ -85,3 +85,24 @@ describe('objectif de pièce à climat égal (#152)', () => {
     expect(withGoal(g, 'r-ch', null)).toEqual({});
   });
 });
+
+describe('année bissextile (#517)', () => {
+  it('saison 2027-2028 : le 28/02/2027 n’est compté qu’une fois, des jours entiers', () => {
+    const last = '2028-03-10';
+    const records: DayRecord[] = [];
+    const weather: Weather = new Map();
+    const fill = (from: string, to: string) => {
+      for (let d = from; d <= to; d = addDays(d, 1)) {
+        weather.set(d, [8, 8, 8]); // 10 degree days
+        records.push({ day: d, room: 'r-ch', cat: 'heating', kwh: 5 });
+      }
+    };
+    fill('2027-09-01', last);
+    fill('2026-09-01', minusYears(last));
+    const p = goalProgress(records, 'r-ch', weather, last, 10)!;
+    expect(p.days).toBe(191); // 1 Sept 2027 → 10 March 2028: 192 days, 29 Feb left out
+    expect(p.ref.dju).toBeCloseTo(p.days * 10, 9); // one count per reference day
+    expect(p.now.dju).toBeCloseTo(p.days * 10, 9);
+    expect(p.change).toBeCloseTo(0, 9); // same kWh, same cold every day
+  });
+});

@@ -14,7 +14,7 @@ export interface DayTypeCost {
   method: 'fit' | 'ratio';
 }
 
-export const MIN_DJU = 2; // heating days only: below, the room barely heats whatever the day
+export const MIN_DJU_DAY = 2; // heating days only: below, the room barely heats whatever the day
 
 /**
  * Average kWh per day for each group of days (e.g. working day / weekend), at equal
@@ -38,7 +38,7 @@ export function dayTypeCost(
     const g = group(day);
     if (!w || g === null) continue;
     const x = dju(w);
-    if (x < MIN_DJU) continue;
+    if (x < MIN_DJU_DAY) continue;
     if (!pts.has(g)) pts.set(g, []);
     pts.get(g)!.push([x, kwh]);
     sumDju += x;
