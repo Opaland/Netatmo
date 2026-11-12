@@ -14,10 +14,40 @@ import {
   toResearchCsv,
 } from './research';
 
-const FILES = import.meta.glob('../public/demo/*.json', { eager: true, import: 'default' });
+// Only the documents the export reads (#483: the whole folder, ~5 MB, was parsed for nothing).
+const FILES = import.meta.glob(
+  [
+    '../public/demo/keyinfo.json',
+    '../public/demo/meta.enc.json',
+    '../public/demo/20[0-9][0-9].enc.json',
+    '../public/demo/*.hourly.enc.json',
+    '../public/demo/*.station_h.enc.json',
+    '../public/demo/*.linky30.enc.json',
+    '../public/demo/weather.enc.json',
+    '../public/demo/linky.enc.json',
+    '../public/demo/station.enc.json',
+  ],
+  { eager: true, import: 'default' },
+);
 const read = <T>(name: string) => FILES[`../public/demo/${name}`] as T;
 
-/** The whole demo, hourly documents included, decrypted the way the app does. */
+/**
+ * Hourly series kept to their last HOURLY_DAYS days (#483). The whole demo gives ~178 000
+ * rows and a 16 MB JSON per document: building it three times and scanning it with the
+ * Unicode regexes of the detector took 3 to 4 s, over the 5 s limit on a loaded machine.
+ * A leak depends on names, ids and dates, not on how many hours there are: every hourly
+ * source (rooms, Linky curve, station modules) keeps all its entities and metrics, and all
+ * the daily series stay whole.
+ */
+const HOURLY_DAYS = 7;
+function lastDays<V>(series: Map<string, V>): Map<string, V> {
+  let last = '';
+  for (const k of series.keys()) if (k > last) last = k;
+  const from = new Date(Date.parse(`${last.slice(0, 10)}T00:00:00Z`) - (HOURLY_DAYS - 1) * 86_400_000).toISOString().slice(0, 10);
+  return new Map([...series].filter(([k]) => k.slice(0, 10) >= from));
+}
+
+/** The demo decrypted the way the app does, its hourly documents cut to their last week. */
 async function demo(): Promise<ResearchInput> {
   const key = await deriveKey('demo', read<KeyInfo>('keyinfo.json'));
   const dec = <T>(n: string) => decryptEnvelope<T>(read<Envelope>(`${n}.enc.json`), key);
@@ -64,9 +94,9 @@ async function demo(): Promise<ResearchInput> {
     weather: new Map(Object.entries(weather.outdoor)),
     linky: new Map(Object.entries(linky.daily).map(([d, wh]) => [d, wh / 1000])),
     station: await dec<Station>('station'),
-    hourly,
-    stationHourly,
-    curve,
+    hourly: new Map([...hourly].map(([room, m]) => [room, lastDays(m)])),
+    stationHourly: new Map([...stationHourly].map(([mod, m]) => [mod, lastDays(m)])),
+    curve: lastDays(curve),
     surfaces: { [rooms[0].id]: 14, [rooms[1].id]: 22.5 },
     markers: [{ day: '2025-06-01', kind: 'isolation' }],
   };
