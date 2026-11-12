@@ -165,7 +165,7 @@ export function renderSettings(view: HTMLElement, section: SettingsSection) {
       'Données : où elles sont, qui peut les lire',
     )}
     ${sharedOriginWarning(location.hostname)}
-    <h3>Services tiers contactés par la collecte</h3>
+    <h3 class="money-h">Services tiers contactés par la collecte</h3>
     ${cardTable(
       ['Service', 'Pour quoi', 'Ce qui lui est envoyé'],
       [

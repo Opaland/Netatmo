@@ -206,7 +206,7 @@ try {
       const rows = await card.locator('[data-fire-day]').count();
       check(rows >= 5, `${name} : flambées, ${rows} soir(s) listé(s) au lieu des soirs de la démo`);
       const text = await card.innerText();
-      check(/\d+ soirs de flambée sur \d+ soirs lisibles/.test(text), `${name} : flambées, compte des soirs absent (« ${text.slice(0, 160)} »)`);
+      check(/\d+ soirs de flambée sur \d+ soirs où la détection peut juger/.test(text), `${name} : flambées, compte des soirs absent (« ${text.slice(0, 160)} »)`);
       check(/Confiance : à établir/.test(text), `${name} : flambées, confiance non dite`);
       check(/2 pièces témoins · (nette|à peine marquée)/.test(text), `${name} : flambées, pièces témoins ou netteté absentes`);
       check(/à partir de \d+ h( 30)? · ≈ \d+ h/.test(text), `${name} : flambées, heure et durée absentes`);
@@ -234,9 +234,10 @@ try {
       const pick = page.locator('#sig-card [data-set="sigEnergy"][aria-checked="true"]');
       check((await pick.count()) === 1 && (await pick.innerText()) === 'Électricité + bois', `${name} : la signature n'est pas en électricité + bois par défaut`);
       const wk = await page.locator('#iso-wk').innerText();
-      const m = /≈ ([\d\s  ]+) W\/°C, électricité \+ bois \(hiver 2025–2026\) : (très bien|bien|moyennement|mal) isolé\. Électricité seule : ([\d\s  ]+) W\/°C\./.exec(wk);
+      // #499: the words of the grid first, the W/°C in detail
+      const m = /^Logement (très bien|bien|moyennement|mal) isolé, à titre indicatif \(pertes ≈ ([\d\s  ]+) W\/°C, électricité \+ bois, hiver 2025–2026\)\. Électricité seule : ([\d\s  ]+) W\/°C\./.exec(wk);
       const num = (v) => Number(v.replace(/\s/g, ''));
-      check(!!m && num(m[1]) > num(m[3]), `${name} : verdict d'isolation sans le bois, ou pas plus fort qu'électricité seule (« ${wk} »)`);
+      check(!!m && num(m[2]) > num(m[3]), `${name} : verdict d'isolation sans le bois, ou pas plus fort qu'électricité seule (« ${wk} »)`);
       const isoHint = await page.locator('#sig-isolation').innerText();
       check(/Repères indicatifs, pas un diagnostic : en W\/°C, < 100 très bien · 100–170 bien · 170–280 moyen · > 280 mal isolé/.test(isoHint), `${name} : grille indicative absente (« ${isoHint.slice(0, 300)} »)`);
       const slope = async () => num(((await page.locator('#sig-table tbody tr').nth(1).locator('td').nth(2).innerText()).split('[')[0]).replace(',', '.'));

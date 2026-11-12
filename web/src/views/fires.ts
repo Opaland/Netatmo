@@ -78,7 +78,7 @@ export function renderFires(el: HTMLElement) {
   if (!f || !f.covered.length) {
     el.innerHTML = html(`<section class="card" id="fires-card" aria-labelledby="fires-title">
       <div class="card-head"><h2 id="fires-title">Flambées du poêle</h2></div>
-      <p class="hint">Aucun soir lisible pour l’instant : la détection a besoin des relevés à la demi-heure de deux pièces voisines du poêle dont la température monte, radiateur à 0 W, au moins un soir. ${
+      <p class="hint">Aucun soir où la détection peut juger pour l’instant : elle a besoin des relevés à la demi-heure de deux pièces voisines du poêle dont la température monte, radiateur à 0 W, au moins un soir. ${
         stove ? '' : 'Déclarez aussi la pièce du poêle (⚙ Mon logement › Radiateurs arrêtés volontairement).'
       } Sans détection, le bois du poêle est réparti selon les degrés-jours.</p>
       ${question}
@@ -95,16 +95,16 @@ export function renderFires(el: HTMLElement) {
     : 'à établir : la détection est réglée sur des données fictives (démo) ; répondez « poêle allumé ce soir ? » quelques soirs pour les vérifier';
   el.innerHTML = html(`<section class="card" id="fires-card" aria-labelledby="fires-title">
     <div class="card-head"><h2 id="fires-title">Flambées du poêle</h2></div>
-    ${countedNote(esc(`${f.fires.size} soir${f.fires.size > 1 ? 's' : ''} de flambée sur ${covered} soirs lisibles, du ${dayLong(f.covered[0][0])} au ${dayLong(f.covered[f.covered.length - 1][1])}`))}
-    <p class="hint">Un soir de flambée : après le coucher du soleil, au moins deux pièces voisines du poêle se réchauffent de ${esc(RISE_MIN.toLocaleString('fr-FR'))} °C ou plus alors que leur radiateur ne consomme rien, sans redoux dehors. ${
-      stove ? `Le bois du poêle est réparti sur ces soirs (selon leur durée) plutôt que sur les degrés-jours ; les jours non lisibles gardent les degrés-jours.` : 'Aucun poêle déclaré : rien n’est réparti.'
+    ${countedNote(esc(`${f.fires.size} soir${f.fires.size > 1 ? 's' : ''} de flambée sur ${covered} soirs où la détection peut juger, du ${dayLong(f.covered[0][0])} au ${dayLong(f.covered[f.covered.length - 1][1])}`))}
+    <p class="hint">Un soir de flambée : après le coucher du soleil, au moins deux pièces voisines du poêle se réchauffent d’un demi-degré environ ou plus (${esc(RISE_MIN.toLocaleString('fr-FR'))} °C) alors que leur radiateur ne consomme rien, sans redoux dehors. ${
+      stove ? `Le bois du poêle est réparti sur ces soirs (selon leur durée) plutôt que sur les degrés-jours ; les jours où elle ne peut pas juger gardent les degrés-jours.` : 'Aucun poêle déclaré : rien n’est réparti.'
     }</p>
-    <p class="hint fires-confidence"><strong>Confiance :</strong> ${esc(confidence)}.${check.unseen ? ` <span class="hint muted">${esc(`${check.unseen} réponse${check.unseen > 1 ? 's' : ''} sur des soirs non lisibles (ou pas encore collectés).`)}</span>` : ''}</p>
+    <p class="hint fires-confidence"><strong>Confiance :</strong> ${esc(confidence)}.${check.unseen ? ` <span class="hint muted">${esc(`${check.unseen} réponse${check.unseen > 1 ? 's' : ''} sur des soirs où la détection ne peut pas juger (ou pas encore collectés).`)}</span>` : ''}</p>
     ${question}
-    <p class="fires-legend hint muted" aria-hidden="true"><span class="fires-day fires-fire">1</span> flambée <span class="fires-day fires-calm">1</span> soir lisible, sans flambée <span class="fires-day fires-unseen">1</span> non lisible</p>
+    <p class="fires-legend hint muted" aria-hidden="true"><span class="fires-day fires-fire">1</span> flambée <span class="fires-day fires-calm">1</span> sans flambée <span class="fires-day fires-unseen">1</span> pas jugé</p>
     ${months.slice(0, OPEN_MONTHS).map((m) => monthHtml(f, m)).join('')}
     ${months.length > OPEN_MONTHS ? `<details class="table-details" id="fires-older"><summary>Mois précédents (${months.length - OPEN_MONTHS})</summary>${months.slice(OPEN_MONTHS).map((m) => monthHtml(f, m)).join('')}</details>` : ''}
-    <p class="hint muted">Détection faite chaque nuit par la collecte, d’après les relevés à la demi-heure ; durée estimée : le temps où les pièces montent en température. Une pièce voisine hors de portée, un radiateur qui chauffe ou un redoux rendent le soir non lisible.</p>
+    <p class="hint muted">Détection faite chaque nuit par la collecte, d’après les relevés à la demi-heure ; durée estimée : le temps où les pièces montent en température. Une pièce voisine hors de portée, un radiateur qui chauffe ou un redoux empêchent la détection de juger le soir.</p>
   </section>`);
   wire(el);
 }

@@ -34,7 +34,9 @@ Ce que l'application mobile ne fait pas, et que celle-ci fait :
   calculé (compteur Linky × tarif du contrat + abonnement au prorata), écart expliqué (relevé estimé,
   jours manquants, abonnement, taxes) et part du chauffage et de l'eau chaude ;
 - les **surfaces** des pièces et des **marqueurs « travaux »** datés (isolation, fenêtres,
-  radiateur…) : signature avant / après (deux droites), kWh/m² et kWh par degré-jour ; ces saisies et
+  radiateur…) : signature avant / après (deux droites), kWh/m² et kWh par degré-jour, et dans le
+  rapport annuel un **repère en kWh/m²/an** (chauffage + eau chaude, en énergie primaire) face aux
+  seuils de l'étiquette énergie du DPE, à titre indicatif et **sans être un DPE** ; ces saisies et
   les factures restent **chiffrées sur l'appareil** ;
 - une **analyse du mois rédigée par l'IA** (Claude), facultative.
 
@@ -331,7 +333,7 @@ sur la démo, d'après ce que vous avez observé (+1 à +2 °C dans deux chambre
 dits dans le code ; *Historique → Flambées du poêle* montre le calendrier (heure de début, durée
 estimée, pièces témoins, netteté) et pose la question « poêle allumé ce soir ? » : vos réponses restent
 chiffrées sur l'appareil et disent combien de soirs la détection a vus juste. Le bois du poêle est alors
-réparti sur ces soirs plutôt que sur les degrés-jours (les jours non lisibles gardent les degrés-jours).
+réparti sur ces soirs plutôt que sur les degrés-jours (les jours où la détection ne peut pas juger gardent les degrés-jours).
 Rien de tout cela n'entre dans le journal public.
 
 **Radiateur arrêté ou retiré.** Une pièce chauffée autrement dont les radiateurs sont coupés ou
