@@ -36,6 +36,7 @@ import * as ha from './ha';
 import { fmt1 as f1 } from '../glossary';
 import { alertHtml } from '../components';
 import { pressureCard } from './pressure';
+import { lazyCard } from '../lazy';
 import { linkRoom } from '../module-match';
 
 // #247: station hourly readings of the dataset shown; `hourly` / `hourlyFailed` refreshed from it.
@@ -95,6 +96,7 @@ export function renderComfort(view: HTMLElement) {
   ${st ? co2Cards(st, map) : ''}
   ${st ? cellarCards(st, map) : ''}
   ${coldCard(st, map)}
+  <div id="lower-zone"></div>
   ${windows.windowsCard(showBedrooms)}
   ${ha.haCard(showBedrooms)}
   ${st ? probeCard(st, map) : ''}`;
@@ -105,6 +107,8 @@ export function renderComfort(view: HTMLElement) {
   }
   drawCold(st, map);
   windows.drawWindows(showBedrooms);
+  // #452: the lower level, loaded on demand (its rooms and changes are read from this device)
+  void lazyCard(() => import('./lower'), (m) => m.fillLower(showBedrooms), { zone: 'lower-zone', what: 'Niveau inférieur' });
 }
 
 // ------------------------------------------------------------------ S-11.1 night CO₂
