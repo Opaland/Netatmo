@@ -1,15 +1,17 @@
 // #346: ⚙ Mon logement → « Radiateurs arrêtés volontairement » (réglage foyer). A room whose
 // radiator was switched off on purpose (heated by a stove…) is « arrêté depuis le … (poêle) »,
 // not « hors ligne »: no alert, no estimate from the meter, and its fall counts as a change of
-// heating. Applied on this device at once; saved for the household in the repository variable
-// STOPPED_ROOMS_JSON (the nightly collection copies it into the encrypted meta).
+// heating. Applied on this device at once; saved for the household in the repository secret
+// STOPPED_ROOMS_JSON, sealed in this browser (#459; the nightly collection copies it into the
+// encrypted meta).
 import { ds, rawDataset, rerender } from '../app';
 import { alert, alertHtml } from '../components';
 import { dayShort } from '../glossary';
 import { STOP_REASONS, type StopReason, type StoppedRoom, offlineText, parseStopped, stoppedJson } from '../room-offline';
-import { hasToken, putVariable } from '../settings';
+import { hasToken } from '../settings';
 import { html } from '../trusted';
 import { esc, lastDay, roomColor } from '../ui';
+import { bindMigrate, checkPlain, plainOffer, saveSecret, secretWhere, tokenHint } from './household-secret';
 import { offlineInfo, setStoppedDraft, sharedStopped, stoppedDraft, stoppedRooms } from './offline-rooms';
 import '../simulators.css';
 
@@ -69,15 +71,19 @@ export function mountStopped(card: HTMLElement | null, repo: () => string) {
         : shared.length
           ? 'Enregistré pour le foyer.'
           : 'Rien d’enregistré pour le foyer.'
-    } Variable du dépôt <code>${STOPPED_VARIABLE}</code> :</p>
+    } ${secretWhere(STOPPED_VARIABLE)}</p>
     <code class="sim-json">${esc(stoppedJson(list))}</code>
     <div class="controls">
       <button type="button" class="btn secondary" id="stop-save" ${canWrite && pending ? '' : 'disabled'}>Enregistrer pour le foyer</button>
       ${pending ? '<button type="button" class="link" id="stop-reset">Revenir à la version du foyer</button>' : ''}
     </div>
-    <p class="hint muted">${demo ? 'Démo : appliqué sur cet appareil seulement, rien n’est envoyé.' : hasToken() ? 'Pris en compte par la collecte de la nuit (plus d’alerte pour ces pièces).' : 'Connectez un jeton GitHub (⚙ Sources de données, permission Variables) pour enregistrer, ou copiez la variable à la main.'}</p>
+    <p class="hint muted">${demo ? 'Démo : appliqué sur cet appareil seulement, rien n’est envoyé.' : hasToken() ? 'Pris en compte par la collecte de la nuit (plus d’alerte pour ces pièces).' : tokenHint}</p>
+    ${plainOffer(repo(), STOPPED_VARIABLE, canWrite)}
     ${message ? alertHtml(message.ok ? 'info' : 'bad', esc(message.text), { role: 'status' }) : ''}
   </section>`);
+  const remount = () => (card.isConnected ? mountStopped(card, repo) : rerender());
+  if (canWrite) checkPlain(repo(), STOPPED_VARIABLE, remount);
+  bindMigrate(card, repo(), STOPPED_VARIABLE, (m) => (message = m), remount);
   const apply = (next: StoppedRoom[]) => {
     setStoppedDraft(stoppedJson(next) === stoppedJson(shared) ? null : parseStopped(next));
     message = null;
@@ -99,9 +105,6 @@ export function mountStopped(card: HTMLElement | null, repo: () => string) {
   card.querySelector('#stop-save')?.addEventListener('click', () => {
     message = { ok: true, text: 'En cours…' };
     mountStopped(card, repo);
-    putVariable(repo(), STOPPED_VARIABLE, stoppedJson(list))
-      .then(() => (message = { ok: true, text: 'Enregistré pour le foyer : pris en compte à la prochaine collecte.' }))
-      .catch((err: Error) => (message = { ok: false, text: err.message }))
-      .finally(() => (card.isConnected ? mountStopped(card, repo) : rerender()));
+    void saveSecret(repo(), STOPPED_VARIABLE, stoppedJson(list), (m) => (message = m)).finally(remount);
   });
 }
