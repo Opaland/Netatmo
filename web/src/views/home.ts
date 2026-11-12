@@ -38,7 +38,7 @@ import { html } from '../trusted';
 import { avgPrice, costAvailable, costOf, esc, firstDay, fmtEur, fmtKwh, lastDay, table, tableToggle } from '../ui';
 import { chartMarks, yoyGapNote } from './quality';
 import { offlineEstimate, offlineLine, offlineNow, offlineRun, stoppedIn } from './offline-rooms';
-import { offlineText } from '../room-offline';
+import { offlineText, runStart } from '../room-offline';
 import { type Scope, fmtMoney, homeScope, money, yoy } from './verdict-scope';
 import { stoveName, verdictWood, woodOver } from './wood-state';
 
@@ -245,7 +245,7 @@ function countedCard(records: DayRecord[], r: HomeRange): string {
           const est = run ? offlineEstimate(x.id, r.from, r.to) : null; // « ≈ » before the value: estimated
           return {
             title: room.name,
-            sub: run ? offlineText(run, run.from.slice(0, 4) !== r.to.slice(0, 4)) : changeText(x.change, vs), // #311: short, one line
+            sub: run ? offlineText(run, runStart(run).slice(0, 4) !== r.to.slice(0, 4)) : changeText(x.change, vs), // #311: short, one line
             value: `${est !== null ? '≈ ' : ''}${euros ? fmtEur(x.value) : fmtKwh(x.value)}`,
             color: water ? '--usage-water' : '--usage-heating',
             share: x.share,

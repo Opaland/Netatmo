@@ -182,15 +182,31 @@ export function runIn(runs: OfflineRun[], room: string, from: string, to: string
 }
 
 /**
+ * #461: the first day of a run as said to the owner. A room switched off on purpose is « arrêté »
+ * from the day DECLARED, not from its first day without reading: a room whose radiators were
+ * taken down on 1 July may still have sent readings until October (applyStopped keeps the run's
+ * own `from`, the silent days, for the counts). The one rule for every text (AGENTS.md §5).
+ */
+export const runStart = (run: Pick<OfflineRun, 'from' | 'stopped'>) => run.stopped?.from ?? run.from;
+
+/**
+ * #461: the last day with a reading of a room switched off on purpose, when it is after the day
+ * declared (said in complement: « dernière donnée le … »); null otherwise.
+ */
+export const lastReadingAfterStop = (run: Pick<OfflineRun, 'from' | 'stopped'>): string | null =>
+  run.stopped && run.from > run.stopped.from ? addDays(run.from, -1) : null;
+
+/**
  * « hors ligne depuis le 14 oct. 2025 », « hors ligne du 4 au 17 nov. 2024 »; a room switched off
- * on purpose: « arrêté depuis le 14 oct. 2025 (poêle) ».
+ * on purpose: « arrêté depuis le 14 oct. 2025 (poêle) », from the day declared (#461).
  */
 export function offlineText(run: Pick<OfflineRun, 'from' | 'to' | 'ongoing' | 'stopped'>, withYear = true): string {
   const what = run.stopped ? 'arrêté' : 'hors ligne';
   const why = run.stopped && stopShort(run.stopped) ? ` (${stopShort(run.stopped)})` : '';
-  if (run.ongoing) return `${what} depuis le ${dayShort(run.from, withYear)}${why}`;
-  const sameYear = run.from.slice(0, 4) === run.to.slice(0, 4);
-  return `${what} du ${dayShort(run.from, !sameYear)} au ${dayShort(run.to, true)}${why}`;
+  const from = runStart(run);
+  if (run.ongoing) return `${what} depuis le ${dayShort(from, withYear)}${why}`;
+  const sameYear = from.slice(0, 4) === run.to.slice(0, 4);
+  return `${what} du ${dayShort(from, !sameYear)} au ${dayShort(run.to, true)}${why}`;
 }
 
 /**

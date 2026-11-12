@@ -11,6 +11,7 @@ import {
   displayRuns,
   estimateOffline,
   estimatedIn,
+  lastReadingAfterStop,
   notComparable,
   offlineDaysIn,
   offlineRuns,
@@ -143,7 +144,23 @@ describe('radiators switched off on purpose (⚙ Mon logement)', () => {
     expect(offlineText(out[1])).toBe('arrêté depuis le 10 janv. 2026 (poêle)');
     expect(applyStopped([run], [{ ...stove, from: '2026-01-07' }])).toHaveLength(1); // 1 day before: not a run
     expect(applyStopped([run], [{ ...stove, room: 'z' }])).toEqual([run]);
-    expect(offlineText({ ...run, stopped: { ...stove, reason: 'autre' } })).toBe('arrêté depuis le 6 janv. 2026');
+    // #461: from the day declared, even on a run that was not cut (the declared day prevails)
+    expect(offlineText({ ...run, stopped: { ...stove, reason: 'autre' } })).toBe('arrêté depuis le 10 janv. 2026');
+  });
+
+  it('#461: « arrêté depuis » the day declared, not the last reading; the last reading said in complement', () => {
+    // radiators taken down on 1 July 2025; the room still sent readings until 9 October
+    const gone = { room: 'k', from: '2025-07-01', reason: 'retires' as const, label: '' };
+    const silent = { room: 'k', from: '2025-10-10', to: '2026-01-31', days: 114, ongoing: true };
+    const [out] = applyStopped([silent], [gone]);
+    expect(out.stopped).toBe(gone);
+    expect(offlineText(out)).toBe('arrêté depuis le 1er juil. 2025 (radiateurs retirés)');
+    expect(offlineText({ ...out, ongoing: false, to: '2025-12-31' })).toBe('arrêté du 1er juil. au 31 déc. 2025 (radiateurs retirés)');
+    expect(lastReadingAfterStop(out)).toBe('2025-10-09');
+    // silent since the day declared (or before it, cut by applyStopped): nothing to add
+    expect(lastReadingAfterStop(applyStopped([{ ...silent, from: '2025-06-20' }], [gone]).at(-1)!)).toBeNull();
+    expect(lastReadingAfterStop(silent)).toBeNull();
+    expect(offlineText(silent)).toBe('hors ligne depuis le 10 oct. 2025');
   });
 
   it('#440: « radiateurs retirés » is a reason of its own, kept by the reader, said in the text', () => {
