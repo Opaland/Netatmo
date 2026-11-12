@@ -123,10 +123,14 @@ export function listRow(o: RowOpts): string {
 export const list = (rows: RowOpts[], label?: string) => `<ul class="list"${attrs({ 'aria-label': label })}>${rows.map(listRow).join('')}</ul>`;
 
 // ------------------------------------------------------------------ controls
-/** Segmented control (2-4 options, role=radiogroup); wraps instead of overflowing (#319). */
-export function seg<T extends string>(name: string, value: T, options: [T, string][], label: string): string {
+/**
+ * Segmented control (2-4 options, role=radiogroup); wraps instead of overflowing (#319). By
+ * default each option sets the state `name` (data-set, data-value); `optAttrs` gives an option
+ * its own attributes instead, for a view that handles the click itself (#517: « Mon défi »).
+ */
+export function seg<T extends string>(name: string, value: T, options: [T, string][], label: string, optAttrs?: (v: T) => Attrs): string {
   return `<div class="seg" role="radiogroup" aria-label="${esc(label)}">${options
-    .map(([v, l]) => `<button type="button" role="radio" aria-checked="${v === value}" data-set="${esc(name)}" data-value="${esc(v)}">${esc(l)}</button>`)
+    .map(([v, l]) => `<button type="button" role="radio" aria-checked="${v === value}"${attrs(optAttrs ? optAttrs(v) : { 'data-set': name, 'data-value': v })}>${esc(l)}</button>`)
     .join('')}</div>`;
 }
 /** #427: the label of what a card counts, written here only (design-usage.test.ts refuses it elsewhere). */

@@ -6,7 +6,7 @@ import { toCsv } from './aggregate';
 import { type State, activeRooms, app, ds, onDatasetOpened, onLock, setDataset, setRenderer, setState, state } from './app';
 import { disposeAll, useChartPrefs } from './charts';
 import { BadEnvelope, WrongPassphrase } from './crypto';
-import { type Dataset, NoData, clearDataCaches, dataDir, forgetKeys, load, noteSealParams, recallKey } from './data';
+import { type Dataset, NoData, clearDataCaches, dataDir, forgetKeys, openRemembered, recallKey } from './data';
 import { type Ctl, cardHandlers, dispatch } from './events';
 import { lazyAction } from './lazy';
 import { clearMemo } from './memo';
@@ -623,8 +623,7 @@ async function start() {
     }
     if (!key) return await showLockScreen();
     renderLoading();
-    opened = await load('data', key);
-    void noteSealParams('data'); // #139: what the device's notes are sealed with
+    opened = await openRemembered('data', key); // #139, #517: and what the device's notes are sealed with
   } catch (err) {
     if (err instanceof WrongPassphrase) await forgetKeys();
     renderLock(startError(err), !(err instanceof NoData));
