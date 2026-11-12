@@ -66,6 +66,7 @@ jobs:
       - run: npm run e2e:plannings # v1.6 #211, #210 : plannings et heures creuses, absences reconstituées (axe, 200 %)
       - run: npm run e2e:pwa # v1.6 #357 : nouvelle version en attente + bandeau, deux onglets, « Recharger l'application », Installer, hors ligne
       - run: npm run e2e:reglages # v1.6 #20, #370 : feuille « Réglages du graphique » (axe, 360 px 200 %, focus, réglages gardés)
+      - run: npm run e2e:logement # v1.8 #462 : saisies gardées dans ⚙ Mon logement (localisation, bois, surfaces)
       # #353 : balayage systématique (chaque route × fixtures de démo × 360 px, 1280 px, 200 %, sombre ;
       # vue Proche à 360 px et à 200 %, #451)
       # puis explorateur de contrôles. Les fixtures (données fictives) sont générées dans dist/,
@@ -108,6 +109,9 @@ jobs:
         env:
           E2E_BROWSER: webkit
       - run: npm run e2e:reglages
+        env:
+          E2E_BROWSER: webkit
+      - run: npm run e2e:logement
         env:
           E2E_BROWSER: webkit
       - uses: actions/upload-artifact@v4
