@@ -15,6 +15,7 @@ describe('#463 erreur du jeton : l’appel et la permission en cause', () => {
     expect(ghCall('/repos/o/r/actions/secrets/HOME_LOCATION_JSON', 'PUT')).toEqual({ what: 'l’enregistrement d’un secret', permission: '« Secrets » en écriture' });
     expect(ghCall('/repos/o/r/actions/variables/WOOD_JSON', 'PATCH')).toEqual({ what: 'la mise à jour d’une variable', permission: '« Variables » en écriture' });
     expect(ghCall('/repos/o/r/actions/variables', 'post').what).toBe('la création d’une variable');
+    expect(ghCall('/repos/o/r/actions/variables/WOOD_JSON', 'DELETE').what).toBe('la suppression d’une variable'); // #459: migration
     expect(ghCall('/repos/o/r/actions/workflows/collect.yml/dispatches', 'POST')).toEqual({ what: 'le lancement de la collecte', permission: '« Actions » en écriture' });
     expect(ghCall('/user').what).toBe('un appel à GitHub');
   });
@@ -28,7 +29,7 @@ describe('#463 erreur du jeton : l’appel et la permission en cause', () => {
     for (const call of [
       () => listSecrets('proprio-fictif/depot-fictif'),
       () => putSecret('proprio-fictif/depot-fictif', 'INTUIS_PASSWORD', 'valeur-secrete-du-test'),
-      () => putVariable('proprio-fictif/depot-fictif', 'WOOD_JSON', '{"purchases":[]}'),
+      () => putVariable('proprio-fictif/depot-fictif', 'CONTRACT_JSON', '[]'), // #459: WOOD_JSON is a secret now
       () => runCollect('proprio-fictif/depot-fictif', false),
     ])
       seen.push(await call().then(() => '', (e: Error) => e.message));

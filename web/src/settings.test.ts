@@ -1,6 +1,23 @@
 import sodium from 'libsodium-wrappers';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { expiryInfo, listSecrets, noSaveAttrs, putSecret, putVariable, repoFromLocation, runCollect, setToken, validate, invalidFields } from './settings';
+import {
+  APP_SECRETS,
+  HOUSEHOLD_SECRETS,
+  VARIABLES,
+  expiryInfo,
+  listSecrets,
+  migratePlainVariable,
+  noSaveAttrs,
+  plainVariable,
+  putSecret,
+  putVariable,
+  repoFromLocation,
+  runCollect,
+  saveHouseholdSecret,
+  setToken,
+  validate,
+  invalidFields,
+} from './settings';
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -111,6 +128,73 @@ describe('settings', () => {
     vi.stubGlobal('fetch', async () => new Response('', { status: 403 }));
     setToken('t');
     await expect(putVariable('o/r', 'CONTRACT_JSON', '[]')).rejects.toThrow(/Variables/);
+  });
+
+  describe('#459: no household setting is ever written in clear', () => {
+    const household = [...HOUSEHOLD_SECRETS, 'HOME_LOCATION_JSON'];
+    const fakeGitHub = async (plain: Record<string, string>) => {
+      await sodium.ready;
+      const pair = sodium.crypto_box_keypair();
+      const calls: { method: string; url: string; body: string }[] = [];
+      vi.stubGlobal('fetch', async (url: string, init?: RequestInit) => {
+        const method = init?.method ?? 'GET';
+        calls.push({ method, url, body: String(init?.body ?? '') });
+        if (url.endsWith('/public-key')) return new Response(JSON.stringify({ key: sodium.to_base64(pair.publicKey, sodium.base64_variants.ORIGINAL), key_id: 'k1' }));
+        const v = /\/actions\/variables\/([A-Z_]+)$/.exec(url)?.[1];
+        const known = v !== undefined && Object.hasOwn(plain, v);
+        if (v && method === 'GET') return known ? new Response(JSON.stringify({ name: v, value: plain[v] })) : new Response('', { status: 404 });
+        if (v && method === 'DELETE') {
+          if (!known) return new Response('', { status: 404 });
+          delete plain[v];
+        }
+        return new Response(null, { status: 204 });
+      });
+      setToken('github_pat_test');
+      const open = (c: { body: string }) =>
+        sodium.to_string(
+          sodium.crypto_box_seal_open(sodium.from_base64(JSON.parse(c.body).encrypted_value, sodium.base64_variants.ORIGINAL), pair.publicKey, pair.privateKey),
+        );
+      return { calls, open };
+    };
+
+    it('is never a repository variable the app may write', async () => {
+      const calls: string[] = [];
+      vi.stubGlobal('fetch', async (url: string) => (calls.push(url), new Response(null, { status: 204 })));
+      setToken('t');
+      for (const name of household) {
+        expect(VARIABLES.has(name), name).toBe(false);
+        expect(APP_SECRETS.has(name), name).toBe(true);
+        await expect(putVariable('o/r', name, '[]')).rejects.toThrow(/ne peut pas/);
+      }
+      expect(calls).toEqual([]);
+    });
+
+    it('is sealed into a secret, then the plaintext variable left is deleted', async () => {
+      const value = '[{"room":"r1","from":"2025-07-01","reason":"retires","label":"Valeur-Secrete"}]';
+      const { calls, open } = await fakeGitHub({ STOPPED_ROOMS_JSON: '[]' });
+      expect(await saveHouseholdSecret('o/r', 'STOPPED_ROOMS_JSON', value)).toEqual({ removedPlain: true });
+      expect(calls.filter((c) => !c.url.endsWith('/public-key')).map((c) => `${c.method} ${c.url}`)).toEqual([
+        'PUT https://api.github.com/repos/o/r/actions/secrets/STOPPED_ROOMS_JSON',
+        'DELETE https://api.github.com/repos/o/r/actions/variables/STOPPED_ROOMS_JSON',
+      ]);
+      expect(calls.some((c) => c.body.includes('Valeur-Secrete'))).toBe(false);
+      expect(open(calls.find((c) => c.method === 'PUT')!)).toBe(value);
+      expect(await saveHouseholdSecret('o/r', 'STOPPED_ROOMS_JSON', value)).toEqual({ removedPlain: false });
+      await expect(saveHouseholdSecret('o/r', 'CONTRACT_JSON', value)).rejects.toThrow(/ne peut pas/);
+    });
+
+    it('migrates a plaintext variable as it is, then deletes it; nothing to do without one', async () => {
+      const old = '{"purchases":[{"day":"2025-10-01","steres":2,"species":"chene","moisture":20,"price":777}]}';
+      const { calls, open } = await fakeGitHub({ WOOD_JSON: old });
+      expect(await plainVariable('o/r', 'WOOD_JSON')).toBe(old);
+      expect(await migratePlainVariable('o/r', 'WOOD_JSON')).toBe(true);
+      expect(open(calls.find((c) => c.method === 'PUT')!)).toBe(old);
+      const writes = calls.filter((c) => c.method !== 'GET');
+      expect(writes.map((c) => `${c.method} ${c.url.replace('https://api.github.com/repos/o/r/actions/', '')}`)).toEqual(['PUT secrets/WOOD_JSON', 'DELETE variables/WOOD_JSON']);
+      expect(await plainVariable('o/r', 'WOOD_JSON')).toBeNull();
+      expect(await migratePlainVariable('o/r', 'WOOD_JSON')).toBe(false);
+      await expect(plainVariable('o/r', 'CONTRACT_JSON')).rejects.toThrow(/ne peut pas/);
+    });
   });
 
   it('shows the token expiry, estimated or unknown, and when to renew (S-1.12)', () => {

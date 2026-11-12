@@ -1,11 +1,12 @@
 // #366: ⚙ Mon logement → « Poêle à bois » (réglage foyer). The wood bought (day, stères, species,
 // moisture, price) and the assumptions that turn it into heat (kWh per stère at 20 %, efficiency),
 // shown and editable. Applied on this device at once (encrypted draft); saved for the household
-// in the repository variable WOOD_JSON (the nightly collection copies it into the encrypted meta).
+// in the repository secret WOOD_JSON, sealed in this browser (#459; the nightly collection copies
+// it into the encrypted meta).
 import { ds, rerender } from '../app';
 import { alertHtml, howDetails } from '../components';
 import { dayShort, seasonLabel } from '../glossary';
-import { hasToken, putVariable } from '../settings';
+import { hasToken } from '../settings';
 import { html } from '../trusted';
 import { avgPrice, esc, fmtEur, fmtKwh, lastDay, nf0 } from '../ui';
 import {
@@ -27,6 +28,7 @@ import {
   woodJson,
   woodSeasons,
 } from '../wood';
+import { bindMigrate, checkPlain, plainOffer, saveSecret, secretWhere, tokenHint } from './household-secret';
 import { setWoodDraft, sharedWood, stoveName, woodDraft, woodPersisted, woodSettings } from './wood-state';
 import '../simulators.css';
 
@@ -118,17 +120,21 @@ export function mountWood(card: HTMLElement | null, repo: () => string) {
       <p class="hint muted">Humidité : la chaleur prise par l’eau à évaporer, à bois sec égal (${n1(moistureFactor(15) * 100)} % de l’énergie à 15 %, ${n1(moistureFactor(30) * 100)} % à 30 %). Au-delà de ${WET_MOISTURE} %, le bois brûle mal : le vrai rendement est bien plus bas que l’hypothèse. Par défaut : rendement ${DEFAULT_EFFICIENCY} % (poêle à bûches récent), ${nf0.format(KWH_PER_STERE.chene)} kWh par stère de chêne, ${nf0.format(KWH_PER_STERE.resineux)} de résineux. Sans relevé (« Bois réellement brûlé »), une saison est supposée brûler tout le bois qu’elle a, le plus ancien d’abord.</p>
       <div class="controls"><button type="button" class="btn secondary" id="wood-assume">Appliquer les hypothèses</button></div>`,
     )}
-    <p class="hint muted">${pending ? 'Appliqué sur cet appareil, pas encore pour le foyer.' : shared.purchases.length ? 'Enregistré pour le foyer.' : 'Rien d’enregistré pour le foyer.'} Variable du dépôt <code>${WOOD_VARIABLE}</code> :</p>
+    <p class="hint muted">${pending ? 'Appliqué sur cet appareil, pas encore pour le foyer.' : shared.purchases.length ? 'Enregistré pour le foyer.' : 'Rien d’enregistré pour le foyer.'} ${secretWhere(WOOD_VARIABLE)}</p>
     <code class="sim-json">${esc(woodJson(w))}</code>
     <div class="controls">
       <button type="button" class="btn secondary" id="wood-save" ${canWrite && pending ? '' : 'disabled'}>Enregistrer pour le foyer</button>
       ${pending ? '<button type="button" class="link" id="wood-reset">Revenir à la version du foyer</button>' : ''}
     </div>
-    <p class="hint muted">${demo ? 'Démo : appliqué sur cet appareil seulement, rien n’est envoyé.' : hasToken() ? 'Recopié chiffré par la collecte de la nuit : jamais dans le journal public.' : 'Connectez un jeton GitHub (⚙ Sources de données, permission Variables) pour enregistrer, ou copiez la variable à la main.'}${
+    <p class="hint muted">${demo ? 'Démo : appliqué sur cet appareil seulement, rien n’est envoyé.' : hasToken() ? 'Jamais dans le journal public.' : tokenHint}${
       woodPersisted() ? '' : ' Cet appareil n’a pas pu garder la version chiffrée : elle durera jusqu’au verrouillage.'
     }</p>
+    ${plainOffer(repo(), WOOD_VARIABLE, canWrite)}
     ${message ? alertHtml(message.ok ? 'info' : 'bad', esc(message.text), { role: 'status' }) : ''}
   </section>`);
+  const remount = () => (card.isConnected ? mountWood(card, repo) : rerender());
+  if (canWrite) checkPlain(repo(), WOOD_VARIABLE, remount);
+  bindMigrate(card, repo(), WOOD_VARIABLE, (m) => (message = m), remount);
   // #462: « Noter un achat de bois » and « Hypothèses » keep their state across the redraws: a
   // fold closed again under the finger made the next tap land on its title instead of the button
   card.querySelector('#wood-eff')?.closest('details')?.setAttribute('id', 'wood-assumptions');
@@ -188,9 +194,6 @@ export function mountWood(card: HTMLElement | null, repo: () => string) {
   card.querySelector('#wood-save')?.addEventListener('click', () => {
     message = { ok: true, text: 'En cours…' };
     mountWood(card, repo);
-    putVariable(repo(), WOOD_VARIABLE, woodJson(w))
-      .then(() => (message = { ok: true, text: 'Enregistré pour le foyer : pris en compte à la prochaine collecte.' }))
-      .catch((err: Error) => (message = { ok: false, text: err.message }))
-      .finally(() => (card.isConnected ? mountWood(card, repo) : rerender()));
+    void saveSecret(repo(), WOOD_VARIABLE, woodJson(w), (m) => (message = m)).finally(remount);
   });
 }

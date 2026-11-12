@@ -101,8 +101,8 @@ def room_days(
 
 
 def stopped_of(store: Store, env: str | None = None) -> list[dict]:
-    """#346 / #440: the rooms switched off on purpose: STOPPED_ROOMS_JSON when given (the variable
-    of the repository), else the list the last collection saved in the archive. [] when invalid."""
+    """#346 / #440: the rooms switched off on purpose: STOPPED_ROOMS_JSON when given (the secret
+    of the repository, #459), else the list the last collection saved in the archive. [] when invalid."""
     raw = env if env is not None and env.strip() else json.dumps(store.meta.get("stopped_rooms") or [])
     try:
         return parse_stopped(raw)
