@@ -365,8 +365,9 @@ donne l'état des pièces qu'en instantané. Pour en garder l'historique :
    les jours d'aération, l'énergie estimée pendant les boosts, les absences confirmées par le mode
    de consigne et les délestages face au pic Linky. Les chambres y sont regroupées par défaut.
 4. Ailleurs dans l'appli : « Pourquoi cette pièce était froide ? » dans les **Questions types**
-   (rapport), une colonne « Explication possible » (fenêtre ouverte N h, mode absence) dans les
-   **Jours inhabituels** (Analyse), les **absences confirmées par le mode de consigne** dans « Absences
+   (rapport), une colonne « Explication possible » (fenêtre ouverte N h, mode absence ; et, pour un
+   jour sous l'attendu, une journée ensoleillée d'après le rayonnement Open-Meteo, en hypothèse) dans
+   les **Jours inhabituels** (Analyse), les **absences confirmées par le mode de consigne** dans « Absences
    probables » (la détection par la consommation reste le repli), le **délestage par pièce** sous la
    puissance maximale (Synthèse), le **mode du contacteur** dans la carte chauffe-eau (Analyse). Si
    l'analyse IA est activée, elle reçoit les heures de fenêtre ouverte et de boost **du mois**, par
