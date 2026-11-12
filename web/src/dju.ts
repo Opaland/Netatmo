@@ -14,7 +14,7 @@ export function weatherSourceLabel(source: string | null | undefined): string {
 
 /** Base, method and source in one sentence. */
 export function djuMethodText(source: string | null | undefined): string {
-  return `base ${DJU_BASE} °C ; chaque jour, ${DJU_BASE} °C moins la moyenne du minimum et du maximum, zéro s’il fait plus doux, selon la méthode de Météo-France ; températures du ${weatherSourceLabel(source)}`;
+  return `base ${DJU_BASE}\u00a0°C ; chaque jour, ${DJU_BASE}\u00a0°C moins la moyenne du minimum et du maximum, zéro s’il fait plus doux, selon la méthode de Météo-France ; températures du ${weatherSourceLabel(source)}`;
 }
 
 /**

@@ -35,7 +35,7 @@ describe('degrés-jours (#464)', () => {
 
   it('la phrase dit la base, la méthode et la source', () => {
     const om = djuMethodText('open-meteo');
-    expect(om).toMatch(/base 18 °C/);
+    expect(om).toMatch(/base 18\u00a0°C/);
     expect(om).toMatch(/moyenne du minimum et du maximum/);
     expect(om).toMatch(/Open-Meteo/);
     expect(djuMethodText('netatmo')).toMatch(/station Netatmo/);
