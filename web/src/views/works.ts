@@ -10,6 +10,7 @@ import { BEDROOMS_ID, displaySurfaces } from '../household';
 import { html } from '../trusted';
 import { homePerM2, roomPerM2Text } from '../isolation';
 import { stoveRooms, verdictWood } from './wood-state';
+import { woodSpread } from '../wood';
 import { onCard } from '../events';
 import { activeRooms, catColor, esc, firstDay, fmtKwh, lastDay, longDate, nf0, pct, table, referenceColor } from '../ui';
 import {
@@ -221,7 +222,7 @@ function card(): string {
     </details>
     ${persisted ? '' : '<p class="hint muted">Ces saisies dureront jusqu\'au verrouillage : reconnectez-vous avec la phrase de passe pour qu\'elles soient enregistrées (chiffrées) sur cet appareil.</p>'}
     <details class="table-details"><summary>Comment c'est calculé</summary>
-      <p class="hint">Avant : les 365 jours qui précèdent la date des travaux ; après : les 365 jours qui la suivent (date comprise), dans la limite des données. Chaque côté a sa droite de signature (chauffage du jour selon la température extérieure moyenne, jours sous 15 °C). « Par degré-jour » divise le chauffage par les degrés-jours (base 18 °C) des mêmes jours : c'est la comparaison à climat égal.${c?.wood ? ' Avec le poêle, le bois de vos achats (⚙ Mon logement), réparti selon le froid de chaque jour, s’ajoute à l’électricité, avant comme après.' : ''} Les filtres de pièces s'appliquent.</p>
+      <p class="hint">Avant : les 365 jours qui précèdent la date des travaux ; après : les 365 jours qui la suivent (date comprise), dans la limite des données. Chaque côté a sa droite de signature (chauffage du jour selon la température extérieure moyenne, jours sous 15 °C). « Par degré-jour » divise le chauffage par les degrés-jours (base 18 °C) des mêmes jours : c'est la comparaison à climat égal.${c?.wood ? ` Avec le poêle, le bois de vos achats (⚙ Mon logement), ${woodSpread()}, s’ajoute à l’électricité, avant comme après.` : ''} Les filtres de pièces s'appliquent.</p>
       <p class="hint muted">Surfaces et travaux restent sur cet appareil, chiffrés avec votre phrase de passe : ils ne sont ni envoyés à GitHub, ni à l'IA, et un autre appareil ne les voit pas. L'export recherche n'en garde que la nature et la surface, jamais la précision saisie.</p>
     </details>
   </section>`;
