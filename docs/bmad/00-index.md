@@ -23,6 +23,7 @@ Ce dossier ajoute une revue par 72 personas pour mesurer les besoins avant de co
 | 04 | [04-architecture.md](04-architecture.md) | Architect | Architecture actuelle, modèle de données chiffré, couche IA, pont local, ADR |
 | 05 | [05-epics-stories.md](05-epics-stories.md) | PO / SM | Épopées, récits utilisateur, critères d'acceptation, taille, priorité, statut |
 | 06 | [06-qa-strategy.md](06-qa-strategy.md) | QA | Stratégie de test, matrice de risques, définition de « terminé » |
+| — | [feuille-de-route.md](feuille-de-route.md) | PM / PO | Versions v1.8 à v2.1, jalon « Matériel », règle de passage d'une version à la suivante (12/11/2026) |
 
 Documents antérieurs, toujours valables : [README](../../README.md), [notes API](../api-notes.md),
 [étude de marché](../etude-marche.md), [feuille de route et revue à 6 personas](../feuille-de-route.md).
@@ -41,7 +42,8 @@ Documents antérieurs, toujours valables : [README](../../README.md), [notes API
 | v1.4 : fenêtres ouvertes et états des radiateurs, Shelly, Home Assistant, simulateurs, revues par agents | Livré ([cadrage](revues/v1.4-cadrage.md), [revue de fin](revues/v1.4.md)) ; relevé horaire à activer par le propriétaire |
 | v1.5 : revue de code complète par agents, corrections, suites de l'audit des données | Livré ([cadrage](revues/v1.5-cadrage.md), [revue de fin](revues/v1.5.md)) ; anciens journaux de collecte à supprimer et origine (#229) à décider par le propriétaire |
 | v1.6 : revue design et UI/UX, nouveau design system | Reconstruite (tous les écrans sur le nouveau design system), **pas encore close** : [revue de fin](revues/v1.6.md) ; restent #317 (fin de migration, captures, test « hors jetons »), #383, #384 et la revue design par agents (#385) |
-| v1.7 : finitions et données de la maison (lisibilité, incidents, poêle à bois, photovoltaïque, heures creuses) | Livrée, **pas encore close** : [revue de fin](revues/v1.7.md) ; reste #433 (verdict de l'Accueil avec le bois) et les preuves du propriétaire (localisation, bois, heures creuses) |
+| v1.7 : finitions et données de la maison (lisibilité, incidents, poêle à bois, photovoltaïque, heures creuses) | Livré et clos ([revue de fin](revues/v1.7.md), § 11 : décisions du propriétaire, PR #455 et #458) ; restent les preuves du propriétaire (localisation, bois, heures creuses) |
+| v1.8 à v2.1, jalon « Matériel » | [Feuille de route](feuille-de-route.md) |
 
 ## Conventions
 

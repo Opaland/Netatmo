@@ -17,13 +17,13 @@
   « Isolation, à titre indicatif » sous « Chauffage selon le froid » : W/°C et kWh/m² par an, grilles indicatives affichées
   (`web/src/isolation.ts`), jours estimés signalés.
 
-## v1.7 — en cours : finitions et données de la maison
+## v1.7 — novembre 2026 : finitions et données de la maison
 
 Version de finitions de la refonte v1.6 et de données de la maison, sans nouvel onglet (cadrage :
 recommandation de [`docs/bmad/revues/v1.6.md`](docs/bmad/revues/v1.6.md) § 9, validée par le
 propriétaire). Revue de fin de version par les **72 personas** et revue design des écrans nouveaux ou
-changés ; détail dans [`docs/bmad/revues/v1.7.md`](docs/bmad/revues/v1.7.md). **Clôture à valider par
-le propriétaire.**
+changés ; détail dans [`docs/bmad/revues/v1.7.md`](docs/bmad/revues/v1.7.md). Close après les quatre décisions
+du propriétaire qui ont suivi la revue (#438) et les PR de clôture #455 et #458 (revue, § 11).
 
 - **Lisibilité, suite de la v1.6**
   - Historique en deux questions (« Hiver contre hiver », « Consommation en détail ») et six
@@ -33,10 +33,10 @@ le propriétaire.**
     légende, « An » seulement sur des années entières (#299, #300, #301, #306, #420). L'onglet tient
     en 4 écrans à 360 px, mesuré à 360 × 800 en DejaVu Sans ; la ligne « électricité + bois »
     d'« Hiver contre hiver » est repliée sous son écart, écrit en couleur de texte normale
-    (#426, #432 ; décision du propriétaire).
+    (#426, #432, #458 ; décision du propriétaire).
   - Lignes de consigne (« Température demandée ») en `--series-reference`, en tirets, et non plus en
-    iris : l'iris est réservé aux actions, sans exception dans `design-usage.test.ts` (décision du
-    propriétaire ; la rampe d'encre des cartes de chaleur ne change pas).
+    iris : l'iris est réservé aux actions, sans exception dans `design-usage.test.ts` (#458, décision
+    du propriétaire ; la rampe d'encre des cartes de chaleur ne change pas).
   - État des données : une ligne par source en tête (« complet depuis 2022 », « muet depuis
     4 jours »), le détail replié, plus de formulaire dans la page, un seul bilan (13 → 3,3 écrans à
     360 px) (#387, #419).
@@ -80,16 +80,17 @@ le propriétaire.**
   sa pièce (#436) ; « règle ADR-5 » retirée de ⚙ Sources (#437) ; plus de
   bandeau « Nouvelle version disponible » à la première visite quand le premier service worker prend
   la page avant son événement « installé » (vu en WebKit sur la CI).
-- **Verdict de l'Accueil en électricité + bois** (#433, décision du propriétaire, option A) : avec un
+- **Verdict de l'Accueil en électricité + bois** (#433, #455, décision du propriétaire, option A) : avec un
   poêle déclaré et des achats de bois, le verdict, sa jauge, la tuile du mois et la vue Proche comparent le chauffage
   électricité + bois à celui attendu (« 27 € d’électricité + bois (160 kWh) … pour 27 € attendus »
   sur la démo, au lieu de « 5 € de moins » en électricité seule) ; le bois de chaque jour vient de la
   même répartition par degrés-jours qu'« Hiver contre hiver » et « Expliquer un mois », compté
   aussi dans les années de référence. Une pièce aux radiateurs retirés compte comme chauffée par le
-  poêle quand des achats de bois existent (#440, `stoveHeated`).
-- **Reste ouvert** (raison dans chaque issue) : césure à 360 px (#434) et couleurs des heures pleines / creuses (#435),
-  en v1.8 ; volets (#200) en attente du NAS ; plan de la maison (#202) et pince (#281) à sortir du
-  jalon.
+  poêle quand des achats de bois existent (#440, #455, `stoveHeated`).
+- **Reporté** (raison dans chaque issue) : césure à 360 px (#434) et couleurs des heures pleines /
+  creuses (#435), en v1.8 ; issues non commencées, sur décision du propriétaire : volets et pince
+  (#200, #24, #26, #281) au jalon « Matériel (attend le propriétaire) », plan de la maison (#202) en
+  v2.1. Suite : [feuille de route](docs/bmad/feuille-de-route.md).
 
 ## v1.6 — novembre 2026 : refonte UX/UI, nouveau design system, écrans reconstruits
 
