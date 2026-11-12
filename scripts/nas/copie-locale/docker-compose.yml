@@ -1,0 +1,38 @@
+# Container Manager (DSM) → Projet → Créer, avec ce dossier comme chemin : docs/nas-copie-locale.md.
+# Aucun secret ici : le dépôt est public. Aucun port n'est ouvert vers Internet : le seul port
+# publié (8080) l'est sur le NAS, pour le réseau local et le proxy inversé de DSM ; ne le
+# redirigez pas depuis la box.
+name: copie-locale
+
+services:
+  synchro:
+    build: .
+    image: copie-locale:1
+    command: ["/usr/local/bin/copie-locale.sh", "boucle"]
+    environment:
+      TZ: Europe/Paris
+      HEURE: "08:30" # après la collecte de la nuit (vers 5 h-6 h) et son déploiement
+      BRANCHE: main
+      # DEPOT_URL: https://github.com/<vous>/<votre-depot>.git   (votre copie, si ce n'est pas l'original)
+    volumes:
+      - copie:/copie
+    restart: unless-stopped
+
+  web:
+    image: copie-locale:1
+    depends_on: [synchro]
+    command: ["node", "/usr/local/lib/copie-locale/serveur.mjs"]
+    environment:
+      SITE: /copie/site
+      PORT: "8080"
+    volumes:
+      - copie:/copie:ro
+    ports:
+      - "8080:8080"
+    read_only: true
+    restart: unless-stopped
+
+# A named volume, not a folder of the NAS: Docker fills it the first time with /copie as the image
+# makes it (owned by the image's « node » user), so nothing has to be given write rights by hand.
+volumes:
+  copie:

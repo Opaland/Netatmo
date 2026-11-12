@@ -169,6 +169,10 @@ courbe Linky, météo, analyse…), **toujours chiffrés** : rien n'est déchiff
 Le jeton Netatmo (`netatmo-token.enc.json`) n'y est pas : il change à chaque collecte. Gardez ce
 fichier où vous voulez (clé USB, NAS) ; sans la phrase de passe il est illisible.
 
+**Copie locale sur un NAS** (#143, facultatif) : un conteneur reprend le dépôt chaque nuit et sert
+l'application et les données chiffrées sur le réseau de la maison, lisibles même si GitHub ne répond
+plus ; sortant seulement, sans jeton : [docs/nas-copie-locale.md](docs/nas-copie-locale.md).
+
 Pour restaurer (nouveau dépôt, autre machine) :
 
 ```bash
