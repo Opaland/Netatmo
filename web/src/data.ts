@@ -38,6 +38,8 @@ export interface Dataset {
   /** S-3.12 (#221): day -> [mean wind km/h, gust km/h | null] and day -> rain mm (Open-Meteo). */
   wind?: Map<string, [number, number | null]>;
   rain?: Map<string, number>;
+  /** #452: day -> global radiation MJ/m² (Open-Meteo), for the days with little sun. */
+  sun?: Map<string, number>;
   indoor: Map<string, number>;
   linky: Map<string, number>; // day -> kWh, whole home
   insights: Insights | null;
@@ -160,6 +162,7 @@ export async function load(source: Source, key: CryptoKey): Promise<Dataset> {
       indoor?: Record<string, number>;
       wind?: Record<string, [number, number | null]>;
       rain?: Record<string, number>;
+      sun?: Record<string, number>;
     }>(
       source,
       'weather',
@@ -210,6 +213,7 @@ export async function load(source: Source, key: CryptoKey): Promise<Dataset> {
     weather: outdoor && outdoor.size ? outdoor : null,
     wind: new Map(Object.entries(weatherDoc?.wind ?? {})),
     rain: new Map(Object.entries(weatherDoc?.rain ?? {})),
+    sun: new Map(Object.entries(weatherDoc?.sun ?? {})),
     indoor: new Map(Object.entries(weatherDoc?.indoor ?? {})),
     linky: new Map(Object.entries(linkyDoc?.daily ?? {}).map(([d, wh]) => [d, wh / 1000])),
     insights,
