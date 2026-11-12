@@ -23,7 +23,7 @@ export function ghCall(path: string, method = 'GET'): GhCall {
     return write ? { what: 'l’enregistrement d’un secret', permission: '« Secrets » en écriture' } : { what: 'la lecture d’un secret', permission: '« Secrets » en lecture' };
   if (/\/actions\/variables(\/[^/]+)?$/.test(p))
     return write
-      ? { what: m === 'POST' ? 'la création d’une variable' : 'la mise à jour d’une variable', permission: '« Variables » en écriture' }
+      ? { what: m === 'POST' ? 'la création d’une variable' : m === 'DELETE' ? 'la suppression d’une variable' : 'la mise à jour d’une variable', permission: '« Variables » en écriture' }
       : { what: 'la lecture d’une variable', permission: '« Variables » en lecture' };
   if (/\/actions\/workflows\/[^/]+\/dispatches$/.test(p)) return { what: 'le lancement de la collecte', permission: '« Actions » en écriture' };
   return { what: 'un appel à GitHub', permission: ALL };

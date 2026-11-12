@@ -57,5 +57,7 @@ jobs:
         env:
           DATA_PASSPHRASE: ${{ inputs.qualite && secrets.DATA_PASSPHRASE || '' }}
           # #346 / #440: rooms switched off on purpose are « arrêtés », not missing (only their count is printed)
-          STOPPED_ROOMS_JSON: ${{ vars.STOPPED_ROOMS_JSON }}
+          # #459: a secret sealed in the app; the old plaintext variable until it is migrated
+          STOPPED_ROOMS_JSON: ${{ inputs.qualite && secrets.STOPPED_ROOMS_JSON || '' }}
+          STOPPED_ROOMS_JSON_VARIABLE: ${{ vars.STOPPED_ROOMS_JSON }}
         run: python -m collector diagnose --qualite

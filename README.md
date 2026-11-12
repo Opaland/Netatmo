@@ -144,7 +144,7 @@ dépôt (le procédé imposé par GitHub) et les enregistre comme secrets, puis 
 
 Il faut pour cela un [jeton GitHub « fine-grained »](https://github.com/settings/personal-access-tokens/new) :
 accès au seul dépôt, permissions **Secrets : lecture et écriture**, **Variables : lecture et écriture**
-(pour le contrat partagé) et **Actions : lecture et écriture**, rien d'autre, expiration courte. Le jeton reste en mémoire le temps de la visite et
+(pour le contrat partagé, et pour migrer en secret les anciens réglages du foyer) et **Actions : lecture et écriture**, rien d'autre, expiration courte. Le jeton reste en mémoire le temps de la visite et
 l'application ne l'enregistre jamais. Les champs du jeton et des identifiants ne sont pas dans un formulaire
 et sont marqués pour que le navigateur et les gestionnaires de mots de passe courants ne proposent pas de
 les mémoriser ; aucun navigateur ne le garantit : s'il le propose quand même, refusez.
@@ -315,8 +315,8 @@ bois*, notez chaque achat (date, stères, essence, humidité, prix). L'appli le 
 des hypothèses affichées et modifiables (kWh par stère selon l'essence à 20 % d'humidité, correction
 d'humidité, rendement du poêle), le répartit sur la saison de chauffe qui suit l'achat au prorata des
 degrés-jours, et compte électricité **et** bois dans le coût du chauffage (Accueil, hiver contre hiver,
-« Expliquer un mois »). Enregistré pour le foyer dans la variable du dépôt `WOOD_JSON`, recopiée
-chiffrée par la collecte ; le journal public n'en dit rien.
+« Expliquer un mois »). Enregistré pour le foyer dans le **secret** du dépôt `WOOD_JSON`, scellé dans
+le navigateur comme la localisation, recopié chiffré par la collecte ; le journal public n'en dit rien.
 
 **Radiateur arrêté ou retiré.** Une pièce chauffée autrement dont les radiateurs sont coupés ou
 démontés se déclare dans ⚙ Paramètres → Mon logement → *Radiateurs arrêtés volontairement*, avec une
@@ -325,7 +325,13 @@ date, ses modules ne déclenchent plus d'alerte (« ne répond plus », firmware
 de la collecte), la pièce n'est pas « hors ligne », et une comparaison avec l'an dernier qui couvre la
 date parle d'un changement de mode de chauffage, pas d'une économie. Son historique d'avant reste
 visible : si ses modules, ou la pièce, disparaissent de l'application Intuis, la collecte garde la pièce
-et ses jours (variable du dépôt `STOPPED_ROOMS_JSON`).
+et ses jours (**secret** du dépôt `STOPPED_ROOMS_JSON`, scellé dans le navigateur).
+
+Ces deux réglages du foyer étaient avant la v1.8 des variables du dépôt, lisibles en clair par les
+collaborateurs et les workflows (#459). Si l'une existe encore, sa carte propose « Migrer en secret » :
+l'appli écrit le secret avec le même contenu, puis supprime la variable, et le dit. D'ici là, la
+collecte lit le secret d'abord, la variable ensuite, et signale dans son journal, par son nom seul,
+la variable en clair qui reste à migrer.
 
 **Fenêtres ouvertes, boost et état des radiateurs** (relevé horaire, facultatif) : l'API Intuis ne
 donne l'état des pièces qu'en instantané. Pour en garder l'historique :
