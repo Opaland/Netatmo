@@ -144,7 +144,7 @@ dépôt (le procédé imposé par GitHub) et les enregistre comme secrets, puis 
 
 Il faut pour cela un [jeton GitHub « fine-grained »](https://github.com/settings/personal-access-tokens/new) :
 accès au seul dépôt, permissions **Secrets : lecture et écriture**, **Variables : lecture et écriture**
-(pour le contrat partagé, et pour migrer en secret les anciens réglages du foyer) et **Actions : lecture et écriture**, rien d'autre, expiration courte. Le jeton reste en mémoire le temps de la visite et
+(pour lire puis supprimer les anciennes variables en clair en les migrant en secret : réglages du foyer, contrat partagé, alerte froid) et **Actions : lecture et écriture**, rien d'autre, expiration courte. Le jeton reste en mémoire le temps de la visite et
 l'application ne l'enregistre jamais. Les champs du jeton et des identifiants ne sont pas dans un formulaire
 et sont marqués pour que le navigateur et les gestionnaires de mots de passe courants ne proposent pas de
 les mémoriser ; aucun navigateur ne le garantit : s'il le propose quand même, refusez.
@@ -294,7 +294,7 @@ par le code, sans IA ni réseau.
 **Prix et contrat.** Dans ⚙ Paramètres → Contrat et prix, décrivez votre contrat période par période (date de début, offre,
 puissance souscrite, par exemple 9 kVA puis 12 kVA). Pour que **tous les appareils du foyer**
 utilisent le même contrat, ouvrez Paramètres → **Contrat partagé** → *Partager ce contrat* : il est
-écrit dans la **variable** du dépôt `CONTRACT_JSON` (ce n'est pas un secret : dates, offre et
+scellé dans le navigateur et enregistré dans le **secret** du dépôt `CONTRACT_JSON` (#497 : dates, offre et
 puissance, par exemple `[{"from":"2022-01-01","offer":"edf-trv-hphc","kva":12},{"from":"2025-10-14","offer":"edf-trv-hphc","kva":9}]`),
 que la collecte vérifie puis recopie dans les données chiffrées ; le journal public n'indique que
 « Contrat partagé : oui (N périodes) ». Le contrat partagé s'applique alors partout (badge
@@ -425,8 +425,8 @@ seuil sur une journée entière** (moyenne journalière de la sonde du radiateur
 de la station), la collecte de la nuit ouvre une *issue* « 🥶 Alerte froid prolongé » (GitHub vous
 prévient par e-mail) ; elle se ferme seule au retour au-dessus du seuil.
 
-Réglage : Paramètres → **Alerte froid prolongé** (pièces, seuil, durée de 1 à 3 jours), qui écrit la
-**variable** du dépôt `COLD_ALERT_JSON`, par exemple `{"threshold": 14, "days": 1, "rooms": ["1234567890"]}`
+Réglage : Paramètres → **Alerte froid prolongé** (pièces, seuil, durée de 1 à 3 jours), scellé dans le
+navigateur et enregistré dans le **secret** du dépôt `COLD_ALERT_JSON` (#497), par exemple `{"threshold": 14, "days": 1, "rooms": ["1234567890"]}`
 (identifiants Intuis ou de modules de la station, dans l'ordre des pseudonymes). L'issue étant
 publique, elle ne donne **ni température ni nom de pièce** : seulement « Pièce A », « Pièce B »… dans
 l'ordre de la liste ; la correspondance n'est affichée que dans l'application. Le journal public

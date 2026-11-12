@@ -13,7 +13,6 @@ import {
   noSaveAttrs,
   listSecrets,
   putSecret,
-  putVariable,
   repoFromLocation,
   runCollect,
   setToken,
@@ -30,6 +29,10 @@ import { loadVotes, usefulRate } from '../insight';
 import { tenant, tenantNote } from '../tenant';
 import { intuisContractLine } from './devices-quality';
 import { alertHtml, formMsg, switchField } from '../components';
+import { checkPlain, migrateText, plainOffer, saveSecretText } from './household-secret';
+
+/** #497: the shared contract is a household secret, sealed in this browser. */
+const CONTRACT_SECRET = 'CONTRACT_JSON';
 
 let settingsRepo = repoFromLocation() ?? 'Opaland/Netatmo';
 /** The repository the settings write to (#346: radiators switched off, ⚙ Mon logement). */
@@ -149,10 +152,10 @@ export function renderSettings(view: HTMLElement, section: SettingsSection) {
         ['Code de l\'application', 'Dépôt public', 'Tout le monde (aucune donnée personnelle)'],
         ['Journaux de collecte', 'GitHub Actions (public)', 'Tout le monde : uniquement des comptes et des codes, jamais de valeur'],
         ['Prix saisis ici, contrat non partagé', 'Votre appareil (stockage du navigateur)', 'Vous seul'],
-        ['Contrat partagé (dates, offre, puissance)', 'Variable GitHub CONTRACT_JSON, puis données chiffrées', 'Les administrateurs du dépôt ; chiffré dans data/'],
+        ['Contrat partagé (dates, offre, puissance)', 'Secret GitHub CONTRACT_JSON, scellé dans ce navigateur, puis données chiffrées', 'Uniquement la collecte automatique ; chiffré dans data/'],
         ['Achats de bois du poêle (dates, stères, prix)', 'Secret GitHub WOOD_JSON, scellé dans ce navigateur, puis données chiffrées ; brouillon chiffré sur cet appareil', 'Uniquement la collecte automatique ; chiffré dans data/'],
         ['Radiateurs arrêtés volontairement (pièces, dates, motif)', 'Secret GitHub STOPPED_ROOMS_JSON, scellé dans ce navigateur, puis données chiffrées', 'Uniquement la collecte automatique ; chiffré dans data/'],
-        ['Alerte froid prolongé (pièces suivies, seuil)', 'Variable GitHub COLD_ALERT_JSON ; issue publique', 'Variable : les administrateurs du dépôt ; issue : tout le monde, avec des pseudonymes seulement (ni nom ni température)'],
+        ['Alerte froid prolongé (pièces suivies, seuil)', 'Secret GitHub COLD_ALERT_JSON, scellé dans ce navigateur, puis données chiffrées ; issue publique', 'Secret : uniquement la collecte automatique ; issue : tout le monde, avec des pseudonymes seulement (ni nom ni température)'],
         [
           'Clé « Rester connecté », notes chiffrées, réglages, cache hors ligne',
           'Ce navigateur, sur l\'origine de l\'appli',
@@ -210,6 +213,8 @@ export function renderSettings(view: HTMLElement, section: SettingsSection) {
   view.innerHTML = html(body[section]);
   const has = (id: string) => !!document.getElementById(id);
   // the card fills from build.json: the view is not ready before (the sweep saw it empty under load)
+  // #497: an old plaintext CONTRACT_JSON variable left: offer to migrate it
+  if (has('contract-share') && ds!.source !== 'demo' && hasToken()) checkPlain(settingsRepo, CONTRACT_SECRET, rerender);
   if (has('build-info')) void track(showBuild(document.getElementById('build-info')));
   if (has('app-card')) void mountAppCard(document.getElementById('app-card')); // #357
   // S-12.6 tenant mode, S-12.5 prolonged cold alert: lazy modules
@@ -241,13 +246,14 @@ function contractSection() {
   return `<section class="card" id="contract-share">
     <div class="card-head"><h2>Contrat partagé</h2>${scopeTag('foyer')}</div>
     <p class="hint muted">Le contrat (dates de changement, offre, puissance souscrite) sert au calcul des coûts. Partagé, il est enregistré
-      dans la <strong>variable</strong> GitHub <code>CONTRACT_JSON</code> (ce n'est pas un secret), puis recopié chiffré par la collecte :
+      dans le <strong>secret</strong> GitHub <code>CONTRACT_JSON</code>, scellé dans ce navigateur (personne ne peut le relire, pas même cette appli), puis recopié chiffré par la collecte :
       tous les appareils affichent alors le même coût. Il n'apparaît jamais dans les journaux publics.</p>
     ${state}
     ${table(['À partir du', 'Offre', 'Puissance'], rows, 99)}
     ${intuisContractLine()}
     <button type="button" class="primary small" id="contract-share-btn" ${hasToken() && info.source !== 'shared' ? '' : 'disabled'}>Partager ce contrat</button>
     <p class="hint muted">Modifiable ci-dessus (« Mon contrat »). Le partage s'applique sur les autres appareils après la prochaine collecte. Bouton actif une fois connecté à GitHub (Sources de données).</p>
+    ${plainOffer(settingsRepo, CONTRACT_SECRET, ds!.source !== 'demo' && hasToken())}
   </section>`;
 }
 
@@ -396,11 +402,20 @@ export function handleClick(btn: HTMLElement): boolean {
   if (btn.id === 'contract-share-btn' || btn.dataset.shareContract !== undefined) {
     const periods = contractInfo().periods;
     void settingsAction(async () => {
-      await putVariable(settingsRepo, 'CONTRACT_JSON', contractJson(periods));
+      const text = await saveSecretText(
+        settingsRepo,
+        CONTRACT_SECRET,
+        contractJson(periods),
+        `contrat de ${periods.length} période${periods.length > 1 ? 's' : ''}, lancez la collecte pour l'appliquer sur tous les appareils`,
+      );
       // Keep using this device's contract until the collection copies the shared one.
       if (contractInfo().source === 'default') setState({ contracts: periods.map((c) => ({ ...c })) });
-      return `Contrat partagé (${periods.length} période${periods.length > 1 ? 's' : ''}). Lancez la collecte pour l'appliquer sur tous les appareils.`;
+      return text;
     });
+    return true;
+  }
+  if (btn.dataset.migratePlain === CONTRACT_SECRET) {
+    void settingsAction(() => migrateText(settingsRepo, CONTRACT_SECRET));
     return true;
   }
   if (btn.id === 'legal-open') {

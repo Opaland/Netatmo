@@ -6,9 +6,9 @@
 // - Secret values are encrypted IN THE BROWSER with the repository public key
 //   (libsodium sealed box, the scheme GitHub requires): only GitHub can decrypt them.
 // - Values are never read back (GitHub doesn't allow it) nor displayed.
-// - S-12.1: the shared contract is not a secret: it goes into the repository VARIABLE
-//   CONTRACT_JSON (token permission « Variables : lecture et écriture »), the only variable
-//   the app may write.
+// - #497: the app writes no repository variable any more. The shared contract and the cold alert
+//   are household settings sealed into secrets like the others (HOUSEHOLD_SECRETS); the token
+//   still needs « Variables » to read and delete the plaintext variables left from before.
 import { ghCall, ghErrorText } from './gh-call';
 
 export interface SecretField {
@@ -145,14 +145,15 @@ export const FORBIDDEN = new Set(['DATA_PASSPHRASE']);
  * #204: secrets the app writes from a card of its own (not from « Sources de données »): the
  * home's location and roofs, sealed like the others, never readable back.
  */
-export const APP_SECRETS = new Set(['HOME_LOCATION_JSON', 'STOPPED_ROOMS_JSON', 'WOOD_JSON']);
+export const APP_SECRETS = new Set(['HOME_LOCATION_JSON', 'STOPPED_ROOMS_JSON', 'WOOD_JSON', 'CONTRACT_JSON', 'COLD_ALERT_JSON']);
 
 /**
- * #459: the household settings of ⚙ Mon logement, sealed like HOME_LOCATION_JSON and never
- * written in clear (they used to be repository variables). Same list as the collector
- * (collector/__main__.py HOUSEHOLD_SETTINGS, held in agreement by tests/test_reglages_foyer.py).
+ * #459: the household settings of ⚙ Mon logement (#497: and the shared contract, the cold alert),
+ * sealed like HOME_LOCATION_JSON and never written in clear (they used to be repository
+ * variables). Same list as the collector (collector/__main__.py HOUSEHOLD_SETTINGS, held in
+ * agreement by tests/test_reglages_foyer.py).
  */
-export const HOUSEHOLD_SECRETS = new Set(['STOPPED_ROOMS_JSON', 'WOOD_JSON']);
+export const HOUSEHOLD_SECRETS = new Set(['STOPPED_ROOMS_JSON', 'WOOD_JSON', 'CONTRACT_JSON', 'COLD_ALERT_JSON']);
 
 export async function putSecret(repo: string, name: string, value: string): Promise<void> {
   if (FORBIDDEN.has(name) || !(APP_SECRETS.has(name) || GROUPS.some((g) => g.fields.some((f) => f.name === name)))) {
@@ -170,20 +171,6 @@ export async function putSecret(repo: string, name: string, value: string): Prom
       key_id: publicKey!.key_id,
     }),
   });
-}
-
-/** Repository variables the app may write (S-12.1). Never a household setting (#459). */
-export const VARIABLES = new Set(['CONTRACT_JSON', 'COLD_ALERT_JSON']);
-
-/** Create or update a repository variable (not secret, so not sealed). */
-export async function putVariable(repo: string, name: string, value: string): Promise<void> {
-  if (!VARIABLES.has(name)) throw new GitHubError(`${name} ne peut pas être modifié depuis l'application`, 400);
-  try {
-    await gh(`/repos/${repo}/actions/variables/${encodeURIComponent(name)}`, { method: 'PATCH', body: JSON.stringify({ name, value }) });
-  } catch (err) {
-    if (!(err instanceof GitHubError) || err.status !== 404) throw err;
-    await gh(`/repos/${repo}/actions/variables`, { method: 'POST', body: JSON.stringify({ name, value }) });
-  }
 }
 
 const householdOnly = (name: string) => {
