@@ -31,6 +31,8 @@ import '../simulators.css';
 
 export const WOOD_VARIABLE = 'WOOD_JSON';
 let message: { ok: boolean; text: string } | null = null;
+/** #462: the folds the reader opened or closed stay so after an action (the card is redrawn). */
+const folds = new Map<string, boolean>();
 
 const n1 = (v: number) => v.toLocaleString('fr-FR', { maximumFractionDigits: 1 });
 const cents = (eurPerKwh: number) => `${(eurPerKwh * 100).toFixed(1).replace('.', ',')} c€`;
@@ -108,6 +110,15 @@ export function mountWood(card: HTMLElement | null, repo: () => string) {
   const remount = () => (card.isConnected ? mountWood(card, repo) : rerender());
   if (canWrite) checkPlain(repo(), WOOD_VARIABLE, remount);
   bindMigrate(card, repo(), WOOD_VARIABLE, (m) => (message = m), remount);
+  // #462: « Noter un achat de bois » and « Hypothèses » keep their state across the redraws: a
+  // fold closed again under the finger made the next tap land on its title instead of the button
+  card.querySelector('#wood-eff')?.closest('details')?.setAttribute('id', 'wood-assumptions');
+  for (const id of ['wood-new', 'wood-assumptions']) {
+    const fold = card.querySelector<HTMLDetailsElement>(`#${id}`);
+    if (!fold) continue;
+    if (folds.has(id)) fold.open = folds.get(id)!;
+    fold.addEventListener('toggle', () => folds.set(id, fold.open));
+  }
   const apply = (next: WoodSettings) => {
     message = null;
     void setWoodDraft(parseWood(next)).then(() => rerender());
@@ -130,12 +141,16 @@ export function mountWood(card: HTMLElement | null, repo: () => string) {
   });
   for (const b of card.querySelectorAll<HTMLButtonElement>('[data-wood-remove]'))
     b.addEventListener('click', () => apply({ ...w, purchases: w.purchases.filter((_, i) => String(i) !== b.dataset.woodRemove) }));
-  card.querySelector('#wood-assume')?.addEventListener('click', () => {
+  const assume = (always: boolean) => {
     const kwh = { ...w.kwhPerStere };
     for (const i of card.querySelectorAll<HTMLInputElement>('[data-wood-kwh]')) kwh[i.dataset.woodKwh as Species] = Number(i.value);
     const next = parseWood({ ...w, efficiency: val('wood-eff'), kwhPerStere: kwh });
-    apply(next);
-  });
+    if (always || woodJson(next) !== woodJson(w)) apply(next);
+  };
+  card.querySelector('#wood-assume')?.addEventListener('click', () => assume(true));
+  // #462: an assumption applies when its field is left, purchases or not (the button stays, for
+  // those who look for it): typed then « Noter l'achat », it used to be lost (70 % kept)
+  for (const i of card.querySelectorAll<HTMLInputElement>('#wood-eff, [data-wood-kwh]')) i.addEventListener('change', () => assume(false));
   card.querySelector('#wood-reset')?.addEventListener('click', () => apply(shared));
   card.querySelector('#wood-save')?.addEventListener('click', () => {
     message = { ok: true, text: 'En cours…' };
