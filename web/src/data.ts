@@ -143,13 +143,19 @@ export async function unlock(source: Source, passphrase: string): Promise<Crypto
   return key;
 }
 
-/** #139: a remembered key opened the data: the device's notes are sealed with today's keyinfo.json. */
-export async function noteSealParams(source: Source): Promise<void> {
-  try {
-    recordSealParams(source, await keyInfo(source));
-  } catch {
-    /* offline: recorded at the next unlock */
-  }
+/**
+ * #139: open the data with a remembered key, and record the derivation the device's notes are
+ * sealed with. #517: the parameters recorded are those read BEFORE the data opened: a rekey
+ * published meanwhile would change keyinfo.json, and a second read after the load would record
+ * the new parameters for notes still sealed with the old key. Read (fully) first, the parameters
+ * can only be older than the data: when they are the new ones, the old key does not open the
+ * data and nothing is recorded. `open` and `info` are injected by the tests.
+ */
+export async function openRemembered(source: Source, key: CryptoKey, open = load, info = keyInfo): Promise<Dataset> {
+  const params = await info(source).catch(() => null); // offline: recorded at the next unlock
+  const ds = await open(source, key);
+  if (params) recordSealParams(source, params);
+  return ds;
 }
 
 const toMap2 = <V>(o: Record<string, Record<string, V>> | undefined, into: Map<string, Map<string, V>>) => {
