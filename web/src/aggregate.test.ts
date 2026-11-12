@@ -13,6 +13,7 @@ import {
 } from './aggregate';
 import { BadEnvelope, checkEnvelope, decryptEnvelope, deriveKey } from './crypto';
 import vector from './__fixtures__/python-vector.json';
+import padded from './__fixtures__/python-vector-padded.json';
 
 const rec = (day: string, kwh: number, room = 'a', cat: DayRecord['cat'] = 'heating'): DayRecord => ({ day, room, cat, kwh });
 
@@ -69,6 +70,18 @@ describe('crypto', () => {
     const out = await decryptEnvelope<{ txt: string; daily: Record<string, Record<string, number>> }>(vector, key);
     expect(out.txt).toBe('Salle de bain é');
     expect(out.daily['100']['2024-01-01']).toBe(1200.5);
+  });
+  it('#138 : lit un fichier rempli par paliers comme un fichier sans remplissage (mêmes totaux)', async () => {
+    // Same vectors as tests/test_remplissage.py: written by Python before and after #138.
+    const key = await deriveKey('test', { salt: padded.salt, iter: padded.iter });
+    type Doc = { txt: string; daily: Record<string, Record<string, number>> };
+    const before = await decryptEnvelope<Doc>(vector, key);
+    const after = await decryptEnvelope<Doc>(padded, key);
+    expect(atob(padded.ct).length).toBe(4096 + 16); // padded inside the ciphertext, GCM tag after
+    expect(atob(vector.ct).length).toBeLessThan(4096);
+    expect(after).toEqual(before);
+    const total = (d: Doc) => Object.values(d.daily).flatMap((days) => Object.values(days)).reduce((a, b) => a + b, 0);
+    expect(total(after)).toBe(1200.5);
   });
   it('rejects a wrong passphrase', async () => {
     const key = await deriveKey('nope', { salt: vector.salt, iter: vector.iter });
