@@ -52,7 +52,7 @@ export function mountWood(card: HTMLElement | null, repo: () => string) {
   const stove = stoveName() !== 'Poêle à bois'; // a room declared heated by a stove (#346)
   card.innerHTML = html(`<section class="card" id="wood-card" aria-labelledby="wood-title">
     <div class="card-head"><h2 id="wood-title">${esc(stoveName())}</h2><span class="tag scope">foyer</span></div>
-    <p class="hint muted">Le bois ne passe pas par le compteur : notez vos achats pour que le coût du chauffage (Accueil, hiver contre hiver, « Expliquer un mois ») compte l’électricité <strong>et</strong> le bois. Chaque achat est brûlé pendant la saison de chauffe qui suit (acheté de janvier à mars : la saison en cours), réparti selon le froid de chaque jour (degrés-jours) ; ce qu’une saison ne brûle pas passe à la suivante.</p>
+    <p class="hint muted">Le bois ne passe pas par le compteur : notez vos achats pour que le coût du chauffage (Accueil, hiver contre hiver, « Expliquer un mois ») compte l’électricité <strong>et</strong> le bois. Chaque achat est brûlé pendant la saison de chauffe qui suit (acheté de janvier à mars : la saison en cours), réparti selon le froid de chaque jour (degrés-jours), ou sur les soirs de flambée que la collecte a trouvés (Historique › Flambées du poêle) ; ce qu’une saison ne brûle pas passe à la suivante.</p>
     ${
       seasons.length
         ? `<ul class="list" aria-label="Bois par saison">${seasons
