@@ -611,6 +611,12 @@ est déjà vérifié).
   dans le dépôt pourrait intervertir deux fichiers chiffrés. Le lier demande un format v2 et un rekey
   complet (tant que les fichiers v1 restent lisibles, un ancien fichier pourrait remplacer un nouveau) :
   reporté à la prochaine évolution du format.
+- Taille des fichiers chiffrés (#138) : avant chiffrement, chaque document est complété par des espaces
+  jusqu'à un palier (4 Ko jusqu'à 32 Ko, puis un huitième de la puissance de deux inférieure : 16 Ko
+  vers 150 Ko, 128 Ko vers 1 Mo ; `padded_length` dans `collector/crypto.py`). La taille publiée ne
+  suit donc plus l'activité du foyer jour après jour : un jour d'absence n'écrit pas un fichier plus
+  petit. Le remplissage est dans le chiffré (invisible en clair) ; les fichiers d'avant se lisent
+  comme avant. Coût : environ 5 % de plus par collecte commitée.
 - Exports CSV (application et `export-csv`) : une cellule texte (nom de pièce, de module) qui commence
   par `=`, `+`, `-`, `@`, une tabulation ou un retour chariot est préfixée d'une apostrophe, pour qu'un
   tableur ne l'exécute pas comme une formule. Les colonnes numériques (températures négatives) sont
