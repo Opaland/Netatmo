@@ -68,52 +68,14 @@ creuses), comparateur Tempo, et des trous de données comme sur un vrai compte (
 Intuis en février-mars et novembre 2024, jours estimés en décembre 2023, deux jours « suspects » en
 janvier 2025).
 
-## Installation (une seule fois, environ 15 minutes)
+## Installation
 
-### 1. Choisir une phrase de passe
+Le guide pas à pas pour un nouveau foyer est **[docs/INSTALLER.md](docs/INSTALLER.md)** : créer sa
+copie du dépôt, vider ce qui appartient au foyer d'origine, la phrase de passe, les secrets, Pages,
+la première collecte et l'installation sur le téléphone, puis un script facultatif qui vérifie que
+le dépôt est prêt (`scripts/depot_pret.py`). Les options ci-dessous s'ajoutent après coup.
 
-Elle chiffre vos données. Prenez **au moins 5 mots** au hasard (ex. `pivoine tracteur lagune
-moustache onze`) : le dépôt étant public, une phrase courte pourrait être devinée. Notez-la : sans
-elle, les données sont perdues.
-
-### 2. Identifiants d'application
-
-Le serveur Intuis demande, en plus de votre e-mail et de votre mot de passe, les identifiants OAuth
-(`client_id` et `client_secret`) **de l'application mobile**. Ils ne sont délivrés à personne
-officiellement. Les intégrations open source les incluent dans leur code, par exemple
-[intuis-connect](https://github.com/antoine-pyre/intuis-connect) (fichier `const.py`). Ce dépôt ne les
-contient pas : vous les ajoutez en secret.
-
-### 3. Ajouter les secrets dans GitHub
-
-Dans le dépôt : **Settings → Secrets and variables → Actions → New repository secret**.
-
-| Secret | Valeur |
-|---|---|
-| `INTUIS_USERNAME` | e-mail du compte Intuis / Intuitiv |
-| `INTUIS_PASSWORD` | mot de passe du compte |
-| `INTUIS_CLIENT_ID` | voir étape 2 |
-| `INTUIS_CLIENT_SECRET` | voir étape 2 |
-| `DATA_PASSPHRASE` | votre phrase de passe (étape 1) |
-
-### 4. Activer GitHub Pages
-
-**Settings → Pages → Build and deployment → Source : GitHub Actions**.
-
-### 5. Première collecte
-
-**Actions → Collecte quotidienne → Run workflow**, en cochant **« Récupérer tout l'historique
-disponible »**. La collecte remonte année par année tant que le serveur renvoie des données, puis
-publie le site. Ensuite, elle tourne seule chaque nuit (vers 5 h-6 h, heure de Paris).
-
-L'adresse du site s'affiche dans **Settings → Pages** (de la forme
-`https://<utilisateur>.github.io/<dépôt>/`).
-
-### 6. Installer sur le téléphone
-
-- **iPhone** : ouvrir l'adresse dans Safari → bouton Partager → **Sur l'écran d'accueil**.
-- **Android** : ouvrir l'adresse dans Chrome → menu ⋮ → **Installer l'application**, ou le bouton
-  **Installer l'application** de ⚙ Paramètres → À propos quand Chrome le propose.
+### Sur le téléphone
 
 **Mises à jour** (#357) : une nouvelle version attend qu'on la demande ; un bandeau « Nouvelle version
 disponible » propose **Recharger** (rien ne se recharge tout seul). Une appli qui semble bloquée sur une
@@ -138,20 +100,6 @@ puis redemande la phrase. Les données ne sont pas touchées : elles restent chi
 L'appli demande au navigateur de conserver son stockage (`navigator.storage.persist()`) ; l'installer
 sur l'écran d'accueil le protège mieux. Les notes privées de l'appareil (absences, factures, travaux)
 sont, elles, perdues avec le stockage. Chaque version est testée sur WebKit (moteur de Safari) en CI.
-
-### Le plus simple : l'écran Paramètres
-
-Une fois l'application ouverte (⚙ Paramètres → **Sources de données**), vous pouvez saisir vos
-identifiants directement : l'application les **chiffre dans votre navigateur** avec la clé publique du
-dépôt (le procédé imposé par GitHub) et les enregistre comme secrets, puis peut lancer la collecte.
-
-Il faut pour cela un [jeton GitHub « fine-grained »](https://github.com/settings/personal-access-tokens/new) :
-accès au seul dépôt, permissions **Secrets : lecture et écriture**, **Variables : lecture et écriture**
-(pour lire puis supprimer les anciennes variables en clair en les migrant en secret : réglages du foyer, contrat partagé, alerte froid) et **Actions : lecture et écriture**, rien d'autre, expiration courte. Le jeton reste en mémoire le temps de la visite et
-l'application ne l'enregistre jamais. Les champs du jeton et des identifiants ne sont pas dans un formulaire
-et sont marqués pour que le navigateur et les gestionnaires de mots de passe courants ne proposent pas de
-les mémoriser ; aucun navigateur ne le garantit : s'il le propose quand même, refusez.
-La phrase de passe des données ne se change pas ici (voir plus bas).
 
 ### Changer de phrase de passe
 
