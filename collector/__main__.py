@@ -211,10 +211,11 @@ def _silent_rooms(store: Store, syncer: Syncer) -> list[str]:
     return lines
 
 
-# #459: the household settings written by ⚙ Mon logement, sealed in the browser and stored as
-# repository secrets (env NAME). Until migrated, an older plaintext repository variable of the
-# same name is still read (env NAME_VARIABLE, see collect.yml), after the secret.
-HOUSEHOLD_SETTINGS = ("STOPPED_ROOMS_JSON", "WOOD_JSON")
+# #459: the household settings written by the app (⚙ Mon logement; #497: the shared contract and
+# the cold alert too), sealed in the browser and stored as repository secrets (env NAME). Until
+# migrated, an older plaintext repository variable of the same name is still read (env
+# NAME_VARIABLE, see collect.yml), after the secret.
+HOUSEHOLD_SETTINGS = ("STOPPED_ROOMS_JSON", "WOOD_JSON", "CONTRACT_JSON", "COLD_ALERT_JSON")
 PLAIN_SUFFIX = "_VARIABLE"
 
 
@@ -224,7 +225,7 @@ def household_setting(name: str, warn: bool = True) -> str:
     secret = os.environ.get(name, "").strip()
     plain = os.environ.get(name + PLAIN_SUFFIX, "").strip()
     if plain and warn:
-        _warn(f"Variable en clair {name} encore présente : à migrer en secret depuis ⚙ Mon logement")
+        _warn(f"Variable en clair {name} encore présente : à migrer en secret depuis ⚙ Paramètres")
     return secret or plain
 
 
@@ -360,7 +361,7 @@ def expiry_alerts(state: dict[str, dict], today: date) -> list[str]:
     return out
 
 
-# S-12.1: contract shared between devices, from the repository variable CONTRACT_JSON.
+# S-12.1: contract shared between devices, from the repository secret CONTRACT_JSON (#497).
 # Same lists as the web app (web/src/offers.ts and the CRE tariff files).
 CONTRACT_OFFERS = ("edf-trv-hphc", "edf-trv-base")
 CONTRACT_KVAS = (3, 6, 9, 12, 15, 18, 24, 30, 36)
@@ -403,14 +404,14 @@ def parse_contract(raw: str) -> list[dict]:
 
 
 def shared_contract(previous: list[dict] | None) -> list[dict] | None:
-    """CONTRACT_JSON if valid; the previous contract if invalid; None when the variable is unset."""
-    raw = os.environ.get("CONTRACT_JSON", "").strip()
+    """CONTRACT_JSON if valid; the previous contract if invalid; None when the setting is unset."""
+    raw = household_setting("CONTRACT_JSON")
     if not raw:
         return None
     try:
         return parse_contract(raw)
     except ContractError as err:
-        _warn(f"Variable CONTRACT_JSON ignorée ({err}) : le contrat partagé précédent est conservé")
+        _warn(f"Réglage CONTRACT_JSON ignoré ({err}) : le contrat partagé précédent est conservé")
         return previous
 
 
@@ -632,7 +633,7 @@ def cmd_sync(s: Settings, args: argparse.Namespace, backfill: bool = False) -> N
     for alert in alerts:
         _warn(alert)
     write_renew_file(alerts)
-    # S-12.5: prolonged cold in the rooms chosen (repository variable), pseudonyms only.
+    # S-12.5: prolonged cold in the rooms chosen (repository secret, #497), pseudonyms only.
     stopped = stopped_config()
     if stopped or household_setting_set("STOPPED_ROOMS_JSON"):
         extra["stopped_rooms"] = stopped  # #346: shown by the app, set from ⚙ Mon logement
@@ -642,7 +643,7 @@ def cmd_sync(s: Settings, args: argparse.Namespace, backfill: bool = False) -> N
     fires = _stove_fires(store, home, stopped)
     if fires:
         extra["stove_fires"] = fires  # #469: encrypted meta only, never a line of the log
-    cold = cold_config(_warn)
+    cold = cold_config(household_setting("COLD_ALERT_JSON"), _warn)
     if cold:
         extra["cold_alert"] = cold
     cold_lines, cold_counts = cold_alerts(store, cold)

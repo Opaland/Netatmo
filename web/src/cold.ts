@@ -74,7 +74,7 @@ export function parseColdDraft(raw: unknown): ColdConfig | null {
   return { threshold: o.threshold, days, rooms };
 }
 
-/** The repository variable COLD_ALERT_JSON for this configuration. */
+/** The repository secret COLD_ALERT_JSON for this configuration (#497). */
 export function coldJson(c: ColdConfig): string {
   return JSON.stringify({ threshold: c.threshold, days: c.days, rooms: c.rooms });
 }

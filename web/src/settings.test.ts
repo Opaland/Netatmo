@@ -3,14 +3,12 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   APP_SECRETS,
   HOUSEHOLD_SECRETS,
-  VARIABLES,
   expiryInfo,
   listSecrets,
   migratePlainVariable,
   noSaveAttrs,
   plainVariable,
   putSecret,
-  putVariable,
   repoFromLocation,
   runCollect,
   saveHouseholdSecret,
@@ -100,36 +98,6 @@ describe('settings', () => {
     expect(JSON.parse(calls[1].body!)).toEqual({ ref: 'main', inputs: { backfill: true } });
   });
 
-  it('shares the contract as a repository variable: update, else create (S-12.1)', async () => {
-    const calls: { url: string; method?: string; body?: string }[] = [];
-    let exists = false;
-    vi.stubGlobal('fetch', async (url: string, init?: RequestInit) => {
-      calls.push({ url, method: init?.method, body: init?.body as string });
-      if (init?.method === 'PATCH') return new Response(null, { status: exists ? 204 : 404 });
-      exists = true;
-      return new Response(null, { status: 201 });
-    });
-    setToken('github_pat_test');
-    const value = '[{"from":"2022-01-01","offer":"edf-trv-hphc","kva":12}]';
-    await putVariable('o/r', 'CONTRACT_JSON', value);
-    expect(calls.map((c) => `${c.method} ${c.url}`)).toEqual([
-      'PATCH https://api.github.com/repos/o/r/actions/variables/CONTRACT_JSON',
-      'POST https://api.github.com/repos/o/r/actions/variables',
-    ]);
-    expect(JSON.parse(calls[1].body!)).toEqual({ name: 'CONTRACT_JSON', value });
-    await putVariable('o/r', 'CONTRACT_JSON', value);
-    expect(calls).toHaveLength(3);
-    expect(calls[2].method).toBe('PATCH');
-    await expect(putVariable('o/r', 'INTUIS_ROOM_CATEGORIES', '{}')).rejects.toThrow(/ne peut pas/);
-    expect(calls).toHaveLength(3);
-  });
-
-  it('reports a missing variables permission instead of creating blindly', async () => {
-    vi.stubGlobal('fetch', async () => new Response('', { status: 403 }));
-    setToken('t');
-    await expect(putVariable('o/r', 'CONTRACT_JSON', '[]')).rejects.toThrow(/Variables/);
-  });
-
   describe('#459: no household setting is ever written in clear', () => {
     const household = [...HOUSEHOLD_SECRETS, 'HOME_LOCATION_JSON'];
     const fakeGitHub = async (plain: Record<string, string>) => {
@@ -157,16 +125,12 @@ describe('settings', () => {
       return { calls, open };
     };
 
-    it('is never a repository variable the app may write', async () => {
-      const calls: string[] = [];
-      vi.stubGlobal('fetch', async (url: string) => (calls.push(url), new Response(null, { status: 204 })));
-      setToken('t');
-      for (const name of household) {
-        expect(VARIABLES.has(name), name).toBe(false);
-        expect(APP_SECRETS.has(name), name).toBe(true);
-        await expect(putVariable('o/r', name, '[]')).rejects.toThrow(/ne peut pas/);
-      }
-      expect(calls).toEqual([]);
+    it('is a secret the app may write; the app writes no variable at all (#497)', async () => {
+      for (const name of household) expect(APP_SECRETS.has(name), name).toBe(true);
+      // #497: the shared contract and the cold alert joined the household settings
+      expect([...HOUSEHOLD_SECRETS].sort()).toEqual(['COLD_ALERT_JSON', 'CONTRACT_JSON', 'STOPPED_ROOMS_JSON', 'WOOD_JSON']);
+      const settings = await import('./settings');
+      expect(Object.keys(settings).filter((k) => /variable/i.test(k) && !/plain/i.test(k))).toEqual([]);
     });
 
     it('is sealed into a secret, then the plaintext variable left is deleted', async () => {
@@ -180,7 +144,7 @@ describe('settings', () => {
       expect(calls.some((c) => c.body.includes('Valeur-Secrete'))).toBe(false);
       expect(open(calls.find((c) => c.method === 'PUT')!)).toBe(value);
       expect(await saveHouseholdSecret('o/r', 'STOPPED_ROOMS_JSON', value)).toEqual({ removedPlain: false });
-      await expect(saveHouseholdSecret('o/r', 'CONTRACT_JSON', value)).rejects.toThrow(/ne peut pas/);
+      await expect(saveHouseholdSecret('o/r', 'INTUIS_ROOM_CATEGORIES', value)).rejects.toThrow(/ne peut pas/);
     });
 
     it('migrates a plaintext variable as it is, then deletes it; nothing to do without one', async () => {
@@ -193,7 +157,7 @@ describe('settings', () => {
       expect(writes.map((c) => `${c.method} ${c.url.replace('https://api.github.com/repos/o/r/actions/', '')}`)).toEqual(['PUT secrets/WOOD_JSON', 'DELETE variables/WOOD_JSON']);
       expect(await plainVariable('o/r', 'WOOD_JSON')).toBeNull();
       expect(await migratePlainVariable('o/r', 'WOOD_JSON')).toBe(false);
-      await expect(plainVariable('o/r', 'CONTRACT_JSON')).rejects.toThrow(/ne peut pas/);
+      await expect(plainVariable('o/r', 'INTUIS_ROOM_CATEGORIES')).rejects.toThrow(/ne peut pas/);
     });
   });
 
