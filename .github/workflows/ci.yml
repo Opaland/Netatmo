@@ -69,6 +69,7 @@ jobs:
       - run: npm run e2e:logement # v1.8 #462 : saisies gardées dans ⚙ Mon logement (localisation, bois, surfaces)
       - run: npm run e2e:jeton # v1.8 #463 : erreur du jeton nommée, effacée à chaque essai, « Réessayer »
       - run: npm run e2e:assistant # v2.0 #40 : assistant de premier lancement (GitHub simulé, démo, écran sans données)
+      - run: npm run e2e:http # v2.0 #524 : ouverte en HTTP hors localhost, l'écran de déverrouillage le dit
       # #353 : balayage systématique (chaque route × fixtures de démo × 360 px, 1280 px, 200 %, sombre ;
       # vue Proche à 360 px et à 200 %, #451)
       # puis explorateur de contrôles. Les fixtures (données fictives) sont générées dans dist/,
@@ -120,6 +121,9 @@ jobs:
         env:
           E2E_BROWSER: webkit
       - run: npm run e2e:assistant
+        env:
+          E2E_BROWSER: webkit
+      - run: npm run e2e:http
         env:
           E2E_BROWSER: webkit
       - uses: actions/upload-artifact@v4

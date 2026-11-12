@@ -5,7 +5,7 @@
 import { toCsv } from './aggregate';
 import { type State, activeRooms, app, ds, onDatasetOpened, onLock, setDataset, setRenderer, setState, state } from './app';
 import { disposeAll, useChartPrefs } from './charts';
-import { BadEnvelope, WrongPassphrase } from './crypto';
+import { BadEnvelope, InsecureContext, WrongPassphrase } from './crypto';
 import { type Dataset, NoData, clearDataCaches, dataDir, forgetKeys, openRemembered, recallKey } from './data';
 import { type Ctl, cardHandlers, dispatch } from './events';
 import { lazyAction } from './lazy';
@@ -657,6 +657,7 @@ async function showLockScreen() {
 function startError(err: unknown): string {
   if (err instanceof WrongPassphrase) return 'La clé mémorisée ne déchiffre plus les données (phrase de passe changée ?) : saisissez la phrase de passe.';
   if (err instanceof NoData) return ''; // the lock screen already says that nothing was collected
+  if (err instanceof InsecureContext) return ''; // #524: and that this page cannot decrypt
   if (err instanceof BadEnvelope) return err.message;
   if (!navigator.onLine) return unavailable('Données');
   return `Ouverture impossible : ${err instanceof Error ? err.message : String(err)}`;
