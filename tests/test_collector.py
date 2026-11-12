@@ -1074,7 +1074,8 @@ def test_shared_contract_goes_into_the_encrypted_meta_and_only_a_count_in_the_su
     store.merge("100", "2024-01-01", 1.0)
     previous = [{"from": "2022-01-01", "offer": "edf-trv-hphc", "kva": 12}]
     monkeypatch.delenv("CONTRACT_JSON", raising=False)
-    assert shared_contract(previous) is None  # variable removed: no shared contract any more
+    monkeypatch.delenv("CONTRACT_JSON_VARIABLE", raising=False)
+    assert shared_contract(previous) is None  # setting removed: no shared contract any more
     monkeypatch.setenv("CONTRACT_JSON", "not json")
     assert shared_contract(previous) == previous  # invalid: keep the last good one
     assert "not json" not in capsys.readouterr().out

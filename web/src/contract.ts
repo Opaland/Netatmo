@@ -1,7 +1,7 @@
 // S-12.1: contract shared between devices.
 //
-// The owner writes it from Settings into the repository variable CONTRACT_JSON (not a
-// secret: a contract is no credential); the nightly collection validates it and copies it
+// The owner writes it from Settings into the repository secret CONTRACT_JSON, sealed in the
+// browser (#497: like the other household settings); the nightly collection validates it and copies it
 // into the encrypted meta (`meta.contract`). On every device the shared contract wins over
 // the one saved in this browser, unless the user edited it here on purpose (`localEdit`).
 import { type ContractPeriod, OFFERS } from './offers';

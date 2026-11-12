@@ -1,4 +1,4 @@
-"""S-12.5: prolonged cold alert, from the repository variable COLD_ALERT_JSON."""
+"""S-12.5: prolonged cold alert, from the repository secret COLD_ALERT_JSON (#497)."""
 
 import pytest
 
@@ -36,12 +36,10 @@ def test_config_is_validated_without_quoting_values():
         assert "salon-secret" not in str(err.value)
 
 
-def test_disabled_by_default_and_invalid_value_reported_not_quoted(monkeypatch):
+def test_disabled_by_default_and_invalid_value_reported_not_quoted():
     warnings = []
-    monkeypatch.delenv("COLD_ALERT_JSON", raising=False)
-    assert cold_config(warnings.append) is None
-    monkeypatch.setenv("COLD_ALERT_JSON", '{"threshold": 99, "rooms": ["chambre-de-mamie"]}')
-    assert cold_config(warnings.append) is None
+    assert cold_config("", warnings.append) is None
+    assert cold_config('{"threshold": 99, "rooms": ["chambre-de-mamie"]}', warnings.append) is None
     assert len(warnings) == 1 and "chambre-de-mamie" not in warnings[0] and "99" not in warnings[0]
 
 

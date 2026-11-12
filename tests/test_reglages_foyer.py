@@ -70,8 +70,42 @@ def test_the_collection_reads_each_household_setting_from_a_secret():
     assert {"collect.yml", "diagnostic.yml"} <= seen
 
 
+def test_diagnostic_hands_a_household_setting_to_the_quality_report_only():
+    """#502: in Diagnostic, a household setting (secret or old plaintext variable) is passed only
+    when the quality report is asked for, the one step that reads it."""
+    lines = (ROOT / ".github" / "workflows" / "diagnostic.yml").read_text().splitlines()
+    seen = 0
+    for line in lines:
+        if any(
+            f"secrets.{n} " in line or f"vars.{n} " in line for n in (*cli.HOUSEHOLD_SETTINGS, "HOME_LOCATION_JSON")
+        ):
+            assert "inputs.qualite &&" in line, line
+            seen += 1
+    assert seen >= 2
+
+
 def test_the_same_household_settings_as_the_app():
     """One list each side (AGENTS.md §5): web/src/settings.ts HOUSEHOLD_SECRETS."""
     src = (ROOT / "web" / "src" / "settings.ts").read_text()
     line = next(x for x in src.splitlines() if x.startswith("export const HOUSEHOLD_SECRETS"))
     assert sorted(x for x in line.split("'")[1::2]) == sorted(cli.HOUSEHOLD_SETTINGS)
+
+
+def test_the_contract_and_the_cold_alert_are_household_secrets_too(env, capsys):
+    """#497: CONTRACT_JSON and COLD_ALERT_JSON follow the same rule: the secret first, a plaintext
+    variable left from before still read, named in the log without its value."""
+    from collector.cold import cold_config
+
+    env.setenv("CONTRACT_JSON_VARIABLE", json.dumps([{"from": "2023-04-05", "offer": "edf-trv-base", "kva": 6}]))
+    assert cli.shared_contract(None) == [{"from": "2023-04-05", "offer": "edf-trv-base", "kva": 6}]
+    env.setenv("CONTRACT_JSON", json.dumps([{"from": "2024-06-07", "offer": "edf-trv-hphc", "kva": 9}]))
+    assert cli.shared_contract(None)[0]["from"] == "2024-06-07"
+    env.setenv("COLD_ALERT_JSON", json.dumps({"threshold": 12, "days": 2, "rooms": ["module-zorglub"]}))
+    env.setenv("COLD_ALERT_JSON_VARIABLE", json.dumps({"threshold": 14, "rooms": ["module-en-clair"]}))
+    cfg = cold_config(cli.household_setting("COLD_ALERT_JSON"), cli._warn)
+    assert cfg == {"threshold": 12, "days": 2, "rooms": ["module-zorglub"]}
+    out = capsys.readouterr().out
+    assert "Variable en clair CONTRACT_JSON encore présente" in out
+    assert "Variable en clair COLD_ALERT_JSON encore présente" in out
+    for value in ("2023-04-05", "2024-06-07", "edf-trv", "zorglub", "en-clair"):
+        assert value not in out
