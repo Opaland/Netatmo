@@ -123,15 +123,14 @@ def test_main_to_data_updates_the_branch_without_forcing(tmp_path):
 
 
 @needs_git
-def test_the_copy_never_overwrites_where_the_data_is_written_today(tmp_path):
+def test_a_copy_from_an_absent_branch_or_with_a_wrong_variable_is_refused(tmp_path):
     _, runner = _repo(tmp_path)
     out = tmp_path / "copie"
     r = _run(runner, _env(tmp_path), str(SCRIPT), "copier", "data", "main", str(out))
-    assert r.returncode != 0 and "lues et écrites aujourd'hui" in r.stderr
-    r = _run(runner, _env(tmp_path, DATA_BRANCH="data"), str(SCRIPT), "copier", "main", "data", str(out))
-    assert r.returncode != 0 and "lues et écrites aujourd'hui" in r.stderr
-    r = _run(runner, _env(tmp_path, DATA_BRANCH="autre"), str(SCRIPT), "ouvrir", str(tmp_path / "d"))
-    assert r.returncode != 0 and "« main » ou « data »" in r.stderr
+    assert r.returncode != 0 and "n'existe pas" in r.stderr
+    for cmd in (["ouvrir", str(tmp_path / "d")], ["copier", "main", "data", str(out)]):
+        r = _run(runner, _env(tmp_path, DATA_BRANCH="autre"), str(SCRIPT), *cmd)
+        assert r.returncode != 0 and "« main » ou « data »" in r.stderr
 
 
 @needs_git
@@ -316,6 +315,7 @@ def test_the_move_workflow_is_manual_compares_totals_and_waits_for_every_writer(
     i_cmp = next(i for i, r in enumerate(runs) if "collector comparer" in r)
     i_push = next(i for i, r in enumerate(runs) if "donnees.sh pousser" in r)
     assert i_copy < i_cmp < i_push  # nothing sent before the totals are compared
+    assert "--avant" in runs[i_cmp]  # and the destination before loses no file (#523 review)
     assert all("--force" not in r and "git rm" not in r for r in runs)
     assert job["permissions"] == {"contents": "write"}
 
@@ -336,3 +336,105 @@ def test_sparse_open_from_a_sparse_shallow_checkout_like_the_hourly_reading(tmp_
     assert r.returncode == 0, r.stderr
     assert sorted(p.name for p in Path(_env_file(genv)["DATA_DIR"]).iterdir()) == ["keyinfo.json", "meta.enc.json"]
     assert sorted(p.name for p in (sparse / "data").iterdir()) == ["keyinfo.json"]  # the root stays sparse
+
+
+# ---------------------------------------------------------------- relecture adverse de #523
+def _night(repo: Path, branch: str, amount: float) -> None:
+    """A collection on `branch`: MODIFIES existing files (year, meta) and pushes."""
+    _git(repo, "fetch", "-q", "origin", branch)
+    _git(repo, "checkout", "-q", "-B", branch, f"origin/{branch}")
+    store = Store(repo / "data", PASS)
+    store.merge("100", "2026-01-03", amount)
+    store.save({"id": "h", "name": "Maison fictive"}, [{"id": "100", "category": "heating"}])
+    _git(repo, "add", "data")
+    _git(repo, "commit", "-q", "-m", "data: nuit")
+    _git(repo, "push", "-q", "origin", f"HEAD:{branch}")
+
+
+@needs_git
+def test_update_after_a_night_that_modified_files_with_an_up_to_date_checkout(tmp_path):
+    """Bloquant 1: a night MODIFIES files; the runner's checkout is up to date (actions/checkout)."""
+    origin, runner = _repo(tmp_path)
+    out = tmp_path / "copie"
+    env = _env(tmp_path)
+    assert _run(runner, env, str(SCRIPT), "copier", "main", "data", str(out)).returncode == 0
+    assert _run(runner, env, str(SCRIPT), "pousser", str(out), "data").returncode == 0
+    _night(tmp_path / "seed", "main", 42.0)
+    _git(runner, "pull", "-q", "origin", "main")
+    r = _run(runner, env, str(SCRIPT), "copier", "main", "data", str(out))
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert _run(runner, env, str(SCRIPT), "pousser", str(out), "data").returncode == 0
+    assert _git(origin, "rev-parse", "data:data") == _git(origin, "rev-parse", "main:data")
+    # The way back, after a night that modified data, from an up-to-date checkout of main.
+    _night(tmp_path / "seed", "data", 7.0)
+    _git(runner, "pull", "-q", "origin", "main")
+    denv = _env(tmp_path, DATA_BRANCH="data")
+    r = _run(runner, denv, str(SCRIPT), "copier", "data", "main", str(out))
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert _run(runner, env, str(SCRIPT), "pousser", str(out), "main").returncode == 0
+    assert _git(origin, "rev-parse", "main:data") == _git(origin, "rev-parse", "data:data")
+    assert _git(origin, "show", "main:README") == "code\n"
+
+
+@needs_git
+def test_catch_up_after_the_variable_is_set_when_data_did_not_move(tmp_path):
+    """Bloquant 2: a night on main between the copy and DATA_BRANCH=data (token rotated) is
+    caught up by copying again, as long as nothing was written on data since the copy."""
+    origin, runner = _repo(tmp_path)
+    out = tmp_path / "copie"
+    env = _env(tmp_path)
+    _run(runner, env, str(SCRIPT), "copier", "main", "data", str(out))
+    _run(runner, env, str(SCRIPT), "pousser", str(out), "data")
+    _night(tmp_path / "seed", "main", 42.0)
+    denv = _env(tmp_path, DATA_BRANCH="data")
+    r = _run(runner, denv, str(SCRIPT), "copier", "main", "data", str(out))
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert _run(runner, env, str(SCRIPT), "pousser", str(out), "data").returncode == 0
+    assert _git(origin, "rev-parse", "data:data") == _git(origin, "rev-parse", "main:data")
+
+
+@needs_git
+def test_a_copy_never_moves_the_destination_back(tmp_path):
+    """Mineur 3: once a night was written on data, copying main over it is refused, whatever
+    DATA_BRANCH says."""
+    origin, runner = _repo(tmp_path)
+    out = tmp_path / "copie"
+    env = _env(tmp_path)
+    _run(runner, env, str(SCRIPT), "copier", "main", "data", str(out))
+    _run(runner, env, str(SCRIPT), "pousser", str(out), "data")
+    _night(tmp_path / "seed", "data", 7.0)
+    after_night = _git(origin, "rev-parse", "data")
+    for extra in ({}, {"DATA_BRANCH": "data"}):
+        r = _run(runner, _env(tmp_path, **extra), str(SCRIPT), "copier", "main", "data", str(out))
+        assert r.returncode != 0 and "reculer" in r.stderr, r.stdout + r.stderr
+        assert "autre sens" not in r.stderr
+    assert _git(origin, "rev-parse", "data") == after_night  # the night is still there
+
+
+@needs_git
+def test_open_with_the_variable_set_too_early_says_to_remove_it(tmp_path):
+    _, runner = _repo(tmp_path)
+    r = _run(runner, _env(tmp_path, DATA_BRANCH="data"), str(SCRIPT), "ouvrir", str(tmp_path / "d"))
+    assert r.returncode != 0 and "retirez la variable DATA_BRANCH" in r.stderr
+
+
+def test_compare_with_the_destination_before_refuses_a_lost_file(tmp_path):
+    from collector.compare import compare_before
+
+    a, before = tmp_path / "a", tmp_path / "avant"
+    _folder(a)
+    shutil.copytree(a, before)
+    store = Store(a, PASS)
+    store.merge("100", "2026-01-05", 5.0)
+    store.save({"id": "h", "name": "Maison fictive"}, [{"id": "100", "category": "heating"}])
+    assert compare_before(before, a, PASS) == 1  # one year changed
+    (before / "volets.enc.json").write_text((before / "meta.enc.json").read_text())
+    with pytest.raises(CompareError, match="volets.enc.json"):
+        compare_before(before, a, PASS)
+    assert compare_before(tmp_path / "absente", a, PASS) == 0  # no destination before: nothing to lose
+
+
+def test_readme_warns_that_a_relaunch_cancels_a_pending_collection():
+    text = (ROOT / "README.md").read_text()
+    section = text.split("### Branche des données", 1)[1].split("\n### ", 1)[0]
+    assert "annule" in section and "en attente" in section

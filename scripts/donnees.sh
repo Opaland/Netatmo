@@ -15,9 +15,12 @@
 #   scripts/donnees.sh copier SOURCE DEST OUT
 #       Prepares, without sending anything, a commit of DEST whose data/ is exactly the data/ of
 #       SOURCE (the same git tree, nothing else of DEST changes; DEST absent: a branch holding
-#       data/ only). Refused when DEST is where the data is read and written today (DATA_BRANCH):
-#       the copy would overwrite the nights collected there. Writes OUT/commit (empty when there
-#       is nothing to copy), and both data/ in OUT/source and OUT/copie for `collector comparer`.
+#       data/ only). Never backwards: refused unless the data/ DEST has today is one SOURCE already
+#       had (the tree of a commit of SOURCE's last HISTORY_DEPTH commits), i.e. nothing was written
+#       on DEST since it was last copied from SOURCE. So a night collected on main between the copy
+#       and DATA_BRANCH=data is caught up by copying again, and nights collected on data are never
+#       overwritten. Writes OUT/commit (empty when there is nothing to copy) and the data/ of
+#       SOURCE, of the copy and of DEST before (OUT/source, OUT/copie, OUT/avant) for `comparer`.
 #   scripts/donnees.sh pousser OUT DEST
 #       Pushes OUT/commit to DEST. Never forced: when DEST moved meanwhile, the push is refused.
 #
@@ -45,8 +48,13 @@ export_env() {
 
 fetch_branch() {
   git ls-remote --exit-code --heads origin "$1" > /dev/null 2>&1 \
-    || die "La branche « $1 » n'existe pas sur le dépôt : lancez d'abord le workflow « Branche des données »"
-  git fetch -q --depth=1 origin "+refs/heads/$1:refs/remotes/origin/$1"
+    || die "La branche « $1 » n'existe pas sur le dépôt : retirez la variable DATA_BRANCH (les données restent sur main), ou lancez d'abord le workflow « Branche des données »"
+  git fetch -q --depth="${2:-1}" origin "+refs/heads/$1:refs/remotes/origin/$1"
+}
+
+# The data/ tree of a commit (empty when it has none).
+data_tree() {
+  git rev-parse -q --verify "$1:data" 2> /dev/null || true
 }
 
 cmd_ouvrir() {
@@ -75,46 +83,46 @@ cmd_ouvrir() {
 }
 
 cmd_copier() {
-  local src=${1:?SOURCE} dest=${2:?DEST} out=${3:?OUT} now
-  now=$(current)
+  local src=${1:?SOURCE} dest=${2:?DEST} out=${3:?OUT} depth=${HISTORY_DEPTH:-200}
+  current > /dev/null # DATA_BRANCH must be main, data or unset
   git check-ref-format --branch "$src" > /dev/null 2>&1 || die "Source invalide"
   git check-ref-format --branch "$dest" > /dev/null 2>&1 || die "Destination invalide"
   [ "$src" != "$dest" ] || die "La source et la destination sont la même branche"
-  if [ "$dest" = "$now" ]; then
-    die "« $dest » est la branche où les données sont lues et écrites aujourd'hui (DATA_BRANCH) : la copier écraserait les nuits collectées depuis. Copiez dans l'autre sens."
-  fi
-  fetch_branch "$src"
+  fetch_branch "$src" "$depth"
   local data
-  data=$(git rev-parse -q --verify "origin/$src:data") || die "Pas de dossier data/ dans « $src »"
-  local tree commit="" parent=""
+  data=$(data_tree "origin/$src")
+  [ -n "$data" ] || die "Pas de dossier data/ dans « $src »"
+  rm -rf "$out"
+  mkdir -p "$out/source" "$out/copie" "$out/avant"
+  git archive "origin/$src" data | tar -x -C "$out/source"
+  local tree commit="" parent="" before=""
   if git ls-remote --exit-code --heads origin "$dest" > /dev/null 2>&1; then
     git fetch -q --depth=1 origin "+refs/heads/$dest:refs/remotes/origin/$dest"
     parent=$(git rev-parse "origin/$dest")
-    local index
-    index=$(mktemp)
-    rm -f "$index"
-    # DEST's own tree, data/ replaced by SOURCE's (files absent from SOURCE disappear from data/
-    # only: the copy is a mirror of data/, nothing else of DEST is touched).
-    GIT_INDEX_FILE=$index git read-tree "$parent"
-    GIT_INDEX_FILE=$index git rm -r -q --cached --ignore-unmatch data
-    GIT_INDEX_FILE=$index git read-tree --prefix=data/ "$data"
-    tree=$(GIT_INDEX_FILE=$index git write-tree)
-    rm -f "$index"
-    if [ "$tree" != "$(git rev-parse "$parent^{tree}")" ]; then
-      commit=$(git commit-tree "$tree" -p "$parent" -m "data: copie de data/ depuis $src")
+    before=$(data_tree "$parent")
+    if [ -n "$before" ]; then git archive "$parent" data | tar -x -C "$out/avant"; fi
+    if [ "$before" = "$data" ]; then
+      : > "$out/commit"
+      git archive "origin/$src" data | tar -x -C "$out/copie"
+      echo "Rien à copier : data/ de « $dest » est déjà celui de « $src »."
+      return
     fi
+    # Never backwards: DEST's data/ must be one SOURCE had, nothing written on DEST since.
+    if [ -n "$before" ] && ! git log --format='%H' "origin/$src" | {
+      while read -r c; do [ "$(data_tree "$c")" != "$before" ] || exit 0; done
+      exit 1
+    }; then
+      die "data/ de « $dest » contient ce que « $src » n'a pas (des nuits collectées depuis la dernière copie) : la copie le ferait reculer, rien n'est fait."
+    fi
+    # DEST's own top-level tree, its data entry replaced by SOURCE's (no index involved).
+    tree=$({
+      git ls-tree "$parent" | awk -F '\t' '$2 != "data"'
+      printf '040000 tree %s\tdata\n' "$data"
+    } | git mktree)
+    commit=$(git commit-tree "$tree" -p "$parent" -m "data: copie de data/ depuis $src")
   else
     tree=$(printf '040000 tree %s\tdata\n' "$data" | git mktree)
     commit=$(git commit-tree "$tree" -m "data: copie de data/ depuis $src")
-  fi
-  rm -rf "$out"
-  mkdir -p "$out/source" "$out/copie"
-  git archive "origin/$src" data | tar -x -C "$out/source"
-  if [ -z "$commit" ]; then
-    : > "$out/commit"
-    git archive "origin/$src" data | tar -x -C "$out/copie"
-    echo "Rien à copier : data/ de « $dest » est déjà celui de « $src »."
-    return
   fi
   # The copy is the very same tree as the source: byte for byte, file by file.
   [ "$(git rev-parse "$commit:data")" = "$data" ] || die "La copie diffère de la source"

@@ -16,8 +16,13 @@ name: Branche des données
 # Retour arrière : ce workflow, sens « data → main » (main reçoit un commit dont data/ est celui
 # de la branche `data`, mêmes vérifications), puis supprimez la variable DATA_BRANCH.
 #
-# Refusé quand la destination est la branche où les données sont écrites aujourd'hui
-# (DATA_BRANCH) : la copie écraserait les nuits collectées depuis. Jamais d'envoi forcé.
+# Jamais en arrière : la copie est refusée si data/ de la destination contient ce que la source
+# n'a pas (des nuits collectées sur la destination depuis la dernière copie) ; elle est acceptée
+# quand la destination n'a pas bougé depuis, même si DATA_BRANCH la désigne déjà (rattrapage d'une
+# nuit collectée sur main entre l'étape 1 et la variable). Aucun fichier de la destination d'avant
+# ne doit manquer à la copie (`comparer --avant`). Jamais d'envoi forcé.
+# Ne pas lancer pendant qu'une collecte ou un rechiffrement attend son tour : GitHub ne garde qu'un
+# run en attente par groupe de concurrence, celui-ci annulerait la collecte en attente.
 # Journal public : noms de branche, comptes et identifiants de commit seulement.
 on:
   workflow_dispatch:
@@ -80,7 +85,9 @@ jobs:
       - name: Totaux comparés
         env:
           DATA_PASSPHRASE: ${{ secrets.DATA_PASSPHRASE }}
-        run: python -m collector comparer "$RUNNER_TEMP/copie/source/data" "$RUNNER_TEMP/copie/copie/data"
+        run: |
+          python -m collector comparer "$RUNNER_TEMP/copie/source/data" "$RUNNER_TEMP/copie/copie/data" \
+            --avant "$RUNNER_TEMP/copie/avant/data"
       - name: Envoi (jamais forcé)
         run: scripts/donnees.sh pousser "$RUNNER_TEMP/copie" "$DEST"
       - name: Étape suivante

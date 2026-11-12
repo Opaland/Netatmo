@@ -38,3 +38,16 @@ def compare_dirs(source: Path, copy: Path, passphrase: str) -> tuple[int, int]:
     if before != after:
         raise CompareError("Totaux différents")
     return len(names), len(before)
+
+
+def compare_before(before: Path, copy: Path, passphrase: str) -> int:
+    """The destination before the copy (#523 review): every file it had is still in the copy, and
+    both open with the passphrase. Returns how many years have other totals (a forward copy adds
+    nights); CompareError when a file would be lost. No destination before: 0."""
+    if not (before / "keyinfo.json").is_file():
+        return 0
+    lost = sorted({p.name for p in before.glob("*.json")} - {p.name for p in copy.glob("*.json")})
+    if lost:
+        raise CompareError(f"La copie perdrait des fichiers de la destination : {lost}")
+    old, new = Store(before, passphrase).totals(), Store(copy, passphrase).totals()
+    return sum(1 for y in set(old) | set(new) if old.get(y) != new.get(y))

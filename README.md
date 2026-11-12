@@ -243,12 +243,16 @@ Passer à la branche `data` (une fois, de jour, loin de la collecte de 04:17 UTC
    déchiffre chaque fichier des deux côtés et compare les totaux de `verify` **avant** d'envoyer quoi
    que ce soit ; le journal ne montre que des comptes. `main` n'est pas touché : rien n'y est
    supprimé. Il attend une collecte, un rechiffrement ou un relevé des volets en cours, et ceux-ci
-   l'attendent.
+   l'attendent. **Ne le lancez pas pendant qu'une collecte est en attente** (Actions : « Queued ») :
+   GitHub ne garde qu'un run en attente par groupe, et ce workflow annule la collecte en attente.
 3. Tout de suite après : **Settings → Secrets and variables → Actions → Variables → New repository
    variable**, nom `DATA_BRANCH`, valeur `data`. Dès lors la collecte, les volets, le changement de
    phrase de passe, le relevé horaire, le diagnostic et le déploiement lisent et écrivent la branche
-   `data` (le code vient toujours de `main`). Si une collecte a eu lieu entre les étapes 2 et 3,
-   relancez l'étape 2 : elle met la branche `data` à jour sans rien forcer.
+   `data` (le code vient toujours de `main`). Si une collecte a eu lieu sur `main` entre les étapes
+   2 et 3 (son jeton Netatmo est le seul valable), relancez l'étape 2, variable posée ou non, avant
+   la collecte suivante : la branche `data` n'ayant pas bougé depuis la copie, elle est mise à jour
+   en avance rapide. Si la variable a été posée **avant** l'étape 2, la collecte échoue en le disant :
+   retirez la variable, faites l'étape 2, reposez-la.
 4. **Contrôle** : lancez **Actions → Déploiement GitHub Pages** ; son résumé dit « Données servies
    depuis la branche data ». Ouvrez l'application : mêmes totaux qu'à l'étape 1. Le lendemain, le
    commit `data: collecte du …` est dans la branche `data`, plus sur `main`.
@@ -258,9 +262,10 @@ Passer à la branche `data` (une fois, de jour, loin de la collecte de 04:17 UTC
 
 **Retour arrière** : lancez **Actions → Branche des données**, sens **data → main** (avant de retirer
 la variable : `main` reçoit un commit dont `data/` est celui de la branche `data`, mêmes
-vérifications, jamais forcé), puis supprimez la variable `DATA_BRANCH`. Le workflow refuse toujours
-de copier **vers** la branche où les données sont écrites aujourd'hui : la copie écraserait les
-nuits collectées depuis.
+vérifications, jamais forcé), puis supprimez la variable `DATA_BRANCH`. Le workflow ne copie jamais
+en arrière : si la destination contient des nuits que la source n'a pas (collectées sur elle depuis
+la dernière copie), il refuse et n'envoie rien ; il vérifie aussi qu'aucun fichier de la destination
+d'avant ne manque à la copie.
 
 En local, avec `DATA_BRANCH=data` : `git fetch origin data && git worktree add ../donnees origin/data`,
 puis `DATA_DIR=../donnees/data python -m collector verify`. `python -m collector comparer A B` dit si

@@ -916,12 +916,15 @@ def cmd_rekey(s: Settings, args: argparse.Namespace) -> None:
 
 
 def cmd_compare(s: Settings, args: argparse.Namespace) -> None:
-    from .compare import compare_dirs
+    from .compare import compare_before, compare_dirs
 
     s.require("passphrase")
     files, years = compare_dirs(Path(args.source), Path(args.copie), s.passphrase)
     # Counts only: the log is public (#23).
     print(f"{files} fichiers déchiffrés et identiques, totaux identiques sur {years} années.")
+    if getattr(args, "avant", None):
+        changed = compare_before(Path(args.avant), Path(args.copie), s.passphrase)
+        print(f"Destination d'avant : aucun fichier perdu, {changed} années aux totaux changés par la copie.")
 
 
 def cmd_strength(s: Settings, args: argparse.Namespace) -> None:
@@ -1068,6 +1071,7 @@ def main(argv: list[str] | None = None) -> None:
     cp = sub.add_parser("comparer", help="vérifier qu'une copie de data/ a les mêmes fichiers et totaux (#23)")
     cp.add_argument("source", metavar="SOURCE")
     cp.add_argument("copie", metavar="COPIE")
+    cp.add_argument("--avant", metavar="DOSSIER", help="data/ de la destination avant la copie : aucun fichier perdu")
     sub.add_parser("strength", help="robustesse estimée de DATA_PASSPHRASE")
     ins = sub.add_parser("insights", help="analyse du mois rédigée par Claude (ANTHROPIC_API_KEY)")
     ins.add_argument("--force", action="store_true")
