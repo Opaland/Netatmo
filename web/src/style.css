@@ -1561,6 +1561,11 @@ fieldset.prices label:not(.radio) {
 .setup-steps p {
   margin: 0 0 var(--space-1);
 }
+/* a grid item is as wide as its longest word by default: INTUIS_CLIENT_SECRET at 200 % overflowed in WebKit */
+.setup-steps > li {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
 .setup-lock {
   text-align: start;
 }
