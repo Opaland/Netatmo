@@ -74,11 +74,11 @@ export const isCovered = (f: StoveFires, day: string) => inRanges(f.covered, day
 /**
  * How clearly a fire stands out, said in words (a threshold of PRESENTATION: it changes no figure).
  * « nette » when its weakest witness rose twice the threshold or more (well above the noise of the
- * demo, 0.3 °C, collector/stove.py), else « juste au-dessus du seuil ». More witnesses than two
+ * demo, 0.3 °C, collector/stove.py), else « à peine marquée ». More witnesses than two
  * also makes it « nette ». Chosen by judgement; the other path considered, a percentage, would
  * claim a precision the twenty-odd calibration evenings do not have.
  */
-export const fireClarity = (f: Fire): 'nette' | 'juste au-dessus du seuil' => (f.rise >= 2 * RISE_MIN || f.witnesses > 2 ? 'nette' : 'juste au-dessus du seuil');
+export const fireClarity = (f: Fire): 'nette' | 'à peine marquée' => (f.rise >= 2 * RISE_MIN || f.witnesses > 2 ? 'nette' : 'à peine marquée');
 
 /** « 19 h 30 » of a half hour. */
 export const slotTime = (i: number) => `${Math.floor(i / 2)} h${i % 2 ? ' 30' : ''}`;

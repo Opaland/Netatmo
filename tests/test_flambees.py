@@ -166,3 +166,12 @@ def test_the_collection_writes_nothing_to_the_log(capsys, tmp_path):
     assert _stove_fires(store, Broken(), []) is None  # a broken room: warned by its type only
     out = capsys.readouterr()
     assert "r-secret" not in out.out + out.err and "19" not in out.out + out.err
+
+
+def test_the_app_reads_the_same_threshold():
+    """AGENTS.md §5: the app says how clearly a fire stands out against RISE_MIN
+    (web/src/stove-fires.ts); the two stay equal."""
+    from pathlib import Path
+
+    ts = (Path(__file__).parent.parent / "web" / "src" / "stove-fires.ts").read_text(encoding="utf-8")
+    assert f"export const RISE_MIN = {stove.RISE_MIN};" in ts

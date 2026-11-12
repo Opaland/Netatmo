@@ -8,8 +8,11 @@
 //                        × moisture factor × efficiency of the stove
 //   in time            = the season the purchase feeds (Sept → Aug), spread over its days in
 //                        proportion to the degree days (the colder, the more wood burnt).
+//   #469: the fires     = where the collection found the stove's fires (stove-fires.ts), the wood
+//                        of the days it could see goes to those evenings (onFireDays).
 import { type DayRecord, addDays } from './aggregate';
 import { type Weather, dju } from './analysis';
+import { type StoveFires, isCovered } from './stove-fires';
 
 export type Species = 'chene' | 'hetre' | 'charme' | 'frene' | 'melange' | 'resineux';
 export const SPECIES: Record<Species, string> = {
@@ -145,7 +148,7 @@ const seasonDays = (y: number, last: string): [string, string] => [`${y}-09-01`,
  * whole season (the complete ones of the weather): what is still in the woodshed is not counted
  * yet. Without weather, evenly from October to April.
  */
-export function woodDaily(s: WoodSettings, weather: Weather | null, last: string): Map<string, [number, number]> {
+export function woodDaily(s: WoodSettings, weather: Weather | null, last: string, fires: StoveFires | null = null): Map<string, [number, number]> {
   const out = new Map<string, [number, number]>();
   const seasons = woodSeasons(s);
   if (!seasons.length || !last) return out;
@@ -174,12 +177,37 @@ export function woodDaily(s: WoodSettings, weather: Weather | null, last: string
     // running: an average season's degree days, or the days of October to April without weather
     const denom = complete ? so : weather ? Math.max(so, usual ?? so) : 212;
     if (denom <= 0) continue;
-    for (const [d, x] of weight) {
+    // #469: the share of the season so far stays the degree days'; the fires only choose its days
+    const days = (fires && onFireDays(weight, fires)) || weight;
+    const sum = [...days.values()].reduce((a, b) => a + b, 0);
+    if (sum <= 0) continue;
+    const share = so / denom;
+    for (const [d, x] of days) {
       if (!x) continue;
       const cur = out.get(d) ?? [0, 0];
-      out.set(d, [cur[0] + (w.kwh * x) / denom, cur[1] + (w.eur * x) / denom]);
+      out.set(d, [cur[0] + (w.kwh * share * x) / sum, cur[1] + (w.eur * share * x) / sum]);
     }
   }
+  return out;
+}
+
+/**
+ * #469: the weights of a season's days moved to its fires. The days the detection could see
+ * (stove-fires.ts isCovered) keep their degree days in all, but these go to the evenings a fire was
+ * found, in proportion to its estimated burn (half hours); the days it could not see keep their
+ * own. Null when no fire was found in the season: the degree days throughout (the fallback).
+ */
+export function onFireDays(weight: Map<string, number>, fires: StoveFires): Map<string, number> | null {
+  let seen = 0;
+  let burnt = 0;
+  for (const [d, x] of weight) {
+    if (!isCovered(fires, d)) continue;
+    seen += x;
+    burnt += fires.fires.get(d)?.slots ?? 0;
+  }
+  if (!burnt) return null;
+  const out = new Map<string, number>();
+  for (const [d, x] of weight) out.set(d, isCovered(fires, d) ? (seen * (fires.fires.get(d)?.slots ?? 0)) / burnt : x);
   return out;
 }
 

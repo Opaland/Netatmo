@@ -78,6 +78,7 @@ const DESTINATIONS = {
   'historique-jours': ['#unusual-card .card-period', '#unusual-card .counted'],
   'historique-calendrier': ['#cal-chart canvas', '#calendar-card .card-period', '#calendar-card .counted'],
   'historique-station': ['#station-chart canvas', '#station-table table'],
+  'historique-flambees': ['#fires-card [data-fire-day]', '#fires-card .fires-grid', '#fires-card [data-fire-answer=yes]', 'text:Confiance'], // #469
   // #301: part of the usages, maximum power (shedding in « Voir les valeurs »), then the detail pages
   compteur: ['#linky-chart canvas', '#pmax-chart canvas', '#offload-zone table', '#share-card .counted', '#power-card .counted', 'a[href="#compteur-veille"]', 'a[href="#compteur-heures-creuses"]'],
   'compteur-journee': ['#curve-typical canvas', '#curve-day-chart canvas', '#hour-grid canvas', '#curve-card .counted'],
