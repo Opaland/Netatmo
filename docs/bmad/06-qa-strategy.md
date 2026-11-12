@@ -101,13 +101,29 @@ Pas de score minimal imposé : un survivant n'est pas toujours un défaut, il se
 | `pricing.ts` | 47 | 97,9 % | 97,9 % | 1 |
 | `periods.ts` | 237 | 65,8 % | 92,8 % | 17 |
 | `invoice.ts` | 290 | 62,9 % | 93,8 % | 18 |
-| `reconstitute.ts` | 306 | 72,6 % | 76,5 % | 72 → #392 |
+| `reconstitute.ts` | 306 | 72,6 % | 76,5 % → **98,0 %** (vague 2, #392) | 6 (5 équivalents, 1 non tranché, ci-dessous) |
 | `crypto.ts` | 58 | 82,8 % | 96,6 % | 2 |
 | **Total** | 1 091 | **66,8 %** (223 survivants, 140 non couverts) | **89,2 %** (98 survivants, 20 non couverts) | |
 
 Les tests ajoutés sont dans `web/src/mutation-vague1.test.ts` ; chacun a été vu rouge sur son mutant
 (le survivant a disparu à la vague suivante). La vague 1 a aussi trouvé **un vrai défaut** : sans
 Linky, une facture qui compte moins de kWh que les radiateurs disait « de plus » (`invoice.ts`, corrigé).
+
+**Deuxième vague (#392, 12/11/2026) : les heuristiques de `reconstitute.ts`.** Mutation limitée à ce
+fichier (`npx stryker run --mutate src/reconstitute.ts`, après l'installation que fait
+`npm run mutation` ; 94 à 128 s sur 4 cœurs) : 76,5 % (55 survivants, 17 non couverts) →
+**98,0 %** (6 survivants : 5 équivalents, 1 départage non tranché). Les tests sont dans
+`web/src/mutation-vague2.test.ts`, vus rouges par la vague d'après (les 66 autres mutants tués) :
+médiane (tri numérique, parité), jours avec Linky seuls et `minRef` inclus, jours de chauffage
+`> 0,2`, part de la pièce et répartition (`weights > 0`, partage égal), signature gardée seulement si
+`slope < 0` (pente nulle comprise), saison la plus proche (avant et après), bornes de la fenêtre, et
+pour les jours suspects : `minExpected` inclus, ratio strict, seuil Linky `max(3, ½ écart)` des deux
+côtés, jours bas exclus des références les uns des autres.
+
+Mesure complète du même jour (toute la configuration, 123 s) : **93,6 %** sur 1 131 mutants hors
+ignorés (57 survivants, 16 non couverts). `periods.ts`, modifié depuis le 10/11 (PR #418 et #429), compte
+283 mutants (277 hors ignorés) et passe de 92,8 % à 86,3 % : 38 mutants non tués, surtout l. 144-148
+et 25 ; à lire dans une vague suivante.
 
 ### Survivants lus et laissés, avec leur raison
 
@@ -126,7 +142,12 @@ Linky, une facture qui compte moins de kWh que les radiateurs disait « de plus 
 | `invoice.ts:194-200, 227` | `diff > 0` → `>= 0`, `residual >= 0` → `> 0` | équivalent | branches atteintes seulement pour `|diff| ≥ 1` et `|reste| > tolérance ≥ 2 €` : jamais à zéro |
 | `invoice.ts:229` | `heatCost !== null` → `true` | équivalent | ne vaut `null` que sans prix moyen, cas déjà sorti en « no-price » |
 | `crypto.ts:31` | `typeof iter !== 'number'` retiré | équivalent | `Number.isInteger` refuse déjà tout ce qui n'est pas un nombre |
-| `reconstitute.ts` | 72 mutants des heuristiques | **à lire** | deuxième vague : #392 |
+| `reconstitute.ts:24` | `d <= dernier jour` → `<` | équivalent | le dernier jour d'une pièce a toujours un relevé : la boucle le saute (`continue`) dans les deux cas |
+| `reconstitute.ts:79` | `[]` → `["Stryker was here"]` | équivalent | le point parasite (une chaîne) est rejeté par `fitSeason` (`t < 15` est faux pour une lettre) |
+| `reconstitute.ts:93` | `fits.has(s)` → `false` | équivalent | la boucle de la saison la plus proche retrouve la même saison, seule à l'écart 0 (une saison par année de début) |
+| `reconstitute.ts:97` | `gap < best[0]` → `<=` | non tranché | ne change que l'égalité : un jour perdu à égale distance de deux saisons (une avant, une après) prend la première trouvée (`<`) ou la dernière (`<=`). Laquelle est la bonne est une question de modèle, pas de code ; non figée par un test |
+| `reconstitute.ts:131` | `k !== 0` → `true` | équivalent | le jour lui-même n'est jamais une référence : perdu (`rebuildLost`) ou bas, donc exclu (`suspectDays`) |
+| `reconstitute.ts:267` | `<` → `<=` dans le tri des années | équivalent | une année n'apparaît qu'une fois : jamais d'égalité |
 
 ## 8. Fuzz à graine fixe des entrées non sûres (#359)
 
