@@ -3,7 +3,26 @@
 import { describe, expect, it } from 'vitest';
 import { addDays } from './aggregate';
 import type { Weather } from './analysis';
-import { DEFAULT_EFFICIENCY, KWH_PER_STERE, NO_WOOD, heatOf, moistureFactor, parseWood, purchaseText, seasonFed, seasonText, woodDaily, woodIn, woodJson, woodSeasons } from './wood';
+import {
+  DEFAULT_EFFICIENCY,
+  KWH_PER_STERE,
+  NO_WOOD,
+  STOVE_ROOM_WARM,
+  STOVE_WARM_MIN_DAYS,
+  heatOf,
+  moistureFactor,
+  parseWood,
+  purchaseText,
+  seasonFed,
+  seasonText,
+  stoveWarm,
+  stoveWarmText,
+  woodDaily,
+  woodIn,
+  woodJson,
+  woodSeasons,
+} from './wood';
+import { ADEME_PER_DEGREE } from './checks';
 
 const oak = { day: '2025-09-20', steres: 2, species: 'chene' as const, moisture: 20, price: 200 };
 
@@ -165,5 +184,51 @@ describe('#366 wood stove', () => {
     expect(seasonText(b)).toBe('0,5 stère reporté · 1 stère acheté · tout brûlé (supposé)');
     const [c] = woodSeasons(parseWood({ purchases: [oak], burnt: [{ season: 2025, steres: 3 }] }));
     expect(seasonText(c)).toBe('2 stères achetés · 2 stères brûlés (relevé) · 1 stère de plus que les achats notés, non compté');
+  });
+});
+
+// #468: a stove room kept too warm, and the wood it costs (fictitious purchase and readings)
+describe('#468 stove room above 22 °C', () => {
+  const settings = parseWood({ purchases: [{ ...oak, steres: 4, price: 400 }] });
+  const last = '2025-11-30';
+  const daily = woodDaily(settings, null, last); // no weather: evenly from October to April
+  const seasons = woodSeasons(settings);
+  const temps = (t: number, days = 30) => {
+    const m = new Map<string, number | null>();
+    for (let i = 0; i < days; i++) m.set(addDays(last, -i), t);
+    return m;
+  };
+
+  it('says the wood saved at 22 °C, about 7 % per degree above, in stères and euros', () => {
+    const w = stoveWarm(temps(25), daily, seasons, last)!;
+    expect(w.days).toBe(30);
+    expect(w.mean).toBeCloseTo(25);
+    expect(w.season).toBe(2025);
+    expect(w.pct).toBeCloseTo((25 - STOVE_ROOM_WARM) * ADEME_PER_DEGREE);
+    expect(w.steres).toBeCloseTo(4 * 0.21);
+    expect(w.eur).toBeCloseTo(400 * 0.21);
+    const t = stoveWarmText(w);
+    expect(t.title).toBe('Pièce chauffée au bois au-dessus de 22 °C');
+    expect(t.text).toContain('la pièce était à 25,0 °C en moyenne');
+    expect(t.text).toContain('environ 21 % du bois de la saison 2025-2026, soit ≈ 0,8 stère et 84 €');
+    // the assumptions are said on screen
+    expect(t.text).toContain('Hypothèses : le seuil de 22 °C, environ 7 % de bois par degré au-dessus');
+  });
+
+  it('nothing at or under 22 °C, under 7 days, or on days the stove does not heat', () => {
+    expect(stoveWarm(temps(STOVE_ROOM_WARM), daily, seasons, last)).toBeNull();
+    expect(stoveWarm(temps(26, STOVE_WARM_MIN_DAYS - 1), daily, seasons, last)).toBeNull();
+    expect(stoveWarm(temps(26, STOVE_WARM_MIN_DAYS), daily, seasons, last)?.days).toBe(STOVE_WARM_MIN_DAYS);
+    // in summer the wood is not spread (October to April): a warm room is not the stove
+    const july = '2026-07-31';
+    const hot = new Map<string, number>();
+    for (let i = 0; i < 30; i++) hot.set(addDays(july, -i), 27);
+    expect(stoveWarm(hot, woodDaily(settings, null, july), seasons, july)).toBeNull();
+    // no wood bought: nothing to save
+    expect(stoveWarm(temps(26), new Map(), [], last)).toBeNull();
+  });
+
+  it('caps the share at the whole wood of the season', () => {
+    expect(stoveWarm(temps(40), daily, seasons, last)!.pct).toBe(1);
   });
 });

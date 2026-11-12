@@ -16,6 +16,7 @@
 import { type DayRecord, addDays } from './aggregate';
 import { type Weather, dju } from './analysis';
 import { type StoveFires, isCovered } from './stove-fires';
+import { ADEME_PER_DEGREE } from './checks';
 
 export type Species = 'chene' | 'hetre' | 'charme' | 'frene' | 'melange' | 'resineux';
 export const SPECIES: Record<Species, string> = {
@@ -296,6 +297,80 @@ export function woodIn(daily: Map<string, [number, number]>, from: string, to: s
   let eur = 0;
   for (const [d, v] of daily) if (d >= from && d <= to && !skip?.has(d)) (kwh += v[0]), (eur += v[1]);
   return { kwh, eur };
+}
+
+// ------------------------------------------------------------------ #468 a stove room kept too warm
+/**
+ * #468: the assumptions of the advice « pièce chauffée au bois au-dessus de 22 °C », shown as such
+ * on screen (stoveWarmText), written here only. 22 °C: the threshold the issue asks for (above the
+ * usual 19–21 °C of a living room). The share of wood saved per degree is the ADEME rule of thumb
+ * the app already uses for the heating (checks.ts ADEME_PER_DEGREE, ≈ 7 % per °C): one place.
+ * The window (30 days) and the 7 days of stove heating with a measured temperature are thresholds
+ * of PRESENTATION (AGENTS.md: they decide whether the advice is said, never a figure): a month is
+ * what the room page says by default; under a week of readings a mean says little. Ruled out: the
+ * whole season (a stove room warm in November says nothing of March) and the period picked on the
+ * page (in summer the stove does not run).
+ */
+export const STOVE_ROOM_WARM = 22;
+export const STOVE_WARM_WINDOW = 30;
+export const STOVE_WARM_MIN_DAYS = 7;
+
+export interface StoveWarm {
+  /** Mean measured temperature (°C) of the days of stove heating in the window. */
+  mean: number;
+  days: number;
+  /** The heating season (Sept → Aug, by its first year) whose wood the saving is a share of. */
+  season: number;
+  /** Share of that season's wood saved at 22 °C (0–1). */
+  pct: number;
+  steres: number;
+  eur: number;
+}
+
+/** The heating season (Sept → Aug) a day belongs to, by its first year. */
+const heatingSeason = (day: string) => Number(day.slice(0, 4)) - (Number(day.slice(5, 7)) >= 9 ? 0 : 1);
+
+/**
+ * #468: a room heated by the stove (room-offline.ts stoveHeated) whose measured temperature, over
+ * the days the wood heats (woodDaily: kWh > 0) of the last 30 days, is above 22 °C on average: the
+ * wood saved by bringing it back to 22 °C, as a share of the season's wood (woodSeasons: the stock
+ * rule, its stères and its price). Null: not enough days, not too warm, or no wood this season.
+ */
+export function stoveWarm(
+  temps: ReadonlyMap<string, number | null | undefined>,
+  daily: Map<string, [number, number]>,
+  seasons: WoodSeason[],
+  last: string,
+): StoveWarm | null {
+  let sum = 0;
+  let days = 0;
+  for (let d = addDays(last, 1 - STOVE_WARM_WINDOW); d <= last; d = addDays(d, 1)) {
+    const t = temps.get(d);
+    if ((daily.get(d)?.[0] ?? 0) > 0 && typeof t === 'number' && Number.isFinite(t)) (sum += t), days++;
+  }
+  if (days < STOVE_WARM_MIN_DAYS) return null;
+  const mean = sum / days;
+  if (mean <= STOVE_ROOM_WARM) return null;
+  const season = heatingSeason(last);
+  const w = seasons.find((s) => s.season === season);
+  if (!w || w.steres <= 0) return null;
+  const pct = Math.min(1, (mean - STOVE_ROOM_WARM) * ADEME_PER_DEGREE);
+  return { mean, days, season, pct, steres: w.steres * pct, eur: w.eur * pct };
+}
+
+const fr1 = (v: number) => v.toLocaleString('fr-FR', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+/** #468: the advice, its gain and its assumptions in words (title, text). */
+export function stoveWarmText(w: StoveWarm): { title: string; text: string } {
+  const pct = Math.round(w.pct * 100);
+  const eur = Math.round(w.eur);
+  const steres = `${fr1(w.steres)} stère${w.steres >= 2 ? 's' : ''}`;
+  return {
+    title: `Pièce chauffée au bois au-dessus de ${STOVE_ROOM_WARM} °C`,
+    text:
+      `Sur ${w.days} jours de chauffe au bois des ${STOVE_WARM_WINDOW} derniers jours, la pièce était à ${fr1(w.mean)} °C en moyenne. ` +
+      `La ramener à ${STOVE_ROOM_WARM} °C économiserait environ ${pct} % du bois de la saison ${w.season}-${w.season + 1}, soit ≈ ${steres}${eur > 0 ? ` et ${eur} €` : ''}. ` +
+      `Hypothèses : le seuil de ${STOVE_ROOM_WARM} °C, environ ${Math.round(ADEME_PER_DEGREE * 100)} % de bois par degré au-dessus (règle de l'ADEME pour le chauffage), et le bois de la saison d'après vos achats (⚙ Mon logement).`,
+  };
 }
 
 /** Room id of the wood as day records: no room of the home has it (a NUL cannot come from the API). */
