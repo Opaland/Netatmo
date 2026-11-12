@@ -29,6 +29,11 @@
                                                        │ CSP + Trusted Types, noms de    │
                                                        │ stockage propres au dépôt       │
                                                        └─────────────────────────────────┘
+ Données : data/ sur main, ou dans la branche « data » si la variable DATA_BRANCH le dit (v2.0,
+ ADR-12b) ; le déploiement copie celles de la branche choisie, l'adresse dans l'appli ne change pas.
+ Copie locale facultative (v2.0, ADR-23) : un conteneur du NAS reprend le dépôt public chaque nuit
+ (sortant seulement) et sert l'appli et data/ chiffré sur le réseau de la maison, en HTTPS par le
+ proxy inversé de DSM.
  Échec de collecte ──► issue « La collecte quotidienne échoue » (e-mail), fermée au succès.
  Alertes facultatives (jeton à renouveler, froid prolongé, module injoignable) : types, dates et
  pseudonymes seulement.
@@ -157,6 +162,7 @@ tableau, avec le numéro de celui qui le remplace ; on n'en efface aucun.
 | ADR | Décision | Statut | Alternatives écartées | Compromis |
 |---|---|---|---|---|
 | ADR-22 | **Clés d'appareils opaques et stables, sans identifiant stocké** : modules de la station (`m0`…), modules Intuis (`i0`…) et prises Shelly (`p0`…) gardent leur clé à vie ; le document ne contient qu'un sel aléatoire et `sha256("<sel>:<id>")[:16] → clé` (`KeyMap`, `collector/storage.py`). Un module ajouté prend la première clé libre, un module retiré garde la sienne, chaque module de la station reprend depuis son propre dernier jour. Les anciennes tables (`station.ids`, `devices.ids`, champ `id` des prises) sont converties une fois puis supprimées | Accepté (v1.6, reprend la PR #213) | Ids en clair dans le document chiffré (v1.5) ; clés par ordre de l'API (avant #209) ; empreinte sans sel | Une adresse MAC ne fuit plus même si la phrase de passe fuit ; l'empreinte tronquée à 64 bits suffit pour quelques dizaines d'appareils ; l'instantané horaire (artefact chiffré de 3 jours) garde les ids Intuis, nécessaires pour retrouver la pièce |
+| ADR-23 | **Copie locale en lecture seule sur le NAS** (S-9.8, #143) : un conteneur `synchro` reprend chaque nuit le dépôt public sans jeton (clone peu profond), reconstruit l'appli seulement quand autre chose que `data/` change, publie une copie (appli + `data/`, de la branche des données si `BRANCHE_DONNEES` la nomme) par un lien renommé ; un conteneur `web` la sert sans dépendance, en lecture seule ; HTTPS par le proxy inversé de DSM (WebCrypto exige un contexte sûr, #524) | Proposé (#143, PR #527), preuve sur le NAS au propriétaire | Pont qui pousse (ADR-7, à part) ; servir depuis GitHub seul ; HTTP sur le réseau local (refusé : pas de WebCrypto) | Lisible si GitHub ne répond plus ; aucune donnée déchiffrée sur le NAS ; une autre origine : clé et notes de l'appareil à refaire |
 
 ## 5. Architecture cible côté local (si E9 est validé)
 

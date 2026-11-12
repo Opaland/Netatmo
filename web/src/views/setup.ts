@@ -50,7 +50,11 @@ function draw(c: Ctx) {
         <button type="button" class="primary small" id="setup-check"${off}>Vérifier</button>
       </div>
       <p class="hint muted">${tokenAdvice(f.repo)}</p>`
-      : `<p>Dépôt <strong>${esc(f.repo)}</strong> <button type="button" class="link" id="setup-recheck"${off}>Vérifier à nouveau</button></p>`;
+      : `<p>Dépôt <strong>${esc(f.repo)}</strong> <button type="button" class="link" id="setup-recheck"${off}>Vérifier à nouveau</button>${
+          // revue v2.0: a mistyped repository or a token without the right access is not a dead end
+          // (on the lock screen there is no ⚙ Paramètres to change them)
+          c.demo ? '' : ` <button type="button" class="link" id="setup-change"${off}>Changer de dépôt ou de jeton</button>`
+        }</p>`;
   c.el.innerHTML = html(`<div class="card-head"><h2 id="setup-title" tabindex="-1">Assistant de premier lancement</h2></div>
     ${c.demo ? alertHtml('info', 'Démo : un dépôt fictif à moitié installé. Rien n’est lu ni envoyé à GitHub.', { id: 'setup-demo' }) : ''}
     <p class="hint muted">Il vérifie avec le jeton ce qui est fait, fait lui-même ce que le jeton permet (secrets Intuis, activer et lancer la collecte) et donne le lien de la page GitHub pour le reste.</p>
@@ -142,6 +146,13 @@ function onClick(c: Ctx, e: Event) {
     c.facts = { repo: r, token: true, onOwnSite: repoFromLocation() === r };
     void check(c);
   } else if (btn.id === 'setup-recheck') void check(c);
+  else if (btn.id === 'setup-change') {
+    setToken(null); // typed again with the repository, like « Oublier le jeton » in Sources de données
+    c.facts = { repo, token: false, onOwnSite: repoFromLocation() === repo };
+    c.msg = null;
+    draw(c);
+    c.el.querySelector<HTMLInputElement>('#setup-login input[name="repo"]')?.focus();
+  }
   else if (btn.id === 'setup-intuis-save') {
     const group = c.el.querySelector('#setup-intuis')!;
     const inputs = [...group.querySelectorAll<HTMLInputElement>('input[name]')];

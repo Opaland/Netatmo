@@ -41,6 +41,7 @@ Dans `docker-compose.yml`, service `synchro` :
 | Réglage | Défaut | Quand le changer |
 |---|---|---|
 | `DEPOT_URL` | le dépôt public d'origine | vous avez votre propre copie (`docs/INSTALLER.md`) : `https://github.com/<vous>/<votre-dépôt>.git` |
+| `BRANCHE_DONNEES` | vide (données lues dans `data/` de `main`) | `data` si les données vivent dans la branche `data` (variable de dépôt `DATA_BRANCH` = `data`, README « Branche des données ») ; sans ce réglage, la copie resterait figée au jour du passage, puis sans données une fois `data/` retiré de `main`. Une branche absente fait échouer la synchro, la copie précédente reste servie |
 | `HEURE` | `08:30` | heure locale de la synchro, après la collecte de la nuit (vers 5 h-6 h) et la publication du site |
 | `TZ` | `Europe/Paris` | autre fuseau |
 | `GARDER` | `3` | nombre de copies gardées pour revenir en arrière |

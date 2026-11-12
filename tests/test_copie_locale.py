@@ -211,9 +211,71 @@ def test_sans_donnees_pas_de_dossier_data(tmp_path, depot):
     assert not (actuelle(tmp_path) / "data").exists()
 
 
+def push_data_branch(tmp_path, origin, files):
+    """The `data` branch of #23: data/ alone, as the « Branche des données » workflow makes it."""
+    work = tmp_path / "branche-data"
+    if not work.exists():
+        git(tmp_path, "init", "--quiet", "-b", "data", str(work))
+        git(work, "remote", "add", "origin", str(origin))
+    for name, text in files.items():
+        p = work / "data" / name
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(text)
+    git(work, "add", "-A")
+    git(work, "commit", "--quiet", "-m", "data: collecte")
+    git(work, "push", "--quiet", "origin", "data")
+
+
+@NEEDS_GIT
+@pytest.mark.parametrize("shell", SHELLS, ids=lambda s: s[0])
+def test_donnees_dans_la_branche_data(tmp_path, depot, shell):
+    """Revue v2.0: with DATA_BRANCH = data (#23), main's data/ no longer moves (then is removed):
+    the copy must serve the data of the data branch, or it goes stale, then empty, in silence."""
+    work, origin = depot
+    push_data_branch(tmp_path, origin, {"keyinfo.json": '{"salt": "BBBB", "iter": 1}\n', "2026.enc.json": '{"v": 2}\n'})
+    r = run(shell, tmp_path, origin, BRANCHE_DONNEES="data")
+    assert r.returncode == 0, r.stderr
+    site = actuelle(tmp_path)
+    assert (site / "index.html").read_text() == "<p>version 1</p>\n", "the app still comes from main"
+    assert (site / "data" / "2026.enc.json").read_text() == '{"v": 2}\n', (
+        "data/ of main served instead of the data branch"
+    )
+    assert builds(tmp_path) == 1
+
+    # a night collected on the data branch only: published, without rebuilding the app
+    push_data_branch(tmp_path, origin, {"2027.enc.json": '{"v": 2}\n'})
+    r = run(shell, tmp_path, origin, BRANCHE_DONNEES="data")
+    assert r.returncode == 0, r.stderr
+    assert (actuelle(tmp_path) / "data" / "2027.enc.json").exists()
+    assert builds(tmp_path) == 1
+
+    # then data/ removed from main (the owner's later PR): the data branch is still served
+    git(work, "rm", "--quiet", "-r", "data")
+    git(work, "commit", "--quiet", "-m", "data/ retiré de main")
+    git(work, "push", "--quiet", "origin", "main")
+    r = run(shell, tmp_path, origin, BRANCHE_DONNEES="data")
+    assert r.returncode == 0, r.stderr
+    assert (actuelle(tmp_path) / "data" / "2027.enc.json").exists()
+
+
+@NEEDS_GIT
+def test_branche_data_absente_la_copie_precedente_reste(tmp_path, depot):
+    """A data branch that does not exist (variable set too early, typo) never replaces a copy that
+    had data with one that has none."""
+    work, origin = depot
+    assert run(SHELLS[0], tmp_path, origin).returncode == 0
+    before = actuelle(tmp_path)
+    r = run(SHELLS[0], tmp_path, origin, BRANCHE_DONNEES="data")
+    assert r.returncode != 0
+    assert "copie précédente reste servie" in r.stderr
+    assert actuelle(tmp_path) == before
+    assert (actuelle(tmp_path) / "data" / "2026.enc.json").exists()
+
+
 @pytest.mark.parametrize(
     "env",
     [
+        {"BRANCHE_DONNEES": "--upload-pack=x"},
         {"DEPOT_URL": "https://jeton:x@github.com/moi/depot.git"},
         {"DEPOT_URL": "git@github.com:moi/depot.git"},
         {"BRANCHE": "--upload-pack=x"},

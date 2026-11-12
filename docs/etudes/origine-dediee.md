@@ -210,8 +210,12 @@ dépôt, pas celles de Pages) :
   (`docs/etudes/volets-wiser.md`) ;
 - les liens du README (`SITE=https://opaland.github.io/Netatmo`, `gh attestation verify -R …`),
   `SECURITY.md`, `.github/ISSUE_TEMPLATE/config.yml`, `web/src/legal.ts`, le dépôt par défaut de
-  `web/src/views/settings.ts`, les `User-Agent` du collecteur (`collector/enedis.py`, `shelly.py`,
-  `scripts/tempo_jours.py`), `scripts/revue_issues.py` ;
+  `web/src/views/settings.ts`, les `User-Agent` du collecteur (`collector/enedis.py`,
+  `collector/shelly.py`, `scripts/tempo_jours.py`), `scripts/revue_issues.py` ;
+- ajoutés par la v2.0 : le lien de l'écran de déverrouillage en HTTP (`web/src/crypto.ts`,
+  `INSECURE_DOC`), le dépôt d'origine de `scripts/depot_pret.py` (`MODEL`) et le dépôt copié par
+  défaut sur le NAS (`scripts/nas/copie-locale/copie-locale.sh`, `DEPOT_URL`) ; un test tient cette
+  liste d'accord avec le code (`tests/test_origine_dediee.py`) ;
 - les tests qui citent l'adresse comme exemple peuvent rester (données fictives).
 
 **Après, sur chaque appareil**

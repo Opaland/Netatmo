@@ -29,12 +29,16 @@ signalement privé, et cité dans la PR du correctif si vous le souhaitez.
 
 - **L'application** (`web/`) : déchiffrement local, clé « Rester connecté » (IndexedDB), notes
   chiffrées (localStorage), service worker et ses caches, politique de sécurité du contenu (CSP) et
-  Trusted Types, appels à l'API GitHub depuis ⚙ Paramètres.
+  Trusted Types, appels à l'API GitHub depuis ⚙ Paramètres et l'assistant de premier lancement
+  (aussi ouvert depuis l'écran d'un site sans données).
 - **Le collecteur** (`collector/`) : appels à Intuis, Netatmo, Conso API, Shelly, Open-Meteo,
   Anthropic ; chiffrement avant commit ; journaux publics de GitHub Actions.
 - **Les workflows** (`.github/workflows/`) : permissions, secrets, déploiement Pages et attestation
   de provenance.
 - **Le chiffrement des données** (`data/*.enc.json`) : format d'enveloppe, dérivation de la clé.
+- **La copie locale sur un NAS** (`scripts/nas/copie-locale/`) : script de synchronisation et
+  serveur statique servis sur le réseau de la maison ; et les scripts d'installation
+  (`scripts/depot_pret.py`, `scripts/donnees.sh`).
 
 Hors périmètre : les services tiers eux-mêmes (Intuis, Netatmo, Enedis, GitHub…), et le partage
 de l'origine `<compte>.github.io` entre les sites Pages d'un même compte, risque connu et documenté :

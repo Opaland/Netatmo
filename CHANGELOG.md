@@ -1,5 +1,53 @@
 # Historique des versions
 
+## v2.0 — novembre 2026 : ouverture (en cours)
+
+Dépôt modèle et guide, assistant de premier lancement, origine dédiée, branche `data` et copie sur
+le NAS ([feuille de route](docs/bmad/feuille-de-route.md)), plus les issues ouvertes par la revue de
+fin de v1.9. Revue de fin de version par les **72 personas**, revue design des écrans nouveaux ou
+changés et revue de code par agent : [`docs/bmad/revues/v2.0.md`](docs/bmad/revues/v2.0.md). Le pont
+(#25) attend le go de S-9.0 et la clé IA (#14) la condition de l'ADR-5 ; les gestes et décisions du
+propriétaire (revue, § 9 et § 10) ne bloquent pas l'enchaînement vers la v2.1.
+
+- **Installer chez un nouveau foyer**
+  - Guide pas à pas `docs/INSTALLER.md` (partie de #29, #522) : créer sa copie, vider `data/` du
+    foyer d'origine, phrase de passe, les cinq secrets obligatoires, Pages, première collecte,
+    téléphone ; `scripts/depot_pret.py` dit en lecture seule ce qui reste à faire (données, dépôt
+    distant, secrets et Pages avec `--github`). Cocher « Template repository » reste au propriétaire.
+  - Assistant de premier lancement (partie de #40, #528) : ⚙ Sources de données → Premier
+    lancement, et l'écran d'un site sans données ; il vérifie avec le jeton ce qui est fait, scelle
+    lui-même les secrets Intuis manquants, réactive et lance la première collecte avec tout
+    l'historique, et donne le lien GitHub pour la phrase de passe et Pages ; démo fictive sans appel.
+    Un dépôt mal tapé ou un jeton sans les bons droits se corrige sans recharger (« Changer de dépôt
+    ou de jeton », revue de fin de version).
+- **Où vivent les données**
+  - Branche `data`, au choix du propriétaire (#23, #523) : variable `DATA_BRANCH`, workflow manuel
+    « Branche des données » (même arbre Git, totaux déchiffrés comparés avant l'envoi, jamais forcé,
+    jamais en arrière), `python -m collector comparer` ; l'adresse des données dans l'appli ne
+    change pas. La garde anti-recul relit tout l'historique de la source (#529, #530). Rien ne
+    bascule tout seul.
+  - Copie locale sur un NAS Synology (partie de #143, #527) : un conteneur reprend le dépôt public
+    chaque nuit, sans jeton ni port entrant, et sert l'appli et les données chiffrées à la maison,
+    lisibles si GitHub ne répond plus ; HTTPS par le proxy inversé de DSM. Avec la branche `data`,
+    réglage `BRANCHE_DONNEES` (revue de fin de version).
+- **Sécurité**
+  - Origine `github.io` partagée (partie de #229, #525) : modèle de menace corrigé (le site du compte
+    peut prendre la main par un service worker) ; la trace d'un autre site du compte ouvert dans ce
+    navigateur est signalée à côté de « Rester connecté » (une détection, pas une protection) ;
+    gestes du transfert vers l'organisation écrits dans l'étude.
+  - Ouverte en HTTP hors `localhost` (#524, #531) : l'écran de déverrouillage le dit avant toute
+    saisie et grise la phrase et la démo, au lieu d'une erreur JavaScript ou d'une « phrase de passe
+    incorrecte ».
+  - Notes de l'appareil : paramètres lus avant l'ouverture des données (#517, #521).
+- **Lisibilité** (constats de la revue v1.9, #518, #526)
+  - Effacer une note illisible demande confirmation, avec la variante destructive du design system ;
+    repère kWh/m²/an : grille et coefficients sous « Comment c'est calculé » ; phrase du soleil dite
+    une fois.
+  - « Mon défi » juste en année bissextile (#517, #521).
+- **Revue de fin de version** : captures de référence régénérées dans la police de la CI (DejaVu
+  Sans) ; la liste des fichiers à renommer au transfert tenue par un test ; textes périmés corrigés
+  (SECURITY.md, architecture : ADR-23) (revue, § 6 et § 12).
+
 ## v1.9 — novembre 2026 : sécurité et méthode
 
 Argon2id, paliers de taille, ensoleillement, repère kWh/m²/an, objectif à climat égal et rapport
