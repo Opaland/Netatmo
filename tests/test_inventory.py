@@ -10,7 +10,14 @@ import pytest
 from collector.api import ApiError
 from collector.budget import METER
 from collector.config import Settings
-from collector.diagnose import inventory, inventory_intuis, inventory_linky, inventory_station, shape
+from collector.diagnose import (
+    compatibility_report,
+    inventory,
+    inventory_intuis,
+    inventory_linky,
+    inventory_station,
+    shape,
+)
 
 NOW = 1_762_000_000
 MAC_MAIN = "70:ee:50:aa:bb:cc"
@@ -191,6 +198,20 @@ def test_intuis_inventory_lists_fields_schedules_types_and_scales_without_values
     assert res["measures"][("sp_temperature", "1day")] == "pièces 0 / modules 0"
     assert res["depth"]["1hour"] == 180 and res["depth"]["1day"] == 1825 and res["depth"]["5min"] is None
     assert ("sum_energy_elec_heating", "30min") in client.calls
+
+
+def test_compatibility_report_tells_the_hardware_measures_and_depth_without_an_id(capsys):
+    """S-10.4 (#144): the text of the « Compatibilité » issue: type codes, measure names, counts."""
+    report = compatibility_report(FakeIntuis(), now=NOW)  # type: ignore[arg-type]
+    assert capsys.readouterr().out == ""  # the inventory's own log is not printed
+    assert "- Maisons : 1\n" in report
+    assert "- Pièces : 2 (bedroom ×1, livingroom ×1)" in report
+    assert "NMH ×1" in report and "NMW ×1" in report and "NMG ×1" in report
+    assert "- État des pièces (homestatus) : lu" in report
+    assert "| `sum_energy_elec` | refusé (HTTP 400) | pièces 2 / modules 2 |" in report
+    assert "- 1day : au moins 1825 jours" in report and "- 5min : rien" in report
+    for secret in SECRETS_INTUIS:
+        assert secret not in report, secret
 
 
 def _station_handler(seen: list):
@@ -421,3 +442,17 @@ def test_collection_without_station_skips_the_inventory(capsys):
 
     _station_inventory(None)
     assert "Inventaire de la station : ignoré" in capsys.readouterr().out
+
+
+def test_the_compatibility_template_asks_for_the_command_the_collector_has():
+    """S-10.4 (#144): the issue template and the CLI name the same command (AGENTS.md §5)."""
+    import subprocess
+    import sys
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[1]
+    template = (root / ".github" / "ISSUE_TEMPLATE" / "compatibilite.yml").read_text()
+    assert "python -m collector diagnose --report" in template
+    cmd = [sys.executable, "-m", "collector", "diagnose", "--help"]
+    helped = subprocess.run(cmd, capture_output=True, text=True, cwd=root)
+    assert "--report" in helped.stdout and "Compatibilité" in helped.stdout

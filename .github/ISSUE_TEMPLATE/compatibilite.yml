@@ -1,0 +1,32 @@
+name: Compatibilité (mon matériel marche-t-il ?)
+description: Avant d'installer, déposez le rapport anonyme de votre installation Intuis / Muller.
+title: "Compatibilité : "
+labels: ["collecteur"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Le rapport se produit sur votre ordinateur, avec vos identifiants Intuis dans un fichier `.env`
+        (voir le README, « Installation ») :
+
+        ```bash
+        python -m collector diagnose --report
+        ```
+
+        Il ne contient ni identifiant, ni nom de pièce, ni valeur de consommation : des codes de type de
+        module (NMG, NMH…), des types de pièce, des noms de mesure, des nombres de points et une
+        profondeur d'historique en jours. Relisez-le avant de le coller ; **ne collez jamais** vos
+        identifiants, un e-mail, un nom ou une adresse.
+  - type: textarea
+    id: rapport
+    attributes:
+      label: Rapport de compatibilité
+      description: La sortie complète de `python -m collector diagnose --report`, telle quelle.
+      render: markdown
+    validations:
+      required: true
+  - type: textarea
+    id: materiel
+    attributes:
+      label: Votre installation (facultatif)
+      description: Radiateurs, chauffe-eau, passerelle, station Netatmo, compteur Linky… en mots, sans numéro de série.
