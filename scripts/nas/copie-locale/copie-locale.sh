@@ -111,6 +111,15 @@ recuperer() {
 	fi
 }
 
+# Keeps, in folder $1, the entry $2 (the one just made) and the GARDER-1 most recent others. $2 is
+# never a candidate: the order comes from modification times, and two entries made in the same
+# instant (coarse clock) sort either way; on the CI runner, the build just made was removed.
+elaguer() {
+	ls -1t "$1" | grep -v '\.tmp$' | grep -vxF "$2" | awk -v n=$((GARDER - 1)) 'NR > n' | while read -r vieux; do
+		rm -rf "${1:?}/$vieux"
+	done
+}
+
 # Builds the app once per source tree, in the repository's own web/ (the build reads files outside
 # web/, such as docs/export-long.schema.json: a copy of web/ alone does not build). The build is named
 # after every top-level entry of the commit except data/, so the nightly data commits reuse the last
@@ -132,14 +141,13 @@ construire() {
 		journal "la construction n'a pas produit dist/index.html"
 		ok=0
 	fi
-	[ "$ok" = 1 ] && mv "$depot/web/dist" "$sortie.tmp" && mv "$sortie.tmp" "$sortie" || ok=0
+	# touch: a rename keeps the build's own mtime, the pruning below sorts on it
+	[ "$ok" = 1 ] && mv "$depot/web/dist" "$sortie.tmp" && mv "$sortie.tmp" "$sortie" && touch "$sortie" || ok=0
 	# the npm packages (about 300 MB) are not kept between builds; the next fetch cleans the rest
 	rm -rf "$depot/web/node_modules" "$depot/web/dist"
 	[ "$ok" = 1 ] || return 1
 	# only the last builds are kept (each takes a few MB)
-	ls -1t "$COPIE/constructions" | sed "1,${GARDER}d" | while read -r vieux; do
-		rm -rf "${COPIE:?}/constructions/$vieux"
-	done
+	elaguer "$COPIE/constructions" "${sortie##*/}"
 	printf '%s\n' "$sortie"
 }
 
@@ -164,9 +172,7 @@ publier() {
 	ln -sfn "versions/$nom" "$site/actuelle.tmp" && mv -fT "$site/actuelle.tmp" "$site/actuelle" ||
 		return 1
 	# the GARDER most recent copies stay (to go back by hand: point « actuelle » to an older one)
-	ls -1t "$site/versions" | grep -v '\.tmp$' | sed "1,${GARDER}d" | while read -r vieux; do
-		[ "$vieux" = "$nom" ] || rm -rf "${site:?}/versions/$vieux"
-	done
+	elaguer "$site/versions" "$nom"
 	n=$(find "$site/versions/$nom/data" -name '*.enc.json' 2>/dev/null | wc -l | tr -d ' ')
 	journal "copie publiée : commit ${commit%"${commit#????????????}"}, ${n} fichier(s) chiffré(s)"
 }

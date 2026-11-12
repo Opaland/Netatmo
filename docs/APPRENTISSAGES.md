@@ -167,3 +167,14 @@ quand un outil la rend impossible à refaire.
   pas. Vus sur une capture, pas par la suite verte.
 - **Conduite** : la borne d'un invariant se justifie par le cas qu'elle écarte, et ce cas se
   cherche dans l'appli avant de la poser ; ici, plus de borne (`e2e/sweep.mjs`).
+
+### A17 · 12/11/2026 — Un tri par date de modification rangeait au hasard des copies du même instant (#143, PR #527)
+
+- **Ce qui s'est passé** : le script de copie locale du NAS gardait les `GARDER` dernières
+  constructions avec `ls -t` ; vert en local, rouge sur le runner sous busybox : la construction
+  qui venait d'être faite, de même date que les précédentes à la résolution de l'horloge (et un
+  renommage garde la date d'origine), a été rangée parmi les anciennes et supprimée, puis
+  « publication impossible ».
+- **Conduite** : un élagage par date ne propose jamais l'élément qu'on vient de faire ; le test
+  rend le cas certain (anciennes entrées datées dans le futur) au lieu d'attendre une égalité
+  d'horloge (`elaguer`, `tests/test_copie_locale.py`).

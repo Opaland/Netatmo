@@ -5,6 +5,7 @@ and the container files read statically (no Docker daemon in CI).
 Only made-up files here: no real data, no address, no secret."""
 
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -177,6 +178,27 @@ def test_la_construction_voit_le_depot_et_suit_ce_qui_n_est_pas_data(tmp_path, d
     assert builds(tmp_path) == 2
     assert (actuelle(tmp_path) / "index.html").read_text().endswith('{"a": 1}\n')
     assert not (tmp_path / "copie" / "depot" / "web" / "dist").exists()
+
+
+@NEEDS_GIT
+@pytest.mark.parametrize("garder", [1, 2])
+@pytest.mark.parametrize("shell", SHELLS, ids=lambda s: s[0])
+def test_l_elagage_ne_supprime_jamais_la_construction_ou_la_copie_du_jour(tmp_path, depot, shell, garder):
+    """Seen on the CI runner (busybox): the pruning sorts by modification time, and a build made in
+    the same instant as older ones (or older-looking: mv keeps the build's own mtime) could be the one
+    removed, then « publication impossible ». Older entries dated in the future make that certain."""
+    work, origin = depot
+    for sub in ("constructions", "site/versions"):
+        for name in ("vieille-1", "vieille-2"):
+            d = tmp_path / "copie" / sub / name
+            d.mkdir(parents=True)
+            (d / "index.html").write_text("<p>vieille</p>\n")
+            os.utime(d, (4_102_444_800, 4_102_444_800))  # 2100-01-01
+    r = run(shell, tmp_path, origin, GARDER=str(garder))
+    assert r.returncode == 0, r.stderr
+    assert (actuelle(tmp_path) / "index.html").read_text() == "<p>version 1</p>\n"
+    assert len(list((tmp_path / "copie" / "constructions").iterdir())) == garder
+    assert len(list((tmp_path / "copie" / "site" / "versions").iterdir())) == garder
 
 
 @NEEDS_GIT
