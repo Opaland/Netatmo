@@ -175,6 +175,7 @@ OPEN_METEO_DAILY = {
         "wind_speed_10m_mean": Optional([(int, float, type(None))]),
         "wind_gusts_10m_max": Optional([(int, float, type(None))]),
         "precipitation_sum": Optional([(int, float, type(None))]),
+        "shortwave_radiation_sum": Optional([(int, float, type(None))]),  # #452
     }
 }
 # S-3.12 (#221): wind and rain alone, when the Netatmo station gives the temperatures.
@@ -184,6 +185,7 @@ OPEN_METEO_WIND = {
         "wind_speed_10m_mean": [(int, float, type(None))],
         "wind_gusts_10m_max": Optional([(int, float, type(None))]),
         "precipitation_sum": Optional([(int, float, type(None))]),
+        "shortwave_radiation_sum": Optional([(int, float, type(None))]),  # #452
     }
 }
 # #356: PVGIS hourly series of one roof (seriescalc, 1 kWc): the power P of each UTC hour.

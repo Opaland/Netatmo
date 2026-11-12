@@ -135,6 +135,12 @@ try {
     // ---------------------------------------------------------------- Air et confort: radiator vs station
     progress(`${name} : Air et confort`);
     await go(page, 'confort');
+    // #452: the setup of « Niveau inférieur » opens by itself; it must not turn « Voir les valeurs »
+    // on for every table of the app (Accueil grew by a table after a visit to Air et confort)
+    await page.waitForSelector('#lower-card #lower-setup[open]', { timeout: 15000 });
+    await go(page, 'accueil');
+    check((await page.locator('#view details.table-details[open]').count()) === 0, `${name} : visiter Air et confort ouvre les tableaux de l'Accueil`);
+    await go(page, 'confort');
     await page.waitForSelector('#probe-card', { timeout: 15000 });
     const card = await page.locator('#probe-card').innerText();
     check(/écart moyen/i.test(card) && /recalez la consigne/.test(card), `${name} : la carte radiateur/station n'explique pas l'écart moyen ni son usage`);
@@ -183,6 +189,38 @@ try {
       check((await wide(page)) <= 1, `${name} : défilement horizontal sur Air et confort (${await wide(page)} px)`);
       await audit(page, `${name}/confort`, enhanced);
     }
+
+    // ---------------------------------------------------------------- #452 Niveau inférieur
+    progress(`${name} : niveau inférieur`);
+    await go(page, 'confort');
+    await page.waitForSelector('#lower-card [data-lower-room="r-bureau"]', { timeout: 15000 });
+    check(/Choisissez les pièces chauffées du niveau inférieur/.test(await page.locator('#lower-card').innerText()), `${name} : niveau inférieur sans consigne de départ`);
+    await page.locator('#lower-card [data-lower-room="r-bureau"]').click();
+    await page.waitForSelector('#lower-card [data-lower-room="r-bureau"]:checked', { state: 'attached', timeout: 15000 });
+    await page.locator('#lower-card [data-lower-room="r-ch2"]').click();
+    // a bedroom on the lower level: its detail is masked until the deliberate gesture (S-12.2)
+    await page.waitForSelector('#lower-card [data-comfort="show-bedrooms"]', { timeout: 15000 });
+    await page.click('#lower-card [data-comfort="show-bedrooms"]');
+    await ready(page);
+    await page.waitForSelector('#lower-card table', { timeout: 15000 });
+    let lower = await page.locator('#lower-card').innerText();
+    check(/Hiver 20\d\d–20\d\d/.test(lower) && /kWh par degré-jour/.test(lower), `${name} : niveau inférieur sans tendance d'un hiver à l'autre (« ${lower.slice(0, 200)} »)`);
+    if (!(await page.evaluate(() => document.getElementById('lower-setup')?.open))) await page.click('#lower-setup summary');
+    await page.selectOption('#lower-probe', { label: 'Cave' });
+    await page.waitForFunction(() => /Sonde − dehors/.test(document.querySelector('#lower-card table')?.textContent ?? ''), null, { timeout: 15000 });
+    await page.fill('#lower-day', '2025-01-15');
+    await page.selectOption('#lower-kind', 'joints');
+    await page.click('#lower-add');
+    await page.waitForSelector('#lower-card [data-lower-del]', { timeout: 15000 });
+    await ready(page);
+    lower = await page.locator('#lower-card').innerText();
+    check(/après « Joints de porte » du 15 janvier 2025/.test(lower) && /[−+]?\d+\s%\sd'énergie par degré-jour/.test(lower), `${name} : avant / après absent (« ${lower.slice(0, 240)} »)`);
+    check(/^Avant .*jours retenus/m.test(lower) && /^Après /m.test(lower), `${name} : lignes avant / après absentes`);
+    const hyp = await page.locator('#lower-card details:last-of-type').evaluate((d) => d.textContent);
+    check(/médiane/.test(hyp) && /MJ\/m²/.test(hyp) && /base 18 °C/.test(hyp) && /pas la chaleur partie seule/.test(hyp), `${name} : hypothèses du niveau inférieur incomplètes`);
+    check((await wide(page)) <= 1, `${name} : défilement horizontal avec le niveau inférieur (${await wide(page)} px)`);
+    await audit(page, `${name}/niveau-inferieur`, enhanced);
+    await page.locator('#lower-card').screenshot({ path: `${OUT}/retours-${BROWSER}-${name}-niveau-inferieur.png` });
 
     // ---------------------------------------------------------------- segments: the page stays in place
     if (name === 'clair' || name === 'texte-200') {

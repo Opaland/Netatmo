@@ -20,9 +20,10 @@ Flambées) give labelled evenings; with about twenty of them, the smallest rise 
 answered « oui » and the largest of those answered « non » bound RISE_MIN as the demo does below.
 Logs: nothing (no room, no value, no count).
 
-Sun: Open-Meteo radiation is not collected (collector/weather.py asks the daily temperatures, wind
-and rain only). The window therefore opens at sunset, computed for the home's coordinates (or, when
-unknown, the latest sunset of mainland France that day): after it, there is no sun to warm a room.
+Sun: Open-Meteo's radiation is collected as a daily sum only (#452, weather "sun", MJ/m²), which
+cannot say whether the evening was sunny. The window therefore opens at sunset, computed for the
+home's coordinates (or, when unknown, the latest sunset of mainland France that day): after it, the
+radiation is nil and no sun warms a room; the daily sum is not needed.
 """
 
 from __future__ import annotations
