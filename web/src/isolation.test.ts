@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest';
 import { type DayRecord, addDays } from './aggregate';
 import type { Weather } from './analysis';
 import { seasonSignatures, signatureDays } from './indoorsig';
-import { KWH_M2_GRID, W_PER_K_GRID, gradeOf, gridText, homePerM2, roomPerM2Text, wattsPerDegree, withWood } from './isolation';
+import { KWH_M2_GRID, W_PER_K_GRID, gradeOf, gridText, homePerM2, roomPerM2Text, wattsPerDegree, withWood, woodYear } from './isolation';
 import { NO_WOOD, type WoodSettings, woodDaily } from './wood';
 
 /** A year of weather (Sept 2025 → Aug 2026): cold in January, warm in July, no noise. */
@@ -101,5 +101,39 @@ describe('the indicative grids (#460)', () => {
   });
   it('W/°C from the slope: 2.4 kWh per day per °C is 100 W/°C', () => {
     expect(wattsPerDegree(-2.4)).toBeCloseTo(100, 6);
+  });
+});
+
+describe('« Chauffage électricité + bois », year by year (revue de code v1.8)', () => {
+  // A fictitious year whose data start on 1 March: 10 kWh of electricity and 5 kWh of wood a day,
+  // the wood also on days before the first electricity day, and no outdoor temperature on the
+  // second half of the year (a station out of reach), every day measured at 8 °C (10 degree days).
+  const heat: DayRecord[] = [];
+  const daily = new Map<string, [number, number]>();
+  const weather: Weather = new Map();
+  for (let d = '2025-01-01'; d <= '2025-12-31'; d = addDays(d, 1)) {
+    daily.set(d, [5, 0.5]);
+    if (d >= '2025-03-01') heat.push({ day: d, room: 'r-ch', cat: 'heating', kwh: 10 });
+    if (d < '2025-07-01') weather.set(d, [4, 12, 8]);
+  }
+  const y = woodYear(heat, daily, weather, 2025, '2025-03-01', '2025-12-31');
+
+  it('counts the wood from the first electricity day on, as withWood (#433)', () => {
+    expect(y.wood).toBe(5 * 306); // 1 March → 31 December
+    expect(y.kwh).toBe(15 * 306);
+    expect(y.woodEur).toBeCloseTo(0.5 * 306);
+  });
+
+  it('divides by the degree days of the days measured only, and says « au moins » (#464)', () => {
+    // 1 March → 30 June: 122 days with a temperature, 10 degree days each
+    expect(y.cold!.perDju).toBe('1,50'); // 15 kWh / 10 DJ: not the whole span's heating over the cold of the days measured
+    expect(y.cold!.cell).toMatch(/^1\s220 \*$/);
+    expect(y.cold!.caveat).toContain('184 jours sans température extérieure');
+  });
+
+  it('no weather: no cold, the heating still counted', () => {
+    const z = woodYear(heat, daily, null, 2025, '2025-03-01', '2025-12-31');
+    expect(z.cold).toBeNull();
+    expect(z.kwh).toBe(15 * 306);
   });
 });
