@@ -9,6 +9,13 @@
   alertes restent. Une pièce et ses modules qui disparaissent de l'application Intuis gardent leur
   historique (entrée de la pièce conservée dans la méta, clés pseudonymes des modules inchangées).
   « Expliquer un mois » : « Changement de mode de chauffage (radiateurs retirés : Salon) ».
+- **L'isolation jugée électricité + bois** (#460) : avec un poêle et du bois acheté, « Chauffage
+  selon le froid » compte le bois par défaut (bascule « Électricité seule »), « Année par année »
+  ajoute le chauffage électricité + bois en kWh, par degré-jour et en euros, et le kWh/m² du
+  logement (⚙ Mon logement › Surfaces) compte le bois ; la pièce du poêle dit « chauffée au bois »,
+  jamais 0. Une seule répartition du bois, celle du verdict de l'Accueil (#433). Verdict
+  « Isolation, à titre indicatif » sous « Chauffage selon le froid » : W/°C et kWh/m² par an, grilles indicatives affichées
+  (`web/src/isolation.ts`), jours estimés signalés.
 - **Saisies gardées dans ⚙ Mon logement** (#462) : « Localisation et toits » garde ce qui est tapé
   dans un brouillon chiffré sur l'appareil (clé des données), qui survit à un changement d'onglet, à
   un passage par ⚙ Sources de données et à un rechargement, et s'efface après « Enregistrer pour le

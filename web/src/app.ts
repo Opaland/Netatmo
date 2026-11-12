@@ -56,6 +56,8 @@ export interface State {
   contracts: ContractPeriod[];
   contractLocalEdit: boolean; // S-12.1: edited here while a shared contract exists
   climate: boolean;
+  /** #460: the signature with the stove's wood (default when wood is bought) or the electricity alone. */
+  sigEnergy: 'wood' | 'elec';
   analyseYear: number | null;
   tempRoom: string | null;
   reportYear: number | null;
@@ -100,6 +102,7 @@ export const DEFAULT: State = {
   contracts: [],
   contractLocalEdit: false,
   climate: true, // maquette « Historique »: à climat égal (off without weather)
+  sigEnergy: 'wood',
   analyseYear: null,
   tempRoom: null,
   reportYear: null,
