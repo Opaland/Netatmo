@@ -33,7 +33,9 @@ Ce que l'application mobile ne fait pas, et que celle-ci fait :
   calculé (compteur Linky × tarif du contrat + abonnement au prorata), écart expliqué (relevé estimé,
   jours manquants, abonnement, taxes) et part du chauffage et de l'eau chaude ;
 - les **surfaces** des pièces et des **marqueurs « travaux »** datés (isolation, fenêtres,
-  radiateur…) : signature avant / après (deux droites), kWh/m² et kWh par degré-jour ; ces saisies et
+  radiateur…) : signature avant / après (deux droites), kWh/m² et kWh par degré-jour, et dans le
+  rapport annuel un **repère en kWh/m²/an** (chauffage + eau chaude, en énergie primaire) face aux
+  seuils de l'étiquette énergie du DPE, à titre indicatif et **sans être un DPE** ; ces saisies et
   les factures restent **chiffrées sur l'appareil** ;
 - une **analyse du mois rédigée par l'IA** (Claude), facultative.
 
