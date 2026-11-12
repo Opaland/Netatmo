@@ -68,7 +68,7 @@ export const GROUPS: SecretGroup[] = [
   {
     id: 'ia',
     title: 'Analyse IA mensuelle (facultatif)',
-    help: 'console.anthropic.com → clé API. Seuls des totaux mensuels sont envoyés.',
+    help: 'console.anthropic.com → clé API. Seuls les totaux du mois et au plus cinq jours inhabituels sont envoyés, pièces sous pseudonyme.',
     fields: [{ name: 'ANTHROPIC_API_KEY', label: 'Clé API Anthropic', secret: true, placeholder: 'sk-ant-…' }],
   },
 ];

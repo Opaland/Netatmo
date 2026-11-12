@@ -226,6 +226,11 @@ def _energy_cost(store: Store, rooms: dict, contract: list[dict], first: str, la
 
 
 # ------------------------------------------------------------------ unusual days (S-5.6)
+# #365: the only daily values sent to the AI; the screens and the docs say « au plus cinq jours
+# inhabituels » (tests/test_promesses.py holds them to this number).
+MAX_UNUSUAL_DAYS = 5
+
+
 def _unusual_days(store: Store, rooms: dict, weather: dict, first: str, last: str) -> list[dict]:
     """Heating days of the month far from the season's energy signature (same rule as the
     app's "Jours inhabituels": residual > 2 σ and > 3 kWh)."""
@@ -256,7 +261,7 @@ def _unusual_days(store: Store, rooms: dict, weather: dict, first: str, last: st
     res = [(k - (slope * t + intercept), t, k, d) for t, k, d in pts]
     sigma = math.sqrt(sum(r[0] ** 2 for r in res) / max(1, n - 2))
     out = [r for r in res if first <= r[3] <= last and abs(r[0]) > 2 * sigma and abs(r[0]) > 3]
-    out = sorted(out, key=lambda r: -abs(r[0]))[:5]
+    out = sorted(out, key=lambda r: -abs(r[0]))[:MAX_UNUSUAL_DAYS]
     return [
         {
             "jour": _long_day(d),
