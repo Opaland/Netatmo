@@ -14,7 +14,7 @@ import { FORBIDDEN, GROUPS } from './settings';
 export const PASSPHRASE_SECRET = 'DATA_PASSPHRASE';
 /** The four Intuis secrets, those of « Sources de données » (one list, settings.ts GROUPS). */
 export const INTUIS_SECRETS: readonly string[] = GROUPS.find((g) => g.id === 'intuis')!.fields.map((f) => f.name);
-/** The secrets the collection needs (README, Installation, step 3; setup.test.ts holds them in agreement). */
+/** The secrets the collection needs (docs/INSTALLER.md, step 4; setup.test.ts holds them in agreement). */
 export const REQUIRED_SECRETS: readonly string[] = [...INTUIS_SECRETS, PASSPHRASE_SECRET];
 /** The collection workflow, run once with the whole history. */
 export const COLLECT_WORKFLOW = 'collect.yml';
@@ -136,7 +136,7 @@ export function setupSteps(f: SetupFacts): Step[] {
   const missing = INTUIS_SECRETS.filter((n) => !has(n));
   steps.push(
     f.secrets === undefined
-      ? { id: 'intuis', title: 'Compte Intuis', status: 'a-verifier', text: 'Quatre secrets : l’e-mail et le mot de passe du compte, et les identifiants d’application (README, étape 2).', link: { href: l.secrets, label: 'Voir les secrets du dépôt' } }
+      ? { id: 'intuis', title: 'Compte Intuis', status: 'a-verifier', text: 'Quatre secrets : l’e-mail et le mot de passe du compte, et les identifiants d’application (guide d’installation, étape 4).', link: { href: l.secrets, label: 'Voir les secrets du dépôt' } }
       : missing.length
         ? { id: 'intuis', title: 'Compte Intuis', status: 'a-faire', text: `Manque${missing.length > 1 ? 'nt' : ''} : ${missing.join(', ')}. L’appli les chiffre dans ce navigateur avec la clé publique du dépôt, puis les enregistre.`, action: 'save-intuis' }
         : { id: 'intuis', title: 'Compte Intuis', status: 'fait', text: 'Les quatre secrets Intuis existent.' },

@@ -33,7 +33,7 @@ export function renderLock(message = '', hasRealData = true, notice = '') {
         ${switchField('Rester connecté sur cet appareil (30 jours au plus)', true, { id: 'remember' })}
         <button class="primary" type="submit">Déverrouiller</button>
       </form>`
-          : `${alertHtml('info', "Aucune donnée n'a encore été collectée. Suivez l'assistant d'installation (ou le guide du README), ou essayez la démo.")}
+          : `${alertHtml('info', "Aucune donnée n'a encore été collectée. Suivez l'assistant d'installation (ou le guide d'installation), ou essayez la démo.")}
         <button class="primary" type="button" id="setup-lock">Ouvrir l’assistant d’installation</button>
         <section id="setup-zone" class="setup-lock" hidden></section>`
       }

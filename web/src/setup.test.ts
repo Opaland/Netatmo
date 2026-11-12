@@ -101,9 +101,9 @@ describe('#40 assistant de premier lancement', () => {
     expect(s.some((x) => x.status === 'fait') && s.some((x) => x.status !== 'fait')).toBe(true);
   });
 
-  it('les secrets requis sont ceux du README (Installation, étape 3) : une seule liste (AGENTS.md § 5)', () => {
-    const readme = readFileSync(new URL('../../README.md', import.meta.url), 'utf8');
-    const part = readme.slice(readme.indexOf('### 3. Ajouter les secrets'), readme.indexOf('### 4.'));
+  it('les secrets requis sont ceux du guide d’installation (étape 4) : une seule liste (AGENTS.md § 5)', () => {
+    const guide = readFileSync(new URL('../../docs/INSTALLER.md', import.meta.url), 'utf8');
+    const part = guide.slice(guide.indexOf('### Les cinq secrets obligatoires'), guide.indexOf('### Autre voie'));
     const names = [...part.matchAll(/^\| `([A-Z_]+)` \|/gm)].map((m) => m[1]);
     expect(names).toEqual([...REQUIRED_SECRETS]);
   });
