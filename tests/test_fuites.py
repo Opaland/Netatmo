@@ -217,6 +217,29 @@ def test_collection_with_every_source_failing_leaks_nothing(tmp_path, monkeypatc
     assert sources["open-meteo"]["message"].startswith("Open-Meteo : /v1/archive → HTTP 429")
 
 
+@pytest.mark.parametrize("layers", ["errors seulement", "errors + redact"])
+def test_compatibility_report_leaks_nothing(tmp_path, monkeypatch, capsys, caplog, all_sources, layers):
+    """S-10.4 (#144): `diagnose --report` is pasted into a public issue by a candidate household:
+    the same detector as the collection, with and without the redaction of the logs."""
+    from collector.__main__ import main
+
+    if layers == "errors seulement":
+        monkeypatch.setattr(redact, "redact", lambda text: text)
+        monkeypatch.setattr(redact, "install", lambda streams=None: None)
+    else:
+        monkeypatch.setenv("GITHUB_ACTIONS", "true")
+    all_sources(router())
+    caplog.set_level(logging.INFO)
+    main(["diagnose", "--report"])
+    out = _outputs(tmp_path, capsys, caplog)
+    assert_clean(out, layers)
+    # it says something: the hardware, the measure families, the depth
+    assert "### Rapport de compatibilité (anonyme)" in out
+    assert "- Maisons : 2 (seule la première est décrite)" in out
+    assert "- Modules : NMG ×1, NMH ×3, NMW ×1" in out
+    assert "| `sum_energy_elec_heating` |" in out and "#### Profondeur d'historique" in out
+
+
 def test_fatal_intuis_error_leaks_nothing_in_message_traceback_or_summary(
     tmp_path, monkeypatch, capsys, caplog, all_sources
 ):

@@ -60,7 +60,7 @@ def cmd_discover(s: Settings, args: argparse.Namespace) -> None:
 
 
 def cmd_diagnose(s: Settings, args: argparse.Namespace) -> None:
-    from .diagnose import history, history_deep, inventory, probe_history, run
+    from .diagnose import compatibility_report, history, history_deep, inventory, probe_history, run
 
     if args.qualite:  # S-1.32 #336: counts read from the encrypted archive, no API call
         cmd_quality(s)
@@ -70,6 +70,9 @@ def cmd_diagnose(s: Settings, args: argparse.Namespace) -> None:
         inventory(s, IntuisClient(s) if has_intuis else None)
         return
     client = _client(s)
+    if args.report:  # S-10.4 #144: a text to paste into the « Compatibilité » issue template
+        print(compatibility_report(client))
+        return
     if args.probe_history:
         probe_history(client)
     elif args.history:
@@ -1028,6 +1031,11 @@ def main(argv: list[str] | None = None) -> None:
         "--inventory",
         action="store_true",
         help="inventaire des champs, types de mesure, échelles et profondeur par source (S-1.19)",
+    )
+    dg.add_argument(
+        "--report",
+        action="store_true",
+        help="rapport de compatibilité anonyme, à coller dans le gabarit d'issue « Compatibilité » (S-10.4)",
     )
     dg.add_argument(
         "--qualite",

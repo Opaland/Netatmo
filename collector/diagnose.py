@@ -7,10 +7,16 @@ no energy values.
 `--inventory` (S-1.19, `inventory`): field names, measure types, accepted scales, point counts
 and history depth of every configured source (Intuis, Netatmo station, Linky), for
 docs/audit-donnees.md.
+
+`--report` (S-10.4, #144, `compatibility_report`): the same Intuis inventory, told as a short
+Markdown text a candidate household pastes into the « Compatibilité » issue template: module type
+codes, room types, measure families and history depth. Never an id, a name or a value.
 """
 
 from __future__ import annotations
 
+import contextlib
+import io
 import re
 import time
 
@@ -566,8 +572,13 @@ def inventory_intuis(client: IntuisClient, now: int | None = None) -> dict:
     if not homes:
         return result
     h = homes[0]
+    result["homes"] = len(homes)
     result["homesdata"] = print_shape("homesdata, 1re maison", h, "home", forbidden)
     modules = [m for m in h.get("modules", []) or [] if isinstance(m, dict)]
+    # #144: type codes and their counts only (a code that is also a text of the answer is « ? »)
+    result["modules"] = _counts(_type_code(m) for m in modules)
+    rooms = [r for r in h.get("rooms", []) or [] if isinstance(r, dict)]
+    result["rooms"] = _counts(_type_code(r) for r in rooms)
     print("\nModules de homesdata par type :")
     for t, keys in keys_by_type(modules, forbidden).items():
         n = sum(1 for m in modules if _type_code(m) == t)
@@ -633,6 +644,54 @@ def inventory_intuis(client: IntuisClient, now: int | None = None) -> dict:
         result["depth"][scale] = oldest
         print(f"  {scale:<6} " + " ".join(cells) + (f"  → au moins {oldest} jours" if oldest else "  → rien"))
     return result
+
+
+def _counts(codes) -> dict[str, int]:
+    out: dict[str, int] = {}
+    for c in codes:
+        out[c] = out.get(c, 0) + 1
+    return dict(sorted(out.items()))
+
+
+def _times(counts: dict[str, int]) -> str:
+    return ", ".join(f"{t} ×{n}" for t, n in counts.items()) or "aucun"
+
+
+def compatibility_report(client: IntuisClient, now: int | None = None) -> str:
+    """S-10.4 (#144): the Intuis inventory as a short Markdown text for the « Compatibilité »
+    issue template. Module type codes, room types, measure type names, counts of non-zero points
+    and history depth in days: never an id, a name, a value or a date of the home. The detail of
+    the inventory (field names) is left out: what a candidate household needs is « does it work
+    with my hardware », not the structure of each answer."""
+    with contextlib.redirect_stdout(io.StringIO()):  # the inventory's own log is not the report
+        res = inventory_intuis(client, now)
+    lines = [
+        "### Rapport de compatibilité (anonyme)",
+        "",
+        "Produit par `python -m collector diagnose --report`. Il ne contient ni identifiant, ni nom, "
+        "ni valeur : des codes de type, des noms de mesure et des nombres.",
+        "",
+    ]
+    if not res.get("homes"):
+        return "\n".join([*lines, "- Maisons : 0 (aucune maison renvoyée par Intuis)", ""])
+    lines += [
+        f"- Maisons : {res['homes']}{' (seule la première est décrite)' if res['homes'] > 1 else ''}",
+        f"- Pièces : {sum(res['rooms'].values())} ({_times(res['rooms'])})",
+        f"- Modules : {_times(res['modules'])}",
+        f"- État des pièces (homestatus) : {'lu' if 'homestatus' in res else 'refusé'}",
+        "",
+        "#### Familles de mesure (points non nuls, toutes pièces et modules ; aucune valeur)",
+        "",
+        "| Mesure | " + " | ".join(f"{s} ({d} j)" for s, d in INV_INTUIS_SCALES.items()) + " |",
+        "|---|" + "---|" * len(INV_INTUIS_SCALES),
+    ]
+    for t in INV_INTUIS_TYPES:
+        cells = [res["measures"].get((t, s), "—") for s in INV_INTUIS_SCALES]
+        lines.append(f"| `{t}` | " + " | ".join(cells) + " |")
+    lines += ["", "#### Profondeur d'historique (énergie)", ""]
+    for scale, oldest in res["depth"].items():
+        lines.append(f"- {scale} : {f'au moins {oldest} jours' if oldest else 'rien'}")
+    return "\n".join([*lines, ""])
 
 
 class _Paced:
