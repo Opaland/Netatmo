@@ -27,7 +27,7 @@ import { MAX_PURCHASES, SPECIES, parseWood } from './wood';
 import { HISTORY_PAGES, METER_PAGES, SETTINGS, TOOLS, parseRoute, routeKey } from './router';
 import { lockNotice } from './session';
 import { readShellyPrefs } from './shelly-prefs';
-import { INPUT_FIELDS, MAX_ROOFS, parseLocation, parsePvgisFile, parseSolarDoc, parseSolarInputs } from './solar';
+import { INPUT_FIELDS, MAX_ROOFS, ROOF_FIELDS, parseLocation, parseLocationDraft, parsePvgisFile, parseSolarDoc, parseSolarInputs } from './solar';
 import { type VoletsDoc, evenings, loadNotes, recentFailures, shutterNames, summarize } from './shutters';
 import { readMark } from './storage';
 import { parseTenant } from './tenant';
@@ -489,6 +489,31 @@ describe('#204 #356 fuzz : localisation et profil solaire', () => {
       for (const t of l.roofs)
         assert(t.name.length > 0 && !CONTROL.test(t.name) && t.azimuth >= 0 && t.azimuth < 360 && t.tilt >= 0 && t.tilt <= 90 && t.kwc > 0 && t.kwc <= 36 && t.loss >= 0 && t.loss <= 60, 'toit hors bornes');
       assert(JSON.stringify(parseLocation(JSON.parse(JSON.stringify(l)))) === JSON.stringify(l), 'relecture différente');
+    });
+  });
+  it('#462 brouillon de localisation relu : null, ou des champs texte bornés, un à six toits, relus à l’identique', () => {
+    fuzz('parseLocationDraft', (r) => {
+      const raw =
+        r() < 0.3
+          ? anyValue(r)
+          : {
+              commune: anyValue(r),
+              lat: r() < 0.5 ? pick(r, STRINGS) : anyValue(r),
+              lon: r() < 0.5 ? pick(r, STRINGS) : anyValue(r),
+              precision: r() < 0.5 ? pick(r, ['1', '2', '3', 3, '4', '__proto__']) : anyValue(r),
+              roofs: r() < 0.8 ? Array.from({ length: Math.floor(r() * 9) }, () => (r() < 0.8 ? roof(r) : anyValue(r))) : anyValue(r),
+            };
+      const t = parseLocationDraft(raw);
+      notPolluted();
+      if (t === null) return;
+      assert(['1', '2', '3'].includes(t.precision), 'précision');
+      for (const s of [t.commune, t.lat, t.lon]) assert(isStr(s) && Array.from(s).length <= 60, 'champ');
+      assert(t.roofs.length >= 1 && t.roofs.length <= MAX_ROOFS, 'toits');
+      for (const x of t.roofs) {
+        assert(Object.keys(x).join() === ROOF_FIELDS.join(), 'champs du toit');
+        for (const k of ROOF_FIELDS) assert(isStr(x[k]) && Array.from(x[k]).length <= 40, k);
+      }
+      assert(JSON.stringify(parseLocationDraft(JSON.parse(JSON.stringify(t)))) === JSON.stringify(t), 'relecture différente');
     });
   });
   it('document solaire déchiffré : null ou des heures bornées, jamais d’exception', () => {
