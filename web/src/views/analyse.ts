@@ -25,6 +25,7 @@ import { html } from '../trusted';
 import { tenant, tenantNote } from '../tenant'; // S-12.6: works are the owner's business
 import { withWood } from '../isolation';
 import { verdictWood } from './wood-state';
+import { woodSpread } from '../wood';
 import { fillPerM2, isolationBlock } from './isolation';
 
 // #247: documents loaded on demand for the dataset shown; a late result of another dataset is dropped.
@@ -136,7 +137,7 @@ export function renderAnalyse(view: HTMLElement, records: DayRecord[], part: Ana
     <div id="sig-table"></div>
     <div id="sig-isolation"></div>
     <div id="sig-wind-zone"></div>
-    ${countedHtml(true, sigWithWood ? 'bois du poêle compris, réparti selon les degrés-jours' : '')}
+    ${countedHtml(true, sigWithWood ? `bois du poêle compris, ${woodSpread()}` : '')}
   </section>
   <section class="card" id="indoor-sig" hidden></section>`
           : `<section class="card"><h2>Chauffage selon le froid dehors</h2><p class="hint muted">Disponible dès que la collecte a récupéré la météo (prochaine collecte).</p></section>`,

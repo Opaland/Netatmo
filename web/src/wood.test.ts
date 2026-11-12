@@ -13,6 +13,7 @@ import {
   moistureFactor,
   parseWood,
   purchaseText,
+  readingIgnored,
   seasonFed,
   seasonText,
   stoveWarm,
@@ -21,8 +22,12 @@ import {
   woodIn,
   woodJson,
   woodSeasons,
+  woodSpread,
 } from './wood';
 import { ADEME_PER_DEGREE } from './checks';
+
+const fsName = 'node:fs';
+const fs = (await import(/* @vite-ignore */ fsName)) as { readFileSync: (u: URL, enc: 'utf8') => string; readdirSync: (u: URL) => string[] };
 
 const oak = { day: '2025-09-20', steres: 2, species: 'chene' as const, moisture: 20, price: 200 };
 
@@ -184,6 +189,37 @@ describe('#366 wood stove', () => {
     expect(seasonText(b)).toBe('0,5 stère reporté · 1 stère acheté · tout brûlé (supposé)');
     const [c] = woodSeasons(parseWood({ purchases: [oak], burnt: [{ season: 2025, steres: 3 }] }));
     expect(seasonText(c)).toBe('2 stères achetés · 2 stères brûlés (relevé) · 1 stère de plus que les achats notés, non compté');
+  });
+
+  it('#501: a stock left above the stock recorded is said, like the stères burnt beyond it', () => {
+    const [a] = woodSeasons(parseWood({ purchases: [oak], burnt: [{ season: 2025, left: 5 }] }));
+    expect([a.steres, a.left, a.over, a.short]).toEqual([0, 2, 3, 0]);
+    expect(seasonText(a)).toBe('2 stères achetés · 0 stère brûlé (stock relevé au printemps) · reste 2 stères · stock relevé : 3 stères de plus que les achats notés, non comptés');
+    const [b] = woodSeasons(parseWood({ purchases: [oak], burnt: [{ season: 2025, left: 0.5 }] }));
+    expect(b.over).toBe(0);
+    expect(seasonText(b)).not.toContain('de plus que');
+  });
+
+  it('#501: a reading before the first purchase is in no season: ignored, and said', () => {
+    const w = parseWood({ purchases: [oak], burnt: [{ season: 2023, steres: 1 }, { season: 2025, steres: 1 }] });
+    expect(woodSeasons(w).map((s) => s.season)).not.toContain(2023);
+    expect(readingIgnored(w, w.burnt.find((b) => b.season === 2023)!)).toBe(true);
+    expect(readingIgnored(w, w.burnt.find((b) => b.season === 2025)!)).toBe(false);
+  });
+
+  it('#501: no screen says the degree days alone where the evenings of fire place the wood', () => {
+    expect(woodSpread()).toBe('réparti sur les soirs de flambée que la collecte a trouvés, sinon selon le froid de chaque jour (degrés-jours)');
+    expect(woodSpread(true)).toMatch(/^répartie sur les soirs de flambée/);
+    const alone = /répartie? (jour par jour )?(selon|au prorata des?) (les degrés-jours|le froid)/;
+    const dir = new URL('./views/', import.meta.url);
+    const said: string[] = [];
+    for (const f of fs.readdirSync(dir).filter((x) => x.endsWith('.ts') && !x.endsWith('.test.ts'))) {
+      fs.readFileSync(new URL(f, dir), 'utf8')
+        .split('\n')
+        // fires.ts: « Sans détection, le bois du poêle est réparti selon les degrés-jours » (the fallback, said as such)
+        .forEach((line, i) => alone.test(line) && !/Sans détection/.test(line) && said.push(`${f}:${i + 1}`));
+    }
+    expect(said).toEqual([]);
   });
 });
 
