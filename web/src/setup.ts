@@ -107,7 +107,9 @@ export function setupSteps(f: SetupFacts): Step[] {
   // collect.yml must run (a fork has its workflows off until they are enabled)
   const wf = f.workflow;
   steps.push(
-    wf === undefined
+    // #533: only a stopped workflow (disabled_fork, disabled_inactivity, disabled_manually) can be
+    // enabled again; a state not read (« unknown », a deleted workflow…) is « à vérifier »
+    wf === undefined || (wf !== 'active' && !wf.startsWith('disabled_'))
       ? { id: 'actions', title: 'Collecte quotidienne activée', status: 'a-verifier', text: 'Dans un dépôt copié (fork), GitHub laisse les workflows arrêtés tant qu’on ne les a pas activés.', link: { href: l.actions, label: 'Ouvrir l’onglet Actions' } }
       : wf === 'active'
         ? { id: 'actions', title: 'Collecte quotidienne activée', status: 'fait', text: 'Le workflow « Collecte quotidienne » est actif.' }
@@ -190,10 +192,12 @@ function collectStep(f: SetupFacts, ready: boolean): Step {
   };
 }
 
-/** « 3 étapes sur 6 faites ». */
+/** « 3 étapes faites sur 6 », « Aucune étape faite sur 6 ». */
 export function setupSummary(steps: Step[]): string {
   const done = steps.filter((s) => s.status === 'fait').length;
-  return done === steps.length ? 'Tout est prêt : la collecte tourne seule chaque nuit.' : `${done} étape${done > 1 ? 's' : ''} sur ${steps.length} faite${done > 1 ? 's' : ''}`;
+  if (done === steps.length) return 'Tout est prêt : la collecte tourne seule chaque nuit.';
+  // #533 (revue design v2.0): « 0 étape sur 6 faite » read as a count, not as a sentence
+  return done === 0 ? `Aucune étape faite sur ${steps.length}` : `${done} étape${done > 1 ? 's' : ''} faite${done > 1 ? 's' : ''} sur ${steps.length}`;
 }
 
 /** #40: the facts of the demo, fictitious (a repository half set up), no call to GitHub. */
