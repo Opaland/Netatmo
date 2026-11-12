@@ -23,6 +23,11 @@
   ouverts après une action, le rendement s'applique à la sortie du champ, avant le premier achat
   aussi. Surfaces : une valeur saisie ne reconstruit plus la grille, le focus passe au champ
   suivant. Parcours e2e `npm run e2e:logement` (Chromium et WebKit).
+- **Erreur du jeton GitHub** (#463) : le message nomme l'appel refusé et la permission qu'il
+  demande (« droits insuffisants pour la lecture de la liste des secrets (HTTP 403) : … « Secrets »
+  en lecture »), jamais une valeur, un nom de secret ni le dépôt ; il s'efface au début de chaque
+  essai, dit l'heure de l'échec et le numéro de l'essai, et propose « Réessayer » (des droits
+  modifiés chez GitHub peuvent mettre une minute à s'appliquer). Parcours e2e `npm run e2e:jeton`.
 
 ## v1.7 — novembre 2026 : finitions et données de la maison
 
