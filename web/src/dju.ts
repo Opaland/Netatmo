@@ -29,6 +29,9 @@ export function djuSpan(weather: Weather, from: string, to: string): { dju: numb
   return { dju, days, missing: expected - days };
 }
 
+/** Under this many degree days, a span is too mild for a heating per degree day (#464; #152). */
+export const MIN_DJU = 50;
+
 export interface YearCold {
   /** The total for the table: a number when complete, « 1 930 * » when days are missing. */
   cell: number | string;
@@ -48,7 +51,7 @@ export function yearCold(weather: Weather, year: number, from: string, to: strin
   const s = djuSpan(weather, from, to);
   if (!s.days) return { cell: '—', perDju: '—', caveat: null };
   const heat = heatOn((d) => weather.has(d));
-  const perDju = s.dju > 50 ? (heat / s.dju).toFixed(2).replace('.', ',') : '—';
+  const perDju = s.dju > MIN_DJU ? (heat / s.dju).toFixed(2).replace('.', ',') : '—';
   if (!s.missing) return { cell: Math.round(s.dju), perDju, caveat: null };
   const n = s.missing;
   return {
