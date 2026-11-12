@@ -402,6 +402,23 @@ try {
       );
       for (const [title, period, counted] of cards) check(period && counted, `#299/#301 : ${route} « ${title} » sans ${period ? '' : 'période '}${counted ? '' : '« Compté : »'}`);
     }
+    // #466: every total read as « the heating » says what it counts, with the words of the
+    // Accueil's scope line (countedWhat): « Hiver contre hiver » and the month tile of the Accueil,
+    // for the whole selection and for the heating alone
+    for (const [cat, words] of [['all', 'chauffage et eau chaude'], ['heating', 'chauffage seul']]) {
+      await go(page, 'historique');
+      await page.click(`#explore-card [data-set=cat][data-value=${cat}]`);
+      await ready(page);
+      const figure = await page.locator('.season-tiles + p').innerText();
+      check(figure.toLowerCase().startsWith(`${words} :`), `#466 : « Hiver contre hiver » ne dit pas « ${words} » (« ${figure} »)`);
+      await go(page, 'accueil');
+      const scope = await page.locator('.periodbar .scope').innerText();
+      const month = await page.locator('.home-tiles .kpi h3').first().innerText();
+      check(scope.includes(words) && month.includes(words), `#466 : total du mois sans « ${words} » (ligne « ${scope} », tuile « ${month} »)`);
+    }
+    await go(page, 'historique');
+    await page.click('#explore-card [data-set=cat][data-value=all]');
+    await ready(page);
     // #306: « An » only over whole years
     await go(page, 'historique');
     await page.selectOption('select[data-set=period]', '12m');
