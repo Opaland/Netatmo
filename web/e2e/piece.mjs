@@ -136,6 +136,7 @@ try {
     const axis = await page.locator('#piece-temp-chart').getAttribute('aria-label');
     check(/jours? sous|aucun jour sous/.test(axis ?? ''), `${name} : résumé du graphique de température sans les jours froids (« ${axis} »)`);
     check((await wide(page)) <= 1, `${name} : défilement horizontal sur la page Pièce (${await wide(page)} px)`);
+    check((await page.locator('#piece-link').count()) === 0, `${name} : liaison proposée pour le salon, déjà lié à son module`);
     await audit(page, `${name}/piece`, enhanced);
     await page.screenshot({ path: `${OUT}/piece-${BROWSER}-${name}-salon.png`, fullPage: true });
 
@@ -165,6 +166,22 @@ try {
       check(/température demandée de 18,0\s°C/.test(cold) && /\(1\d,\d\s°C\) :/.test(cold), `${name} : jours froids de la chambre parentale mal expliqués (« ${cold.slice(0, 200)} »)`);
       await page.screenshot({ path: `${OUT}/piece-${BROWSER}-${name}-chambre.png`, fullPage: true });
 
+      // #467: the « Grenier » module sits in the parents' bedroom and follows its probe: proposed,
+      // then linked, its reading becomes the room's
+      progress(`${name} : module à lier`);
+      const offer = await page.locator('#piece-link').innerText().catch(() => '');
+      check(/Lier ce module à la pièce/.test(offer) && /« Grenier »/.test(offer) && /1,\d\s°C au-dessus/.test(offer), `${name} : liaison du module « Grenier » non proposée (« ${offer.slice(0, 200)} »)`);
+      check(/Mesurée \(sonde du radiateur\)/.test(await page.locator('#piece-temp').innerText()), `${name} : chambre parentale déjà sur la station avant la liaison`);
+      await audit(page, `${name}/piece-liaison`);
+      await page.click('[data-piece=link-module]');
+      await ready(page);
+      check((await page.locator('#piece-link').count()) === 0, `${name} : liaison encore proposée une fois le module lié`);
+      check(/Mesurée \(station\)/.test(await page.locator('#piece-temp').innerText()), `${name} : la mesure du module lié ne prime pas`);
+      check(/Module « Grenier »/.test(await page.locator('#piece-air').innerText()), `${name} : air de la pièce sans le module lié`);
+      await go(page, 'confort');
+      check((await page.locator('select[data-map-room="r-ch1"]').inputValue()) === 'm4', `${name} : liaison absente d'Air et confort`);
+      check((await page.locator('select[data-map-room="r-salon"]').inputValue()) === 'm0', `${name} : la liaison a défait celle du salon`);
+
       // ---------------------------------------------------------------- household view: « Chambres » regroupées, never named
       progress(`${name} : vue foyer`);
       await go(page, 'parametres-affichage');
@@ -186,6 +203,17 @@ try {
       await go(page, 'parametres-affichage');
       await page.uncheck('[data-toggle=household]');
       await ready(page);
+    }
+    if (name === 'sombre') {
+      // #467: « Ne pas lier » : the proposal is not made again for this pair on this device
+      await go(page, 'piece-r-ch1');
+      await page.click('[data-piece=decline-module]');
+      await ready(page);
+      check((await page.locator('#piece-link').count()) === 0, `${name} : « Ne pas lier » sans effet`);
+      check(/Mesurée \(sonde du radiateur\)/.test(await page.locator('#piece-temp').innerText()), `${name} : « Ne pas lier » a lié le module`);
+      await go(page, 'pieces');
+      await go(page, 'piece-r-ch1');
+      check((await page.locator('#piece-link').count()) === 0, `${name} : liaison proposée de nouveau après « Ne pas lier »`);
     }
     await ctx.close();
   }
