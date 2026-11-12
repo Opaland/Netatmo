@@ -14,6 +14,7 @@ import {
 } from '../aggregate';
 import { compareOffers, daySplits, djuBetween, monthlyDju, offPeakShares } from '../analysis';
 import { djuMethodText, yearCold } from '../dju';
+import { woodYear } from '../isolation';
 import { activeRooms, ds, setState, state } from '../app';
 import { type Series, barChart, chartCaption, cssVar, lineChart } from '../charts';
 import { SEASON_DEFINITION, dayLong, dayShort, monthLong, monthShort, plural, seasonLabel, signedPct } from '../glossary';
@@ -50,7 +51,6 @@ import { alertHtml, countedNote, legend, tile } from '../components';
 import { lazyCard } from '../lazy';
 import { tenant, tenantNote } from '../tenant';
 import { verdictWood, woodOver } from './wood-state';
-import { woodIn } from '../wood';
 
 /**
  * #337: « Pourquoi ce mois ? » — each of the last 12 months that has the same month a year
@@ -362,7 +362,7 @@ function yearsCard(records: DayRecord[], first: string, last: string, uncertain:
       ],
       rows,
     )}
-    ${woodYears(records, last)}
+    ${woodYears(records, first, last)}
     ${caveats.length ? `<p class="hint muted">* À lire avec prudence :</p><ul class="hint muted caveats">${caveats.map((c) => `<li>${esc(c)}</li>`).join('')}</ul>` : ''}
     ${
       withCold
@@ -379,27 +379,27 @@ function yearsCard(records: DayRecord[], first: string, last: string, uncertain:
  * electricity + wood, in kWh, per degree-day and in euros (hors abonnement): the electricity alone
  * made the home look better insulated than it is. Empty without a stove and wood bought.
  */
-function woodYears(records: DayRecord[], last: string): string {
+function woodYears(records: DayRecord[], first: string, last: string): string {
   const daily = verdictWood(state.cat, state.rooms);
   if (!daily) return '';
   const heat = records.filter((r) => r.cat === 'heating');
   const priced = costAvailable();
+  const firstYear = Number(first.slice(0, 4));
   const rows = ds!.meta.years
     .slice()
     .reverse()
     .map((y) => {
       const end = y === Number(last.slice(0, 4)) ? last : `${y}-12-31`;
-      const w = woodIn(daily, `${y}-01-01`, end);
-      const elec = total(heat, `${y}-01-01`, end);
-      const kwh = elec + w.kwh;
+      // #464: the span and the cold of the table above (from the first day of data, « au moins »)
+      const from = y === firstYear && first > `${y}-01-01` ? first : `${y}-01-01`;
+      const w = woodYear(heat, daily, ds!.weather ?? null, y, from, end);
       const cost = priced ? costOf(heat, `${y}-01-01`, end) : null;
-      const deg = ds!.weather ? djuBetween(ds!.weather, `${y}-01-01`, end).dju : 0;
       return [
         String(y),
-        Math.round(kwh),
         Math.round(w.kwh),
-        ...(ds!.weather ? [deg > 50 ? (kwh / deg).toFixed(2).replace('.', ',') : '—'] : []),
-        ...(priced ? [cost === null ? '—' : fmtEur(cost + w.eur)] : []),
+        Math.round(w.wood),
+        ...(ds!.weather ? [w.cold?.perDju ?? '—'] : []),
+        ...(priced ? [cost === null ? '—' : fmtEur(cost + w.woodEur)] : []),
       ];
     });
   return `<h3 class="money-h" id="years-wood-title">Chauffage électricité + bois</h3>

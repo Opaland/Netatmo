@@ -5,7 +5,9 @@
 // day by day, with the one split of the wood (wood.ts woodDaily, the degree-day split of #433's
 // verdict, of « Hiver contre hiver » and « Expliquer un mois »): this module never splits wood
 // itself, it takes that map. Pure functions, no DOM.
-import { type DayRecord } from './aggregate';
+import { type DayRecord, total } from './aggregate';
+import type { Weather } from './analysis';
+import { type YearCold, yearCold } from './dju';
 import { woodIn, woodRecords } from './wood';
 
 /** The heating records with the stove's wood of each day from the first electricity day on (#433's rule). */
@@ -13,6 +15,34 @@ export function withWood(records: DayRecord[], daily: Map<string, [number, numbe
   if (!daily) return records;
   const first = records.reduce((a, r) => (!a || r.day < a ? r.day : a), '');
   return [...records, ...woodRecords(daily, first)];
+}
+
+export interface WoodYear {
+  /** Heating kWh, electricity + wood, over the span. */
+  kwh: number;
+  /** Of which the stove's wood. */
+  wood: number;
+  /** Price paid for that wood (€). */
+  woodEur: number;
+  /** The cold of the span and the heating per degree day (dju.ts yearCold), null without weather. */
+  cold: YearCold | null;
+}
+
+/**
+ * One year of « Chauffage électricité + bois » (Année par année, #460), by the rules of the table
+ * above it: the wood counted from the first electricity day on (withWood, #433's rule), and the
+ * cold of the same span with the same caveat (#464, yearCold: « au moins » when days have no
+ * outdoor temperature, the heating per degree day over the days measured only). `heat`: the
+ * heating records; [from, to]: the span of the year the table shows (from the first day of data).
+ */
+export function woodYear(heat: DayRecord[], daily: Map<string, [number, number]>, weather: Weather | null, year: number, from: string, to: string): WoodYear {
+  const counted = withWood(heat, daily);
+  const elec = total(heat, from, to);
+  const kwh = total(counted, from, to);
+  const first = heat.reduce((a, r) => (!a || r.day < a ? r.day : a), '');
+  const woodEur = woodIn(daily, first > from ? first : from, to).eur; // same days as withWood
+  const cold = weather ? yearCold(weather, year, from, to, (has) => total(counted.filter((r) => has(r.day)), from, to)) : null;
+  return { kwh, wood: kwh - elec, woodEur, cold };
 }
 
 /** Heat loss in W per °C of the home from the slope of the signature (kWh per day per °C outdoors). */
