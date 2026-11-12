@@ -23,6 +23,13 @@
   ouverts après une action, le rendement s'applique à la sortie du champ, avant le premier achat
   aussi. Surfaces : une valeur saisie ne reconstruit plus la grille, le focus passe au champ
   suivant. Parcours e2e `npm run e2e:logement` (Chromium et WebKit).
+- **Ce que l'écran promet, tenu par le code** (#365) : l'IA reçoit les totaux du mois **et au plus
+  cinq jours inhabituels** ; les écrans (Cadre juridique, Paramètres, « où vont vos données ») et la
+  documentation disaient « seuls des totaux mensuels », l'architecture « noms de pièces envoyés ».
+  Toutes ces surfaces disent maintenant la même chose, tenue par `tests/test_promesses.py` : sur la
+  démonstration complète, aucun nom de pièce, de module ni du logement, aucun jour daté hors des cinq
+  jours au plus, ne part chez l'IA. Nouvelle revue de fin de version « promesses »
+  (`docs/revues-agents/revue-promesses.md`, workflow `Revue par agents`, `scripts/revue_issues.py`).
 
 ## v1.7 — novembre 2026 : finitions et données de la maison
 

@@ -51,7 +51,8 @@ Chaque point est tenu par un test qui échoue s'il est cassé :
 - **Journaux publics** : aucune valeur, aucun nom, aucun identifiant, aucun secret, même quand toutes
   les sources échouent — `tests/test_fuites.py`.
 - **IA** : pièces et capteurs envoyés sous pseudonyme, jamais leurs noms —
-  `tests/test_collector.py` (`test_insights_never_send_room_or_module_names`).
+  `tests/test_collector.py` (`test_insights_never_send_room_or_module_names`) et, sur la démonstration
+  complète, `tests/test_promesses.py` (ni nom, ni jour daté hors des cinq jours inhabituels au plus).
 - **Noms rangés sous le chemin de l'application** sur une origine partagée (#229) —
   `web/src/scope.test.ts`.
 - **« Recharger l'application »** n'efface ni la clé mémorisée, ni les notes, ni les données

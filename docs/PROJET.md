@@ -14,7 +14,7 @@ qui travaillent sur le dépôt.
 | **Travail à faire / en cours** | [Issues GitHub](https://github.com/Opaland/Netatmo/issues), une par récit, rangées par **jalon** |
 | Stratégie de test, définition de « fini » | `docs/bmad/06-qa-strategy.md` |
 | Revues multi-personas | `docs/bmad/02-revue-50-personas.md` (initiale) et `docs/bmad/revues/` (une par version) |
-| Revues par agents (code, design) : consignes | `docs/revues-agents/` (voir § 10) |
+| Revues par agents (code, design, promesses) : consignes | `docs/revues-agents/` (voir § 10) |
 | Inventaire de l'interface (base du design system) | `docs/design/inventaire.md` |
 | Études (faut-il le faire ?) | `docs/etudes/` |
 | Historique des versions | `CHANGELOG.md` |
@@ -91,7 +91,8 @@ sans jalon.
 - Données de consommation : **toujours chiffrées** avant commit (`data/*.enc.json`).
 - Journaux publics de GitHub Actions : uniquement des comptes et des codes, jamais de noms, de valeurs
   ou d'identifiants (voir `collector/diagnose.py`).
-- IA : seuls des agrégats mensuels sont envoyés ; l'application montre exactement ce qui a été envoyé.
+- IA : seuls les totaux du mois et au plus cinq jours inhabituels sont envoyés, pièces et capteurs sous
+  pseudonyme ; l'application montre exactement ce qui a été envoyé.
 
 ## 8. Rituels (projet personnel, rythme léger)
 
@@ -136,6 +137,17 @@ code à **tout** le code, la v1.6 la revue design à **toute** l'interface.
 | Matériau | `git diff <version précédente>..HEAD` (tout le code en v1.5) | captures de la démo (`npm run e2e` : mobile clair et sombre, bureau, 360 px, contraste élevé, couleurs forcées, mode simple à 200 %), [`design/inventaire.md`](design/inventaire.md), code des vues |
 | Grille | justesse ; sécurité (secrets, journaux publics, chiffrement, CSP et Trusted Types, workflows, dépendances) ; tests ; performance et taille ; simplicité | hiérarchie et lisibilité ; cohérence (jetons, composants) ; accessibilité (WCAG 2.2 AA, 7:1 en contraste élevé) ; mobile ; langage clair |
 | Étiquettes des issues | `revue-code` + gravité | `revue-design` + `design` + gravité |
+
+### Troisième angle : les promesses (#365)
+
+[`revues-agents/revue-promesses.md`](revues-agents/revue-promesses.md), lancée avec la revue de code :
+chaque promesse de l'écran et de la documentation (« jamais », « aucun », « seuls », « chiffré »,
+« reste sur cet appareil ») est classée **tenue** (preuve : code ou test), **non tenue** (scénario qui la
+contredit) ou **invérifiable** (ce qui manque). Périmètre prioritaire : ce qui part sur le réseau (IA,
+GitHub, Open-Meteo), ce qui reste sur l'appareil, ce qui est chiffré, ce qui est public dans les
+journaux. Les non tenues deviennent des issues `revue-code` (étiquette `promesses`) ; la consigne
+interdit à l'agent toute écriture hors du fichier de constats. Les promesses les plus fortes sont tenues
+par un test plutôt que par une relecture (`tests/test_promesses.py` : ce qui part chez l'IA).
 
 ### Gravité et suites
 
