@@ -14,8 +14,9 @@ import {
   comparedToLastYear,
   glossarySection,
   heatingSentence,
-  kpiTitle,
+  homeMonthTitle,
   leftSentence,
+  monthLabel,
   pinnedTemp,
   plainEur,
   plainNum,
@@ -88,13 +89,6 @@ function roomTodayCard(roomId: string, name: string, heading = true): string {
   </section>`;
 }
 
-/** Spending of the month so far (euros when prices are known, else kWh), compared to last year. */
-/** « Novembre, jusqu'au 8 » (maquette simple.html: the year is that of today). */
-const monthLabel = (last: string) => {
-  const t = kpiTitle('month', last).replace(/ \d{4},/, ',');
-  return t.charAt(0).toUpperCase() + t.slice(1);
-};
-
 /** The whole home, as the Accueil counts it with nothing narrowed (heating and hot water). */
 const wholeHome = () => applyFilter(ds!.records, { cats: new Set<Category>(['heating', 'water_heater']), rooms: null });
 
@@ -111,12 +105,13 @@ function homeMonthCard(last: string): string {
   const all = wholeHome();
   const sc = homeScope(all, from, last);
   return `<section class="card proche-month">
-    <h3 class="muted">${esc(monthLabel(last))}</h3>
+    <h3 class="muted">${esc(homeMonthTitle(last))}</h3>
     <p class="proche-big">${sc.spent.unit === '€' ? plainEur(sc.spent.value) : `${plainNum(sc.spent.kwh)} kWh`}</p>
     <p>${esc(comparedPct(yoy(all, from, last)))}</p>${leftNote(sc.left)}
   </section>`;
 }
 
+/** Spending of the month so far (euros when prices are known, else kWh), compared to last year. */
 function monthCard(records: DayRecord[], last: string, label = monthLabel(last)): string {
   const from = `${last.slice(0, 8)}01`;
   const kwh = total(records, from, last);

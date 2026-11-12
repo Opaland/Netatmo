@@ -1,7 +1,7 @@
 // S-6.2: room surfaces and dated "works" markers (insulation, windows, new radiator…),
 // to compare before / after. Pure functions (no DOM, no app state): views/works.ts reads
 // and saves them (encrypted on this device) and draws the cards.
-import { type DayRecord, addDays } from './aggregate';
+import { type DayRecord, addDays, bucketKey } from './aggregate';
 import { type Fit, type Weather, dju, fitSeason } from './analysis';
 import { withWood } from './isolation';
 
@@ -159,6 +159,18 @@ export function heatPerDay(records: { day: string; cat: string; kwh: number; roo
 export function worksHeat(records: DayRecord[], daily: Map<string, [number, number]> | null): { heat: Map<string, number>; wood: boolean } {
   const counted = withWood(records, daily);
   return { heat: heatPerDay(counted), wood: counted.length > records.length };
+}
+
+/**
+ * #488: the heating per month of the « Chauffage par mois » chart, by the same rule as the before /
+ * after (worksHeat: the electricity plus the stove's wood of each day), so the chart and the
+ * comparison above it count the same heating. `wood`: the screen says « électricité + bois ».
+ */
+export function worksMonthly(records: DayRecord[], daily: Map<string, [number, number]> | null): { perMonth: Map<string, number>; wood: boolean } {
+  const { heat, wood } = worksHeat(records, daily);
+  const perMonth = new Map<string, number>();
+  for (const [day, kwh] of heat) perMonth.set(bucketKey(day, 'month'), (perMonth.get(bucketKey(day, 'month')) ?? 0) + kwh);
+  return { perMonth, wood };
 }
 
 /** kWh/m² per room over [from, to] (rooms with a surface only). */
