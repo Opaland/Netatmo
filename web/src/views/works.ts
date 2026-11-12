@@ -22,11 +22,11 @@ import {
   WORK_KINDS,
   type WorkKind,
   beforeAfter,
-  heatPerDay,
   perRoomM2,
   sortMarkers,
   surfaceOf,
   validWorks,
+  worksHeat,
 } from '../works';
 
 const NOTE = 'works';
@@ -118,7 +118,11 @@ function compare() {
   const rooms = heatingRooms().map((r) => r.id);
   const surf = surfaceOf(shownSurfaces(), rooms);
   const m2 = surf.known === rooms.length && surf.m2 > 0 ? surf.m2 : null;
-  return { m, m2, surf, rooms, r: beforeAfter(heatPerDay(lastRecords), ds!.weather, m.day, firstDay(), lastDay(), m2) };
+  // #476: the stove's wood counted with the electricity, as the signature and « Année par année »
+  // (#471: worksHeat → withWood, the one split of verdictWood); a stove lit between the two sides no longer
+  // makes « après » look better insulated than it is
+  const { heat, wood } = worksHeat(lastRecords, verdictWood(state.cat, state.rooms));
+  return { m, m2, surf, rooms, wood, r: beforeAfter(heat, ds!.weather, m.day, firstDay(), lastDay(), m2) };
 }
 
 function sideRow(name: string, s: Side | null, m2: number | null): (string | number)[] {
@@ -165,7 +169,7 @@ function card(): string {
           ? '<p class="hint muted">La comparaison avant / après a besoin de la météo (prochaine collecte).</p>'
           : `<p>${
               c!.r.change !== null
-                ? `À climat égal (par degré-jour), le chauffage a évolué de <strong>${pct(c!.r.change)}</strong> après « ${esc(markerName(c!.m))} » du ${longDate(c!.m.day)}.`
+                ? `À climat égal (par degré-jour), le chauffage${c!.wood ? ' (électricité + bois)' : ''} a évolué de <strong>${pct(c!.r.change)}</strong> après « ${esc(markerName(c!.m))} » du ${longDate(c!.m.day)}.`
                 : `Comparaison avant / après « ${esc(markerName(c!.m))} » du ${longDate(c!.m.day)} : il faut au moins ${MIN_SIDE_DAYS} jours de chauffe de chaque côté.`
             }</p>
     <div class="chart tall" id="works-sig-chart" role="img" aria-label="Signature énergétique avant et après les travaux"></div>
@@ -214,7 +218,7 @@ function card(): string {
     </details>
     ${persisted ? '' : '<p class="hint muted">Ces saisies dureront jusqu\'au verrouillage : reconnectez-vous avec la phrase de passe pour qu\'elles soient enregistrées (chiffrées) sur cet appareil.</p>'}
     <details class="table-details"><summary>Comment c'est calculé</summary>
-      <p class="hint">Avant : les 365 jours qui précèdent la date des travaux ; après : les 365 jours qui la suivent (date comprise), dans la limite des données. Chaque côté a sa droite de signature (chauffage du jour selon la température extérieure moyenne, jours sous 15 °C). « Par degré-jour » divise le chauffage par les degrés-jours (base 18 °C) des mêmes jours : c'est la comparaison à climat égal. Les filtres de pièces s'appliquent.</p>
+      <p class="hint">Avant : les 365 jours qui précèdent la date des travaux ; après : les 365 jours qui la suivent (date comprise), dans la limite des données. Chaque côté a sa droite de signature (chauffage du jour selon la température extérieure moyenne, jours sous 15 °C). « Par degré-jour » divise le chauffage par les degrés-jours (base 18 °C) des mêmes jours : c'est la comparaison à climat égal.${c?.wood ? ' Avec le poêle, le bois de vos achats (⚙ Mon logement), réparti selon le froid de chaque jour, s’ajoute à l’électricité, avant comme après.' : ''} Les filtres de pièces s'appliquent.</p>
       <p class="hint muted">Surfaces et travaux restent sur cet appareil, chiffrés avec votre phrase de passe : ils ne sont ni envoyés à GitHub, ni à l'IA, et un autre appareil ne les voit pas. L'export recherche n'en garde que la nature et la surface, jamais la précision saisie.</p>
     </details>
   </section>`;
