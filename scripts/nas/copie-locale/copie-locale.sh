@@ -14,6 +14,8 @@
 # Réglages (variables d'environnement, voir docker-compose.yml) :
 #   DEPOT_URL   dépôt à copier (défaut : le dépôt public d'origine)
 #   BRANCHE     branche (défaut : main)
+#   BRANCHE_DONNEES  branche où vivent les données chiffrées quand le dépôt a la variable DATA_BRANCH
+#               = data (#23, README « Branche des données ») ; vide : le data/ de BRANCHE
 #   HEURE       heure locale de la synchro quotidienne, HH:MM (défaut : 08:30, après la collecte
 #               de la nuit et son déploiement) ; TZ donne le fuseau (défaut du conteneur : UTC)
 #   COPIE       dossier de travail (défaut : /copie) : depot/, constructions/, site/
@@ -25,6 +27,7 @@ umask 022
 
 DEPOT_URL=${DEPOT_URL:-https://github.com/Opaland/Netatmo.git}
 BRANCHE=${BRANCHE:-main}
+BRANCHE_DONNEES=${BRANCHE_DONNEES:-}
 HEURE=${HEURE:-08:30}
 COPIE=${COPIE:-/copie}
 GARDER=${GARDER:-3}
@@ -58,6 +61,9 @@ verifier_reglages() {
 	esac
 	case "$BRANCHE" in
 	'' | -* | *[!A-Za-z0-9._/-]*) die "BRANCHE invalide" 2 ;;
+	esac
+	case "$BRANCHE_DONNEES" in
+	-* | *[!A-Za-z0-9._/-]*) die "BRANCHE_DONNEES invalide" 2 ;;
 	esac
 	case "$GARDER" in
 	'' | *[!0-9]* | 0) die "GARDER doit être un entier ≥ 1" 2 ;;
@@ -109,6 +115,20 @@ recuperer() {
 		git -C "$depot" reflog expire --expire=now --all &&
 			git -C "$depot" gc --quiet --prune=now || journal "nettoyage git impossible (non bloquant)"
 	fi
+	# #23: the data in a branch of its own (data/ alone), fetched beside the code, never checked out
+	if [ "$(source_donnees)" != HEAD ]; then
+		git -C "$depot" fetch --quiet --depth 1 origin "+refs/heads/$BRANCHE_DONNEES:refs/remotes/origin/$BRANCHE_DONNEES" ||
+			return 1
+	fi
+}
+
+# The commit data/ is read from: the data branch when there is one, else the code's own commit.
+source_donnees() {
+	if [ -n "$BRANCHE_DONNEES" ] && [ "$BRANCHE_DONNEES" != "$BRANCHE" ]; then
+		printf '%s\n' "origin/$BRANCHE_DONNEES"
+	else
+		printf '%s\n' HEAD
+	fi
 }
 
 # Keeps, in folder $1, the entry $2 (the one just made) and the GARDER-1 most recent others. $2 is
@@ -157,14 +177,19 @@ publier() {
 	construction=$1
 	depot="$COPIE/depot"
 	commit=$(git -C "$depot" rev-parse HEAD) || return 1
+	donnees=$(source_donnees)
+	dcommit=$(git -C "$depot" rev-parse "$donnees") || return 1
 	site="$COPIE/site"
+	# named after the code and, with a data branch, after its commit too: a night of data alone is a
+	# new copy
 	nom="$commit"
+	[ "$donnees" = HEAD ] || nom="$commit-${dcommit%"${dcommit#????????????}"}"
 	mkdir -p "$site/versions" || return 1
 	if [ ! -f "$site/versions/$nom/index.html" ]; then
 		rm -rf "$site/versions/$nom.tmp"
 		cp -R "$construction" "$site/versions/$nom.tmp" || return 1
-		if [ -f "$depot/data/keyinfo.json" ]; then
-			cp -R "$depot/data" "$site/versions/$nom.tmp/data" || return 1
+		if git -C "$depot" cat-file -e "$donnees:data/keyinfo.json" 2>/dev/null; then
+			git -C "$depot" archive "$donnees" data | tar -x -C "$site/versions/$nom.tmp" || return 1
 		fi
 		mv "$site/versions/$nom.tmp" "$site/versions/$nom" || return 1
 	fi

@@ -195,6 +195,27 @@ try {
     for (const v of await seriousAxe(page)) errors.push(`${BROWSER} assistant (verrou) : axe « ${v.id} » → ${v.targets.join(' | ')}`);
     const over = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
     check(over <= 1, `verrou : la page déborde de ${over} px avec l’assistant`);
+
+    // revue v2.0: a mistyped repository (or a token without the right access) is not a dead end:
+    // on this screen there is no ⚙ Paramètres to change it, the assistant itself must allow it
+    const gh = fakeGitHub();
+    await ctx.route('https://api.github.com/**', gh.handle);
+    await page.locator('#setup-login input[name="repo"]').fill('proprietaire-fictif/depot-mal-tape');
+    await page.locator('#setup-login input[name="token"]').fill(TOKEN);
+    await page.locator('#setup-check').click();
+    await settled(page);
+    check((await page.locator('#setup-change').count()) === 1, 'verrou : dépôt mal tapé, rien pour changer de dépôt ou de jeton');
+    await page.locator('#setup-change').click({ timeout: 5000 }).catch(() => {});
+    await page.waitForSelector('#setup-login', { timeout: 5000 }).catch(() => {});
+    check((await page.locator('#setup-login input[name="repo"]').inputValue().catch(() => '')) === 'proprietaire-fictif/depot-mal-tape', 'verrou : le dépôt tapé n’est pas repris pour être corrigé');
+    if (await page.locator('#setup-login').count()) {
+      await page.locator('#setup-login input[name="repo"]').fill(REPO);
+      await page.locator('#setup-login input[name="token"]').fill(TOKEN);
+      await page.locator('#setup-check').click();
+      await settled(page);
+      check((await status(page, 'intuis')) === 'a-faire', 'verrou : le bon dépôt n’est pas relu après le changement');
+    }
+    check(gh.calls.every((c) => c.auth === `Bearer ${TOKEN}`), 'verrou : jeton mal transmis après le changement');
     await ctx.close();
   }
 } catch (e) {

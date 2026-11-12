@@ -215,7 +215,10 @@ Passer à la branche `data` (une fois, de jour, loin de la collecte de 04:17 UTC
    2 et 3 (son jeton Netatmo est le seul valable), relancez l'étape 2, variable posée ou non, avant
    la collecte suivante : la branche `data` n'ayant pas bougé depuis la copie, elle est mise à jour
    en avance rapide. Si la variable a été posée **avant** l'étape 2, la collecte échoue en le disant :
-   retirez la variable, faites l'étape 2, reposez-la.
+   retirez la variable, faites l'étape 2, reposez-la. Une **copie locale sur le NAS** (#143) lit
+   alors ses données dans la branche `data` : posez aussi `BRANCHE_DONNEES: data` dans son
+   `docker-compose.yml` ([docs/nas-copie-locale.md](docs/nas-copie-locale.md), étape 2), sinon elle
+   resterait figée au jour du passage.
 4. **Contrôle** : lancez **Actions → Déploiement GitHub Pages** ; son résumé dit « Données servies
    depuis la branche data ». Ouvrez l'application : mêmes totaux qu'à l'étape 1. Le lendemain, le
    commit `data: collecte du …` est dans la branche `data`, plus sur `main`.

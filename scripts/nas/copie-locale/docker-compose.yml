@@ -13,6 +13,7 @@ services:
       TZ: Europe/Paris
       HEURE: "08:30" # après la collecte de la nuit (vers 5 h-6 h) et son déploiement
       BRANCHE: main
+      # BRANCHE_DONNEES: data   (si la variable de dépôt DATA_BRANCH vaut « data », README « Branche des données »)
       # DEPOT_URL: https://github.com/<vous>/<votre-depot>.git   (votre copie, si ce n'est pas l'original)
     volumes:
       - copie:/copie
