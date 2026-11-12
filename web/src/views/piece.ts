@@ -114,7 +114,7 @@ function proposalAlert(m: ModuleMatch): string {
   const data = `data-room="${esc(m.room)}" data-module="${esc(m.module)}"`;
   return alertHtml(
     'info',
-    `<p>Le module « ${esc(name)} » de la station suit la sonde du radiateur de cette pièce sur ${esc(plural(m.n, 'jour'))}, à ${esc(
+    `<p>Le module «\u00a0${esc(name)}\u00a0» de la station suit la sonde du radiateur de cette pièce sur ${esc(plural(m.n, 'jour'))}, à ${esc(
       fmt1(Math.abs(m.offset)),
     )}\u00a0°C ${m.offset >= 0 ? 'au-dessus' : 'au-dessous'}. Lié à la pièce, il donne sa température à la place de la sonde, placée contre le radiateur.</p>
     <div class="controls"><button type="button" class="btn primary" data-piece="link-module" ${data}>Lier ce module à la pièce</button>

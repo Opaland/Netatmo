@@ -170,7 +170,7 @@ try {
       // then linked, its reading becomes the room's
       progress(`${name} : module à lier`);
       const offer = await page.locator('#piece-link').innerText().catch(() => '');
-      check(/Lier ce module à la pièce/.test(offer) && /« Grenier »/.test(offer) && /1,\d\s°C au-dessus/.test(offer), `${name} : liaison du module « Grenier » non proposée (« ${offer.slice(0, 200)} »)`);
+      check(/Lier ce module à la pièce/.test(offer) && /«\s?Grenier\s?»/.test(offer) && /1,\d\s°C au-dessus/.test(offer), `${name} : liaison du module « Grenier » non proposée (« ${offer.slice(0, 200)} »)`);
       check(/Mesurée \(sonde du radiateur\)/.test(await page.locator('#piece-temp').innerText()), `${name} : chambre parentale déjà sur la station avant la liaison`);
       await audit(page, `${name}/piece-liaison`);
       await page.click('[data-piece=link-module]');
