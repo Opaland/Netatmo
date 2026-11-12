@@ -26,14 +26,12 @@ export class BadEnvelope extends Error {}
 export const ENVELOPE_VERSION = 1;
 export const KDF = 'PBKDF2-SHA256';
 export const ARGON2 = 'Argon2id';
-/** collector/crypto.py ITERATIONS: fewer would make the passphrase cheaper to guess (rekey error, tampering). */
+// #139: the same values as collector/kdf.json, which the collector reads (crypto.test.ts checks
+// that they agree: one rule on both sides). The minimum is what the collector writes: fewer would
+// make the passphrase cheaper to guess (rekey error, tampering); the maximum keeps a keyinfo.json
+// from freezing the phone. One Argon2id lane only: the key must be the collector's.
 export const MIN_ITERATIONS = 600_000;
-/**
- * #139: collector/crypto.py ARGON2_MEMORY_KIB, ARGON2_TIME, ARGON2_LANES. The app refuses less
- * memory or fewer passes (same reason as MIN_ITERATIONS) and caps them, so that a keyinfo.json
- * cannot freeze the phone. One lane only: the key must be the collector's. The shared vector
- * (__fixtures__/kdf-vector.json) is written with these values, and both sides check it.
- */
+export const MAX_ITERATIONS = 2_000_000;
 export const ARGON2_MIN = { m: 64 * 1024, t: 2, p: 1 } as const;
 export const ARGON2_MAX = { m: 256 * 1024, t: 10 } as const;
 
@@ -43,6 +41,10 @@ function checkIterations(iter: unknown) {
   if (typeof iter !== 'number' || !Number.isInteger(iter) || iter < MIN_ITERATIONS)
     throw new BadEnvelope(
       `Dérivation de clé trop faible (${String(iter)} itérations, minimum ${MIN_ITERATIONS.toLocaleString('fr-FR')}) : keyinfo.json a été modifié ou mal régénéré, relancez « rekey ».`,
+    );
+  if (iter > MAX_ITERATIONS)
+    throw new BadEnvelope(
+      `Dérivation de clé refusée (${String(iter)} itérations, maximum ${MAX_ITERATIONS.toLocaleString('fr-FR')}) : keyinfo.json a été modifié ou mal régénéré, relancez « rekey ».`,
     );
 }
 

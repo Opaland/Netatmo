@@ -35,6 +35,7 @@ import { addDays } from './aggregate';
 import { INPUT_FIELDS, MAX_ROOFS, ROOF_FIELDS, parseLocation, parseLocationDraft, parsePvgisFile, parseSolarDoc, parseSolarInputs } from './solar';
 import { type VoletsDoc, evenings, loadNotes, recentFailures, shutterNames, summarize } from './shutters';
 import { readMark } from './storage';
+import { opensWith } from './sealed-notes';
 import { parseTenant } from './tenant';
 
 const SEED = 20261110;
@@ -528,6 +529,16 @@ describe('#359 fuzz : adresses, facture, CSV, enveloppes', () => {
       } catch (e) {
         assert(e instanceof BadEnvelope, `exception ${(e as Error).name}`);
       }
+    });
+  });
+
+  it('#139 : note de l’appareil relue avant d’écrire dessus : un booléen, jamais une exception', async () => {
+    const key = await crypto.subtle.importKey('raw', new Uint8Array(32), 'AES-GCM', false, ['encrypt', 'decrypt']);
+    const B64 = ['', 'AAAAAAAAAAAAAAAA', 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA', '!!!', '=', 'abcd'];
+    await fuzzAsync('opensWith', 300, async (r) => {
+      const raw = r() < 0.4 ? storedText(r) : JSON.stringify({ iv: r() < 0.5 ? pick(r, B64) : anyValue(r), ct: r() < 0.5 ? pick(r, B64) : anyValue(r) });
+      const ok = await opensWith(r() < 0.1 ? null : raw, key);
+      assert(typeof ok === 'boolean', `résultat ${String(ok)}`);
     });
   });
 

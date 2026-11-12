@@ -8,11 +8,12 @@ import { datasetDoc, ds, onDatasetLoaded } from '../app';
 import { addDays, minusYears } from '../aggregate';
 import { type Breakdown, type Declared, type Part, breakdown, kwhPerYear, parseDeclared, plugsFrom } from '../breakdown';
 import { list, countedNote } from '../components';
-import { openLocal, sealLocal } from '../crypto';
+import { openLocal } from '../crypto';
+import { writeSealed } from '../local-store';
 import { type Curve, lastCurveDay, measuredWattsCached, talon } from '../curve';
 import { type Dataset, loadCurve, loadHourly } from '../data';
 import { memo } from '../memo';
-import { readPref, writePref } from '../money';
+import { readPref } from '../money';
 import { html } from '../trusted';
 import { coverage, coveredText } from '../meter';
 import { activeRooms, avgPrice, esc, fmtEur, lastDay, nf0, table, tableToggle } from '../ui';
@@ -55,12 +56,8 @@ async function loadDeclared(d: Dataset): Promise<Declared[]> {
 
 async function saveDeclared(list: Declared[], card: HTMLElement) {
   declared = list;
-  try {
-    writePref(lsKey(), list.length ? JSON.stringify(await sealLocal(list, ds!.key)) : null);
-    formMsg = '';
-  } catch {
-    formMsg = 'Enregistré jusqu’au verrouillage seulement (clé non exportable).';
-  }
+  // #139: never over an unreadable note (kept, see sealed-notes.ts)
+  formMsg = (await writeSealed(lsKey(), ds!.key, list, !list.length)) ? '' : 'Enregistré jusqu’au verrouillage seulement.';
   renderBreakdownCard(card, range);
 }
 

@@ -8,6 +8,7 @@ import type { Coverage } from './checks';
 import { type DevicesDoc, type StationHealth, type TempoCheck, fillTempo } from './devices';
 import type { DayHours, Night, StationHourly } from './comfort';
 import { type Envelope, type KeyInfo, decryptEnvelope, deriveKey } from './crypto';
+import { migrateSealed, recordSealParams } from './sealed-notes';
 import type { Room30, Room30Doc } from './room30';
 import { type RememberedKey, freshKey } from './session';
 import { askPersistence, writeMark } from './storage';
@@ -133,10 +134,22 @@ export async function keyInfo(source: Source): Promise<KeyInfo> {
 }
 
 export async function unlock(source: Source, passphrase: string): Promise<CryptoKey> {
-  const key = await deriveKey(passphrase, await keyInfo(source));
+  const info = await keyInfo(source);
+  const key = await deriveKey(passphrase, info);
   // Validate immediately so a typo is reported on the unlock screen.
   await decryptEnvelope(await getJson<Envelope>(`${dataDir(source)}/meta.enc.json`), key);
+  // #139: notes of this device sealed before a rekey are carried over to the new key (same passphrase).
+  await migrateSealed(source, passphrase, info, key);
   return key;
+}
+
+/** #139: a remembered key opened the data: the device's notes are sealed with today's keyinfo.json. */
+export async function noteSealParams(source: Source): Promise<void> {
+  try {
+    recordSealParams(source, await keyInfo(source));
+  } catch {
+    /* offline: recorded at the next unlock */
+  }
 }
 
 const toMap2 = <V>(o: Record<string, Record<string, V>> | undefined, into: Map<string, Map<string, V>>) => {

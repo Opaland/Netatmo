@@ -3,6 +3,7 @@
 // Nothing is sent anywhere; another device or another passphrase does not see them.
 import { openLocal, sealLocal } from './crypto';
 import { NS } from './scope';
+import { opensWith } from './sealed-notes';
 
 /** Key of a note for one dataset (real data and demo never mix). */
 export const noteKey = (name: string, source: string) => `${NS}:${name}:${source}`;
@@ -28,8 +29,19 @@ export async function loadNote<T>(name: string, source: string, key: CryptoKey, 
  * without the encrypt usage, private browsing, storage full): the note then lasts until locking.
  */
 export async function saveNote(name: string, source: string, key: CryptoKey, value: unknown): Promise<boolean> {
+  return writeSealed(noteKey(name, source), key, value);
+}
+
+/**
+ * Seal `value` under `storageKey` (or remove it with `remove`). #139: never over a note this key
+ * cannot open (written with another passphrase, or before a rekey not yet carried over): it is
+ * kept, and the save reports false (the views then say « jusqu'au verrouillage »).
+ */
+export async function writeSealed(storageKey: string, key: CryptoKey, value: unknown, remove = false): Promise<boolean> {
   try {
-    localStorage.setItem(noteKey(name, source), JSON.stringify(await sealLocal(value, key)));
+    if (!(await opensWith(localStorage.getItem(storageKey), key))) return false;
+    if (remove) localStorage.removeItem(storageKey);
+    else localStorage.setItem(storageKey, JSON.stringify(await sealLocal(value, key)));
     return true;
   } catch {
     return false;

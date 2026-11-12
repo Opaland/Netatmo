@@ -3,6 +3,7 @@
 import argparse
 import base64
 import json
+import re
 import time
 from pathlib import Path
 
@@ -208,3 +209,39 @@ def test_backup_of_an_argon2id_folder_restores(tmp_path):
     restore(tmp_path / "b.json", tmp_path / "out", PASS)
     assert json.loads((tmp_path / "out" / "keyinfo.json").read_text()) == bundle["keyinfo"]
     assert Store(tmp_path / "out", PASS).totals() == Store(data, PASS).totals()
+
+
+def test_an_interrupted_replacement_puts_the_files_of_before_back(tmp_path, monkeypatch, capsys):
+    """M4: Ctrl-C in the middle of the swap does not leave data/ half migrated."""
+    import collector.rekey as rk
+
+    data = tmp_path / "data"
+    _folder(data)
+    before = {p.name: p.read_text() for p in data.iterdir()}
+    seen = []
+
+    def interrupt(path):
+        seen.append(path.name)
+        if len(seen) == 2:
+            raise KeyboardInterrupt
+
+    monkeypatch.setattr(rk, "_after_replace", interrupt)
+    with pytest.raises(KeyboardInterrupt):
+        rekey(data, PASS, PASS, Kdf.argon2id(), tmp_path / "copie")
+    assert len(seen) == 2  # two files had been replaced
+    assert {p.name: p.read_text() for p in data.iterdir()} == before
+    assert "s'il est interrompu : cp " in capsys.readouterr().out
+
+
+def test_rekey_never_runs_with_a_workflow_that_writes_data():
+    """M3: rekey.yml waits for the collection (workflow group) and for the shutters (job group)."""
+    root = Path(__file__).resolve().parent.parent / ".github" / "workflows"
+
+    def groups(name: str) -> list[str]:
+        return re.findall(r"^\s*group:\s*(\S+)", (root / name).read_text(), re.M)
+
+    assert set(groups("rekey.yml")) == {"collect", "volets"}
+    assert groups("collect.yml") == ["collect"] and groups("volets.yml") == ["volets"]
+    writes_data = re.compile(r"git add data/|commit-data\.sh")
+    writers = {p.name for p in root.glob("*.yml") if writes_data.search(p.read_text())}
+    assert writers == {"collect.yml", "volets.yml", "rekey.yml"}  # a new writer must join a group here

@@ -196,8 +196,20 @@ try {
   // fetched only once a version 2 keyinfo.json is unlocked (not with the lock screen).
   {
     progress('#139 dossier Argon2id');
-    const files = await argon2Folder('dist/demo', 'demo');
+    const { files, before, sealBefore } = await argon2Folder('dist/demo', 'demo');
     const ctx = await browser.newContext({ ...iphone, serviceWorkers: 'block' });
+    // B1: notes of this device sealed before the rekey (same phrase: carried over) and one sealed
+    // with another phrase (kept untouched, said by the banner, erased only on request).
+    const NOTES = {
+      'intuis-history:sealed-with:data': JSON.stringify(before),
+      'intuis-history:invoices:data': await sealBefore([]),
+      'intuis-history:works:data': JSON.stringify({ iv: 'AAAAAAAAAAAAAAAA', ct: 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA' }),
+    };
+    await ctx.addInitScript((notes) => {
+      if (sessionStorage.getItem('e2e-notes')) return;
+      sessionStorage.setItem('e2e-notes', '1');
+      for (const [k, v] of Object.entries(notes)) localStorage.setItem(k, v);
+    }, NOTES);
     await ctx.route('**/data/*', (r) => {
       const body = files.get(new URL(r.request().url()).pathname.split('/').pop());
       return body ? r.fulfill({ contentType: 'application/json', body }) : r.fulfill({ status: 404, body: '' });
@@ -221,6 +233,21 @@ try {
       await ready(page, 60000);
       progress(`#139 dossier Argon2id ouvert en ${Date.now() - t} ms (dérivation, déchiffrement et premier écran)`);
       check(await page.locator('header.top').count(), 'argon2id : l’application ne s’est pas ouverte');
+      const kept = await page.evaluate(() => ({
+        invoices: localStorage.getItem('intuis-history:invoices:data'),
+        works: localStorage.getItem('intuis-history:works:data'),
+        params: JSON.parse(localStorage.getItem('intuis-history:sealed-with:data') ?? 'null'),
+      }));
+      check(kept.invoices && kept.invoices !== NOTES['intuis-history:invoices:data'], 'notes : la note scellée avant le rekey n’a pas été rescellée');
+      check(kept.works === NOTES['intuis-history:works:data'], 'notes : une note illisible a été modifiée');
+      check(kept.params?.v === 2, `notes : paramètres retenus ${JSON.stringify(kept.params)}`);
+      const banner = await page.locator('#notes-banner').innerText().catch(() => '');
+      check(/^1 note gardée sur cet appareil ne s’ouvre pas/.test(banner), `notes : bandeau attendu, lu « ${banner} »`);
+      await page.screenshot({ path: `${OUT}/${BROWSER}-notes-illisibles.png`, fullPage: true });
+      await audit(page, 'notes-illisibles');
+      await page.click('#notes-erase');
+      check(!(await page.locator('#notes-banner').count()), 'notes : le bandeau reste après « Effacer »');
+      check((await page.evaluate(() => localStorage.getItem('intuis-history:works:data'))) === null, 'notes : la note illisible n’a pas été effacée');
     } catch (err) {
       errors.push(`${BROWSER} argon2id : ${err}`);
     }

@@ -164,21 +164,39 @@ Les données sont chiffrées avec une clé dérivée par PBKDF2 ; Argon2id rési
 hors ligne (elle demande 64 Mio de mémoire par essai). L'application lit les deux. **Rien ne migre
 tout seul** : c'est un geste du propriétaire, une fois.
 
+0. **Avant**, ouvrez une fois l'application (version qui contient #139) sur chaque appareil où vous
+   avez saisi des notes (factures, travaux, absences, appareils, réglages gardés sur l'appareil) :
+   elle retient les paramètres publics de la clé avec lesquels ces notes sont chiffrées.
 1. Lancez **Actions → Changer la phrase de passe** avec « derivation » = **argon2id**, sans
-   `NEW_DATA_PASSPHRASE` : même phrase, aucun secret à changer.
+   `NEW_DATA_PASSPHRASE` : même phrase, aucun secret à changer. Le workflow attend une collecte ou
+   un relevé des volets en cours, et ceux-ci l'attendent.
 2. Avant de remplacer quoi que ce soit, `rekey` déchiffre chaque fichier, le rechiffre à côté, le
    relit et compare les totaux de `verify` (sans les écrire dans le journal public) ; au moindre écart,
    rien n'est remplacé. Les fichiers d'avant sont gardés dans l'artefact **avant-rekey** (30 jours).
 3. Contrôle : ouvrez l'application (même phrase ; une clé mémorisée est redemandée une fois) et, en
    local, `python -m collector verify` donne les mêmes totaux qu'avant.
 
-En local, même chose : `DATA_PASSPHRASE=… python -m collector rekey --kdf argon2id` (copie d'avant
-dans `data-avant-rekey/`, hors du dépôt, ou `--sauvegarde DOSSIER`).
+**Les notes de l'appareil.** Elles sont chiffrées avec la clé des données ; le rekey tire un
+nouveau sel, la clé change même avec la même phrase. Au premier déverrouillage avec la phrase,
+l'application rouvre ces notes avec l'ancienne clé (même phrase, paramètres retenus à l'étape 0) et
+les rechiffre avec la nouvelle : rien ne se perd. Une note qu'aucune des deux clés n'ouvre (phrase
+changée, ou appareil pas ouvert à l'étape 0) n'est **jamais écrasée** : un bandeau le dit, une
+nouvelle saisie du même genre ne dure alors que jusqu'au verrouillage, et le bouton « Effacer ces
+notes illisibles » les supprime seulement si vous le demandez. Pour la retrouver : remettre
+l'ancienne version (retour arrière ci-dessous) puis déverrouiller sur cet appareil.
+
+En local, même chose : `DATA_PASSPHRASE=… python -m collector rekey --kdf argon2id`. La copie d'avant
+va dans `data-avant-rekey/`, à côté de `data/` (ignorée par Git, jamais commitée), ou dans
+`--sauvegarde DOSSIER`. Si le remplacement échoue ou est interrompu (Ctrl-C), la copie est remise
+toute seule. Un arrêt brutal pendant le remplacement (coupure, `kill -9`) laisse un dossier à moitié
+migré, que la collecte lit encore (chaque fichier dit sa dérivation) mais pas l'application (elle
+dérive la clé depuis `keyinfo.json`) : remettez la copie avec `cp data-avant-rekey/* data/`, puis
+relancez.
 
 **Retour arrière** : `git revert` du commit « data: rechiffrement (dérivation : argon2id) » remet les
 fichiers PBKDF2, que la même phrase ouvre ; ou copiez l'artefact **avant-rekey** (ou
 `data-avant-rekey/`) sur `data/`. Les deux dérivations restent lisibles par l'application et la
-collecte.
+collecte. Les notes déjà rechiffrées sur un appareil sont reprises de la même façon dans l'autre sens.
 
 ### Sauvegarde chiffrée (hors GitHub)
 

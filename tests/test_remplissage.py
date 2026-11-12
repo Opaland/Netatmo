@@ -36,14 +36,14 @@ def test_published_size_does_not_follow_a_small_change():
     salt = b"0" * 16
     present = {"daily": {"100": {f"2025-01-{d:02}": 1234.5 for d in range(1, 32)}}}
     away = {"daily": {"100": {f"2025-01-{d:02}": 0 for d in range(1, 32)}}}
-    a, b = encrypt_json(present, "pw", salt, 100_000), encrypt_json(away, "pw", salt, 100_000)
+    a, b = encrypt_json(present, "pw", salt, 600_000), encrypt_json(away, "pw", salt, 600_000)
     assert len(json.dumps(a)) == len(json.dumps(b))
     assert _ct_len(a) == PAD_MIN + 16  # GCM tag after the padded plaintext
     assert decrypt_json(a, "pw") == present and decrypt_json(b, "pw") == away
 
 
 def test_padding_is_inside_the_ciphertext():
-    env = encrypt_json({"a": 1}, "pw", b"0" * 16, 100_000)
+    env = encrypt_json({"a": 1}, "pw", b"0" * 16, 600_000)
     assert set(env) == {"v", "kdf", "iter", "salt", "iv", "ct"}  # same envelope, nothing in clear
     assert pad(b'{"a":1}').rstrip(b" ") == b'{"a":1}'
 

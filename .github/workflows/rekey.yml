@@ -25,6 +25,12 @@ on:
         options: [inchangée, argon2id]
         default: inchangée
 
+# Never at the same time as a run that writes data/: the nightly collection (workflow group
+# « collect ») and the shutters sent by the NAS (job group « volets », volets.yml). A volets
+# commit pushed over a rekey would otherwise be written with the old key, which the app cannot
+# read. volets.yml keeps its own group: in the « collect » group, a second pending volets night
+# or collection would cancel the first (GitHub keeps one pending run per group), which costs a
+# night of data; a rekey is rare and launched by hand, so it is the one that waits.
 concurrency:
   group: collect
   cancel-in-progress: false
@@ -35,6 +41,9 @@ permissions:
 jobs:
   rekey:
     runs-on: ubuntu-latest
+    concurrency:
+      group: volets
+      cancel-in-progress: false
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-python@v7

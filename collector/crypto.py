@@ -24,33 +24,36 @@ import json
 import os
 from dataclasses import dataclass
 from functools import lru_cache
+from pathlib import Path
 
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 
-ITERATIONS = 600_000
-VERSION = 1
-KDF = "PBKDF2-SHA256"
+# #139: what is written and the bounds accepted on read live in collector/kdf.json, read here and
+# checked against web/src/crypto.ts by web/src/crypto.test.ts: one rule on both sides (AGENTS.md §5).
 # S-1.16 #271: an envelope read from outside (an artifact) must not choose its own cost: too low
-# is a downgrade, too high blocks the collection in PBKDF2 for hours. The web app writes 600 000.
-MIN_ITERATIONS = 100_000
-MAX_ITERATIONS = 2_000_000
-
-# #139: Argon2id (RFC 9106), one lane so that every implementation gives the same key (argon2-cffi
+# is a downgrade, too high blocks the collection (or freezes the phone).
+#
+# Argon2id (RFC 9106), one lane so that every implementation gives the same key (argon2-cffi
 # here, hash-wasm in the app). 64 MiB and 2 passes: measured in Chromium with hash-wasm on the main
 # thread, CPU throttled x6 (a modest phone), about 1 s; 3 passes took 1.5 to 1.8 s, too close to
 # the 2 s aimed at (PR of #139). These are also libsodium's "interactive" limits, above OWASP's
-# minimum (19 MiB, 2 passes). The app refuses less (web/src/crypto.ts, ARGON2_MIN).
+# minimum (19 MiB, 2 passes).
+_KDF = json.loads((Path(__file__).with_name("kdf.json")).read_text(encoding="utf-8"))
+VERSION = 1
+KDF = "PBKDF2-SHA256"
+ITERATIONS: int = _KDF["pbkdf2"]["iter"]
+MIN_ITERATIONS: int = _KDF["pbkdf2"]["min_iter"]
+MAX_ITERATIONS: int = _KDF["pbkdf2"]["max_iter"]
 ARGON2 = "Argon2id"
-ARGON2_MEMORY_KIB = 64 * 1024
-ARGON2_TIME = 2
-ARGON2_LANES = 1
-# Accepted from an envelope or a keyinfo read from outside (same reason as MIN/MAX_ITERATIONS):
-# never below OWASP's minimum, never a cost that would block the collection.
-ARGON2_MIN_MEMORY_KIB = 19 * 1024
-ARGON2_MAX_MEMORY_KIB = 1024 * 1024
-ARGON2_MAX_TIME = 10
+ARGON2_MEMORY_KIB: int = _KDF["argon2id"]["m"]
+ARGON2_TIME: int = _KDF["argon2id"]["t"]
+ARGON2_LANES: int = _KDF["argon2id"]["p"]
+ARGON2_MIN_MEMORY_KIB: int = _KDF["argon2id"]["min_m"]
+ARGON2_MAX_MEMORY_KIB: int = _KDF["argon2id"]["max_m"]
+ARGON2_MIN_TIME: int = _KDF["argon2id"]["min_t"]
+ARGON2_MAX_TIME: int = _KDF["argon2id"]["max_t"]
 
 
 # #138: padding steps. A presentation threshold (it changes the size published, never what is
@@ -118,8 +121,8 @@ class Kdf:
             return Kdf.pbkdf2(_int_in(doc.get("iter"), MIN_ITERATIONS, MAX_ITERATIONS, "Nombre d'itérations PBKDF2"))
         if name == ARGON2:
             m = _int_in(doc.get("m"), ARGON2_MIN_MEMORY_KIB, ARGON2_MAX_MEMORY_KIB, "Mémoire Argon2id (Kio)")
-            t = _int_in(doc.get("t"), 1, ARGON2_MAX_TIME, "Nombre de passes Argon2id")
-            return Kdf.argon2id(m, t, _int_in(doc.get("p"), 1, 1, "Parallélisme Argon2id"))
+            t = _int_in(doc.get("t"), ARGON2_MIN_TIME, ARGON2_MAX_TIME, "Nombre de passes Argon2id")
+            return Kdf.argon2id(m, t, _int_in(doc.get("p"), ARGON2_LANES, ARGON2_LANES, "Parallélisme Argon2id"))
         raise DecryptError("Format de fichier chiffré inconnu (version ou dérivation)")
 
 

@@ -3,8 +3,12 @@
 Usage (local or in the « Changer la phrase de passe » workflow):
     DATA_PASSPHRASE=<ancienne> NEW_DATA_PASSPHRASE=<nouvelle> python -m collector rekey
     DATA_PASSPHRASE=<phrase> python -m collector rekey --kdf argon2id   (#139, same passphrase)
-A copy of the current files is kept in data-avant-rekey/ (or --sauvegarde) before anything is
-replaced; going back = copying it over data/ (or `git revert` of the rekey commit).
+A copy of the current files is kept in data-avant-rekey/ (next to data/, ignored by git; or
+--sauvegarde) before anything is replaced; going back = copying it over data/ (or `git revert` of
+the rekey commit). If the replacement fails or is interrupted (Ctrl-C), the copy is put back by
+itself; a process killed outright (power cut, kill -9) leaves data/ half migrated, readable by the
+collector but not by the app: then `cp data-avant-rekey/* data/` (README, « Passer la clé à
+Argon2id »).
 """
 
 from __future__ import annotations
@@ -89,14 +93,33 @@ def rekey(data_dir: Path, old: str, new: str, kdf: Kdf | None = None, backup_dir
         backup_dir.mkdir(parents=True, exist_ok=True)
         for p in [data_dir / "keyinfo.json", *docs]:
             shutil.copy2(p, backup_dir / p.name)
-        for p in docs:  # keyinfo.json last: until then, the old one still opens the old files
-            os.replace(staging / p.name, p)
-        os.replace(staging / "keyinfo.json", data_dir / "keyinfo.json")
+        # From here until keyinfo.json is replaced, data_dir holds both derivations: the collector
+        # still reads it (each envelope says its own), the app does not (it derives from
+        # keyinfo.json). Any failure, Ctrl-C included, puts the copy back; a process killed
+        # outright cannot, hence the message (README, « Passer la clé à Argon2id »).
+        print(f"Remplacement des fichiers… s'il est interrompu : cp {backup_dir}/* {data_dir}/")
+        try:
+            for p in docs:  # keyinfo.json last: until then, the old one still opens the old files
+                os.replace(staging / p.name, p)
+                _after_replace(p)
+            os.replace(staging / "keyinfo.json", data_dir / "keyinfo.json")
+            if Store(data_dir, new).totals() != before:  # the staged copy was checked: a failed write
+                raise RekeyError("Totaux différents après remplacement.")
+        except BaseException as exc:
+            restore_backup(backup_dir, data_dir)
+            if isinstance(exc, RekeyError):
+                raise RekeyError(f"{exc} Fichiers d'origine remis depuis {backup_dir}.") from exc
+            raise
     finally:
         shutil.rmtree(staging, ignore_errors=True)
-
-    if Store(data_dir, new).totals() != before:  # the staged copy was checked: a failed write
-        for p in backup_dir.iterdir():
-            shutil.copy2(p, data_dir / p.name)
-        raise RekeyError(f"Totaux différents après remplacement : fichiers d'origine remis depuis {backup_dir}.")
     return [p.name for p in docs]
+
+
+def _after_replace(path: Path) -> None:
+    """Test hook: called after each file is replaced (an interruption is simulated here)."""
+
+
+def restore_backup(backup_dir: Path, data_dir: Path) -> None:
+    """Put the files of before back (the same as `cp backup_dir/* data_dir/`)."""
+    for p in backup_dir.iterdir():
+        shutil.copy2(p, data_dir / p.name)

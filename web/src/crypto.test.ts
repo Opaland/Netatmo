@@ -4,7 +4,10 @@ import { describe, expect, it } from 'vitest';
 import { argon2idKey } from './argon2';
 import { buildBundle } from './backup';
 import {
+  ARGON2_MAX,
   ARGON2_MIN,
+  MAX_ITERATIONS,
+  MIN_ITERATIONS,
   type Argon2Info,
   BadEnvelope,
   type Envelope,
@@ -20,9 +23,32 @@ import {
 import vector from './__fixtures__/kdf-vector.json';
 import pbkdf2 from './__fixtures__/python-vector.json';
 
+const fsName = 'node:fs';
+const { readFileSync } = (await import(/* @vite-ignore */ fsName)) as { readFileSync: (u: URL, enc: 'utf8') => string };
+
 const info = vector.keyinfo as Argon2Info;
 const env = vector.envelope as Envelope;
 const hex = (b: Uint8Array) => Array.from(b, (x) => x.toString(16).padStart(2, '0')).join('');
+
+describe('#139 bornes de dérivation : une seule règle (collector/kdf.json)', () => {
+  it('l’appli accepte exactement les bornes que lit la collecte, et son minimum est ce qu’elle écrit', () => {
+    const shared = JSON.parse(readFileSync(new URL('../../collector/kdf.json', import.meta.url), 'utf8'));
+    expect({ min: MIN_ITERATIONS, max: MAX_ITERATIONS, written: MIN_ITERATIONS }).toEqual({
+      min: shared.pbkdf2.min_iter,
+      max: shared.pbkdf2.max_iter,
+      written: shared.pbkdf2.iter,
+    });
+    expect({ ...ARGON2_MIN, max_m: ARGON2_MAX.m, max_t: ARGON2_MAX.t }).toEqual({
+      m: shared.argon2id.min_m,
+      t: shared.argon2id.min_t,
+      p: shared.argon2id.p,
+      max_m: shared.argon2id.max_m,
+      max_t: shared.argon2id.max_t,
+    });
+    expect({ m: shared.argon2id.m, t: shared.argon2id.t }).toEqual({ m: ARGON2_MIN.m, t: ARGON2_MIN.t });
+    expect(() => checkKeyInfo({ salt: 'AAAA', iter: MAX_ITERATIONS + 1 })).toThrow(/maximum/);
+  });
+});
 
 describe('#139 Argon2id', () => {
   it('dérive la même clé que la collecte (vecteur partagé), avec les paramètres par défaut', async () => {
