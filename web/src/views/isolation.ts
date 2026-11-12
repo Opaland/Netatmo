@@ -4,7 +4,7 @@
 // ⚙ Mon logement (works.ts, loaded on demand): without them, no kWh/m².
 import { type DayRecord, addDays, minusYears } from '../aggregate';
 import { activeRooms, ds } from '../app';
-import { KWH_M2_GRID, W_PER_K_GRID, gradeOf, gridText, homePerM2, wattsPerDegree } from '../isolation';
+import { DAYS_OF_A_YEAR, KWH_M2_GRID, W_PER_K_GRID, gradeOf, gridText, homePerM2, wattsPerDegree } from '../isolation';
 import type { SeasonSignatures } from '../indoorsig';
 import { seasonLabel } from '../glossary';
 import { lazyCard } from '../lazy';
@@ -37,8 +37,6 @@ export function isolationBlock(whole: boolean, judged: SeasonSignatures[], alone
   return `${head}${wk}<p id="iso-m2" role="status">…</p>
     <p class="hint muted">Repères indicatifs, pas un diagnostic : en W/°C, ${gridText(W_PER_K_GRID)} ; en kWh de chauffage par m² et par an, ${gridText(KWH_M2_GRID)}. Les W/°C viennent de la droite (kWh de plus par jour pour 1 °C de moins dehors, × 1 000 ÷ 24) : un grand logement en perd plus qu’un petit, le kWh/m² le ramène à la surface.</p>`;
 }
-
-const DAYS_OF_A_YEAR = 330;
 
 /** Fill #iso-m2: the heating kWh/m² of the last 12 months, once the surfaces are loaded. */
 export function fillPerM2(records: DayRecord[], wood: Map<string, [number, number]> | null, uncertain: number) {
