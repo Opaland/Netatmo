@@ -220,6 +220,34 @@ export async function migratePlainVariable(repo: string, name: string): Promise<
   return true;
 }
 
+// ------------------------------------------------------------------ #40 first-launch assistant
+// Read with « Actions » in reading (already asked for « Collecter maintenant »): nothing more.
+
+/** State of the collection workflow (active, disabled_fork, disabled_inactivity…). */
+export async function collectWorkflowState(repo: string): Promise<string> {
+  const body = (await (await gh(`/repos/${repo}/actions/workflows/collect.yml`)).json()) as { state?: unknown };
+  return typeof body.state === 'string' ? body.state : 'unknown';
+}
+
+/** The last run of the collection and its jobs (names and outcomes only); run null: never ran. */
+export async function lastCollect(repo: string): Promise<{ run: import('./setup').RunInfo | null; jobs: import('./setup').JobInfo[] }> {
+  const runs = (await (await gh(`/repos/${repo}/actions/workflows/collect.yml/runs?per_page=1`)).json()) as {
+    workflow_runs?: { id: number; status: string; conclusion: string | null; html_url: string; created_at: string }[];
+  };
+  const r = runs.workflow_runs?.[0];
+  if (!r) return { run: null, jobs: [] };
+  const body = (await (await gh(`/repos/${repo}/actions/runs/${Number(r.id)}/jobs?per_page=30`)).json()) as { jobs?: { name: string; status: string; conclusion: string | null }[] };
+  return {
+    run: { status: String(r.status), conclusion: r.conclusion === null ? null : String(r.conclusion), html_url: String(r.html_url), created_at: String(r.created_at) },
+    jobs: (body.jobs ?? []).map((j) => ({ name: String(j.name), status: String(j.status), conclusion: j.conclusion === null ? null : String(j.conclusion) })),
+  };
+}
+
+/** Enable the collection workflow (stopped by GitHub after 60 days without activity, or in a fork). */
+export async function enableCollect(repo: string): Promise<void> {
+  await gh(`/repos/${repo}/actions/workflows/collect.yml/enable`, { method: 'PUT' });
+}
+
 export async function runCollect(repo: string, backfill: boolean): Promise<void> {
   await gh(`/repos/${repo}/actions/workflows/collect.yml/dispatches`, {
     method: 'POST',
