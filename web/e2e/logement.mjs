@@ -160,6 +160,34 @@ try {
     await ctx.close();
   });
 
+  // ------------------------------------------------------------ Bois réellement brûlé (#465)
+  await part('bois brûlé', async () => {
+    const { ctx, page } = await newPage();
+    await openDemo(page, base, null, 'parametres-logement');
+    await page.locator('#wood-card').waitFor({ state: 'attached', timeout: 15000 });
+    await ready(page);
+    const line = (y) => page.locator(`#wood-card [data-wood-season="${y}"]`).innerText();
+    // the demo notes no reading: each season burns all it has, and says it is an assumption
+    check(/tout brûlé \(supposé\)/.test(await line(2025)), `bois brûlé : hypothèse non dite (« ${await line(2025)} »)`);
+    await page.locator('#wood-burnt > summary').click();
+    await page.locator('#wood-burnt-season').selectOption('2025');
+    await page.locator('#wood-burnt-kind').selectOption('left');
+    await page.locator('#wood-burnt-value').fill('0.25');
+    await page.locator('#wood-burn').click();
+    await page.waitForFunction(() => /"burnt"/.test(document.querySelector('#wood-card .sim-json')?.textContent ?? ''), null, SHORT).catch(() => {});
+    await ready(page);
+    const w = JSON.parse(await page.locator('#wood-card .sim-json').innerText());
+    check(JSON.stringify(w.burnt) === '[{"season":2025,"left":0.25}]', `bois brûlé : relevé non noté (${JSON.stringify(w.burnt)})`);
+    check(/\(stock relevé au printemps\) · reste 0,25 stère/.test(await line(2025)), `bois brûlé : 2025–2026 sans son reste (« ${await line(2025)} »)`);
+    check(/^0,25 stère reporté/.test(await line(2026)), `bois brûlé : stock non reporté en 2026–2027 (« ${await line(2026)} »)`);
+    check(await page.locator('#wood-burnt').evaluate((d) => d.open).catch(() => false), 'bois brûlé : volet replié après le relevé');
+    await page.locator('#wood-card').screenshot({ path: `${OUT}/logement-${BROWSER}-bois-brule.png` });
+    await page.locator('[data-wood-unburn="2025"]').click();
+    await ready(page);
+    check(!/"burnt"/.test(await page.locator('#wood-card .sim-json').innerText()), 'bois brûlé : relevé non retiré');
+    await ctx.close();
+  });
+
   // ------------------------------------------------------------ Surfaces
   await part('surfaces', async () => {
     const { ctx, page } = await newPage();

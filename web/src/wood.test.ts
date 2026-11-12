@@ -3,7 +3,7 @@
 import { describe, expect, it } from 'vitest';
 import { addDays } from './aggregate';
 import type { Weather } from './analysis';
-import { DEFAULT_EFFICIENCY, KWH_PER_STERE, NO_WOOD, heatOf, moistureFactor, parseWood, purchaseText, seasonFed, woodDaily, woodIn, woodJson, woodSeasons } from './wood';
+import { DEFAULT_EFFICIENCY, KWH_PER_STERE, NO_WOOD, heatOf, moistureFactor, parseWood, purchaseText, seasonFed, seasonText, woodDaily, woodIn, woodJson, woodSeasons } from './wood';
 
 const oak = { day: '2025-09-20', steres: 2, species: 'chene' as const, moisture: 20, price: 200 };
 
@@ -82,5 +82,88 @@ describe('#366 wood stove', () => {
     expect(woodIn(daily, '2025-09-01', '2026-08-31').eur).toBeCloseTo(200, 6);
     expect(woodIn(daily, '2025-09-01', '2025-09-30').eur).toBe(0);
     expect(woodIn(daily, '2025-10-01', '2025-10-31').eur).toBeCloseTo((200 * 31) / 212, 6);
+  });
+
+  it('#465: parses the readings of the wood burnt — one quantity, one per season, bounded', () => {
+    const w = parseWood({
+      purchases: [oak],
+      burnt: [
+        { season: 2026, left: 0.5 },
+        { season: 2025, steres: 1.5 },
+        { season: 2025, steres: 9 }, // a second reading of the same season: the first kept
+        { season: 2024, steres: 1, left: 1 }, // both: which one?
+        { season: 2023 }, // neither
+        { season: 2022.5, steres: 1 },
+        { season: 1999, steres: 1 },
+        { season: 2021, steres: -1 },
+        { season: 2020, left: 201 },
+        { season: '2019', steres: 1 },
+      ],
+    });
+    expect(w.burnt).toEqual([
+      { season: 2025, steres: 1.5 },
+      { season: 2026, left: 0.5 },
+    ]);
+    expect(parseWood(JSON.parse(woodJson(w)))).toEqual(w);
+    expect(JSON.parse(woodJson(w)).burnt).toEqual(w.burnt);
+    expect(woodJson({ ...w, burnt: [] })).not.toContain('burnt'); // none: the format of before
+  });
+
+  it('#465: without a reading, a season burns all it has, nothing is carried', () => {
+    const [a, b] = woodSeasons(parseWood({ purchases: [oak, { ...oak, day: '2026-06-01', steres: 3, price: 270 }] }));
+    expect([a.bought, a.steres, a.left, a.reading]).toEqual([2, 2, 0, null]);
+    expect([b.carried, b.bought, b.steres, b.left]).toEqual([0, 3, 3, 0]);
+  });
+
+  it('#465: the stères burnt noted take the place of the assumption; the rest is carried to the next season', () => {
+    const w = parseWood({ purchases: [oak, { ...oak, day: '2026-06-01', steres: 3, price: 360, species: 'resineux' }], burnt: [{ season: 2025, steres: 1.5 }] });
+    const [a, b] = woodSeasons(w);
+    expect(a.steres).toBe(1.5);
+    expect(a.left).toBeCloseTo(0.5, 9);
+    expect(a.eur).toBeCloseTo(150, 9); // 1.5 stère at 100 €
+    expect(a.kwh).toBeCloseTo(heatOf(oak, w) * 0.75, 6);
+    // the next season burns the oak carried first, then its own softwood (all of it: no reading)
+    expect(b.carried).toBeCloseTo(0.5, 9);
+    expect(b.steres).toBeCloseTo(3.5, 9);
+    expect(b.eur).toBeCloseTo(50 + 360, 9);
+    expect(b.kwh).toBeCloseTo(heatOf(oak, w) * 0.25 + heatOf({ ...oak, steres: 3, species: 'resineux' }, w), 6);
+    // over both seasons, all the money and heat bought are counted once
+    expect(a.eur + b.eur).toBeCloseTo(200 + 360, 9);
+  });
+
+  it('#465: the stock left in spring: the season burns all but it, and the next one starts with it', () => {
+    const w = parseWood({ purchases: [oak], burnt: [{ season: 2025, left: 0.5 }, { season: 2026, steres: 0.2 }] });
+    const [a, b] = woodSeasons(w);
+    expect([a.steres, a.left]).toEqual([1.5, 0.5]);
+    // a season without purchase but with stock and a reading is a season of its own
+    expect(b.season).toBe(2026);
+    expect([b.bought, b.carried, b.short]).toEqual([0, 0.5, 0]);
+    expect(b.steres).toBeCloseTo(0.2, 9);
+    expect(b.left).toBeCloseTo(0.3, 9);
+  });
+
+  it('#465: more burnt than the stock recorded: what is recorded is burnt, the rest said, never invented', () => {
+    const [a] = woodSeasons(parseWood({ purchases: [oak], burnt: [{ season: 2025, steres: 5 }] }));
+    expect([a.steres, a.left, a.short]).toEqual([2, 0, 3]);
+    expect(a.eur).toBeCloseTo(200, 9);
+    const [c] = woodSeasons(parseWood({ purchases: [oak], burnt: [{ season: 2025, left: 4 }] }));
+    expect([c.steres, c.left]).toEqual([0, 2]);
+  });
+
+  it('#465: the days count the wood burnt, not the wood bought (woodDaily: the one split)', () => {
+    const w = parseWood({ purchases: [oak], burnt: [{ season: 2025, steres: 1 }] });
+    const daily = woodDaily(w, null, '2027-11-08');
+    expect(woodIn(daily, '2025-09-01', '2026-08-31').eur).toBeCloseTo(100, 6);
+    // the stère left burns in 2026–2027 (no reading: all it has)
+    expect(woodIn(daily, '2026-09-01', '2027-08-31').eur).toBeCloseTo(100, 6);
+  });
+
+  it('#465: each season says its assumption or its reading, its stock carried and left', () => {
+    const w = parseWood({ purchases: [oak, { ...oak, day: '2026-06-01', steres: 1 }], burnt: [{ season: 2025, left: 0.5 }] });
+    const [a, b] = woodSeasons(w);
+    expect(seasonText(a)).toBe('2 stères achetés · 1,5 stère brûlé (stock relevé au printemps) · reste 0,5 stère');
+    expect(seasonText(b)).toBe('0,5 stère reporté · 1 stère acheté · tout brûlé (supposé)');
+    const [c] = woodSeasons(parseWood({ purchases: [oak], burnt: [{ season: 2025, steres: 3 }] }));
+    expect(seasonText(c)).toBe('2 stères achetés · 2 stères brûlés (relevé) · 1 stère de plus que les achats notés, non compté');
   });
 });
