@@ -2,7 +2,8 @@
 import { describe, expect, it } from 'vitest';
 import { addDays } from './aggregate';
 import type { Weather } from './analysis';
-import { MIN_SIDE_DAYS, NO_WORKS, beforeAfter, heatPerDay, perRoomM2, surfaceOf, validWorks } from './works';
+import type { DayRecord } from './aggregate';
+import { MIN_SIDE_DAYS, NO_WORKS, beforeAfter, heatPerDay, perRoomM2, surfaceOf, validWorks, worksHeat } from './works';
 
 describe('validWorks', () => {
   it('keeps clean surfaces and markers, sorted', () => {
@@ -65,6 +66,32 @@ describe('beforeAfter', () => {
     expect(r.change).toBeNull();
     const late = beforeAfter(heat, weather, addDays('2025-12-30', -(MIN_SIDE_DAYS - 5)), '2024-01-01', '2025-12-30', null);
     expect(late.after).toBeNull();
+  });
+});
+
+describe('worksHeat (#476)', () => {
+  // A stove lit on the day of the « works »: the radiators fall from 2 to 1.2 kWh per °C, the wood
+  // brings the 0.8 left. The house is the same: electricity + wood, the change is ≈ 0, not −40 %.
+  const marker = '2025-01-01';
+  const { weather, heat } = series(marker);
+  const records: DayRecord[] = [...heat].map(([day, kwh]) => ({ day, room: 'salon', cat: 'heating', kwh }));
+  const daily = new Map<string, [number, number]>();
+  for (const [day, [, , t]] of weather) if (day >= marker && t < 16) daily.set(day, [0.8 * (16 - t), 0]);
+
+  it('counts the wood with the electricity, before and after', () => {
+    const w = worksHeat(records, daily);
+    expect(w.wood).toBe(true);
+    const r = beforeAfter(w.heat, weather, marker, '2024-01-01', '2025-12-30', null);
+    expect(r.after!.fit!.slope).toBeCloseTo(-2, 1);
+    expect(Math.abs(r.change!)).toBeLessThan(5);
+    // the electricity alone would have shown the stove as insulation
+    expect(beforeAfter(heatPerDay(records), weather, marker, '2024-01-01', '2025-12-30', null).change).toBeLessThan(-30);
+  });
+
+  it('without wood, the electricity alone, and says so', () => {
+    const w = worksHeat(records, null);
+    expect(w.wood).toBe(false);
+    expect(w.heat).toEqual(heatPerDay(records));
   });
 });
 
