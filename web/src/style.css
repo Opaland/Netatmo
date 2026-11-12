@@ -1085,6 +1085,11 @@ details.fold[open] > summary {
   display: flex;
   align-items: center;
 }
+/* #432, decision of the owner (v1.7): the folded line of « Hiver contre hiver » gives the change in
+   electricity + wood, the fairest figure of the card: in the text colour, not muted */
+#wood-seasons > summary {
+  color: var(--text);
+}
 /* Scrolls inside its card; first column pinned; a shadow says there is more to the right. */
 .table-wrap {
   overflow: auto;

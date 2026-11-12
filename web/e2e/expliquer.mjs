@@ -177,6 +177,18 @@ try {
       const fold = page.locator('#wood-seasons');
       const headline = (await fold.count()) ? await fold.locator('summary').innerText() : '';
       check(/^Électricité \+ bois : [−+]\d+\s% en énergie, [−+]\d+\s% en euros$/.test(headline), `${name} : hiver contre hiver, l'écart électricité + bois absent du titre replié (« ${headline} »)`);
+      // #432 (decision of the owner): its headline in the text colour, not muted
+      const [head, text] = (await fold.count())
+        ? await fold.locator('summary').evaluate((s) => {
+            const probe = document.createElement('span');
+            probe.style.color = 'var(--text)';
+            s.parentElement.append(probe);
+            const out = [getComputedStyle(s).color, getComputedStyle(probe).color];
+            probe.remove();
+            return out;
+          })
+        : ['', '?'];
+      check(head === text, `${name} : hiver contre hiver, le titre replié n'est pas en couleur de texte (${head} au lieu de ${text})`);
       if (await fold.count()) await fold.locator('summary').click();
       const seasons = (await fold.count()) ? await fold.innerText() : '';
       check(/2025–2026 : ≈ [\d\s ]+\skWh dont [\d\s ]+\skWh de bois, ≈ [\d\s ]+\s€/.test(seasons) && /en énergie, [−+]\d+\s% en euros/.test(seasons), `${name} : hiver contre hiver sans le bois (« ${seasons.slice(0, 200)} »)`);
@@ -235,7 +247,10 @@ try {
       check(!/muette depuis le 14 oct\. 2025/.test(etat), `${name} : État des données compte la Cuisine comme muette`);
       // 2025 and 2026 (since the stove): never explained by the kitchen; 2024 has its own gap (two rooms)
       const years = (await page.locator('#quality-years .year-verdict').allInnerTexts()).slice(0, 2).join(' ');
-      check(/^2026/.test(years) && /2025/.test(years) && !/Cuisine/.test(years), `${name} : 2025 ou 2026 expliquée par la Cuisine arrêtée (« ${years.replace(/\s+/g, ' ').slice(0, 300)} »)`);
+      // #336: the kitchen is named once per year, as stopped on purpose (not a hole), never as a gap
+      const stoppedLine = /Cuisine : radiateur arrêté volontairement depuis le 14 oct\. 2025[^\n]*: pas de données attendues, ce n’est pas un trou\./g;
+      check((years.match(stoppedLine) ?? []).length === 2, `${name} : 2025 et 2026 sans « Cuisine : … ce n’est pas un trou » (« ${years.replace(/\s+/g, ' ').slice(0, 300)} »)`);
+      check(/^2026/.test(years) && /2025/.test(years) && !/Cuisine/.test(years.replace(stoppedLine, '')), `${name} : 2025 ou 2026 expliquée par la Cuisine arrêtée (« ${years.replace(/\s+/g, ' ').slice(0, 300)} »)`);
       // État des appareils: the kitchen radiator is switched off on purpose, not « injoignable »
       await page.waitForSelector('#devices-card:not([hidden])', { state: 'attached', timeout: 15000 });
       await page.click('#devices-fold > summary');
