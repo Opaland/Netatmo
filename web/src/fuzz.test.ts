@@ -23,7 +23,7 @@ import { MAX_RANGES, parseHcRanges, periodsOfTyped, resolveOffPeak, shareOn, slo
 import { agreePlurals } from './glossary';
 import { parseFlags } from './onboarding';
 import { STOP_REASONS, parseStopped } from './room-offline';
-import { MAX_PURCHASES, SPECIES, parseWood } from './wood';
+import { BURNT_SEASONS, MAX_BURNT_STERES, MAX_PURCHASES, SPECIES, parseWood, woodSeasons } from './wood';
 import { HISTORY_PAGES, METER_PAGES, SETTINGS, TOOLS, parseRoute, routeKey } from './router';
 import { lockNotice } from './session';
 import { readShellyPrefs } from './shelly-prefs';
@@ -297,6 +297,14 @@ describe('#359 fuzz : préférences relues de cet appareil', () => {
           ? anyValue(r)
           : {
               purchases: Array.from({ length: Math.floor(r() * 70) }, () => ({ day: r() < 0.5 ? '2026-01-15' : pick(r, STRINGS), steres: field(), species: r() < 0.5 ? pick(r, ['chene', 'resineux']) : pick(r, STRINGS), moisture: field(), price: field() })),
+              burnt:
+                r() < 0.3
+                  ? anyValue(r)
+                  : Array.from({ length: Math.floor(r() * 70) }, () => ({
+                      season: r() < 0.6 ? 2020 + Math.floor(r() * 10) : field(),
+                      ...(r() < 0.6 ? { steres: field() } : {}),
+                      ...(r() < 0.5 ? { left: field() } : {}),
+                    })),
               efficiency: field(),
               kwhPerStere: r() < 0.5 ? anyValue(r) : { chene: field(), [pick(r, KEYS)]: field() },
             };
@@ -307,6 +315,16 @@ describe('#359 fuzz : préférences relues de cet appareil', () => {
         assert(DAY.test(p.day) && new Date(`${p.day}T00:00:00Z`).toISOString().startsWith(p.day), `jour ${p.day}`);
         assert(p.steres >= 0.1 && p.steres <= 100 && p.moisture >= 5 && p.moisture <= 60 && p.price >= 0 && p.price <= 100000, 'valeurs');
       }
+      // #465: one bounded quantity per reading, one reading per season, and a stock never negative
+      assert(w.burnt.length <= MAX_PURCHASES && new Set(w.burnt.map((b) => b.season)).size === w.burnt.length, 'relevés par saison');
+      for (const b of w.burnt) {
+        const q = Object.keys(b).filter((k) => k !== 'season');
+        assert(Number.isInteger(b.season) && b.season >= BURNT_SEASONS[0] && b.season <= BURNT_SEASONS[1], `saison ${b.season}`);
+        assert(q.length === 1 && (q[0] === 'steres' || q[0] === 'left'), `quantité ${q.join(',')}`);
+        const v = (b.steres ?? b.left)!;
+        assert(Number.isFinite(v) && v >= 0 && v <= MAX_BURNT_STERES, 'stères relevés');
+      }
+      for (const s of woodSeasons(w)) assert([s.steres, s.left, s.kwh, s.eur, s.short].every((v) => Number.isFinite(v) && v >= -1e-9), `saison ${s.season}`);
       assert(w.efficiency >= 10 && w.efficiency <= 100, 'rendement');
       assert(Object.keys(w.kwhPerStere).every((k) => Object.hasOwn(SPECIES, k)) && Object.values(w.kwhPerStere).every((v) => v >= 500 && v <= 3000), 'kWh par stère');
     });
