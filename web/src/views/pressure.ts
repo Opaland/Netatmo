@@ -4,6 +4,7 @@ import type { Station, Dataset } from '../data';
 import { dayShort, fmt1 } from '../glossary';
 import { NOISY_DB, type PressureSummary, STABLE_HPA, pressureSummary, trendOf } from '../pressure';
 import { esc, nf0, table } from '../ui';
+import { howDetails } from '../components';
 
 const hpa = (v: number | null) => (v === null ? '—' : `${nf0.format(Math.round(v))} hPa`);
 const signedHpa = (v: number) => `${v > 0 ? '+' : v < 0 ? '−' : ''}${fmt1(Math.abs(v))}`;
@@ -48,10 +49,13 @@ export function pressureCard(st: Station | null, d: Pick<Dataset, 'weather'>, la
     <div class="card-head"><h2 id="pressure-title">Pression${s.hasNoise ? ' et bruit' : ''} <small class="muted">module principal de la station, 7 derniers jours</small></h2></div>
     <p>${esc(sentence(s))}</p>
     ${table(head, rows)}
-    <p class="hint muted">Pression moyenne du jour, ramenée au niveau de la mer ; « stable » à moins de ${STABLE_HPA} hPa d’écart avec la veille.${
-      s.hasNoise
-        ? ` Bruit : seulement le nombre d’heures par jour où le bruit moyen du séjour dépasse ${NOISY_DB} dB (conversation animée, télévision forte), jamais l’heure ; activé par le foyer (variable STATION_NOISE).`
-        : ''
-    }</p>
+    ${howDetails(
+      'Comment c’est mesuré',
+      `<p class="hint muted">Pression moyenne du jour, ramenée au niveau de la mer ; « stable » à moins de ${STABLE_HPA} hPa d’écart avec la veille.${
+        s.hasNoise
+          ? ` Bruit : seulement le nombre d’heures par jour où le bruit moyen du séjour dépasse ${NOISY_DB} dB (conversation animée, télévision forte), jamais l’heure ; activé par le foyer (variable STATION_NOISE).`
+          : ''
+      }</p>`,
+    )}
   </section>`;
 }

@@ -27,7 +27,7 @@ import {
   totals,
 } from '../windows';
 import { fmt1 as f1 } from '../glossary';
-import { switchField } from '../components';
+import { howDetails, switchField } from '../components';
 
 const BEDROOMS = BEDROOMS_ID;
 const EXCLUDE_HOURS = 2;
@@ -165,7 +165,10 @@ function explanations(rs: RoomState, last: string, group: (r: string) => string)
   return `<h3 class="sub-title">Pourquoi cette pièce était froide ? <small class="muted">90 derniers jours</small></h3>
     ${
       items.length
-        ? `<p class="hint muted">Jours sous 19 °C (sonde du radiateur) ou inhabituels avec une fenêtre ouverte : explication possible, pas certaine.${drops ? ' Les chutes de température viennent des relevés au pas de 30 minutes.' : ''}${hidden ? ' Les chambres regroupées ne sont pas détaillées.' : ''}</p><ul class="plain">${items.join('')}</ul>`
+        ? howDetails(
+            `Voir ${items.length > 1 ? `les ${items.length} jours` : 'le jour'}`,
+            `<p class="hint muted">Jours sous 19 °C (sonde du radiateur) ou inhabituels avec une fenêtre ouverte : explication possible, pas certaine.${drops ? ' Les chutes de température viennent des relevés au pas de 30 minutes.' : ''}${hidden ? ' Les chambres regroupées ne sont pas détaillées.' : ''}</p><ul class="plain">${items.join('')}</ul>`,
+          )
         : '<p class="hint muted">Aucun jour froid ou inhabituel avec une fenêtre ouverte sur les 90 derniers jours.</p>'
     }`;
 }
