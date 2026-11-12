@@ -127,7 +127,7 @@ fonctionner après l'arrêt des API Enedis historiques (mi-octobre 2026). Source
 
 | Source | Collectée | Exploitée | Non exploité / possible | Suite |
 |---|---|---|---|---|
-| Open-Meteo (archive ERA5) | `weather.outdoor` [min, max, moyenne] si pas de station | DJU, signature (`analysis.ts`, `views/analyse.ts`, `overview.ts`…) | ensoleillement, rayonnement : #117 ; vent `wind_speed_10m` (même appel) : S-3.12 (#221) | — |
+| Open-Meteo (archive ERA5) | `weather.outdoor` [min, max, moyenne] si pas de station ; `weather.sun` rayonnement quotidien `shortwave_radiation_sum` (MJ/m², #452), vent et pluie (S-3.12, #221) dans tous les cas | DJU, signature (`analysis.ts`, `views/analyse.ts`, `overview.ts`…) ; rayonnement : niveau inférieur (`lower.ts`) et « Explication possible » des jours inhabituels (`sun.ts`, #117) | — | fait (#117) |
 | Shelly Cloud | `shelly.enc.json` `daily` par prise | `views/breakdown.ts`, `views/settings.ts` | puissance instantanée, température de la prise : sans historique, pas d'intérêt | — |
 | Home Assistant (import manuel) | `ha.enc.json` | `views/ha.ts` (carte Confort : capteurs importés, accord capteur d'ouverture ↔ `open_window`, `ha.ts`), sauvegarde | — | fait (#178) |
 | Relevé horaire (`roomstate.enc.json`) | voir § 2.2 | `views/windows.ts` | `values` (noms d'états vus) : contrôlé dans `windows.ts` | — |

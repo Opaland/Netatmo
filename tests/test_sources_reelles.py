@@ -33,7 +33,7 @@ import httpx
 import pytest
 
 from collector import schema
-from collector.weather import ARCHIVE, DAILY, degree_days
+from collector.weather import ARCHIVE, DAILY, WIND, degree_days
 
 ROOT = Path(__file__).resolve().parent.parent
 TARIFS = ROOT / "web" / "public" / "tarifs"
@@ -243,6 +243,44 @@ def test_open_meteo_archive_repond_au_format_lu():
     day = (datetime.now(UTC).date() - timedelta(days=30)).isoformat()
     r = _get(ARCHIVE, **PLACE, daily=DAILY, start_date=day, end_date=day)
     assert meteo_problems(r.json()) == []
+
+
+def wind_problems(body: object) -> list[str]:
+    """#117: what weather.py could not read in the wind, rain and radiation call. These variables
+    are optional in the schema (a refusal never costs the temperatures), so a renamed one would be
+    dropped without a word: each is asked for here, and the radiation read in its unit."""
+    try:
+        schema.check("Open-Meteo", "archive", schema.OPEN_METEO_WIND, body)
+    except Exception as err:  # the class and the path only (schema errors carry no value)
+        return [f"Open-Meteo : format inattendu ({type(err).__name__} : {err})"]
+    daily = body["daily"]  # type: ignore[index]
+    problems = [f"Open-Meteo : variable {k} absente" for k in WIND.split(",") if k not in daily]
+    unit = (body.get("daily_units") or {}).get("shortwave_radiation_sum")  # type: ignore[union-attr]
+    if unit != "MJ/m²":
+        problems.append(f"Open-Meteo : rayonnement en {unit!r}, MJ/m² attendu")
+    sun = [v for v in daily.get("shortwave_radiation_sum") or [] if v is not None]
+    if not sun or not all(0 <= v <= 45 for v in sun):
+        problems.append("Open-Meteo : rayonnement quotidien absent ou hors de 0 à 45 MJ/m²")
+    return problems
+
+
+def test_un_rayonnement_renomme_est_nomme():
+    daily = {"time": ["2026-01-10"], "wind_speed_10m_mean": [3.0], "precipitation_sum": [0.0]}
+    body = {"daily": daily}
+    problems = wind_problems({**body, "daily_units": {}})
+    assert "Open-Meteo : variable shortwave_radiation_sum absente" in problems
+    full = {**daily, "wind_gusts_10m_max": [9.0], "shortwave_radiation_sum": [6.2]}
+    ok = {"daily_units": {"shortwave_radiation_sum": "MJ/m²"}, "daily": full}
+    assert wind_problems(ok) == []
+
+
+@pytest.mark.reseau
+def test_open_meteo_vent_pluie_rayonnement_au_format_lu():
+    """#117: the variable names of the radiation (and the wind, the rain) are the ones Open-Meteo
+    answers, in MJ/m² per day."""
+    day = (datetime.now(UTC).date() - timedelta(days=30)).isoformat()
+    r = _get(ARCHIVE, **PLACE, daily=WIND, start_date=day, end_date=day)
+    assert wind_problems(r.json()) == []
 
 
 @pytest.mark.reseau

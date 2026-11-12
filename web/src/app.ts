@@ -72,6 +72,8 @@ export interface State {
   roomModuleMap: Record<string, string>;
   /** #467: « room module » pairs whose proposed link was declined (read through declinedPairs). */
   moduleMatchNo: string[];
+  /** #152: goal of a room, % of kWh per degree day less than last winter (read through validGoals). */
+  roomGoals: Record<string, number>;
   /**
    * S-12.2: bedrooms merged into « Chambres » on this device. Opt-in since v1.5 (the key was
    * `household`, on by default: renamed so that every device starts with the real per-room figures).
@@ -117,6 +119,7 @@ export const DEFAULT: State = {
   comfortThreshold: 19,
   roomModuleMap: {},
   moduleMatchNo: [],
+  roomGoals: {},
   groupBedrooms: false,
   theme: 'system',
   chart: CHART_DEFAULT,
