@@ -23,8 +23,15 @@ describe('SECURITY.md (#364)', () => {
     // each bullet has its proof
     for (const line of checked.split('\n- ').slice(1)) expect(line, line.slice(0, 40)).toMatch(/`(web|tests)\//);
   });
+  it('promises no delay (#364): no duration anywhere in the « Délais » section', () => {
+    const delays = text.slice(text.indexOf('## Délais'), text.indexOf('## Périmètre'));
+    expect(delays).toMatch(/aucun délai n'est promis/);
+    expect(delays).not.toMatch(/\b\d+\s*(h|heures?|jours?|semaines?|mois)\b|\bsous (une|un|deux|trois|huit|quinze) /i);
+  });
   it('CONTRIBUTING.md and the issue chooser lead to it', () => {
     expect(readFileSync(new URL('CONTRIBUTING.md', root), 'utf8')).toMatch(/SECURITY\.md/);
-    expect(readFileSync(new URL('.github/ISSUE_TEMPLATE/config.yml', root), 'utf8')).toMatch(/security\/advisories\/new/);
+    expect(readFileSync(new URL('.github/ISSUE_TEMPLATE/config.yml', root), 'utf8')).toMatch(
+      /name: Signaler une faille\s+url: https:\/\/github\.com\/Opaland\/Netatmo\/security\/advisories\/new/,
+    );
   });
 });
