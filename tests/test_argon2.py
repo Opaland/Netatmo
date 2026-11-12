@@ -241,7 +241,10 @@ def test_rekey_never_runs_with_a_workflow_that_writes_data():
         return re.findall(r"^\s*group:\s*(\S+)", (root / name).read_text(), re.M)
 
     assert set(groups("rekey.yml")) == {"collect", "volets"}
+    # #23: the copy between main and the data branch waits for both, like rekey.
+    assert set(groups("branche-donnees.yml")) == {"collect", "volets"}
     assert groups("collect.yml") == ["collect"] and groups("volets.yml") == ["volets"]
-    writes_data = re.compile(r"git add data/|commit-data\.sh")
+    writes_data = re.compile(r"git add data/|commit-data\.sh|donnees\.sh pousser")
     writers = {p.name for p in root.glob("*.yml") if writes_data.search(p.read_text())}
-    assert writers == {"collect.yml", "volets.yml", "rekey.yml"}  # a new writer must join a group here
+    # a new writer must join a group here
+    assert writers == {"collect.yml", "volets.yml", "rekey.yml", "branche-donnees.yml"}

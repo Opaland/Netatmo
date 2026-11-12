@@ -26,7 +26,7 @@ jobs:
     steps:
       - uses: actions/checkout@v5
         with:
-          ref: main # pick up the data commit made earlier in the same run
+          ref: main # pick up the data commit made earlier in the same run (data on main, #23)
       - uses: actions/setup-node@v7
         with:
           node-version: 22
@@ -46,9 +46,15 @@ jobs:
         run: python3 scripts/tempo_jours.py || true
       - run: npm run build
         working-directory: web
+      # #23: data/ on main, or in the branch named by the repository variable DATA_BRANCH.
+      - name: Données (branche choisie)
+        env:
+          DATA_BRANCH: ${{ vars.DATA_BRANCH }}
+        run: scripts/donnees.sh ouvrir "$RUNNER_TEMP/donnees"
       - name: Ajout des données chiffrées
         run: |
-          if [ -f data/keyinfo.json ]; then cp -r data web/dist/data; fi
+          if [ -f "$DATA_DIR/keyinfo.json" ]; then cp -r "$DATA_DIR" web/dist/data; fi
+          echo "Données servies depuis la branche ${DATA_BRANCH:-main} ($(git -C "$DATA_REPO" rev-parse --short HEAD))." >> "$GITHUB_STEP_SUMMARY"
       # S-8.10: SHA-256 of every served file (SHA256SUMS, published with the site), then
       # build.json (commit, date, run, digest of SHA256SUMS) shown in Paramètres.
       - name: Empreintes SHA-256 et version déployée

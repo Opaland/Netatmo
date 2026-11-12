@@ -1,0 +1,106 @@
+name: Branche des données
+
+# S-8.3 (#23). Lancé seulement à la main (workflow_dispatch), par le propriétaire.
+#
+# Passer les données dans une branche à part (README, « Branche des données ») :
+# 1. Lancez ce workflow, sens « main → data » : la branche `data` est créée (ou mise à jour) avec
+#    exactement le dossier data/ de main — le même arbre git, fichier par fichier —, puis chaque
+#    fichier est déchiffré des deux côtés et les totaux de `verify` comparés, avant tout envoi.
+#    main n'est pas touché : rien n'y est supprimé.
+# 2. Tout de suite après (avant la collecte de la nuit, 04:17 UTC), ajoutez la variable de dépôt
+#    DATA_BRANCH = data (Settings → Secrets and variables → Actions → Variables). Dès lors la
+#    collecte, les volets, le rechiffrement, le diagnostic et le déploiement lisent et écrivent
+#    la branche `data` ; l'adresse des données dans l'appli ne change pas.
+# 3. Plus tard, et séparément : retirer data/ de main par une pull request (README).
+#
+# Retour arrière : ce workflow, sens « data → main » (main reçoit un commit dont data/ est celui
+# de la branche `data`, mêmes vérifications), puis supprimez la variable DATA_BRANCH.
+#
+# Jamais en arrière : la copie est refusée si data/ de la destination contient ce que la source
+# n'a pas (des nuits collectées sur la destination depuis la dernière copie) ; elle est acceptée
+# quand la destination n'a pas bougé depuis, même si DATA_BRANCH la désigne déjà (rattrapage d'une
+# nuit collectée sur main entre l'étape 1 et la variable). Aucun fichier de la destination d'avant
+# ne doit manquer à la copie (`comparer --avant`). Jamais d'envoi forcé.
+# Ne pas lancer pendant qu'une collecte ou un rechiffrement attend son tour : GitHub ne garde qu'un
+# run en attente par groupe de concurrence, celui-ci annulerait la collecte en attente.
+# Journal public : noms de branche, comptes et identifiants de commit seulement.
+on:
+  workflow_dispatch:
+    inputs:
+      sens:
+        description: "Sens de la copie de data/"
+        type: choice
+        options: ["main → data", "data → main"]
+        default: "main → data"
+
+# Never at the same time as a run that writes the data: the collection and rekey (workflow group
+# « collect ») and the shutters sent by the NAS (job group « volets »), like rekey.yml.
+concurrency:
+  group: collect
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  copie:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    concurrency:
+      group: volets
+      cancel-in-progress: false
+    permissions:
+      contents: write
+    steps:
+      - id: check
+        env:
+          CONFIGURED: ${{ secrets.DATA_PASSPHRASE != '' }}
+        run: |
+          if [ "$CONFIGURED" != "true" ]; then
+            echo "::error::Secret DATA_PASSPHRASE absent : les totaux ne peuvent pas être comparés"
+            exit 1
+          fi
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements-lock.txt
+      # S-1.16 #265: locked versions with hashes, and no secret in this step's environment.
+      - run: pip install --require-hashes -r requirements-lock.txt
+      - name: Copie préparée (rien n'est envoyé)
+        env:
+          DATA_BRANCH: ${{ vars.DATA_BRANCH }}
+          SENS: ${{ inputs.sens }}
+        run: |
+          case "$SENS" in
+            "main → data") src=main dest=data ;;
+            "data → main") src=data dest=main ;;
+            *) echo "::error::Sens inconnu"; exit 1 ;;
+          esac
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          scripts/donnees.sh copier "$src" "$dest" "$RUNNER_TEMP/copie"
+          echo "DEST=$dest" >> "$GITHUB_ENV"
+      - name: Totaux comparés
+        env:
+          DATA_PASSPHRASE: ${{ secrets.DATA_PASSPHRASE }}
+        run: |
+          python -m collector comparer "$RUNNER_TEMP/copie/source/data" "$RUNNER_TEMP/copie/copie/data" \
+            --avant "$RUNNER_TEMP/copie/avant/data"
+      - name: Envoi (jamais forcé)
+        run: scripts/donnees.sh pousser "$RUNNER_TEMP/copie" "$DEST"
+      - name: Étape suivante
+        env:
+          SENS: ${{ inputs.sens }}
+        run: |
+          {
+            echo "## Copie de data/ : $SENS"
+            echo "Fichiers déchiffrés des deux côtés, totaux identiques, avant l'envoi. main n'a rien perdu."
+            if [ "$DEST" = data ]; then
+              echo "Ajoutez maintenant la variable de dépôt **DATA_BRANCH** = \`data\` (avant la collecte de la nuit, 04:17 UTC)."
+              echo "Retour arrière : relancer ce workflow en « data → main », puis supprimer DATA_BRANCH."
+            else
+              echo "Supprimez maintenant la variable de dépôt **DATA_BRANCH** : les données sont relues sur main."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"

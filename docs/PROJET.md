@@ -25,7 +25,8 @@ qui travaillent sur le dépôt.
 1. **Issue** créée avec le gabarit *Récit utilisateur* : « En tant que…, je veux…, afin de… », critères
    Given / When / Then, taille (S/M/L), priorité MoSCoW, jalon.
 2. **Branche** dédiée (`claude/<sujet>` pour un agent, `<prénom>/<sujet>` pour un humain), jamais de
-   commit direct sur `main` (sauf la collecte automatique des données).
+   commit direct sur `main` (sauf la collecte automatique des données, tant que la variable
+   `DATA_BRANCH` ne les envoie pas dans la branche `data` : README, « Branche des données »).
 3. **Pull request** avec le gabarit, qui référence l'issue (`Closes #n`) ; une PR = un sujet.
 4. **CI verte** obligatoire (lint, tests Python et TypeScript, build).
 5. **Fusion** en *squash* ; l'issue se ferme ; le `CHANGELOG.md` est mis à jour dans la PR.
