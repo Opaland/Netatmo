@@ -7,8 +7,10 @@ temperature, a room or module name, an id, nor a date finer than the month.
 Per month:
 - heating: room-days (heating rooms added up) real / estimated (spread from a monthly total) /
   missing (between the room's first day and the last day of the archive, like `coverage`) /
-  suspect (a real value that cannot be: negative, not a number or above SUSPECT_WH a day);
-  number of heating rooms with at least one day;
+  suspect (a real value that cannot be: negative, not a number or above SUSPECT_WH a day) /
+  stopped (a room switched off on purpose, #346 / #440, from its declared day: not missing);
+  number of heating rooms with at least one day. The rule of a room-day is the app's
+  (web/src/data-quality.ts `roomDays`): both test suites read web/src/__fixtures__/quality-rule.json;
 - water heater: the same room-days for the water-heater rooms;
 - Linky daily: days present / missing between the first and the last day of the series;
 - Linky 30 min, rooms 30 min, hourly snapshots: % of the half hours (hours) present between the
@@ -21,14 +23,16 @@ Per year: the longest gap of each series and the month it starts in.
 
 from __future__ import annotations
 
+import json
 import math
 import re
 from collections.abc import Iterable
 from datetime import date, timedelta
 
+from .devices import StoppedError, parse_stopped, stopped_on
 from .model import IGNORE, WATER_HEATER
 from .room30 import SLOTS, unpack
-from .storage import Store, month_coverage
+from .storage import Store
 
 SUSPECT_WH = 80_000  # a room using more than 80 kWh in a day (3.3 kW for 24 h) is not credible
 # Intuis above Linky by more than this is impossible (Intuis counts a part of what the meter sees).
@@ -61,6 +65,51 @@ def _valid(v: object) -> bool:
     return isinstance(v, int | float) and not isinstance(v, bool) and math.isfinite(v) and 0 <= v <= SUSPECT_WH
 
 
+REAL, ESTIMATED, MISSING, SUSPECT, STOPPED = range(5)
+
+
+def room_days(
+    values: dict[str, dict[str, object]],
+    estimated: dict[str, set[str]],
+    kinds: dict[str, str],
+    stopped: list[dict],
+    last: str,
+) -> dict[str, dict[str, list[int]]]:
+    """{"YYYY-MM": {kind: [real, estimated, missing, suspect, stopped]}}: every room-day from the
+    room's first value to `last`: estimated (flagged), else real (a value; suspect too when it
+    cannot be), else stopped (switched off on purpose from that day), else missing. Same rule as
+    the app (web/src/data-quality.ts `roomDays`)."""
+    out: dict[str, dict[str, list[int]]] = {}
+    for rid, days in values.items():
+        if rid not in kinds or not days:
+            continue
+        est = estimated.get(rid, set())
+        for d in _days(_day(min(days)), _day(last)):
+            key = d.isoformat()
+            cell = out.setdefault(key[:7], {}).setdefault(kinds[rid], [0, 0, 0, 0, 0])
+            if key in est:
+                cell[ESTIMATED] += 1
+            elif key in days:
+                cell[REAL] += 1
+                if not _valid(days[key]):
+                    cell[SUSPECT] += 1
+            elif stopped_on(stopped, rid, key):
+                cell[STOPPED] += 1
+            else:
+                cell[MISSING] += 1
+    return out
+
+
+def stopped_of(store: Store, env: str | None = None) -> list[dict]:
+    """#346 / #440: the rooms switched off on purpose: STOPPED_ROOMS_JSON when given (the variable
+    of the repository), else the list the last collection saved in the archive. [] when invalid."""
+    raw = env if env is not None and env.strip() else json.dumps(store.meta.get("stopped_rooms") or [])
+    try:
+        return parse_stopped(raw)
+    except StoppedError:
+        return []
+
+
 def _longest(missing: Iterable[date]) -> dict[int, tuple[int, str]]:
     """Runs of consecutive missing days → {year of the start: (longest length, "YYYY-MM" of its start)}."""
     out: dict[int, tuple[int, str]] = {}
@@ -90,8 +139,9 @@ def _pct(got: int, expected: int) -> str:
 class Report:
     """All the counts, computed once from the store (nothing is written back)."""
 
-    def __init__(self, store: Store) -> None:
+    def __init__(self, store: Store, stopped: list[dict] | None = None) -> None:
         self.store = store
+        self.stopped = stopped_of(store) if stopped is None else stopped
         cats = {str(r.get("id")): r.get("category") for r in store.meta.get("rooms", []) if isinstance(r, dict)}
         years = store.years()
         daily = {y: store.year(y) for y in years}
@@ -107,42 +157,39 @@ class Report:
                 firsts[rid] = min(firsts.get(rid, "9999"), min(d))
         self.first, self.last = (min(firsts.values()), store.last_day()) if firsts else (None, None)
 
-        # month -> [real, estimated, missing, suspect] per kind, rooms with data (heating)
-        self.cells: dict[str, dict[str, list[int]]] = {}
+        # month -> [real, estimated, missing, suspect, stopped] per kind, rooms with data (heating)
+        values: dict[str, dict[str, object]] = {}
+        flagged: dict[str, set[str]] = {}
+        for y in years:
+            for rid, days in daily[y].items():
+                if rid in self.kind:
+                    values.setdefault(rid, {}).update(days)
+            for rid, days in estimated[y].items():
+                if rid in self.kind and isinstance(days, dict):
+                    flagged.setdefault(rid, set()).update(days)
+        self.cells = room_days(values, flagged, self.kind, self.stopped, self.last) if self.last else {}
         self.rooms_with_data: dict[str, int] = {}
         self.real_wh: dict[str, float] = {}  # day -> Intuis real Wh (cross-check, never printed)
         self.intuis_days: set[str] = set()  # days with at least one Intuis value
-        self.room_missing: set[str] = set()  # days where at least one room is missing
-        for y in years:
-            cov = month_coverage(daily[y], estimated[y], firsts, self.last, y) if self.last else {}
-            for rid, months in cov.items():
-                if rid not in self.kind:
-                    continue
-                for month, (real, est, miss) in months.items():
-                    cell = self.cells.setdefault(month, {}).setdefault(self.kind[rid], [0, 0, 0, 0])
-                    cell[0] += real
-                    cell[1] += est
-                    cell[2] += miss
-                    if self.kind[rid] == "heating" and real + est:
-                        self.rooms_with_data[month] = self.rooms_with_data.get(month, 0) + 1
-            for rid, days in daily[y].items():
-                if rid not in self.kind:
-                    continue
-                est = estimated[y].get(rid, {})
-                for day, v in days.items():
-                    self.intuis_days.add(day)
-                    if day in est:
-                        continue
-                    if _valid(v):
-                        self.real_wh[day] = self.real_wh.get(day, 0.0) + float(v)
-                    else:
-                        self.cells.setdefault(day[:7], {}).setdefault(self.kind[rid], [0, 0, 0, 0])[3] += 1
-            for rid, first in firsts.items():
-                if rid not in self.kind or not self.last:
-                    continue
-                have = daily[y].get(rid, {})
-                lo, hi = max(_day(first), date(y, 1, 1)), min(_day(self.last), date(y, 12, 31))
-                self.room_missing |= {d.isoformat() for d in _days(lo, hi) if d.isoformat() not in have}
+        self.room_missing: set[str] = set()  # days where at least one room is missing (not stopped)
+        for rid, days in values.items():
+            months = {d[:7] for d in days}
+            for m in months:
+                if self.kind[rid] == "heating":
+                    self.rooms_with_data[m] = self.rooms_with_data.get(m, 0) + 1
+            est = flagged.get(rid, set())
+            for day, v in days.items():
+                self.intuis_days.add(day)
+                if day not in est and _valid(v):
+                    self.real_wh[day] = self.real_wh.get(day, 0.0) + float(v)
+            if self.last:
+                self.room_missing |= {
+                    d.isoformat()
+                    for d in _days(_day(min(days)), _day(self.last))
+                    if d.isoformat() not in days
+                    and d.isoformat() not in est
+                    and not stopped_on(self.stopped, rid, d.isoformat())
+                }
 
         linky = store.doc("linky").get("daily", {}) or {}
         self.linky = {d: v for d, v in linky.items() if isinstance(d, str) and len(d) == 10}
@@ -262,17 +309,19 @@ class Report:
         out = [
             "Bilan qualité des données (S-1.32) : nombres seulement, aucune valeur, aucun nom.",
             f"Pièces suivies : {heating} chauffage, {water} chauffe-eau ; modules de la station : {len(modules)}.",
-            "Colonnes : chauffage en pièces-jours (réels / estimés / manquants / suspects) et pièces ayant",
+            "Colonnes : chauffage en pièces-jours (réels / estimés / manquants / suspects / arrêtés) et pièces ayant",
             "des données ; chauffe-eau en jours (réels / estimés / manquants) ; Linky jour (présents / manquants) ;",
             "couverture des demi-heures Linky et des pièces (30 min) et du relevé horaire ; recoupement :",
             "jours où Intuis dépasse Linky (impossible) / jours avec Linky sans Intuis ; station : jours par module.",
-            "Un jour suspect (valeur impossible) est aussi compté dans les réels.",
+            "Un jour suspect (valeur impossible) est aussi compté dans les réels ; un jour arrêté (pièce",
+            "arrêtée volontairement, ⚙ Mon logement) n'est pas un manque. Même règle que l'écran État des données.",
+            f"Pièces arrêtées volontairement : {len(self.stopped)}.",
         ]
         if not self.months():
             out.append("Archive vide : aucune donnée à évaluer.")
             return out
         header = (
-            f"{'mois':<8} {'chauffage r/e/m/s':>19} {'pièces':>6} {'chauffe-eau':>12} {'Linky j':>9}"
+            f"{'mois':<8} {'chauffage r/e/m/s/a':>21} {'pièces':>6} {'chauffe-eau':>12} {'Linky j':>9}"
             f" {'Linky 30':>8} {'pièces 30':>9} {'relevé h':>8} {'I>L/L-I':>8}  station"
         )
         gaps = self.gaps()
@@ -291,8 +340,10 @@ class Report:
         w = self.cells.get(m, {}).get("water")
         heat = "/".join(map(str, h)) if h else "—"
         water = "/".join(map(str, w[:3])) if w else "—"
-        if w and w[3]:
-            water += f" s{w[3]}"
+        if w and w[SUSPECT]:
+            water += f" s{w[SUSPECT]}"
+        if w and w[STOPPED]:
+            water += f" a{w[STOPPED]}"
         lk = (
             f"{self.linky_present.get(m, 0)}/{self.linky_range[m] - self.linky_present.get(m, 0)}"
             if m in self.linky_range
@@ -303,7 +354,7 @@ class Report:
         got = self.station.get(m, {})
         station = " ".join(f"{k} {got.get(k, 0)}/{exp[k]}" for k in modules if k in exp) or "—"
         return (
-            f"{m:<8} {heat:>19} {self.rooms_with_data.get(m, 0):>6} {water:>12} {lk:>9}"
+            f"{m:<8} {heat:>21} {self.rooms_with_data.get(m, 0):>6} {water:>12} {lk:>9}"
             f" {_pct(self.curve_got.get(m, 0), self.curve_expected.get(m, 0)):>8}"
             f" {_pct(self.room30_got.get(m, 0), self.room30_expected.get(m, 0)):>9}"
             f" {_pct(self.seen_got.get(m, 0), self.seen_expected.get(m, 0)):>8} {cross:>8}  {station}"
@@ -311,10 +362,10 @@ class Report:
 
     def _year_total(self, year: int) -> str:
         p = f"{year}-"
-        heat = [0, 0, 0, 0]
+        heat = [0, 0, 0, 0, 0]
         for m, kinds in self.cells.items():
             if m.startswith(p):
-                heat = [a + b for a, b in zip(heat, kinds.get("heating", [0, 0, 0, 0]), strict=True)]
+                heat = [a + b for a, b in zip(heat, kinds.get("heating", [0, 0, 0, 0, 0]), strict=True)]
         lk_got = sum(n for m, n in self.linky_present.items() if m.startswith(p))
         lk_exp = sum(n for m, n in self.linky_range.items() if m.startswith(p))
         imp = sum(n for m, n in self.impossible.items() if m.startswith(p))
@@ -333,5 +384,5 @@ def _module_order(key: str) -> tuple[int, str]:
     return (int(key[1:]), key) if key[1:].isdigit() else (10**6, key)
 
 
-def report(store: Store) -> list[str]:
-    return Report(store).lines()
+def report(store: Store, stopped: list[dict] | None = None) -> list[str]:
+    return Report(store, stopped).lines()
