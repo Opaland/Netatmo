@@ -147,6 +147,19 @@ try {
     );
     check(!uncounted.length, `${name} : cartes sans « Compté : » (${uncounted.join(', ')})`);
     check(/€/.test(await page.locator('#piece-conso').innerText()), `${name} : coût absent de la carte Consommation`);
+    // #152: a goal at equal climate, its way said as a challenge, kept on this device
+    await page.click('#piece-goal [data-goal="10"]');
+    await ready(page);
+    const goal = (await page.locator('#piece-goal').innerText()).replace(/\s+/g, ' ');
+    check(/(Objectif atteint : −\d+ % à climat égal, pour −10 % visés\. Bravo|[−+]\d+ % à climat égal : (déjà \d+ % du chemin vers −10 %|la baisse reste à venir))/.test(goal), `${name} : objectif de la pièce sans progression ni encouragement (« ${goal.slice(0, 300)} »)`);
+    check((await page.locator('#piece-goal .gauge').count()) === 1, `${name} : objectif sans jauge`);
+    await go(page, 'pieces');
+    await page.locator('#view a[data-room-link]').first().click();
+    await ready(page);
+    check((await page.locator('#piece-goal [aria-checked=true]').innerText()).replace(/\s+/g, ' ') === '−10 %', `${name} : objectif de la pièce oublié`);
+    await page.click('#piece-goal [data-goal=""]');
+    await ready(page);
+    check((await page.locator('#piece-goal #goal-progress').count()) === 0, `${name} : progression encore affichée sans objectif`);
     await page.click('#view .periodbar [data-value=year]');
     await ready(page);
     check(/^Année \d{4}, du 1er janv\./.test(await page.locator('#view .periodbar .scope').innerText()), `${name} : la période « Année » ne s'applique pas à la page Pièce`);
