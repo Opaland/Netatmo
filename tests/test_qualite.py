@@ -4,12 +4,15 @@ The archive holds room names, ids and energy values that are easy to spot: none 
 date finer than the month, may reach the output (the log of a public repository is public).
 """
 
+import json
 import re
 from datetime import date, timedelta
+from pathlib import Path
 
 import pytest
 
 from collector import __main__ as cli
+from collector import quality
 from collector.quality import Report
 from collector.storage import Store
 
@@ -61,7 +64,9 @@ def build(path) -> None:
         {"id": B, "name": NAMES[B], "category": "heating"},
         {"id": W, "name": NAMES[W], "category": "water_heater"},
     ]
-    store.save({"name": "Famille Zorglub", "timezone": "Europe/Paris"}, rooms)
+    # a room declared stopped with a label (#346): neither its label nor its id may reach the output
+    stopped = [{"room": B, "from": "2024-02-20", "reason": "poele", "label": "Poêle Zorglub"}]
+    store.save({"name": "Famille Zorglub", "timezone": "Europe/Paris"}, rooms, {"stopped_rooms": stopped})
 
 
 @pytest.fixture
@@ -89,12 +94,12 @@ def test_output_has_no_value_name_id_or_day(archive, monkeypatch, capsys):
 def test_counts(archive, monkeypatch, capsys):
     out = run_cli(archive, monkeypatch, capsys)
     rows = {line.split()[0]: line.split() for line in out.splitlines() if re.match(r"\d{4}-\d{2} ", line)}
-    # mois, chauffage r/e/m/s, pièces, chauffe-eau, Linky j, Linky 30, %, pièces 30, %, relevé, %, I>L/L-I, station…
-    assert rows["2024-01"][:6] == ["2024-01", "45/0/3/0", "2", "28/0/3", "29/2", "—"]
+    # mois, chauffage r/e/m/s/a, pièces, chauffe-eau, Linky j, Linky 30, %, pièces 30, %, relevé, %, I>L/L-I, station…
+    assert rows["2024-01"][:6] == ["2024-01", "45/0/3/0/0", "2", "28/0/3", "29/2", "—"]
     assert rows["2024-01"][6:] == ["—", "—", "1/3", "m0", "31/31"]
-    assert rows["2024-02"][:5] == ["2024-02", "53/5/0/1", "2", "29/0/0", "29/0"]
+    assert rows["2024-02"][:5] == ["2024-02", "53/5/0/1/0", "2", "29/0/0", "29/0"]
     assert rows["2024-02"][5:] == ["75", "%", "88", "%", "75", "%", "0/0", "m0", "29/29", "m1", "28/29"]
-    assert "Total 2024 : chauffage 98/5/3/1 pièces-jours ; Linky 58/2 jours" in out
+    assert "Total 2024 : chauffage 98/5/3/1/0 pièces-jours ; Linky 58/2 jours" in out
     assert "1 jours Intuis > Linky, 3 jours Linky sans Intuis" in out
     assert "plus long trou (Intuis, toutes les pièces) : 3 j, à partir de 2024-01" in out
     assert "plus long trou (Intuis, au moins une pièce) : 3 j, à partir de 2024-01" in out
@@ -121,3 +126,66 @@ def test_wrong_passphrase_and_empty_archive(tmp_path, archive, monkeypatch, caps
     with pytest.raises(SystemExit, match="aucune archive"):
         cli.main(["diagnose", "--qualite"])
     assert not (empty / "keyinfo.json").exists()  # nothing created
+
+
+# ---------------------------------------------------------------- one rule with the app (§5)
+ROOT = Path(__file__).resolve().parents[1]
+VECTOR = json.loads((ROOT / "web/src/__fixtures__/quality-rule.json").read_text(encoding="utf-8"))
+
+
+def _vector_store(path) -> Store:
+    """The shared case (web/src/__fixtures__/quality-rule.json) as an encrypted archive."""
+    cells: dict[tuple[str, str], float] = {}
+    for room, first, last, kwh in VECTOR["runs"]:
+        for d in _days(first, last):
+            cells[(room, d)] = kwh
+    for room, first, last in VECTOR["remove"]:
+        for d in _days(first, last):
+            cells.pop((room, d), None)
+    store = Store(path, PASSPHRASE)
+    for (room, d), kwh in cells.items():
+        store.merge(room, d, round(kwh * 1000))
+    for room, first, last in VECTOR["estimated"]:
+        for d in _days(first, last):
+            store.put(d[:4], "estimated", room, d, 1)
+    lk = VECTOR["linky"]
+    for d in _days(lk["from"], lk["to"]):
+        store.put("linky", "daily", d, None, round(lk["days"].get(d, lk["kwh"]) * 1000))
+    home = {"name": "Famille Zorglub", "timezone": "Europe/Paris"}
+    store.save(home, VECTOR["rooms"], {"stopped_rooms": VECTOR["stopped"]})
+    return Store(path, PASSPHRASE)
+
+
+def test_same_thresholds_as_the_app():
+    assert VECTOR["suspect_kwh_day"] * 1000 == quality.SUSPECT_WH
+    assert VECTOR["above_ratio"] == quality.CROSS_RATIO
+    assert VECTOR["above_margin_kwh"] * 1000 == quality.CROSS_MARGIN_WH
+
+
+def test_same_room_days_and_above_meter_as_the_app(tmp_path):
+    r = Report(_vector_store(tmp_path))  # stopped rooms read from the archive (meta.stopped_rooms)
+    assert r.last == VECTOR["last"]
+    assert r.cells == VECTOR["expected"]["months"]
+    above = {}
+    for d in VECTOR["expected"]["above"]:
+        above[d[:7]] = above.get(d[:7], 0) + 1
+    assert r.impossible == above
+
+
+def test_stopped_rooms_from_the_variable_win_and_never_reach_the_output(tmp_path, monkeypatch, capsys):
+    _vector_store(tmp_path)
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("DATA_PASSPHRASE", PASSPHRASE)
+    monkeypatch.setenv("DATA_DIR", str(tmp_path))
+    monkeypatch.setenv("STOPPED_ROOMS_JSON", "[]")  # nothing declared: the stopped days are missing again
+    cli.main(["diagnose", "--qualite"])
+    out = capsys.readouterr().out
+    assert re.search(r"^2024-02 +54/5/28/2/0 ", out, re.M), out
+    assert "Pièces arrêtées volontairement : 0." in out
+    monkeypatch.delenv("STOPPED_ROOMS_JSON")
+    cli.main(["diagnose", "--qualite"])
+    out = capsys.readouterr().out
+    assert re.search(r"^2024-02 +54/5/0/2/28 ", out, re.M), out
+    assert "Pièces arrêtées volontairement : 1." in out
+    assert "retires" not in out
+    assert "Zorglub" not in out

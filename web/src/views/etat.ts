@@ -30,6 +30,7 @@ import { html } from '../trusted';
 import { esc } from '../ui';
 import { stoppedRooms } from './offline-rooms';
 import { incidentsCard } from './incidents';
+import { cutCausesOf } from '../incidents';
 import { SOURCE_NAME } from '../pages';
 
 const pct = (v: number | null) => (v === null ? '—' : withUnit(String(Math.floor(v * 100)), '%'));
@@ -55,6 +56,8 @@ function input(): QualityInput {
       waterSetup: setupDates(doc)
         .filter((s) => s.type === 'NMW')
         .map((s) => s.day),
+      cuts: cutCausesOf(doc), // #394: power and Internet cuts explain a gap
+      failures: doc?.failures, // nights a collection failed: « collecte en échec »
     },
     suspects,
     // #346: radiators switched off on purpose (⚙ Mon logement): no data expected, not missing
@@ -107,7 +110,7 @@ export function mountEtat(el: HTMLElement | null) {
       ${verdicts
         .map(
           (v) => `<div class="year-verdict ${v.level}"><h3>${v.year} <span class="tag level">qualité ${LEVEL_LABEL[v.level]}</span></h3>
-        <p>${esc(v.headline)}.</p>${v.reasons.length ? `<ul>${v.reasons.map((x) => `<li>${esc(x)}</li>`).join('')}</ul>` : ''}${v.answer ? `<p class="hint${v.reasons.length ? '' : ' muted'}">${esc(v.answer)}</p>` : ''}</div>`,
+        <p>${esc(v.headline)}.</p>${v.counts ? `<p class="hint muted">${esc(v.counts)}</p>` : ''}${v.reasons.length ? `<ul>${v.reasons.map((x) => `<li>${esc(x)}</li>`).join('')}</ul>` : ''}${v.answer ? `<p class="hint${v.reasons.length ? '' : ' muted'}">${esc(v.answer)}</p>` : ''}</div>`,
         )
         .join('')}
     </details>
@@ -163,7 +166,7 @@ async function fine(i: QualityInput) {
     );
   }
   tasks.push(loadCurve(raw).then((c) => (c.size ? fineSource('linky30', curveParts(c), null) : null)));
-  if (raw.meta.has_roomstate) tasks.push(loadRoomState(raw).then((rs) => (rs?.seen ? fineSource('roomstate', seenParts(rs.seen), null) : null)));
+  if (raw.meta.has_roomstate) tasks.push(loadRoomState(raw).then((rs) => (rs?.seen ? fineSource('roomstate', seenParts(rs.seen), null, [], i.devices?.cuts) : null)));
   const results = await Promise.allSettled(tasks);
   const zone = document.getElementById('quality-fine');
   if (!zone || ds !== d) return;

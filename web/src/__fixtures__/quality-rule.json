@@ -1,0 +1,39 @@
+{
+  "about": "#336: one rule for a room-day (réel / estimé / manquant / suspect / arrêté) and for « Intuis above Linky », in the app (web/src/data-quality.ts roomDays, aboveMeter) and in `diagnose --qualite` (collector/quality.py room_days, Report). Both test suites read this file. Fictitious ids and values. Runs are [room, from, to, kWh]; a later run overrides an earlier one.",
+  "suspect_kwh_day": 80,
+  "above_ratio": 1.1,
+  "above_margin_kwh": 0.5,
+  "last": "2024-02-29",
+  "rooms": [
+    { "id": "a", "category": "heating" },
+    { "id": "b", "category": "heating" },
+    { "id": "s", "category": "heating" },
+    { "id": "w", "category": "water_heater" },
+    { "id": "i", "category": "ignore" }
+  ],
+  "stopped": [{ "room": "s", "from": "2024-02-01", "reason": "retires" }],
+  "runs": [
+    ["a", "2024-01-01", "2024-02-29", 7.777],
+    ["a", "2024-02-05", "2024-02-05", -0.005],
+    ["a", "2024-02-06", "2024-02-06", 90],
+    ["a", "2024-02-07", "2024-02-07", 80],
+    ["b", "2024-01-15", "2024-02-29", 7.777],
+    ["s", "2024-01-01", "2024-01-31", 7.777],
+    ["s", "2024-02-20", "2024-02-20", 7.777],
+    ["w", "2024-01-01", "2024-02-29", 3.333],
+    ["i", "2024-01-01", "2024-01-31", 70]
+  ],
+  "remove": [
+    ["a", "2024-01-10", "2024-01-12"],
+    ["w", "2024-02-01", "2024-02-03"]
+  ],
+  "estimated": [["b", "2024-02-10", "2024-02-14"]],
+  "linky": { "from": "2024-01-01", "to": "2024-02-29", "kwh": 50, "days": { "2024-01-05": 5, "2024-02-06": 50, "2024-02-12": 12, "2024-01-20": 30 } },
+  "expected": {
+    "months": {
+      "2024-01": { "heating": [76, 0, 3, 0, 0], "water": [31, 0, 0, 0, 0] },
+      "2024-02": { "heating": [54, 5, 0, 2, 28], "water": [26, 0, 3, 0, 0] }
+    },
+    "above": ["2024-01-05", "2024-02-07"]
+  }
+}

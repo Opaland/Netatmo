@@ -227,3 +227,53 @@ Noms et volumes seulement.
 - #211 (plannings) et #210 (absences) : toutes les données nécessaires sont disponibles.
 - #215, #220 confirmées (batteries, radio, pression, bruit).
 - #221 : vent via Open-Meteo uniquement.
+
+## 7. Bilan qualité des données (S-1.32, #336) : gabarit à remplir
+
+Réponse aux questions du propriétaire : « a-t-on bien les données ? la qualité est-elle bonne ?
+2023 : données manquantes normal ? qualité de 2024 ? ». Le bilan se lit **sur l'archive chiffrée**
+du dépôt, sans aucun appel aux API, et n'écrit que des **nombres** par mois : ni valeur, ni nom, ni
+identifiant, ni date plus fine que le mois (le journal d'un dépôt public est public ; test :
+`tests/test_qualite.py`).
+
+**Le lancer** : Actions → **Diagnostic** → *Run workflow* → cocher seulement « Bilan qualité des
+données ». Aucun secret à ajouter (`DATA_PASSPHRASE` existe déjà ; la variable `STOPPED_ROOMS_JSON`
+de ⚙ Mon logement est lue pour compter les pièces arrêtées volontairement). Le bilan est dans
+le journal de l'étape « Bilan qualité des données ».
+
+**La règle**, la même que l'écran État des données (`web/src/data-quality.ts` `roomDays`, tenue
+d'accord avec `collector/quality.py` par `web/src/__fixtures__/quality-rule.json`, lu par les deux
+suites de tests) : chaque jour d'une pièce, de sa première valeur au dernier jour de l'archive,
+est **estimé** (réparti depuis le total du mois), sinon **réel** (une valeur ; **suspect** en plus
+si elle est impossible : négative, pas un nombre ou plus de 80 kWh en un jour), sinon **arrêté**
+(pièce déclarée arrêtée volontairement, à partir de sa date), sinon **manquant**. Recoupement :
+un jour où les relevés Intuis (réels et possibles) dépassent 1,1 × Linky + 0,5 kWh est impossible.
+
+**Où lire la cause d'un trou** : l'appli, État des données → « Année par année » et « Source par
+source » (trou chez Intuis, coupure de courant ou d'Internet, appareil injoignable, collecte en
+échec ou arrêtée, pièce arrêtée volontairement, chauffe-eau réinstallé). Le journal public ne
+peut pas la donner : elle demande les dates et les noms.
+
+Remplir le tableau ci-dessous à partir de la sortie (`Total AAAA`, `plus long trou`), sans recopier
+de valeur ni de nom. Les cases restent vides tant que le bilan n'a pas été relancé avec cette
+version (date de passage à indiquer).
+
+Passage du : _(date)_ — version : _(commit)_
+
+| Année | Chauffage, pièces-jours r / e / m / s / a | Plus long trou (toutes les pièces) | Plus long trou (au moins une pièce) | Chauffe-eau r / e / m | Linky jour présents / manquants | Intuis > Linky / Linky sans Intuis | Station : plus long trou |
+|---|---|---|---|---|---|---|---|
+| 2022 | | | | | | | |
+| 2023 | | | | | | | |
+| 2024 | | | | | | | |
+| 2025 | | | | | | | |
+| 2026 | | | | | | | |
+
+**Réponses** (à rédiger d'après le tableau et l'écran État des données) :
+
+- *A-t-on bien les données ?* — _(couverture de chaque source ; ce qui manque encore)_
+- *2023 : est-ce normal qu'il manque des jours ?* — _(trou commun à toutes les pièces = perdu chez
+  Intuis, non récupérable ; cause affichée dans l'appli)_
+- *Quelle qualité en 2024 ?* — _(jours manquants, suspects, recoupement Linky ; les valeurs trop
+  basses un jour froid relèvent des « jours suspects » de l'appli, pas de ce bilan)_
+- *Pièce arrêtée volontairement* — _(ses jours sont comptés « a », pas « m » : vérifier qu'aucune
+  pièce ne reste en manquants chaque mois sans raison)_
