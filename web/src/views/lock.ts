@@ -52,6 +52,12 @@ export function renderLock(message = '', hasRealData = true, notice = '') {
     await open('data', pass, remember);
   });
   document.getElementById('demo')!.addEventListener('click', () => open('demo', 'demo', false));
+  // #229: on <compte>.github.io, a warning next to « Rester connecté » when this browser also keeps
+  // something of another Pages site of the account (loaded on demand, and only there).
+  if (form && location.hostname.endsWith('.github.io'))
+    import('../origin-traces')
+      .then((m) => m.warnNear(document.getElementById('remember')?.closest('label') ?? null, location.hostname))
+      .catch((err) => console.error(err)); // A2: never a silent catch
 }
 
 /** #254: one unlock at a time (passphrase or demo), the other buttons wait. */
