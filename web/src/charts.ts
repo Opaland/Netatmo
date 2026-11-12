@@ -19,6 +19,7 @@ import {
   splitCount,
   textPx,
   themeKey,
+  wrapText,
   zeroBased,
 } from './chart-theme';
 import { dayLong, signedPct, withUnit } from './glossary';
@@ -227,6 +228,43 @@ function noteLegend(el: HTMLElement, chart: ECharts) {
   else el.removeAttribute('data-legend-cut');
 }
 
+/**
+ * #457: notes on the chart element, for the sweep (invariant « titre-axe-coupe »), an axis name
+ * drawn past an edge of its canvas (`data-axis-name-cut`, absent when it fits): « Température
+ * extérieure moyenne (°C) » was cut at 360 px and text 200 % (Historique, signature; Travaux,
+ * avant / après). Measured on what zrender laid out, as noteLegend: the text elements AxisBuilder
+ * marks with `__fullText` (the axis names, ECharts 6.1, component/axis/AxisBuilder.js).
+ */
+function noteAxisNames(el: HTMLElement, chart: ECharts) {
+  type Rect = { x: number; y: number; width: number; height: number; applyTransform(m: unknown): void };
+  type Text = { __fullText?: string; ignore?: boolean; invisible?: boolean; getBoundingRect(): { clone(): Rect }; getComputedTransform(): unknown };
+  type Root = { traverse(cb: (e: Text) => void): void };
+  const zr = chart.getZr() as unknown as { storage?: { getDisplayList(update?: boolean): unknown; getRoots(): Root[] } } | null;
+  const [w, h] = [chart.getWidth(), chart.getHeight()];
+  // the display list holds the spans of a text, not the text: it is read for its update of the
+  // transforms only, and the names are found in the scene tree
+  zr?.storage?.getDisplayList(true);
+  const names: Text[] = [];
+  for (const root of zr?.storage?.getRoots() ?? []) root.traverse((e) => void (e.__fullText !== undefined && names.push(e)));
+  // and an x name moved to a title under the chart (scatterChart): its text elements
+  const c = chart as unknown as {
+    getModel?: () => { findComponents?: (q: { mainType: string }) => { get(k: string): unknown }[] } | null;
+    getViewOfComponentModel?: (m: unknown) => { group?: Root } | undefined;
+  };
+  for (const m of c.getModel?.()?.findComponents?.({ mainType: 'title' }) ?? [])
+    if (m.get('show') !== false) c.getViewOfComponentModel?.(m)?.group?.traverse((e) => void ((e as { style?: { text?: unknown } }).style?.text && names.push(e)));
+  let out = 0;
+  for (const t of names) {
+    if (t.ignore || t.invisible) continue;
+    const r = t.getBoundingRect().clone();
+    const m = t.getComputedTransform();
+    if (m) r.applyTransform(m);
+    out = Math.max(out, Math.ceil(-r.x), Math.ceil(r.x + r.width - w), Math.ceil(-r.y), Math.ceil(r.y + r.height - h));
+  }
+  if (out > 1) el.setAttribute('data-axis-name-cut', `${out} px`);
+  else el.removeAttribute('data-axis-name-cut');
+}
+
 /** The chart of an element (created on first use), e.g. to add marks after a builder. */
 export function chartOf(el: HTMLElement): ChartHandle {
   return {
@@ -234,6 +272,7 @@ export function chartOf(el: HTMLElement): ChartHandle {
       run(el, (c) => {
         c.setOption(o, opts);
         noteLegend(el, c);
+        noteAxisNames(el, c);
       }),
     on: (ev, h) => run(el, (c) => c.on(ev, (p) => h(p as { dataIndex: number }))),
     off: (ev) => run(el, (c) => c.off(ev)),
@@ -345,7 +384,8 @@ export function legendLayout(names: string[], el: HTMLElement, line = false) {
   const lineHeight = lineHeightPx(px);
   const height = stack ? legendStackHeight(names, width, px, icon) : legendHeight(rows, px);
   // the plot keeps its height: the chart grows by what the stacked legend takes more
-  growForLegend(el, stack ? height - legendHeight(rows, px) : 0);
+  const grow = stack ? height - legendHeight(rows, px) : 0;
+  growForLegend(el, grow);
   const item = (name: string) =>
     stack && legendLines(name, width, px, icon) ? { name, textStyle: { width: legendTextWidth(width, icon), overflow: 'break' as const } } : { name };
   return {
@@ -364,6 +404,8 @@ export function legendLayout(names: string[], el: HTMLElement, line = false) {
       itemGap: 12,
     },
     height,
+    /** What the chart grew by for a stacked legend (a builder adding room of its own adds it). */
+    grow,
   };
 }
 
@@ -1019,11 +1061,27 @@ export function scatterChart(el: HTMLElement, opts: { series: ScatterSeries[]; x
     el,
   );
   const grid = cssVar('--grid');
+  // #457: « Température extérieure moyenne (°C) » ran past both edges at 360 px and text 200 %,
+  // and the room ECharts claimed for it squeezed the plot to a sliver. The x name is centred under
+  // the plot, which starts after the y name and labels: when it does not hold on one line there
+  // (with that space taken on both sides), it becomes a title under the chart, wrapped on the
+  // whole width (an axis name does not wrap: AxisBuilder overrides its width and overflow), and
+  // the chart grows by its lines so that the plot keeps its height. One rule for every scatter
+  // chart (signature, indoor signature, works before / after, shutters).
+  const px = axisPx();
+  const width = el.clientWidth || 360;
+  const below = textPx(opts.xName, px) > width - 2 * Math.ceil(px * 3.5);
+  const xTitle = below ? wrapText(opts.xName, width - 16, px) : '';
+  const titleH = below ? xTitle.split('\n').length * lineHeightPx(px) + 4 : 0;
+  growForLegend(el, leg.grow + titleH);
   chart.setOption(
     {
       animationDuration: 300,
-      grid: { left: 24, right: 16, top: Math.max(16, leg.height + 8), bottom: 24, ...FIT },
+      grid: { left: 24, right: 16, top: Math.max(16, leg.height + 8), bottom: 24 + titleH, ...FIT },
       legend: leg.option,
+      title: below
+        ? { show: true, text: xTitle, left: 'center', bottom: 0, padding: 0, textStyle: { color: muted, fontSize: px, fontWeight: 'normal', lineHeight: lineHeightPx(px) } }
+        : { show: false },
       tooltip: {
         ...ttBase(),
         trigger: 'item',
@@ -1035,10 +1093,10 @@ export function scatterChart(el: HTMLElement, opts: { series: ScatterSeries[]; x
       },
       xAxis: {
         type: 'value',
-        name: opts.xName,
+        name: below ? '' : opts.xName,
         nameLocation: 'middle',
         nameGap: 26,
-        nameTextStyle: { color: muted, fontSize: axisPx() },
+        nameTextStyle: { color: muted, fontSize: px },
         scale: true,
         axisLine: { onZero: false, lineStyle: { color: cssVar('--border') } },
         splitLine: { lineStyle: { color: grid } },

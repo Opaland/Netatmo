@@ -424,6 +424,10 @@ function pageChecks() {
     // text 200 %), measured by charts.ts (noteLegend) on what zrender laid out; only px in it
     if (chart.hasAttribute('data-legend-cut'))
       out.push({ kind: 'legende-coupee', detail: `${chart.id || '(sans id)'} : ${chart.getAttribute('data-legend-cut')}`, quiet: `${chart.id || '(sans id)'} : ${chart.getAttribute('data-legend-cut')}` });
+    // #457: an axis name drawn past an edge of its canvas (« …ature extérieure moye… » at 360 px,
+    // text 200 %), measured by charts.ts (noteAxisNames); only px in it
+    if (chart.hasAttribute('data-axis-name-cut'))
+      out.push({ kind: 'titre-axe-coupe', detail: `${chart.id || '(sans id)'} : ${chart.getAttribute('data-axis-name-cut')}`, quiet: `${chart.id || '(sans id)'} : ${chart.getAttribute('data-axis-name-cut')}` });
   }
   // #484: what must be read whole ([data-whole]: what leaves the device, Paramètres › À propos)
   // hides nothing behind a horizontal scroll: no box inside it scrolls sideways, nothing passes
@@ -865,6 +869,8 @@ async function selfTest(browser, run, display) {
       chart.setAttribute('data-axis-overlap-y', 'secret-piece-42 / secret-piece-43');
       // #451: and whose legend runs past its right edge
       chart.setAttribute('data-legend-cut', '33 px');
+      // #457: and whose axis name runs past an edge
+      chart.setAttribute('data-axis-name-cut', '48 px');
       view.append(chart);
       // #484: and a block to be read whole whose table scrolls sideways
       const whole = Object.assign(document.createElement('div'), { id: 'auto-controle-entier' });
@@ -877,7 +883,7 @@ async function selfTest(browser, run, display) {
     });
     const found = await s.page.evaluate(pageChecks);
     const kinds = found.map((f) => f.kind);
-    const missing = ['texte-interdit', 'carte-vide', 'defilement-horizontal', 'textes-recouverts', 'texte-coupe', 'mot-coupe', 'etiquettes-axe-en-double', 'etiquettes-axe-recouvertes', 'legende-coupee', 'colonne-cachee'].filter((k) => !kinds.includes(k));
+    const missing = ['texte-interdit', 'carte-vide', 'defilement-horizontal', 'textes-recouverts', 'texte-coupe', 'mot-coupe', 'etiquettes-axe-en-double', 'etiquettes-axe-recouvertes', 'legende-coupee', 'colonne-cachee', 'titre-axe-coupe'].filter((k) => !kinds.includes(k));
     if (kinds.filter((k) => k === 'mot-coupe').length < 2) missing.push('mot-coupe (césure par trait, #434)');
     if (found.some((f) => /recouver|coupe/.test(f.kind) && /secret|Salon/i.test(f.quiet ?? ''))) throw new Error('auto-contrôle : le diagnostic discret d’un texte recouvert ou coupé cite un contenu');
     if (missing.length) throw new Error(`auto-contrôle : invariants muets (${missing.join(', ')})`);
