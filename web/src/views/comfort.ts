@@ -34,7 +34,7 @@ import { html } from '../trusted';
 import * as windows from './windows';
 import * as ha from './ha';
 import { fmt1 as f1 } from '../glossary';
-import { alertHtml } from '../components';
+import { alertHtml, howDetails } from '../components';
 import { pressureCard } from './pressure';
 import { lazyCard } from '../lazy';
 import { linkRoom } from '../module-match';
@@ -145,7 +145,7 @@ function co2Cards(st: Station, map: Map<string, string>) {
         .join(' ');
       return `<section class="card">${head}
       ${verdictBox(v.level, esc(v.text), sub)}
-      <p class="hint muted">Barres : heures de la nuit au-dessus de 1 000 ppm (air confiné) et de 1 400 ppm (aération insuffisante). Ligne : maximum horaire de la nuit. La nuit d'un jour va de 22 h à 7 h le lendemain.</p>
+      ${howDetails('Comment lire le graphique', "<p class=\"hint muted\">Barres : heures de la nuit au-dessus de 1 000 ppm (air confiné) et de 1 400 ppm (aération insuffisante). Ligne : maximum horaire de la nuit. La nuit d'un jour va de 22 h à 7 h le lendemain.</p>")}
       <div class="chart" id="co2-${i}" role="img" aria-label="CO₂ de la nuit, ${esc(name)}"></div>
       ${tableToggle(
         table(
@@ -236,7 +236,7 @@ function cellarCards(st: Station, map: Map<string, string>) {
       return `<section class="card">
       <h2>Humidité — ${esc(name)} <small class="muted">90 derniers jours</small></h2>
       ${verdictBox(level, esc(title), sub)}
-      <p class="hint muted">Le <strong>point de rosée</strong> est la température à laquelle l'humidité de l'air se condense. Il est calculé ici à partir des moyennes du jour (température et humidité). Plus il est proche de la température de la cave, plus les surfaces froides se mouillent. Repères : au-delà de ${HUMID_HOURS}\u00a0% d'humidité les moisissures peuvent se développer ; au-delà de ${HUMID_DAYS}\u00a0% plus de 7 jours d'affilée, le risque est installé (seuils indicatifs, à confirmer).</p>
+      ${howDetails('Point de rosée et repères', `<p class="hint muted">Le <strong>point de rosée</strong> est la température à laquelle l'humidité de l'air se condense. Il est calculé ici à partir des moyennes du jour (température et humidité). Plus il est proche de la température de la cave, plus les surfaces froides se mouillent. Repères : au-delà de ${HUMID_HOURS}\u00a0% d'humidité les moisissures peuvent se développer ; au-delà de ${HUMID_DAYS}\u00a0% plus de 7 jours d'affilée, le risque est installé (seuils indicatifs, à confirmer).</p>`)}
       <div class="chart" id="cellar-${i}" role="img" aria-label="Humidité et point de rosée, ${esc(name)}"></div>
       ${tableToggle(
         table(
@@ -366,16 +366,18 @@ function coldCard(st: Station | null, map: Map<string, string>) {
       <div class="controls"><label class="select"><span class="sr-only">Seuil</span><select data-comfort="threshold">${THRESHOLDS.map(
         (v) => `<option value="${v}" ${v === thr ? 'selected' : ''}>Sous ${f1(v)}\u00a0°C</option>`,
       ).join('')}</select></label></div></div>
-    <p class="hint muted">Source : <strong>station Netatmo</strong> (relevés horaires) quand la pièce est liée à un module, sinon <strong>sonde du radiateur</strong> (moyenne du jour : on compte alors des jours, pas des heures). La cave et l'extérieur ne sont pas des pièces chauffées.${
-      waiting ? (hourlyFailed ? ' Relevés horaires indisponibles pour ce seuil.' : ' Chargement des relevés horaires pour ce seuil…') : ''
-    }</p>
+    ${waiting ? `<p class="hint muted">${hourlyFailed ? 'Relevés horaires indisponibles pour ce seuil.' : 'Chargement des relevés horaires pour ce seuil…'}</p>` : ''}
     ${stationRooms.length ? `<div class="chart" id="cold-chart" role="img" aria-label="Heures sous ${t} par jour, 30 derniers jours"></div>` : ''}
     ${table(
       ['Pièce', 'Source', `Hiver ${s - 1}–${s}`, `Hiver ${s}–${s + 1}`],
       rooms.map((r) => [esc(r.label), r.source === 'station' ? `Station (${esc(st!.modules[r.module!].name)})` : 'Radiateur', cell(r, s - 1), cell(r, s)]),
       2,
     )}
-    <p class="hint muted">Hiver = 1er novembre → 31 mars. « h (%) » : heures sous le seuil et part des heures relevées (station) ; « j sur N » : <strong>jours à moyenne sous le seuil</strong> sur les jours relevés, même définition que dans Pièces, quelle que soit la source.</p>
+    ${howDetails(
+      'Comment c’est compté',
+      `<p class="hint muted">Source : <strong>station Netatmo</strong> (relevés horaires) quand la pièce est liée à un module, sinon <strong>sonde du radiateur</strong> (moyenne du jour : on compte alors des jours, pas des heures). La cave et l'extérieur ne sont pas des pièces chauffées.</p>
+      <p class="hint muted">Hiver = 1er novembre → 31 mars. « h (%) » : heures sous le seuil et part des heures relevées (station) ; « j sur N » : <strong>jours à moyenne sous le seuil</strong> sur les jours relevés, même définition que dans Pièces, quelle que soit la source.</p>`,
+    )}
   </section>`;
 }
 
@@ -443,7 +445,7 @@ function probeCard(st: Station, map: Map<string, string>) {
     .join('');
   return `<section class="card" id="probe-card">
     <h2>Radiateur et station : écart de température <small class="muted">pièces liées à un module</small></h2>
-    <p class="hint muted">Le radiateur règle sa chauffe sur sa propre sonde, placée contre l'appareil ; le module de la station, posé dans la pièce, mesure ce que vous ressentez. L'<strong>écart moyen</strong> (radiateur − station, jours de chauffe des 12 derniers mois) dit de combien la sonde se trompe : s'il est stable, recalez la consigne d'autant pour obtenir la température voulue à la station.</p>
+    ${howDetails('Comment lire l’écart moyen', "<p class=\"hint muted\">Le radiateur règle sa chauffe sur sa propre sonde, placée contre l'appareil ; le module de la station, posé dans la pièce, mesure ce que vous ressentez. L'<strong>écart moyen</strong> (radiateur − station, jours de chauffe des 12 derniers mois) dit de combien la sonde se trompe : s'il est stable, recalez la consigne d'autant pour obtenir la température voulue à la station.</p>")}
     ${compared || alertHtml('info', "Aucune pièce n'est liée à un module de la station : choisissez son module ci-dessous pour comparer.")}
     <details class="table-details" id="probe-links" ${linked.length && !linksOpen ? '' : 'open'}><summary>Choisir le module de chaque pièce</summary>
     <p class="hint muted">Tous les modules intérieurs de la station sont proposés, quel que soit leur nom : un module « Cave » posé dans une chambre peut lui être lié. Une pièce liée utilise la station pour le confort ; sinon, la sonde du radiateur. Choix gardé sur cet appareil.</p>

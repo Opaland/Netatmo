@@ -115,7 +115,7 @@ function agreementBlock(sensors: { key: string; name: string; hidden: boolean }[
   });
   return `<h3 class="sub-title">Capteur d'ouverture et fenêtre ouverte Intuis <small class="muted">taux d'accord par jour</small></h3>
     <ul class="plain ha-agree">${items.join('')}</ul>
-    <p class="hint muted">Un jour compte « ouvert » pour une source à partir de 30 minutes d'ouverture. Le radiateur détecte une fenêtre ouverte par une chute rapide de température : une aération courte, ou par temps doux, peut lui échapper (« capteur seul ») ; une porte restée ouverte sur une pièce froide peut le tromper (« radiateur seul »). La pièce choisie est gardée sur cet appareil.</p>`;
+    ${howDetails('Comment c’est comparé', "<p class=\"hint muted\">Un jour compte « ouvert » pour une source à partir de 30 minutes d'ouverture. Le radiateur détecte une fenêtre ouverte par une chute rapide de température : une aération courte, ou par temps doux, peut lui échapper (« capteur seul ») ; une porte restée ouverte sur une pièce froide peut le tromper (« radiateur seul »). La pièce choisie est gardée sur cet appareil.</p>")}`;
 }
 
 export function handleChange(t: HTMLInputElement | HTMLSelectElement): boolean {

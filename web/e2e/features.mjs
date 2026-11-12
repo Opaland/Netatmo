@@ -450,6 +450,12 @@ try {
     progress(`historique 360 px : ${h} px (limite ${4 * screenH})`);
     check(h <= 4 * screenH, `#426 : l'Historique fait ${h} px à 360 × 800 (DejaVu Sans), plus de 4 écrans (${4 * screenH} px)`);
     await p.screenshot({ path: `${OUT}/${BROWSER}-360-historique.png`, fullPage: true });
+    // #498: Air et confort, the longest page (12,8 screens before its explanations were folded):
+    // a limit measured like the Historique's, to be lowered with the layout proposed in the PR
+    await go(p, 'confort');
+    const [hc, screenC] = await p.evaluate(() => [document.documentElement.scrollHeight, window.innerHeight]);
+    progress(`confort 360 px : ${hc} px (limite ${11 * screenC})`);
+    check(hc <= 11 * screenC, `#498 : Air et confort fait ${hc} px à 360 × 800 (DejaVu Sans), plus de 11 écrans (${11 * screenC} px)`);
     await c.close();
   }
 

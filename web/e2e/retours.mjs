@@ -142,7 +142,8 @@ try {
     check((await page.locator('#view details.table-details[open]').count()) === 0, `${name} : visiter Air et confort ouvre les tableaux de l'Accueil`);
     await go(page, 'confort');
     await page.waitForSelector('#probe-card', { timeout: 15000 });
-    const card = await page.locator('#probe-card').innerText();
+    // #498: the explanation is folded under « Comment lire l’écart moyen »: still in the card
+    const card = await page.locator('#probe-card').textContent();
     check(/écart moyen/i.test(card) && /recalez la consigne/.test(card), `${name} : la carte radiateur/station n'explique pas l'écart moyen ni son usage`);
     // every select offers every indoor module, « Cave » included; never the outdoor one
     const options = await page.$$eval('#probe-card select[data-map-room]', (els) => els.map((s) => [...s.options].map((o) => o.textContent.replace(' (suggéré)', '').trim())));
