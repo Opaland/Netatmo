@@ -147,7 +147,7 @@ toutes ouvertes.
     révèle l'occupation (soirées, télévision) : il n'est lu qu'avec la variable de dépôt
     `STATION_NOISE` = `true` (accord du foyer), réduit aussitôt en **heures bruyantes par jour**
     (au-dessus de 55 dB en moyenne horaire), jamais l'heure ; chiffré ; rien n'est envoyé à l'IA ;
-  - **IA** : seuls des totaux mensuels partent chez Anthropic, les pièces et capteurs sous
+  - **IA** : seuls les totaux du mois et au plus cinq jours inhabituels partent chez Anthropic, les pièces et capteurs sous
     pseudonyme (« Pièce A », « Capteur B », S-5.7, `collector/insights.py` `pseudonyms()`), jamais
     leurs noms ; la correspondance reste dans les données chiffrées et l'application montre
     exactement ce qui a été envoyé (#365).
