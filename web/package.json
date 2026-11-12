@@ -25,6 +25,7 @@
     "e2e:jeton": "node --import ./e2e/dist-a-jour.mjs e2e/jeton.mjs",
     "e2e:assistant": "node --import ./e2e/dist-a-jour.mjs e2e/assistant.mjs",
     "e2e:http": "node --import ./e2e/dist-a-jour.mjs e2e/http.mjs",
+    "e2e:plan": "node --import ./e2e/dist-a-jour.mjs e2e/plan.mjs",
     "size": "node scripts/size-budget.mjs",
     "porte": "node ../scripts/porte.mjs",
     "porte:rapide": "node ../scripts/porte.mjs --rapide",

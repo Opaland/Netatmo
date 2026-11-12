@@ -90,8 +90,9 @@ sans jalon.
 
 - Identifiants, jetons, clés : **uniquement** en secrets GitHub (jamais en variables, jamais dans le code).
 - Réglages du foyer qui décrivent la maison (localisation et toits, radiateurs arrêtés, achats de bois,
-  contrat partagé, alerte froid prolongé et ses identifiants de modules : `HOME_LOCATION_JSON`,
-  `STOPPED_ROOMS_JSON`, `WOOD_JSON`, `CONTRACT_JSON`, `COLD_ALERT_JSON`) : **scellés dans le navigateur**
+  contrat partagé, alerte froid prolongé et ses identifiants de modules, plan de la maison :
+  `HOME_LOCATION_JSON`, `STOPPED_ROOMS_JSON`, `WOOD_JSON`, `CONTRACT_JSON`, `COLD_ALERT_JSON`,
+  `FLOOR_PLAN_JSON`) : **scellés dans le navigateur**
   avec la clé publique du dépôt et gardés en secrets, jamais en variables (#204, #459, #497 ;
   `HOUSEHOLD_SECRETS` dans `web/src/settings.ts`, `tests/test_reglages_foyer.py`). L'application
   n'écrit plus aucune variable du dépôt ; elle ne fait que lire puis supprimer, en les migrant, les

@@ -42,6 +42,7 @@ import { MATCH_DAYS, type ModuleMatch, declinedPairs, linkRoom, pairKey, trackin
 import { roomPerM2Text } from '../isolation';
 import { stoveRooms, woodDays, woodSettings } from './wood-state';
 import { stoveWarm, stoveWarmText, woodSeasons } from '../wood';
+import { currentPlan } from './plan-state';
 
 // ------------------------------------------------------------------ documents (loaded on demand)
 /** Hourly room states (window, load shedding, modes): one document, a year of daily aggregates. */
@@ -174,12 +175,49 @@ export interface PiecesOpts {
   compare: (el: HTMLElement) => void;
 }
 
+/** #202: what Pièces says of a room over [from, to], for the list and for the plan (one rule). */
+export interface RoomFigures {
+  /** kWh measured; null when nothing was measured because the room was offline (not « 0 kWh »). */
+  kwh: number | null;
+  /** Mean of the daily mean temperatures (station when linked, else the radiator probe). */
+  temp: number | null;
+  /** Days whose mean is under the comfort threshold; null without temperature. */
+  cold: number | null;
+  /** Hours of open window detected; null without room states. */
+  open: number | null;
+}
+export function roomFigures(id: string, from: string, to: string): RoomFigures {
+  const thr = state.comfortThreshold;
+  const rs = doc(stateDoc, 'pieces');
+  const kwh = total(
+    ds!.records.filter((x) => x.room === id),
+    from,
+    to,
+  );
+  const m = measured(id);
+  const t = meanIn(m.days, from, to);
+  let cold = 0;
+  for (const [d, v] of m.days) if (d >= from && d <= to && v !== null && v < thr) cold++;
+  return {
+    kwh: offlineRun(id, from, to) && !kwh ? null : kwh,
+    temp: t ? t.mean : null,
+    cold: t ? cold : null,
+    open: rs ? sumState(rs, members(id), from, to, (c) => c.open_window_h) : null,
+  };
+}
+
+/** #202: « Liste | Plan » of Pièces, offered once a plan exists (drawn in ⚙ Mon logement). */
+function planSwitch(): string {
+  if (!currentPlan()) return '';
+  return seg('piecesShow', state.piecesShow === 'plan' ? 'plan' : 'list', [['list', 'Liste'], ['plan', 'Plan']], 'Affichage des pièces');
+}
+
 export function renderPieces(view: HTMLElement, o: PiecesOpts) {
   const last = lastDay();
   const r = piecesRange(last);
   const { from, to } = r;
   const thr = state.comfortThreshold;
-  const rs = doc(stateDoc, 'pieces');
+  if (state.piecesShow === 'plan' && currentPlan()) return renderPiecesPlan(view, o, r);
   const rows = activeRooms().map((room) => {
     const mine = ds!.records.filter((x) => x.room === room.id);
     // #346: a room offline counts with its share estimated from the meter (« ≈ »), never 0 kWh
@@ -193,16 +231,12 @@ export function renderPieces(view: HTMLElement, o: PiecesOpts) {
     return x.eur === null ? esc(fmtKwh(x.kwh)) : `${esc(fmtEur(x.eur))}<span class="s">${esc(fmtKwh(x.kwh))}</span>`;
   };
   const heated = byCost(rows.filter((x) => x.room.category === 'heating')).map((x) => {
-    const m = measured(x.room.id);
-    const t = meanIn(m.days, from, to);
-    let cold = 0;
-    for (const [d, v] of m.days) if (d >= from && d <= to && v !== null && v < thr) cold++;
-    const open = rs ? sumState(rs, members(x.room.id), from, to, (c) => c.open_window_h) : null;
-    const pill = comfortPill(cold, open, thr);
+    const f = roomFigures(x.room.id, from, to);
+    const pill = comfortPill(f.cold ?? 0, f.open, thr);
     const sub = x.run
       ? `<span class="pill${x.run.stopped ? '' : ' warn'}">${esc(offlineText(x.run))}</span>${x.est ? ` · ≈ ${esc(fmtKwh(x.est))} estimés` : ''}`
-      : t
-        ? `${fmt1(t.mean)}\u00a0°C · <span class="pill ${pill.level}">${esc(pill.text)}</span>`
+      : f.temp !== null
+        ? `${fmt1(f.temp)}\u00a0°C · <span class="pill ${pill.level}">${esc(pill.text)}</span>`
         : '<span class="muted">pas de température relevée</span>';
     const tag = x.room.id === BEDROOMS_ID ? ' <span class="tag">regroupées</span>' : '';
     return `<li><a class="row" href="#piece-${esc(encodeURIComponent(x.room.id))}" data-room-link="${esc(x.room.id)}"><span class="swatch" style="background:${esc(roomColor(x.room.id))}" aria-hidden="true"></span><span><span class="t">${esc(x.room.name)}${tag}</span><span class="s">${sub}</span></span><span class="v">${value(x)}</span><span class="chev" aria-hidden="true">›</span></a></li>`;
@@ -214,6 +248,7 @@ export function renderPieces(view: HTMLElement, o: PiecesOpts) {
   });
   view.innerHTML = html(`<h1 class="page-title" id="page-title" tabindex="-1">Pièces</h1>
   ${periodBar(seg('pieces', r.period, HOME_PERIODS, 'Période'), `${scopeTitle(r)} · coût, température et confort sur la période, trié par coût · froid : moyenne du jour sous ${fmtTemp(thr)}`)}
+  ${planSwitch()}
   ${heated.length ? `<ul class="list" aria-label="Pièces chauffées, de la plus chère à la moins chère">${heated.join('')}</ul>` : ''}
   ${water.length ? `<p class="section-title">Appareils</p><ul class="list" aria-label="Appareils">${water.join('')}</ul>` : ''}
   <p class="section-title">Tout le logement</p>
@@ -221,6 +256,27 @@ export function renderPieces(view: HTMLElement, o: PiecesOpts) {
   <p class="section-title">Comparer avec l’an dernier</p>
   ${o.picker}
   <div class="part" id="pieces-compare"></div>`);
+  o.compare(document.getElementById('pieces-compare')!);
+}
+
+/**
+ * #202: Pièces as a plan: the same period, the rooms of the plan coloured by what is chosen, and
+ * the table that says the same (views/plan.ts, loaded on demand). The list stays one touch away.
+ */
+function renderPiecesPlan(view: HTMLElement, o: PiecesOpts, r: HomeRange) {
+  view.innerHTML = html(`<h1 class="page-title" id="page-title" tabindex="-1">Pièces</h1>
+  ${periodBar(seg('pieces', r.period, HOME_PERIODS, 'Période'), `${scopeTitle(r)} · le plan de la maison, chaque pièce colorée par la valeur choisie`)}
+  ${planSwitch()}
+  <div class="part" id="pieces-plan"></div>
+  <p class="section-title">Comparer avec l’an dernier</p>
+  ${o.picker}
+  <div class="part" id="pieces-compare"></div>`);
+  const zone = document.getElementById('pieces-plan')!;
+  void lazyCard(
+    () => import('./plan'),
+    (m) => zone.isConnected && m.mountPlanReading(zone, { plan: currentPlan()!, from: r.from, to: r.to, scope: scopeTitle(r), figures: roomFigures }),
+    { zone, what: 'Plan de la maison' },
+  );
   o.compare(document.getElementById('pieces-compare')!);
 }
 
