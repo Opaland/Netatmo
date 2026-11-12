@@ -48,7 +48,7 @@ describe('ensoleillement : la moitié la plus ensoleillée des jours de chauffe 
 
   it('cité seulement pour un jour en dessous de l’attendu, en hypothèse', () => {
     const sun = new Map([['d', 12.34]]);
-    expect(sunHint('d', true, sun, 6)).toBe('journée ensoleillée (12,3 MJ/m²) : le soleil a pu chauffer à la place des radiateurs');
+    expect(sunHint('d', true, sun, 6)).toBe('journée ensoleillée (12,3 MJ/m²)'); // #518: the « why » is said once, under the table
     expect(sunHint('d', false, sun, 6)).toBeNull(); // the sun never raises the heating
     expect(sunHint('d', true, sun, 13)).toBeNull();
   });
