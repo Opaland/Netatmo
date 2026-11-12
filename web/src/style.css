@@ -1134,6 +1134,48 @@ th {
 .num {
   text-align: right;
 }
+/* #484: a table read as stacked cards (ui.ts cardTable): every column on screen, never scrolled
+   to. Below 760 px each name sits above its value; from 760 px (the one break point) beside it. */
+.card-table {
+  list-style: none;
+  margin: var(--space-2) 0 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-2);
+}
+/* rows separated by a rule, no side padding: at text 200 % in the near view a word as long as
+   « application » needs the whole width of the card */
+#view .card-table > li {
+  max-inline-size: none;
+  min-width: 0;
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--grid);
+}
+.card-table-title {
+  margin: 0;
+  font-weight: 600;
+}
+.card-table dl {
+  margin: var(--space-1) 0 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-1);
+  font-size: var(--font-sm);
+}
+.card-table dt {
+  color: var(--text-muted);
+}
+.card-table dd {
+  margin: 0;
+}
+@media (min-width: 760px) {
+  .card-table dl > div {
+    display: grid;
+    grid-template-columns: 14rem minmax(0, 1fr);
+    gap: var(--space-3);
+  }
+}
 
 /* ---------------------------------------------------------------- tooltip */
 .tt-title {
