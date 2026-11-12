@@ -168,7 +168,7 @@ def _devices(store: Store, syncer: Syncer, sources: Sources) -> tuple[list[str],
             payload,
             home.timezone,
             module_rooms(syncer.last_homesdata, home.water_heaters),
-            stopped=stopped_config(),  # #440: no alert for a room switched off on purpose
+            stopped=stopped_config(warn=False),  # #440: no alert for a room switched off on purpose
         )
     except (ApiError, FormatError, CallCapReached, httpx.HTTPError) as err:
         sources.error("appareils", err)
@@ -199,7 +199,7 @@ def _silent_rooms(store: Store, syncer: Syncer) -> list[str]:
     try:
         home = syncer.last_home
         rooms = [{"id": r.id, "category": r.category} for r in home.rooms] if home else store.meta.get("rooms") or []
-        lines = silent_rooms(store, rooms, stopped=stopped_config())
+        lines = silent_rooms(store, rooms, stopped=stopped_config(warn=False))
     except Exception as err:  # optional: never lose the night's data because of it
         _warn(f"Pièces sans relevé non vérifiées ({type(err).__name__})")
         return []
@@ -208,17 +208,39 @@ def _silent_rooms(store: Store, syncer: Syncer) -> list[str]:
     return lines
 
 
-def stopped_config() -> list[dict]:
+# #459: the household settings written by ⚙ Mon logement, sealed in the browser and stored as
+# repository secrets (env NAME). Until migrated, an older plaintext repository variable of the
+# same name is still read (env NAME_VARIABLE, see collect.yml), after the secret.
+HOUSEHOLD_SETTINGS = ("STOPPED_ROOMS_JSON", "WOOD_JSON")
+PLAIN_SUFFIX = "_VARIABLE"
+
+
+def household_setting(name: str, warn: bool = True) -> str:
+    """#459: the secret `name` first, else the plaintext variable left from before; a plaintext
+    variable still present is reported in the log by its name only, never its value."""
+    secret = os.environ.get(name, "").strip()
+    plain = os.environ.get(name + PLAIN_SUFFIX, "").strip()
+    if plain and warn:
+        _warn(f"Variable en clair {name} encore présente : à migrer en secret depuis ⚙ Mon logement")
+    return secret or plain
+
+
+def household_setting_set(name: str) -> bool:
+    """The setting is configured (possibly empty): the collection then records it in the meta."""
+    return name in os.environ or name + PLAIN_SUFFIX in os.environ
+
+
+def stopped_config(warn: bool = True) -> list[dict]:
     """#346: STOPPED_ROOMS_JSON (radiators switched off on purpose); [] when unset or invalid."""
     from .devices import StoppedError, parse_stopped
 
-    raw = os.environ.get("STOPPED_ROOMS_JSON", "").strip()
+    raw = household_setting("STOPPED_ROOMS_JSON", warn)
     if not raw:
         return []
     try:
         return parse_stopped(raw)
     except StoppedError as err:
-        _warn(f"Variable STOPPED_ROOMS_JSON ignorée ({err})")
+        _warn(f"Réglage STOPPED_ROOMS_JSON ignoré ({err})")
         return []
 
 
@@ -226,13 +248,13 @@ def wood_config() -> dict | None:
     """#366: WOOD_JSON (the wood bought for a stove); None when unset or invalid."""
     from .devices import WoodError, parse_wood
 
-    raw = os.environ.get("WOOD_JSON", "").strip()
+    raw = household_setting("WOOD_JSON")
     if not raw:
         return None
     try:
         return parse_wood(raw)
     except WoodError as err:
-        _warn(f"Variable WOOD_JSON ignorée ({err})")
+        _warn(f"Réglage WOOD_JSON ignoré ({err})")
         return None
 
 
@@ -609,10 +631,10 @@ def cmd_sync(s: Settings, args: argparse.Namespace, backfill: bool = False) -> N
     write_renew_file(alerts)
     # S-12.5: prolonged cold in the rooms chosen (repository variable), pseudonyms only.
     stopped = stopped_config()
-    if stopped or "STOPPED_ROOMS_JSON" in os.environ:
+    if stopped or household_setting_set("STOPPED_ROOMS_JSON"):
         extra["stopped_rooms"] = stopped  # #346: shown by the app, set from ⚙ Mon logement
     wood = wood_config()
-    if wood is not None or "WOOD_JSON" in os.environ:
+    if wood is not None or household_setting_set("WOOD_JSON"):
         extra["wood"] = wood or {"purchases": []}  # #366: the stove's wood, set from ⚙ Mon logement
     cold = cold_config(_warn)
     if cold:
