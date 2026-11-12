@@ -48,7 +48,7 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from . import redact
-from .crypto import decrypt_json, encrypt_json
+from .crypto import Kdf, decrypt_json, encrypt_json
 
 # Fields kept from homestatus. Everything else (temperatures, ids of other objects, names) is
 # dropped at once. `presence` only with the opt-in.
@@ -149,10 +149,10 @@ def is_offline(f: dict) -> bool | None:
     return isinstance(f.get("connection_status"), str) and f["connection_status"] in DISCONNECTED
 
 
-def write_snapshot(out_dir: Path, snap: dict, passphrase: str, salt: bytes, iterations: int) -> Path:
+def write_snapshot(out_dir: Path, snap: dict, passphrase: str, salt: bytes, kdf: Kdf | int) -> Path:
     out_dir.mkdir(parents=True, exist_ok=True)
     path = out_dir / f"{SNAPSHOT_PREFIX}{snap['t']}.enc.json"
-    path.write_text(json.dumps(encrypt_json(snap, passphrase, salt, iterations)) + "\n")
+    path.write_text(json.dumps(encrypt_json(snap, passphrase, salt, kdf)) + "\n")
     return path
 
 
@@ -367,4 +367,4 @@ def take(client, store, out_dir: Path, presence: bool) -> Path:
     redact.register(home_id)  # S-1.16: never in the public log of the hourly workflow
     payload = client.homestatus(home_id)
     snap = snapshot(payload, int(time.time()), presence=presence, calls=METER.calls.get("intuis", 0))
-    return write_snapshot(out_dir, snap, store.passphrase, store.salt, store.iterations)
+    return write_snapshot(out_dir, snap, store.passphrase, store.salt, store.kdf)

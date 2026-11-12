@@ -16,3 +16,6 @@ web/.stryker-tmp/
 # Claude Code : copies de travail des agents, réglages personnels
 .claude/worktrees/
 .claude/settings.local.json
+# #139 : copie d'avant et dossier de travail de « rekey », à côté de data/ (jamais commités)
+/data-avant-rekey/
+/.data.rekey/

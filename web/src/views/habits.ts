@@ -5,7 +5,8 @@
 import { MONTHS_SHORT, addDays, minusYears } from '../aggregate';
 import { ds, onDatasetLoaded, rerender } from '../app';
 import { calendarChart } from '../charts';
-import { openLocal, sealLocal } from '../crypto';
+import { openLocal } from '../crypto';
+import { writeSealed } from '../local-store';
 import { loadRoomState } from '../data';
 import { bedroomGrouping } from '../windows';
 import { AUTO_AWAY_DELAY_H, type AwayRun, absenceSaving, homeAbsences, roomOnlyAway, shiftBack } from '../away';
@@ -226,12 +227,7 @@ async function loadEdits(): Promise<AbsenceEdits> {
 
 async function saveEdits(edits: AbsenceEdits) {
   cachedEdits = edits;
-  try {
-    writePref(lsAbsences(), JSON.stringify(await sealLocal(edits, ds!.key)));
-    persisted = true;
-  } catch {
-    persisted = false;
-  }
+  persisted = await writeSealed(lsAbsences(), ds!.key, edits); // #139: never over an unreadable note
   rerender();
 }
 

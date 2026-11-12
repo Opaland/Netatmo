@@ -6,11 +6,13 @@ import { type Dataset, type Source, load, rememberKey, unlock } from '../data';
 import { html } from '../trusted';
 import { INSTALL_HASH, installSteps } from '../invite';
 import { clearLockNotice } from '../session';
+import { hideUnreadableNotes, showUnreadableNotes } from '../sealed-notes';
 import { bindReveal, hideSecrets, revealButton } from '../reveal';
 import { alertHtml, formMsg, switchField } from '../components';
 
 /** `notice`: an information, not an error (S-7.9: key erased by the browser, data intact). */
 export function renderLock(message = '', hasRealData = true, notice = '') {
+  hideUnreadableNotes(); // #139: said again at the next unlock if still there
   disposeAll(app);
   app.innerHTML = html`
   <main class="lock">
@@ -78,6 +80,7 @@ async function open(source: Source, pass: string, remember: boolean) {
   }
   setDataset(opened);
   showApp();
+  showUnreadableNotes(source); // #139: device notes this passphrase cannot open, kept untouched
 }
 
 /**

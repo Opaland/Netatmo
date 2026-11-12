@@ -10,7 +10,7 @@
 // validInvoice, Object.hasOwn in parseRoute and parseStopped, the days check of the cold draft).
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { COLD_DAYS, COLD_MAX_ROOMS, parseColdConfig, parseColdDraft } from './cold';
-import { BadEnvelope, checkEnvelope } from './crypto';
+import { ARGON2_MAX, ARGON2_MIN, BadEnvelope, checkEnvelope, checkKeyInfo } from './crypto';
 import { textCell, untextCell } from './csv';
 import { parseEvInput } from './ev';
 import { parseHaLinks } from './ha';
@@ -36,6 +36,7 @@ import { addDays } from './aggregate';
 import { INPUT_FIELDS, MAX_ROOFS, ROOF_FIELDS, parseLocation, parseLocationDraft, parsePvgisFile, parseSolarDoc, parseSolarInputs } from './solar';
 import { type VoletsDoc, evenings, loadNotes, recentFailures, shutterNames, summarize } from './shutters';
 import { readMark } from './storage';
+import { opensWith } from './sealed-notes';
 import { parseTenant } from './tenant';
 
 const SEED = 20261110;
@@ -542,6 +543,40 @@ describe('#359 fuzz : adresses, facture, CSV, enveloppes', () => {
         checkEnvelope(env as never);
       } catch (e) {
         assert(e instanceof BadEnvelope, `exception ${(e as Error).name}`);
+      }
+    });
+  });
+
+  it('#139 : note de l’appareil relue avant d’écrire dessus : un booléen, jamais une exception', async () => {
+    const key = await crypto.subtle.importKey('raw', new Uint8Array(32), 'AES-GCM', false, ['encrypt', 'decrypt']);
+    const B64 = ['', 'AAAAAAAAAAAAAAAA', 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA', '!!!', '=', 'abcd'];
+    await fuzzAsync('opensWith', 300, async (r) => {
+      const raw = r() < 0.4 ? storedText(r) : JSON.stringify({ iv: r() < 0.5 ? pick(r, B64) : anyValue(r), ct: r() < 0.5 ? pick(r, B64) : anyValue(r) });
+      const ok = await opensWith(r() < 0.1 ? null : raw, key);
+      assert(typeof ok === 'boolean', `résultat ${String(ok)}`);
+    });
+  });
+
+  it('#139 : enveloppe et keyinfo.json Argon2id : acceptées seulement dans les bornes, sinon BadEnvelope', () => {
+    const M = [ARGON2_MIN.m, ARGON2_MAX.m, ARGON2_MIN.m - 1, ARGON2_MAX.m + 1, 1024, 2 ** 31, -1, NaN, '65536', true, null];
+    const T = [ARGON2_MIN.t, ARGON2_MAX.t, 1, 0, 11, 2.5, '2', null];
+    const P = [1, 2, 0, '1', true, null];
+    const within = (o: { m?: unknown; t?: unknown; p?: unknown }) =>
+      Number.isInteger(o.m) && (o.m as number) >= ARGON2_MIN.m && (o.m as number) <= ARGON2_MAX.m && Number.isInteger(o.t) && (o.t as number) >= ARGON2_MIN.t && (o.t as number) <= ARGON2_MAX.t && o.p === 1;
+    fuzz('checkKeyInfo', (r) => {
+      const fields = { m: pick(r, M), t: pick(r, T), p: pick(r, P) };
+      const env = { v: 1, kdf: 'Argon2id', ...fields, salt: 'AAAA', iv: 'AAAA', ct: 'AAAA' };
+      const info = r() < 0.2 ? anyValue(r) : { v: pick(r, [2, 2, 2, 1, 3, '2', undefined]), kdf: pick(r, ['Argon2id', 'Argon2id', 'PBKDF2-SHA256', 'argon2id']), salt: pick(r, ['AAAA', 1, null]), ...fields, iter: pick(r, NUMBERS) };
+      for (const [check, value] of [[checkEnvelope, env], [checkKeyInfo, info]] as const) {
+        let ok = true;
+        try {
+          (check as (x: unknown) => void)(value);
+        } catch (e) {
+          assert(e instanceof BadEnvelope, `exception ${(e as Error).name}`);
+          ok = false;
+        }
+        if (ok && value === env) assert(within(fields), `Argon2id hors bornes accepté : ${JSON.stringify(fields)}`);
+        if (ok && value === info && (info as { v?: unknown }).v === 2) assert(within(fields), `keyinfo Argon2id hors bornes accepté : ${JSON.stringify(fields)}`);
       }
     });
   });

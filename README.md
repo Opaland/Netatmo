@@ -161,6 +161,46 @@ La phrase de passe des données ne se change pas ici (voir plus bas).
 
 En local : `python -m collector strength` estime la robustesse de la phrase actuelle.
 
+### Passer la clé à Argon2id (#139)
+
+Les données sont chiffrées avec une clé dérivée par PBKDF2 ; Argon2id résiste mieux à une attaque
+hors ligne (elle demande 64 Mio de mémoire par essai). L'application lit les deux. **Rien ne migre
+tout seul** : c'est un geste du propriétaire, une fois.
+
+0. **Avant**, ouvrez une fois l'application (version qui contient #139) sur chaque appareil où vous
+   avez saisi des notes (factures, travaux, absences, appareils, réglages gardés sur l'appareil) :
+   elle retient les paramètres publics de la clé avec lesquels ces notes sont chiffrées.
+1. Lancez **Actions → Changer la phrase de passe** avec « derivation » = **argon2id**, sans
+   `NEW_DATA_PASSPHRASE` : même phrase, aucun secret à changer. Le workflow attend une collecte ou
+   un relevé des volets en cours, et ceux-ci l'attendent.
+2. Avant de remplacer quoi que ce soit, `rekey` déchiffre chaque fichier, le rechiffre à côté, le
+   relit et compare les totaux de `verify` (sans les écrire dans le journal public) ; au moindre écart,
+   rien n'est remplacé. Les fichiers d'avant sont gardés dans l'artefact **avant-rekey** (30 jours).
+3. Contrôle : ouvrez l'application (même phrase ; une clé mémorisée est redemandée une fois) et, en
+   local, `python -m collector verify` donne les mêmes totaux qu'avant.
+
+**Les notes de l'appareil.** Elles sont chiffrées avec la clé des données ; le rekey tire un
+nouveau sel, la clé change même avec la même phrase. Au premier déverrouillage avec la phrase,
+l'application rouvre ces notes avec l'ancienne clé (même phrase, paramètres retenus à l'étape 0) et
+les rechiffre avec la nouvelle : rien ne se perd. Une note qu'aucune des deux clés n'ouvre (phrase
+changée, ou appareil pas ouvert à l'étape 0) n'est **jamais écrasée** : un bandeau le dit, une
+nouvelle saisie du même genre ne dure alors que jusqu'au verrouillage, et le bouton « Effacer ces
+notes illisibles » les supprime seulement si vous le demandez. Pour la retrouver : remettre
+l'ancienne version (retour arrière ci-dessous) puis déverrouiller sur cet appareil.
+
+En local, même chose : `DATA_PASSPHRASE=… python -m collector rekey --kdf argon2id`. La copie d'avant
+va dans `data-avant-rekey/`, à côté de `data/` (ignorée par Git, jamais commitée), ou dans
+`--sauvegarde DOSSIER`. Si le remplacement échoue ou est interrompu (Ctrl-C), la copie est remise
+toute seule. Un arrêt brutal pendant le remplacement (coupure, `kill -9`) laisse un dossier à moitié
+migré, que la collecte lit encore (chaque fichier dit sa dérivation) mais pas l'application (elle
+dérive la clé depuis `keyinfo.json`) : remettez la copie avec `cp data-avant-rekey/* data/`, puis
+relancez.
+
+**Retour arrière** : `git revert` du commit « data: rechiffrement (dérivation : argon2id) » remet les
+fichiers PBKDF2, que la même phrase ouvre ; ou copiez l'artefact **avant-rekey** (ou
+`data-avant-rekey/`) sur `data/`. Les deux dérivations restent lisibles par l'application et la
+collecte. Les notes déjà rechiffrées sur un appareil sont reprises de la même façon dans l'autre sens.
+
 ### Sauvegarde chiffrée (hors GitHub)
 
 Tout l'historique tient dans le dépôt. Pour ne pas dépendre d'un seul compte, Outils → Exporter mes données (ou ⚙ Sécurité) →
@@ -609,10 +649,14 @@ Une faille se signale **en privé** : voir [`SECURITY.md`](SECURITY.md) (comment
 est déjà vérifié).
 
 - Identifiants et phrase de passe : uniquement dans les **secrets GitHub**, jamais dans le dépôt.
-- Données : AES-256-GCM, clé dérivée par PBKDF2-SHA256 (600 000 itérations). Le sel est public
-  (`data/keyinfo.json`), c'est normal. L'application refuse un `keyinfo.json` ou un fichier chiffré
-  annonçant moins de 600 000 itérations, une autre version de format ou une autre dérivation, avec un
-  message clair (un `keyinfo.json` modifié ne peut pas affaiblir la clé en silence). Limite connue : le
+- Données : AES-256-GCM, clé dérivée par PBKDF2-SHA256 (600 000 itérations) ou, après la migration
+  par `rekey --kdf argon2id` (#139, voir plus haut), par Argon2id (64 Mio, 2 passes, 1 voie ;
+  `keyinfo.json` en version 2). Le sel est public (`data/keyinfo.json`), c'est normal. L'application
+  refuse un `keyinfo.json` ou un fichier chiffré annonçant moins de 600 000 itérations, moins de
+  64 Mio ou de 2 passes Argon2id, une autre version de format ou une autre dérivation, avec un
+  message clair (un `keyinfo.json` modifié ne peut pas affaiblir la clé en silence). Le code
+  Argon2id (hash-wasm, WebAssembly, 11 Ko compressés) n'est chargé qu'à l'ouverture d'un dossier
+  migré. Limite connue : le
   nom du fichier n'est pas lié au chiffré (pas de données associées GCM) ; quelqu'un qui peut écrire
   dans le dépôt pourrait intervertir deux fichiers chiffrés. Le lier demande un format v2 et un rekey
   complet (tant que les fichiers v1 restent lisibles, un ancien fichier pourrait remplacer un nouveau) :

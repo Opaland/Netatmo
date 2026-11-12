@@ -12,7 +12,7 @@ import json
 import re
 from pathlib import Path
 
-from .crypto import DecryptError, decrypt_json
+from .crypto import DecryptError, decrypt_json, keyinfo_doc, parse_keyinfo
 
 FORMAT = "intuis-history-backup/1"
 # Plain file names only (no path), and never the Netatmo refresh token: it rotates at every
@@ -33,8 +33,12 @@ def read_bundle(path: Path) -> dict:
     if not isinstance(bundle, dict) or bundle.get("format") != FORMAT:
         raise BackupError(f"Format inconnu (attendu {FORMAT})")
     info = bundle.get("keyinfo")
-    if not isinstance(info, dict) or "salt" not in info or "iter" not in info:
+    if not isinstance(info, dict) or "salt" not in info:
         raise BackupError("keyinfo absent de la sauvegarde")
+    try:
+        parse_keyinfo(info)  # version 1 (PBKDF2) or 2 (Argon2id, #139)
+    except DecryptError as exc:
+        raise BackupError(f"keyinfo de la sauvegarde refusé : {exc}") from exc
     if not isinstance(bundle.get("files"), dict) or "meta.enc.json" not in bundle["files"]:
         raise BackupError("meta.enc.json absent de la sauvegarde")
     return bundle
@@ -62,8 +66,7 @@ def restore(path: Path, data_dir: Path, passphrase: str, dry_run: bool = False) 
     if dry_run:
         return names
     data_dir.mkdir(parents=True, exist_ok=True)
-    info = bundle["keyinfo"]
-    (data_dir / "keyinfo.json").write_text(json.dumps({"salt": info["salt"], "iter": int(info["iter"])}) + "\n")
+    (data_dir / "keyinfo.json").write_text(json.dumps(keyinfo_doc(*parse_keyinfo(bundle["keyinfo"]))) + "\n")
     for name, env in files.items():
         (data_dir / name).write_text(json.dumps(env) + "\n")
     return names

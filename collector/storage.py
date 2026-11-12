@@ -1,7 +1,7 @@
 """Encrypted JSON documents committed to the repository.
 
 data/
-  keyinfo.json            public: salt + PBKDF2 iterations (no secret)
+  keyinfo.json            public: salt + key derivation (PBKDF2 iterations, or Argon2id since #139; no secret)
   meta.enc.json           home, rooms (with category), coverage, available extras, last update
   2024.enc.json ...       {"daily":   {room: {"YYYY-MM-DD": Wh}},
                            "tariffs": {room: {"YYYY-MM-DD": [Wh $0, Wh $1, Wh $2]}},
@@ -36,7 +36,6 @@ data/
 
 from __future__ import annotations
 
-import base64
 import hashlib
 import json
 import os
@@ -45,7 +44,7 @@ from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
-from .crypto import ITERATIONS, decrypt_json, encrypt_json
+from .crypto import Kdf, decrypt_json, encrypt_json, keyinfo_doc, parse_keyinfo
 
 Daily = dict[str, dict[str, float]]  # room_id -> day -> Wh
 
@@ -55,20 +54,20 @@ class Store:
         self.dir = data_dir
         self.passphrase = passphrase
         self.dir.mkdir(parents=True, exist_ok=True)
-        self.salt, self.iterations = self._keyinfo()
+        self.salt, self.kdf = self._keyinfo()
         self.meta: dict = self._read("meta") or {}
         self._docs: dict[str, dict] = {}
         self._dirty: set[str] = set()
 
     # ----------------------------------------------------------- files
-    def _keyinfo(self) -> tuple[bytes, int]:
+    def _keyinfo(self) -> tuple[bytes, Kdf]:
         path = self.dir / "keyinfo.json"
         if path.exists():
-            info = json.loads(path.read_text())
-            return base64.b64decode(info["salt"]), int(info["iter"])
-        salt = os.urandom(16)
-        path.write_text(json.dumps({"salt": base64.b64encode(salt).decode(), "iter": ITERATIONS}) + "\n")
-        return salt, ITERATIONS
+            return parse_keyinfo(json.loads(path.read_text()))
+        # A new folder keeps PBKDF2 (#139): Argon2id only comes through `rekey`, a gesture of the owner.
+        salt, kdf = os.urandom(16), Kdf.pbkdf2()
+        path.write_text(json.dumps(keyinfo_doc(salt, kdf)) + "\n")
+        return salt, kdf
 
     def _path(self, name: str) -> Path:
         return self.dir / f"{name}.enc.json"
@@ -83,7 +82,7 @@ class Store:
         """Write only if content changed (encryption is randomised, so compare plaintext)."""
         if self._read(name) == obj:
             return False
-        env = encrypt_json(obj, self.passphrase, self.salt, self.iterations)
+        env = encrypt_json(obj, self.passphrase, self.salt, self.kdf)
         self._path(name).write_text(json.dumps(env) + "\n")
         return True
 
@@ -164,6 +163,17 @@ class Store:
     def station_hourly_years(self) -> list[int]:
         """Years with hourly weather-station readings "YYYY.station_h.enc.json"."""
         return self._years_of(".station_h")
+
+    def totals(self) -> dict[int, dict[str, float]]:
+        """Wh per year and room category: what `verify` prints, and what `rekey` compares (#139)."""
+        rooms = {r["id"]: r for r in self.meta.get("rooms", [])}
+        out: dict[int, dict[str, float]] = {}
+        for y in self.years():
+            per_cat = out.setdefault(y, {})
+            for rid, days in self.year(y).items():
+                cat = rooms.get(rid, {}).get("category", "?")
+                per_cat[cat] = per_cat.get(cat, 0) + sum(days.values())
+        return out
 
     def delete_room(self, room_id: str) -> None:
         """Remove a room from every yearly document (daily, tariffs, temps, hourly, 30 min)."""

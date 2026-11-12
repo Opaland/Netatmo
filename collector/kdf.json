@@ -1,0 +1,5 @@
+{
+  "_comment": "#139: key derivation written by the collector and bounds accepted on read, one rule for both sides: collector/crypto.py reads this file, web/src/crypto.test.ts checks that web/src/crypto.ts says the same. Below the minimum is a downgrade (a tampered keyinfo.json or envelope); above the maximum would block the collection or freeze a phone. The written values are the minimum: the app refuses anything weaker than what the collector writes.",
+  "pbkdf2": { "iter": 600000, "min_iter": 600000, "max_iter": 2000000 },
+  "argon2id": { "m": 65536, "t": 2, "p": 1, "min_m": 65536, "max_m": 262144, "min_t": 2, "max_t": 10 }
+}
