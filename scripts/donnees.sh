@@ -16,8 +16,8 @@
 #       Prepares, without sending anything, a commit of DEST whose data/ is exactly the data/ of
 #       SOURCE (the same git tree, nothing else of DEST changes; DEST absent: a branch holding
 #       data/ only). Never backwards: refused unless the data/ DEST has today is one SOURCE already
-#       had (the tree of a commit of SOURCE's last HISTORY_DEPTH commits), i.e. nothing was written
-#       on DEST since it was last copied from SOURCE. So a night collected on main between the copy
+#       had (the data/ tree of any commit of SOURCE, its whole history fetched: #529), i.e. nothing
+#       was written on DEST since it was last copied from SOURCE. So a night collected on main between the copy
 #       and DATA_BRANCH=data is caught up by copying again, and nights collected on data are never
 #       overwritten. Writes OUT/commit (empty when there is nothing to copy) and the data/ of
 #       SOURCE, of the copy and of DEST before (OUT/source, OUT/copie, OUT/avant) for `comparer`.
@@ -83,12 +83,12 @@ cmd_ouvrir() {
 }
 
 cmd_copier() {
-  local src=${1:?SOURCE} dest=${2:?DEST} out=${3:?OUT} depth=${HISTORY_DEPTH:-200}
+  local src=${1:?SOURCE} dest=${2:?DEST} out=${3:?OUT}
   current > /dev/null # DATA_BRANCH must be main, data or unset
   git check-ref-format --branch "$src" > /dev/null 2>&1 || die "Source invalide"
   git check-ref-format --branch "$dest" > /dev/null 2>&1 || die "Destination invalide"
   [ "$src" != "$dest" ] || die "La source et la destination sont la même branche"
-  fetch_branch "$src" "$depth"
+  fetch_branch "$src"
   local data
   data=$(data_tree "origin/$src")
   [ -n "$data" ] || die "Pas de dossier data/ dans « $src »"
@@ -107,12 +107,21 @@ cmd_copier() {
       echo "Rien à copier : data/ de « $dest » est déjà celui de « $src »."
       return
     fi
-    # Never backwards: DEST's data/ must be one SOURCE had, nothing written on DEST since.
-    if [ -n "$before" ] && ! git log --format='%H' "origin/$src" | {
-      while read -r c; do [ "$(data_tree "$c")" != "$before" ] || exit 0; done
-      exit 1
-    }; then
-      die "data/ de « $dest » contient ce que « $src » n'a pas (des nuits collectées depuis la dernière copie) : la copie le ferait reculer, rien n'est fait."
+    # Never backwards: DEST's data/ must be one SOURCE had, nothing written on DEST since. No pipe
+    # (#529: an early exit under pipefail could end in SIGPIPE): files, read once by git cat-file.
+    if [ -n "$before" ]; then
+      # The whole history of SOURCE, and of it only (fetched after DEST's depth-1 fetch, so that no
+      # shallow boundary is left in it): DEST's data/ is looked for in every commit of SOURCE,
+      # however old the last copy is (#529: a limit of 200 commits refused the way back after
+      # months, with a wrong message).
+      git fetch -q --depth=2147483647 origin "+refs/heads/$src:refs/remotes/origin/$src"
+      git rev-list "origin/$src" > "$out/commits"
+      sed 's/$/:data/' "$out/commits" > "$out/chemins"
+      git cat-file --batch-check='%(objectname)' < "$out/chemins" > "$out/arbres"
+      if ! grep -qxF "$before" "$out/arbres"; then
+        die "data/ de « $dest » n'est dans aucun des $(wc -l < "$out/commits") commits de « $src » : « $dest » contient ce que « $src » n'a pas (des nuits collectées sur « $dest », ou sa phrase de passe changée, depuis la dernière copie). La copie le ferait reculer, rien n'est fait."
+      fi
+      rm -f "$out/commits" "$out/chemins" "$out/arbres"
     fi
     # DEST's own top-level tree, its data entry replaced by SOURCE's (no index involved).
     tree=$({

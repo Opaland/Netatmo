@@ -11,7 +11,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from .crypto import decrypt_json
+from .crypto import DecryptError, decrypt_json
 from .storage import Store
 
 
@@ -49,5 +49,14 @@ def compare_before(before: Path, copy: Path, passphrase: str) -> int:
     lost = sorted({p.name for p in before.glob("*.json")} - {p.name for p in copy.glob("*.json")})
     if lost:
         raise CompareError(f"La copie perdrait des fichiers de la destination : {lost}")
-    old, new = Store(before, passphrase).totals(), Store(copy, passphrase).totals()
+    try:
+        old = Store(before, passphrase).totals()
+    except DecryptError as exc:
+        # #529: the destination was rekeyed (or the source) between two copies. Prudent refusal,
+        # said in words: nothing is sent, the owner decides (README, « Branche des données »).
+        raise CompareError(
+            "La destination d'avant ne s'ouvre pas avec la phrase de passe actuelle (phrase changée "
+            "depuis la dernière copie ?) : rien n'est envoyé."
+        ) from exc
+    new = Store(copy, passphrase).totals()
     return sum(1 for y in set(old) | set(new) if old.get(y) != new.get(y))
