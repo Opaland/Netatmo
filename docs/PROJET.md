@@ -88,6 +88,10 @@ sans jalon.
 ## 7. Règles de sécurité et de confidentialité
 
 - Identifiants, jetons, clés : **uniquement** en secrets GitHub (jamais en variables, jamais dans le code).
+- Réglages du foyer qui décrivent la maison (localisation et toits, radiateurs arrêtés, achats de bois :
+  `HOME_LOCATION_JSON`, `STOPPED_ROOMS_JSON`, `WOOD_JSON`) : **scellés dans le navigateur** avec la clé
+  publique du dépôt et gardés en secrets, jamais en variables (#204, #459 ; `HOUSEHOLD_SECRETS` dans
+  `web/src/settings.ts`, `tests/test_reglages_foyer.py`).
 - Données de consommation : **toujours chiffrées** avant commit (`data/*.enc.json`).
 - Journaux publics de GitHub Actions : uniquement des comptes et des codes, jamais de noms, de valeurs
   ou d'identifiants (voir `collector/diagnose.py`).

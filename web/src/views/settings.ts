@@ -36,6 +36,8 @@ let settingsRepo = repoFromLocation() ?? 'Opaland/Netatmo';
 export const currentRepo = () => settingsRepo;
 let configured: Set<string> | null = null;
 let settingsMsg: { ok: boolean; text: string } | null = null;
+/** #463: the action that failed last (tried again by « Réessayer »), and its failures in a row. */
+let failed: { run: () => Promise<string>; at: number; tries: number } | null = null;
 
 /** #309: the settings pages that come from this module (État des données reuses the sources). */
 export type SettingsSection = 'sources' | 'etat' | 'contrat' | 'foyer' | 'objectifs' | 'apropos';
@@ -148,7 +150,8 @@ export function renderSettings(view: HTMLElement, section: SettingsSection) {
         ['Journaux de collecte', 'GitHub Actions (public)', 'Tout le monde : uniquement des comptes et des codes, jamais de valeur'],
         ['Prix saisis ici, contrat non partagé', 'Votre appareil (stockage du navigateur)', 'Vous seul'],
         ['Contrat partagé (dates, offre, puissance)', 'Variable GitHub CONTRACT_JSON, puis données chiffrées', 'Les administrateurs du dépôt ; chiffré dans data/'],
-        ['Achats de bois du poêle (dates, stères, prix)', 'Variable GitHub WOOD_JSON, puis données chiffrées ; brouillon chiffré sur cet appareil', 'Les administrateurs du dépôt ; chiffré dans data/'],
+        ['Achats de bois du poêle (dates, stères, prix)', 'Secret GitHub WOOD_JSON, scellé dans ce navigateur, puis données chiffrées ; brouillon chiffré sur cet appareil', 'Uniquement la collecte automatique ; chiffré dans data/'],
+        ['Radiateurs arrêtés volontairement (pièces, dates, motif)', 'Secret GitHub STOPPED_ROOMS_JSON, scellé dans ce navigateur, puis données chiffrées', 'Uniquement la collecte automatique ; chiffré dans data/'],
         ['Alerte froid prolongé (pièces suivies, seuil)', 'Variable GitHub COLD_ALERT_JSON ; issue publique', 'Variable : les administrateurs du dépôt ; issue : tout le monde, avec des pseudonymes seulement (ni nom ni température)'],
         [
           'Clé « Rester connecté », notes chiffrées, réglages, cache hors ligne',
@@ -187,7 +190,7 @@ export function renderSettings(view: HTMLElement, section: SettingsSection) {
     <p class="hint muted">Conditions d'utilisation de chaque service (Intuis, Netatmo, Conso API…), date de lecture et risque d'arrêt ; usage domestique et vie privée du foyer.</p>
     <button type="button" class="primary small" id="legal-open">Ouvrir « Cadre juridique »</button>
   </section>`;
-  const msg = settingsMsg ? alertHtml(settingsMsg.ok ? 'info' : 'bad', esc(settingsMsg.text), { role: 'status' }) : '';
+  const msg = `<div id="settings-msg">${messageHtml()}</div>`;
   const body: Record<SettingsSection, string> = {
     sources: `${statusCard}
   <section class="card" id="devices-card" hidden></section>
@@ -248,13 +251,34 @@ function contractSection() {
   </section>`;
 }
 
+/**
+ * The message of the last action. #463: a failure says when it happened and, from the second one
+ * in a row, which attempt it was (the same words at each try left no way to tell a new failure),
+ * with « Réessayer »: permissions changed at GitHub may take a minute to apply.
+ */
+function messageHtml(): string {
+  if (!settingsMsg) return '';
+  if (settingsMsg.ok || !failed) return alertHtml(settingsMsg.ok ? 'info' : 'bad', esc(settingsMsg.text), { role: 'status' });
+  const at = new Date(failed.at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  return alertHtml(
+    'bad',
+    `<p>${esc(settingsMsg.text)}</p>
+    <p class="hint">Échec à ${esc(at)}${failed.tries > 1 ? ` (essai ${failed.tries})` : ''}. Des droits du jeton modifiés chez GitHub peuvent mettre une minute à s’appliquer.</p>
+    <div class="controls"><button type="button" class="btn secondary small" id="settings-retry">Réessayer</button></div>`,
+    { role: 'status' },
+  );
+}
+
 async function settingsAction(fn: () => Promise<string>) {
+  // #463: the previous message goes at once, before the new attempt
   settingsMsg = { ok: true, text: 'En cours…' };
   rerender();
   try {
     settingsMsg = { ok: true, text: await fn() };
+    failed = null;
   } catch (err) {
     settingsMsg = { ok: false, text: (err as Error).message };
+    failed = { run: fn, at: Date.now(), tries: failed?.run === fn ? failed.tries + 1 : 1 };
   }
   rerender();
 }
@@ -280,6 +304,7 @@ export function sharedOriginWarning(host: string): string {
 export function forgetToken() {
   setToken(null);
   configured = null;
+  failed = null; // what it would try again (secrets typed included) goes with it
 }
 
 // ------------------------------------------------------------------ events
@@ -352,6 +377,10 @@ export function handleClick(btn: HTMLElement): boolean {
   if (handleAppClick(btn)) return true; // #357: install, « Recharger l'application »
   if (btn.id === 'gh-login-btn') {
     login(btn.closest('#gh-login')!);
+    return true;
+  }
+  if (btn.id === 'settings-retry') {
+    if (failed) void settingsAction(failed.run);
     return true;
   }
   if (btn.id === 'secrets-save') {

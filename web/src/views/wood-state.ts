@@ -1,6 +1,6 @@
 // #366: the wood of the stove, as the app applies it: this device's draft (encrypted with the data
 // key, local-store.ts) while it is not saved for the household, else the household's settings
-// (repository variable WOOD_JSON, copied into the encrypted meta by the nightly collection).
+// (repository secret WOOD_JSON, #459, copied into the encrypted meta by the nightly collection).
 // The heat and cost per day are computed once per dataset and settings (wood.ts).
 import { ds, onDatasetLoaded, rawDataset, rerender } from '../app';
 import type { Dataset } from '../data';
