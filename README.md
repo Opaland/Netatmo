@@ -181,7 +181,54 @@ python -m collector verify                                                      
 Chaque fichier est déchiffré en mémoire avec `DATA_PASSPHRASE` avant d'écrire quoi que ce soit :
 une mauvaise phrase ou un fichier abîmé arrête la restauration. Les fichiers sont ensuite écrits
 tels quels (toujours chiffrés) dans `data/` (ou `DATA_DIR`), en remplaçant ceux du même nom ;
-commitez-les pour que le site les serve.
+commitez-les pour que le site les serve (dans la branche `data` si la variable `DATA_BRANCH` est
+posée, voir ci-dessous).
+
+### Branche des données (facultatif, #23)
+
+Par défaut, la collecte commite chaque nuit les fichiers chiffrés dans `data/` sur `main`. Pour
+garder `main` au code seul, les données peuvent vivre dans une branche à part, `data`, qui ne
+contient que le dossier `data/`. L'adresse des données dans l'application ne change pas
+(`…/data/…` sur le site) : le déploiement copie les fichiers de la branche choisie à côté de
+l'appli. **Rien ne bascule tout seul** : tant que la variable `DATA_BRANCH` n'est pas posée, tout
+reste sur `main`.
+
+Passer à la branche `data` (une fois, de jour, loin de la collecte de 04:17 UTC) :
+
+1. **Sauvegarde** : Outils → Exporter mes données → *Télécharger une sauvegarde chiffrée*
+   (section précédente), et notez les totaux de l'année affichés par l'application.
+2. Lancez **Actions → Branche des données**, sens **main → data**. Le workflow crée la branche
+   `data` avec exactement le dossier `data/` de `main` (le même arbre Git, fichier par fichier),
+   déchiffre chaque fichier des deux côtés et compare les totaux de `verify` **avant** d'envoyer quoi
+   que ce soit ; le journal ne montre que des comptes. `main` n'est pas touché : rien n'y est
+   supprimé. Il attend une collecte, un rechiffrement ou un relevé des volets en cours, et ceux-ci
+   l'attendent. **Ne le lancez pas pendant qu'une collecte est en attente** (Actions : « Queued ») :
+   GitHub ne garde qu'un run en attente par groupe, et ce workflow annule la collecte en attente.
+3. Tout de suite après : **Settings → Secrets and variables → Actions → Variables → New repository
+   variable**, nom `DATA_BRANCH`, valeur `data`. Dès lors la collecte, les volets, le changement de
+   phrase de passe, le relevé horaire, le diagnostic et le déploiement lisent et écrivent la branche
+   `data` (le code vient toujours de `main`). Si une collecte a eu lieu sur `main` entre les étapes
+   2 et 3 (son jeton Netatmo est le seul valable), relancez l'étape 2, variable posée ou non, avant
+   la collecte suivante : la branche `data` n'ayant pas bougé depuis la copie, elle est mise à jour
+   en avance rapide. Si la variable a été posée **avant** l'étape 2, la collecte échoue en le disant :
+   retirez la variable, faites l'étape 2, reposez-la.
+4. **Contrôle** : lancez **Actions → Déploiement GitHub Pages** ; son résumé dit « Données servies
+   depuis la branche data ». Ouvrez l'application : mêmes totaux qu'à l'étape 1. Le lendemain, le
+   commit `data: collecte du …` est dans la branche `data`, plus sur `main`.
+5. **Plus tard, séparément** (quand tout tourne depuis quelques nuits) : retirer `data/` de `main` par
+   une pull request (`git rm -r --cached data && git commit`), pour que `main` ne porte plus que le
+   code. L'historique de `main` garde les anciens fichiers chiffrés ; les réécrire n'est pas prévu.
+
+**Retour arrière** : lancez **Actions → Branche des données**, sens **data → main** (avant de retirer
+la variable : `main` reçoit un commit dont `data/` est celui de la branche `data`, mêmes
+vérifications, jamais forcé), puis supprimez la variable `DATA_BRANCH`. Le workflow ne copie jamais
+en arrière : si la destination contient des nuits que la source n'a pas (collectées sur elle depuis
+la dernière copie), il refuse et n'envoie rien ; il vérifie aussi qu'aucun fichier de la destination
+d'avant ne manque à la copie.
+
+En local, avec `DATA_BRANCH=data` : `git fetch origin data && git worktree add ../donnees origin/data`,
+puis `DATA_DIR=../donnees/data python -m collector verify`. `python -m collector comparer A B` dit si
+deux dossiers chiffrés ont les mêmes fichiers et les mêmes totaux, sans afficher de valeur.
 
 ### Options (facultatives)
 
@@ -568,6 +615,7 @@ python -m collector discover
 | `python -m collector sync` | Récupère les 35 derniers jours (ou tout l'historique au premier lancement) |
 | `python -m collector backfill` | Force la récupération de tout l'historique |
 | `python -m collector verify` | Déchiffre les données locales et affiche les totaux par année |
+| `python -m collector comparer SOURCE COPIE` | Vérifie que deux dossiers chiffrés ont les mêmes fichiers, le même contenu déchiffré et les mêmes totaux, sans afficher de valeur (#23) |
 | `python -m collector export-csv -o conso.csv` | Export CSV (séparateur `;`, décimales `,`, pour Excel) |
 | `python -m collector insights [--force]` | Analyse du dernier mois par Claude (`ANTHROPIC_API_KEY`) |
 | `python -m collector diagnose [--history]` | Diagnostic anonyme de l'API (modules, types de mesure, profondeur, noms des champs de `homestatus`) |
@@ -591,7 +639,8 @@ cd web && npm install && npm run dev
 ```
 collector/          collecteur Python (API, chiffrement, stockage par année)
 tests/              tests du collecteur (API simulée, aucun appel réseau)
-data/               données chiffrées, écrites par la collecte (créé au premier lancement)
+data/               données chiffrées, écrites par la collecte (créé au premier lancement ;
+                    dans la branche `data` si la variable DATA_BRANCH est posée)
 web/                application PWA (Vite + TypeScript + ECharts)
   public/demo/      données de démonstration chiffrées (phrase « demo »)
 docs/               notes sur l'API, étude de l'existant, feuille de route, règles du projet (PROJET.md)
@@ -601,7 +650,8 @@ docs/               notes sur l'API, étude de l'existant, feuille de route, rè
   revues-agents/    consignes des revues de code, design et promesses par agents (à chaque version)
   bmad/             cadrage BMAD : brief, revue des 72 personas, PRD, architecture, epics, QA
 .github/workflows/  CI, collecte quotidienne, déploiement GitHub Pages, revue par agents (à la demande)
-scripts/            outils ponctuels (jours Tempo, constats de revue → issues)
+scripts/            outils ponctuels (jours Tempo, constats de revue → issues), commit et branche
+                    des données (commit-data.sh, donnees.sh)
 ```
 
 ## Sécurité

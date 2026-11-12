@@ -52,6 +52,12 @@ jobs:
         run: python -m collector diagnose ${{ inputs.history && '--history' || '' }} ${{ inputs.probe_history && '--probe-history' || '' }} ${{ inputs.inventory && '--inventory' || '' }}
       # S-1.32 (#336): reads data/ from the checkout, no API call. DATA_PASSPHRASE only in this step and
       # only when the box is checked; the command prints counts only (redact.register hides the value).
+      # #23: data/ on main, or in the branch named by the repository variable DATA_BRANCH.
+      - name: Données (branche choisie)
+        if: ${{ inputs.qualite }}
+        env:
+          DATA_BRANCH: ${{ vars.DATA_BRANCH }}
+        run: scripts/donnees.sh ouvrir "$RUNNER_TEMP/donnees"
       - name: Bilan qualité des données
         if: ${{ inputs.qualite }}
         env:
