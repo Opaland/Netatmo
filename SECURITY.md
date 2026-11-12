@@ -37,8 +37,11 @@ signalement privé, et cité dans la PR du correctif si vous le souhaitez.
 - **Le chiffrement des données** (`data/*.enc.json`) : format d'enveloppe, dérivation de la clé.
 
 Hors périmètre : les services tiers eux-mêmes (Intuis, Netatmo, Enedis, GitHub…), et le partage
-de l'origine `<compte>.github.io` entre les sites Pages d'un même compte, déjà documenté (README,
-section Sécurité ; [`docs/etudes/origine-dediee.md`](docs/etudes/origine-dediee.md)).
+de l'origine `<compte>.github.io` entre les sites Pages d'un même compte, risque connu et documenté :
+un script d'un autre site Pages du compte peut se servir de la clé « Rester connecté », lire ce qui
+est tapé dans l'appli, et le site `<compte>.github.io` lui-même peut prendre la main durablement par
+un service worker (README, section Sécurité ; [`docs/etudes/origine-dediee.md`](docs/etudes/origine-dediee.md)).
+Le transfert vers une origine dédiée est décidé par le propriétaire (#229).
 
 ## Ce qui est déjà vérifié
 
@@ -56,7 +59,9 @@ Chaque point est tenu par un test qui échoue s'il est cassé :
   `tests/test_collector.py` (`test_insights_never_send_room_or_module_names`) et, sur la démonstration
   complète, `tests/test_promesses.py` (ni nom, ni jour daté hors des cinq jours inhabituels au plus).
 - **Noms rangés sous le chemin de l'application** sur une origine partagée (#229) —
-  `web/src/scope.test.ts`.
+  `web/src/scope.test.ts` ; **trace d'un autre site de la même origine** signalée à côté de « Rester
+  connecté » (détection, pas protection) — `web/src/origin-traces.test.ts`, et sur le site publié
+  `web/e2e/en-ligne.mjs`.
 - **« Recharger l'application »** n'efface ni la clé mémorisée, ni les notes, ni les données
   chiffrées gardées hors ligne, ni les caches d'un autre site du compte (#357) —
   `web/src/pwa.test.ts`, `web/e2e/pwa.mjs`.

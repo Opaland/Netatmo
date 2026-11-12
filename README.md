@@ -702,9 +702,16 @@ est déjà vérifié).
   que fait l'appli : noms rangés sous le chemin du dépôt (`intuis-history@<dépôt>`, caches
   `energy-data@<dépôt>`, pour qu'une autre copie de l'appli sur le compte ne réutilise pas la clé par
   mégarde ; ce n'est pas une isolation), service worker accepté à son chemin exact seulement,
-  avertissement dans Paramètres. **Ce qu'il faut faire** : ne publier aucun autre site GitHub Pages
-  sur ce compte, ou ne pas cocher « Rester connecté » ; la vraie parade est un domaine personnel dédié
-  (origine propre, quelques euros par an) : voir [docs/etudes/origine-dediee.md](docs/etudes/origine-dediee.md).
+  avertissement dans Paramètres. Pire encore, le site **du compte lui-même** (dépôt
+  `<compte>.github.io`, servi à la racine) peut, avec un service worker de portée `/`, servir les
+  pages de l'appli à sa façon à chaque ouverture suivante, une fois celui de l'appli désinscrit (ce
+  que tout script de l'origine peut faire). Sur `*.github.io`, l'écran de déverrouillage **signale**
+  ce que le navigateur garde d'un autre site de la même origine (stockage, base, cache, service
+  worker) à côté de « Rester connecté » : une détection, pas une protection. **Ce qu'il faut faire** :
+  ne publier aucun autre site GitHub Pages sur ce compte (surtout pas `<compte>.github.io`), ou ne
+  pas cocher « Rester connecté » ; la vraie parade est une origine à l'appli seule : décision du
+  propriétaire, une organisation GitHub dédiée en v2.0 (ou un domaine personnel), gestes dans
+  [docs/etudes/origine-dediee.md](docs/etudes/origine-dediee.md).
 
 ### Inviter un membre du foyer (S-12.3)
 
