@@ -522,6 +522,9 @@ try {
   let works = await page.locator('#works-card').innerText();
   check(/Avant/.test(works) && /Après/.test(works), 'travaux : lignes avant / après absentes');
   check(/Isolation — Combles/.test(works), 'travaux : marqueur non listé');
+  // #476: the demo's Cuisine is heated by a stove with fictitious purchases: the before / after
+  // compares the electricity + wood (worksHeat), and says so
+  check(/le chauffage \(électricité \+ bois\) a évolué de/.test(works), `#476 : avant / après sans « électricité + bois » (« ${works.slice(0, 300)} »)`);
   await page.click('#works-surfaces summary');
   const inputs = page.locator('[data-works-surface]');
   const n = await inputs.count();

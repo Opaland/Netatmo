@@ -1,8 +1,9 @@
 // S-6.2: room surfaces and dated "works" markers (insulation, windows, new radiator…),
 // to compare before / after. Pure functions (no DOM, no app state): views/works.ts reads
 // and saves them (encrypted on this device) and draws the cards.
-import { addDays } from './aggregate';
+import { type DayRecord, addDays } from './aggregate';
 import { type Fit, type Weather, dju, fitSeason } from './analysis';
+import { withWood } from './isolation';
 
 export type WorkKind = 'isolation' | 'menuiseries' | 'chauffage' | 'ventilation' | 'reglage' | 'autre';
 export const WORK_KINDS: Record<WorkKind, string> = {
@@ -145,6 +146,16 @@ export function heatPerDay(records: { day: string; cat: string; kwh: number; roo
   const out = new Map<string, number>();
   for (const r of records) if (r.cat === 'heating' && (!rooms || rooms.has(r.room))) out.set(r.day, (out.get(r.day) ?? 0) + r.kwh);
   return out;
+}
+
+/**
+ * #476: the heating per day the before / after compares: the electricity plus the stove's wood of
+ * each day (`daily`, verdictWood: the one split of #433), by #471's one rule (withWood). `wood`:
+ * some wood was counted, the screen says « électricité + bois ».
+ */
+export function worksHeat(records: DayRecord[], daily: Map<string, [number, number]> | null): { heat: Map<string, number>; wood: boolean } {
+  const counted = withWood(records, daily);
+  return { heat: heatPerDay(counted), wood: counted.length > records.length };
 }
 
 /** kWh/m² per room over [from, to] (rooms with a surface only). */
