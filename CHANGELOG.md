@@ -1,5 +1,68 @@
 # Historique des versions
 
+## v1.9 — en cours : sécurité et méthode
+
+Argon2id, paliers de taille, ensoleillement, repère kWh/m²/an, objectif à climat égal et rapport
+anonyme ([feuille de route](docs/bmad/feuille-de-route.md)), plus les issues ouvertes par la revue de
+fin de v1.8. Revue de fin de version par les **72 personas**, revue design des écrans nouveaux ou
+changés et revue de code par agent : [`docs/bmad/revues/v1.9.md`](docs/bmad/revues/v1.9.md). Entrée
+« en cours » jusqu'à la clôture ; les décisions du propriétaire (revue, § 10) ne bloquent pas
+l'enchaînement vers la v2.0 (règle de passage, feuille de route).
+
+- **Chiffrement et réglages**
+  - Clé dérivée par Argon2id (partie de #139, #509) : `rekey --kdf argon2id` (workflow « Changer la
+    phrase de passe », entrée « derivation ») rechiffre à côté, relit chaque fichier, compare les
+    totaux de `verify`, garde une copie d'avant (artefact **avant-rekey**) et remet tout en place au
+    moindre écart ; Argon2id 64 Mio, 2 passes, 1 voie, mesuré sur un processeur ralenti six fois ;
+    bornes communes à la collecte et à l'appli (`collector/kdf.json`) ; Argon2id chargé à la demande
+    dans l'appli (hash-wasm, 11 Ko compressés), argon2-cffi dans la collecte, même clé des deux côtés
+    (vecteur partagé). Rien ne migre tout seul : la migration des vraies données est un geste du
+    propriétaire. Les notes gardées sur l'appareil (factures, travaux, absences…) sont reprises avec
+    la nouvelle clé au déverrouillage suivant ; une note illisible n'est jamais écrasée, un bandeau
+    le dit et propose de l'effacer.
+  - Fichiers chiffrés remplis par paliers de taille (#138, #505) : la taille publiée ne suit plus
+    l'activité du foyer (un jour d'absence n'écrit plus un fichier plus petit) ; format inchangé, lu
+    avant et après par l'appli et la collecte (vecteur partagé) ; +4,4 % sur `data/`.
+  - Contrat partagé et alerte froid prolongé scellés en secrets (#497, #506), comme les réglages du
+    foyer de la v1.8 : l'appli n'écrit plus aucune variable du dépôt ; « Migrer en secret » sur les
+    cartes Contrat partagé et Alerte froid prolongé ; la collecte lit le secret d'abord et nomme une
+    ancienne variable restante sans sa valeur.
+  - Diagnostic : l'ancienne variable des radiateurs arrêtés n'est passée qu'au bilan qualité, comme
+    le secret (partie de #502, #508).
+- **Mesures et méthode**
+  - Rapport annuel : « Repère en kWh/m²/an, pas un DPE » (#127, #510) : chauffage (électricité + bois)
+    et eau chaude des 12 mois du rapport sur les surfaces saisies, en énergie finale puis en énergie
+    primaire (coefficient de l'électricité en vigueur le jour de l'affichage, daté), face aux seuils
+    de l'étiquette énergie, « classe X à titre indicatif » seulement quand toutes les pièces
+    chauffées ont leur surface ; ce qui sépare ce repère d'un DPE est dit.
+  - Page d'une pièce : « Mon défi » (#152, #512) : −5, −10 ou −15 % de kWh par degré-jour face aux
+    mêmes jours de l'hiver dernier, une jauge et une phrase d'encouragement ; l'objectif reste sur
+    l'appareil, relu par un validateur passé au fuzz.
+  - Jours inhabituels : « journée ensoleillée » comme explication possible d'un jour sous l'attendu
+    (#117, #507), avec la même médiane du rayonnement que le niveau inférieur (`sun.ts`) ; nom de la
+    variable d'Open-Meteo vérifié sur la source réelle (`pytest -m reseau`).
+  - Chauffe-eau thermodynamique : les jours relevés à 0 kWh écartés sont dits sous le verdict et dans
+    les hypothèses (partie de #502, #508) ; la règle à garder reste une décision.
+  - Bois : la règle de répartition (soirs de flambée trouvés, sinon degrés-jours) dite par une seule
+    phrase sur tous les écrans ; un stock relevé plus grand que les achats et un relevé antérieur au
+    premier achat sont dits ignorés (#501, #511).
+- **Lisibilité** (constats de la revue v1.8)
+  - Finitions (#499, #513) : colonne des pistes du chauffe-eau en coûts par an, l'économie dite en
+    mots ; aide du niveau inférieur avant les pièces ; espacement de « Services tiers contactés… » ;
+    « sans compter les heures en hors-gel » ; isolation dite par la grille avant l'unité
+    (« Logement bien isolé, à titre indicatif ») ; flambées « où la détection peut juger ».
+  - Air et confort : explications de méthode repliées sous « Comment … » (partie de #498, #514) :
+    12,8 → 10,9 écrans à 360 px, 33,4 → 25,4 à 200 % ; limite de hauteur tenue par un e2e ; le
+    découpage de la page reste une décision.
+- **Qualité et contribution**
+  - Rapport de compatibilité anonyme (#144, #516) : `python -m collector diagnose --report` (types de
+    pièces et de modules, familles de mesure, profondeur d'historique, jamais un identifiant, un nom
+    ni une valeur, tenu par le détecteur de fuites) et gabarit d'issue « Compatibilité ».
+  - Mutation de `periods.ts` : 86,3 % → 94,2 %, survivants lus ; la configuration de mutation
+    exclut d'elle-même les tests qui lisent hors de `web/` (#495, #515).
+- **Revue de fin de version** : captures de référence régénérées dans la police de la CI (DejaVu
+  Sans) ; textes périmés par la v1.9 corrigés (README, architecture, PRD) (revue, § 6 et § 12).
+
 ## v1.8 — novembre 2026 : le bois et les réglages
 
 Le bois partout où l'on juge l'isolation, les réglages du foyer chiffrés, l'ergonomie de ⚙ Mon

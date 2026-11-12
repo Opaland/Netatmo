@@ -386,7 +386,9 @@ visible : si ses modules, ou la pièce, disparaissent de l'application Intuis, l
 et ses jours (**secret** du dépôt `STOPPED_ROOMS_JSON`, scellé dans le navigateur).
 
 Ces deux réglages du foyer étaient avant la v1.8 des variables du dépôt, lisibles en clair par les
-collaborateurs et les workflows (#459). Si l'une existe encore, sa carte propose « Migrer en secret » :
+collaborateurs et les workflows (#459), comme le contrat partagé (`CONTRACT_JSON`) et l'alerte froid
+prolongé (`COLD_ALERT_JSON`) avant la v1.9 (#497). Si l'une existe encore, sa carte (⚙ Mon logement,
+⚙ Contrat et prix, ⚙ Objectifs et alertes) propose « Migrer en secret » :
 l'appli écrit le secret avec le même contenu, puis supprime la variable, et le dit. D'ici là, la
 collecte lit le secret d'abord, la variable ensuite, et signale dans son journal, par son nom seul,
 la variable en clair qui reste à migrer.
