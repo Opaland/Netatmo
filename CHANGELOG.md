@@ -1,12 +1,13 @@
 # Historique des versions
 
-## v1.8 — en cours : le bois et les réglages
+## v1.8 — novembre 2026 : le bois et les réglages
 
 Le bois partout où l'on juge l'isolation, les réglages du foyer chiffrés, l'ergonomie de ⚙ Mon
 logement, les degrés-jours, le stock de bois, les heures creuses datées et le bilan qualité
 ([feuille de route](docs/bmad/feuille-de-route.md)). Revue de fin de version par les **72 personas**
 et revue design des écrans nouveaux ou changés : [`docs/bmad/revues/v1.8.md`](docs/bmad/revues/v1.8.md).
-Elle reste « en cours » jusqu'à la clôture par le propriétaire.
+Close après la revue de code par agent (revue, § 12, PR #503) ; les décisions du propriétaire
+(revue, § 10) ne bloquent pas l'enchaînement vers la v1.9 (règle de passage, feuille de route).
 
 - **Le bois partout où l'on juge le chauffage**
   - Isolation jugée électricité + bois (#460, #471) : avec un poêle et du bois acheté, « Chauffage
