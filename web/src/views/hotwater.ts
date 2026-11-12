@@ -6,7 +6,7 @@
 import { addDays, minusYears } from '../aggregate';
 import { activeRooms, ds } from '../app';
 import { alertHtml, list } from '../components';
-import { HW_FIELDS, type HotWaterDay, type HotWaterInputs, type HwRow, type HwSim, OFFERED_COP, parseHotWaterInputs, simulateHotWater } from '../hotwater';
+import { HW_FIELDS, type HotWaterDay, type HotWaterInputs, type HwRow, type HwSim, OFFERED_COP, parseHotWaterInputs, simulateHotWater, zeroAssumption, zeroText } from '../hotwater';
 import { type OffPeak, offPeakSentence, shareOn } from '../offpeak';
 import { lsKey } from '../scope';
 import { inputStore, readNumberForm } from '../sim-inputs';
@@ -131,7 +131,7 @@ function result(sim: HwSim, i: HotWaterInputs, days: HotWaterDay[], hc: OffPeak,
   const verdict = thermo.year
     ? `<div class="verdict verdict-low"><span class="verdict-icon" aria-hidden="true">▼</span><div><p class="verdict-title">Avec un COP de ${nf1.format(i.cop!)} : ${kwh(thermo.year.kwh)} par an au lieu de ${kwh(now.year!.kwh)}${
         thermo.savedEur !== null ? `, ${fmtEur(thermo.savedEur)} de moins` : ''
-      }</p><p class="verdict-sub">Un chauffe-eau thermodynamique, sur la même eau chaude que vos ${nf0.format(sim.days)} derniers jours de relevés${copOffered ? ', avec le COP proposé (une hypothèse, à remplacer par celui du modèle)' : ''}.</p></div></div>`
+      }</p><p class="verdict-sub">Un chauffe-eau thermodynamique, sur la même eau chaude que vos ${nf0.format(sim.days)} derniers jours de relevés${sim.zeroDays ? ` avec de l’énergie (${zeroText(sim.zeroDays)} écarté${sim.zeroDays > 1 ? 's' : ''}, voir les hypothèses)` : ''}${copOffered ? ', avec le COP proposé (une hypothèse, à remplacer par celui du modèle)' : ''}.</p></div></div>`
     : '';
   const rows = list(
     sim.rows.map((r) => ({
@@ -146,6 +146,7 @@ function result(sim: HwSim, i: HotWaterInputs, days: HotWaterDay[], hc: OffPeak,
     `Relevés du chauffe-eau du ${longDate(days[0].day)} au ${longDate(days[days.length - 1].day)} : ${nf0.format(sim.days)} jours avec de l’énergie, dont ${nf0.format(sim.splitDays)} avec la répartition heures pleines / creuses${
       sim.share !== null && sim.splitDays < sim.days ? ` (les autres jours : ${nf0.format(sim.share * 100)} % en heures creuses, la part de la période)` : ''
     }${sim.days < 365 ? ` ; chiffres ramenés à 365 jours (× ${nf2.format(365 / sim.days)})` : ''}.`,
+    ...(sim.zeroDays ? [zeroAssumption(sim)] : []),
     now.year?.eur == null ? 'Montants en euros : il manque vos prix (⚙ Paramètres → Contrat et prix) ou la répartition heures pleines / creuses des relevés.' : 'Prix : ceux en vigueur chaque jour (tarif réglementé du jour, ou vos prix saisis), sans abonnement.',
     ...HW_FIELDS.map(([k, label]) => `${label.charAt(0).toUpperCase()}${label.slice(1)} : ${i[k] === null ? '<em>non saisi</em>' : `${nf2.format(i[k]!)}${UNITS[k][2]}${k === 'cop' && copOffered ? ' (proposé, non saisi)' : ''}`}`),
     `${esc(offPeakSentence(hc))}.`,
