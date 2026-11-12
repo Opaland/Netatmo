@@ -449,7 +449,7 @@ comparateur d'offres, la simulation de recharge et le contrat partagé sont masq
 d'explication. Avec la date de début (et de fin) du bail, le **rapport anonymisé** couvre la seule
 période du bail, sans comparaison avec l'année d'avant.
 
-### Simulations : voiture électrique, pompe à chaleur, panneaux solaires
+### Simulations : voiture électrique, pompe à chaleur, panneaux solaires, eau chaude
 
 - **Voiture électrique** (onglet Comparer) : énergie rechargée par semaine, heure de début et puissance
   de charge ; coût par offre (Base, heures creuses, Tempo) avec et sans voiture sur 12 mois, et, avec
@@ -467,6 +467,12 @@ période du bail, sans comparaison avec l'année d'avant.
   chauffe-eau et de la recharge, puis avec une batterie de 5 ou 10 kWh (le pilotage d'abord). Prix,
   tarif de rachat, coûts et rendement sont saisis par vous et rappelés sous le résultat ; mention de
   l'amiante des toits en fibro-ciment.
+- **Chauffe-eau thermodynamique** (Outils › Simulateurs, #453) : l'énergie réelle du chauffe-eau sur ses
+  365 derniers jours, au prix en vigueur chaque jour, face à trois pistes pour préparer son
+  remplacement : baisser la consigne, tout chauffer en heures creuses (celles en vigueur chaque jour,
+  dans la limite de la puissance saisie), ou un chauffe-eau thermodynamique d'un COP saisi (2,5 est
+  proposé comme hypothèse) ; kWh et euros économisés par an, retour sur le surcoût face à un chauffe-eau
+  électrique neuf. Toutes les hypothèses sont saisies et rappelées sous le résultat.
 - **Localisation de la maison** (⚙ Mon logement, #204) : commune ou coordonnées, à la précision
   choisie, et chaque toit (orientation, pente, puissance, pertes). Gardée **seulement chiffrée** (secret
   `HOME_LOCATION_JSON`, puis `solar.enc.json`) ; PVGIS la reçoit arrondie à environ 1 km ; jamais dans

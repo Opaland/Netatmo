@@ -15,6 +15,7 @@ import { textCell, untextCell } from './csv';
 import { parseEvInput } from './ev';
 import { parseHaLinks } from './ha';
 import { parseHeatPumpInputs } from './heatpump';
+import { HW_FIELDS, parseHotWaterInputs } from './hotwater';
 import { loadVotes } from './insight';
 import { INSTALL_HASH, inviteUrl } from './invite';
 import { validInvoice } from './invoice';
@@ -629,6 +630,17 @@ describe('#204 #356 fuzz : localisation et profil solaire', () => {
         assert(x === null || (Number.isFinite(x) && x >= min && x <= max), k);
       }
       assert(Object.keys(v).length === INPUT_FIELDS.length, 'clé en trop');
+    });
+  });
+  it('#453 hypothèses du chauffe-eau thermodynamique : chaque champ null ou dans ses bornes', () => {
+    fuzz('parseHotWaterInputs', (r) => {
+      const v = parseHotWaterInputs(r() < 0.3 ? anyValue(r) : Object.fromEntries(HW_FIELDS.map(([k]) => [k, r() < 0.5 ? pick(r, NUMBERS) : anyValue(r)])));
+      notPolluted();
+      for (const [k, , min, max] of HW_FIELDS) {
+        const x = v[k];
+        assert(x === null || (Number.isFinite(x) && x >= min && x <= max), k);
+      }
+      assert(Object.keys(v).length === HW_FIELDS.length, 'clé en trop');
     });
   });
 });

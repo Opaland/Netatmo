@@ -11,6 +11,7 @@
 // (PVGIS hourly year, per kWc), for a few sizes and four scenarios. Every price and efficiency
 // comes from the owner (SolarAssumptions): none is written here.
 import { type Curve, halfHourCounts, localMidnight } from './curve';
+import { type NumberField, parseNumberFields, payback } from './sim-inputs';
 
 // ------------------------------------------------------------------ the home's location
 /** One roof that could carry panels. Azimuth: compass degrees (0 north, 90 east, 180 south). */
@@ -539,8 +540,7 @@ export const SCENARIOS: (Scenario & { label: string })[] = [
   { pilot: true, battery: 10, label: 'Pilotage + batterie 10 kWh' },
 ];
 
-/** Simple payback in years (installed cost / yearly saving), or null when it never pays. */
-export const payback = (cost: number, yearlySaving: number) => (yearlySaving > 0 && cost > 0 ? cost / yearlySaving : null);
+export { payback } from './sim-inputs';
 
 /** What the owner types in the simulator: each field a number in its bounds, or null (not typed). */
 export interface SolarInputs {
@@ -554,8 +554,8 @@ export interface SolarInputs {
   evKwhWeek: number | null; // kWh a week charged at home, today at night
   evKw: number | null; // kW of the charge
 }
-/** Field, label (French, shown when missing), bounds. */
-export const INPUT_FIELDS: [keyof SolarInputs, string, number, number][] = [
+/** Field, label (French, shown when missing), bounds (sim-inputs.ts, one rule with #453). */
+export const INPUT_FIELDS: NumberField<keyof SolarInputs>[] = [
   ['priceHp', 'prix du kWh en heures pleines', 0, 5],
   ['priceHc', 'prix du kWh en heures creuses', 0, 5],
   ['feedIn', 'tarif de rachat du surplus', 0, 5],
@@ -566,18 +566,10 @@ export const INPUT_FIELDS: [keyof SolarInputs, string, number, number][] = [
   ['evKwhWeek', 'recharge de la voiture par semaine', 0, 500],
   ['evKw', 'puissance de recharge', 1, 22],
 ];
-export const NO_INPUTS: SolarInputs = Object.fromEntries(INPUT_FIELDS.map(([k]) => [k, null])) as unknown as SolarInputs;
+export const NO_INPUTS: SolarInputs = parseNumberFields(INPUT_FIELDS, null);
 
 /** The inputs read back (localStorage, a form): unknown keys and values out of bounds dropped. */
-export function parseSolarInputs(v: unknown): SolarInputs {
-  const out: SolarInputs = { ...NO_INPUTS };
-  if (!isObj(v)) return out;
-  for (const [k, , min, max] of INPUT_FIELDS) {
-    const x = num(own(v, k));
-    if (x !== null && x >= min && x <= max) out[k] = x;
-  }
-  return out;
-}
+export const parseSolarInputs = (v: unknown): SolarInputs => parseNumberFields(INPUT_FIELDS, v);
 
 export interface ScenarioRow {
   label: string;

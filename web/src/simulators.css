@@ -42,3 +42,9 @@
 .sim-result {
   margin: 8px 0;
 }
+/* #453: in the simple view (FALC, text up to 200 %), a word of the assumptions must fit the
+   card's line (proche.css): no list indent there, the bullet stays inside the line. */
+body.simple-nav .sim-assumptions {
+  padding-left: 0;
+  list-style-position: inside;
+}

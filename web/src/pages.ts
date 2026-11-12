@@ -255,7 +255,7 @@ function renderExports(view: HTMLElement) {
 }
 
 /** #314: the « et si… » tools look like simulations (dashed cards, label, assumptions recalled). */
-const SIMULATORS = new Set<Tool>(['offres', 'voiture', 'consigne', 'pac', 'teletravail', 'solaire']);
+const SIMULATORS = new Set<Tool>(['offres', 'voiture', 'consigne', 'pac', 'teletravail', 'solaire', 'thermodynamique']);
 
 // #337: « Expliquer un mois », loaded on demand
 let explain: typeof import('./views/explain') | null = null;
@@ -295,6 +295,12 @@ function drawTool(view: HTMLElement, t: Tool) {
     // #356: lazy chunk, with the Linky curve and the solar profile it loads
     view.innerHTML = html`<div id="solar-zone" aria-busy="true"><p class="hint muted" role="status">Chargement du simulateur…</p></div>`;
     void lazyCard(() => import('./views/solar'), (m) => m.mountSolar(document.getElementById('solar-zone')!), { zone: 'solar-zone', what: 'Panneaux solaires' });
+    return;
+  }
+  if (t === 'thermodynamique') {
+    // #453: lazy chunk, the water heater's year confronted with the options for its replacement
+    view.innerHTML = html`<div id="hw-zone" aria-busy="true"><p class="hint muted" role="status">Chargement du simulateur…</p></div>`;
+    void lazyCard(() => import('./views/hotwater'), (m) => m.mountHotWater(document.getElementById('hw-zone')!), { zone: 'hw-zone', what: 'Chauffe-eau thermodynamique' });
     return;
   }
   if (t === 'plannings') {

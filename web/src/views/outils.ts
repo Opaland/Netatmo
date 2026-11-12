@@ -42,6 +42,7 @@ export function renderOutils(view: HTMLElement, status: Freshness & { label: str
       row('pac', 'économie estimée selon le COP'),
       row('teletravail', 'coût d’une journée au bureau chauffé'),
       ...(t ? [] : [row('solaire', 'production, autoconsommation, pilotage ou batterie, sur votre courbe Linky')]),
+      row('thermodynamique', 'face à une consigne plus basse ou une chauffe en heures creuses, sur votre eau chaude réelle'),
     ],
     'Simulateurs',
   )}

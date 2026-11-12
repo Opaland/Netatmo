@@ -19,6 +19,7 @@ export const TOOLS = {
   voiture: 'Une voiture électrique',
   pac: 'Une pompe à chaleur',
   solaire: 'Des panneaux solaires',
+  thermodynamique: 'Un chauffe-eau thermodynamique',
   consigne: 'Demander 1\u00a0°C de moins aux radiateurs',
   teletravail: 'Une journée de télétravail',
   facture: 'Une facture',
