@@ -1,7 +1,7 @@
 import sodium from 'libsodium-wrappers';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ghCall, ghErrorText } from './gh-call';
-import { listSecrets, putSecret, putVariable, runCollect, setToken } from './settings';
+import { listSecrets, plainVariable, putSecret, runCollect, setToken } from './settings';
 
 describe('#463 erreur du jeton : l’appel et la permission en cause', () => {
   afterEach(() => {
@@ -29,17 +29,17 @@ describe('#463 erreur du jeton : l’appel et la permission en cause', () => {
     for (const call of [
       () => listSecrets('proprio-fictif/depot-fictif'),
       () => putSecret('proprio-fictif/depot-fictif', 'INTUIS_PASSWORD', 'valeur-secrete-du-test'),
-      () => putVariable('proprio-fictif/depot-fictif', 'CONTRACT_JSON', '[]'), // #459: WOOD_JSON is a secret now
+      () => plainVariable('proprio-fictif/depot-fictif', 'CONTRACT_JSON'), // #497: the app only reads and deletes variables now
       () => runCollect('proprio-fictif/depot-fictif', false),
     ])
       seen.push(await call().then(() => '', (e: Error) => e.message));
     expect(seen).toEqual([
       'GitHub : droits insuffisants pour la lecture de la liste des secrets (HTTP 403) : le jeton doit viser ce dépôt avec la permission « Secrets » en lecture.',
       'GitHub : droits insuffisants pour l’enregistrement d’un secret (HTTP 403) : le jeton doit viser ce dépôt avec la permission « Secrets » en écriture.',
-      'GitHub : droits insuffisants pour la mise à jour d’une variable (HTTP 403) : le jeton doit viser ce dépôt avec la permission « Variables » en écriture.',
+      'GitHub : droits insuffisants pour la lecture d’une variable (HTTP 403) : le jeton doit viser ce dépôt avec la permission « Variables » en lecture.',
       'GitHub : droits insuffisants pour le lancement de la collecte (HTTP 403) : le jeton doit viser ce dépôt avec la permission « Actions » en écriture.',
     ]);
-    for (const m of seen) for (const s of ['proprio-fictif', 'depot-fictif', 'INTUIS_PASSWORD', 'valeur-secrete', 'github_pat', 'WOOD_JSON', 'purchases']) expect(m).not.toContain(s);
+    for (const m of seen) for (const s of ['proprio-fictif', 'depot-fictif', 'INTUIS_PASSWORD', 'valeur-secrete', 'github_pat', 'WOOD_JSON', 'CONTRACT_JSON', 'purchases']) expect(m).not.toContain(s);
   });
 
   it('distingue le jeton refusé (401) et une panne (5xx)', () => {

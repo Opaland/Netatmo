@@ -224,6 +224,7 @@ def test_intuis_cap_stops_cleanly_saves_and_resumes_the_backfill_next_time(tmp_p
 
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
     monkeypatch.delenv("CONTRACT_JSON", raising=False)
+    monkeypatch.delenv("CONTRACT_JSON_VARIABLE", raising=False)
     monkeypatch.setattr(main, "_client", lambda s: intuis(intuis_handler()))
     summary = tmp_path / "summary.md"
     monkeypatch.setenv("GITHUB_STEP_SUMMARY", str(summary))
