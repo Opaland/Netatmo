@@ -70,6 +70,16 @@ janvier 2025).
 
 ## Installation (une seule fois, environ 15 minutes)
 
+**Assistant de premier lancement** (#40) : sur l'écran d'ouverture d'un site sans données, ou dans
+⚙ Paramètres → Sources de données → **Premier lancement**. Avec le jeton décrit plus bas
+([l'écran Paramètres](#le-plus-simple--lécran-paramètres)), il vérifie chaque étape ci-dessous (secrets
+présents, collecte activée, dernière collecte et publication du site), enregistre lui-même les
+secrets Intuis (chiffrés dans le navigateur), réactive la collecte quotidienne si GitHub l'a arrêtée
+et lance la première collecte. Il ne fait **pas** le reste, et donne le lien de la page GitHub : la
+phrase de passe (`DATA_PASSPHRASE`, jamais écrite par l'application) et l'activation de GitHub Pages
+(le jeton n'a pas la permission « Pages » ; une publication réussie, ou la page servie par le site
+du dépôt, le confirme).
+
 ### 1. Choisir une phrase de passe
 
 Elle chiffre vos données. Prenez **au moins 5 mots** au hasard (ex. `pivoine tracteur lagune

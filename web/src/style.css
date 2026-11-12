@@ -1550,6 +1550,20 @@ fieldset.prices label:not(.radio) {
   gap: 6px;
   overflow-wrap: anywhere;
 }
+/* #40: the first-launch assistant (⚙ Sources de données, lock screen without data) */
+.setup-steps {
+  display: grid;
+  gap: var(--space-3);
+  margin: 0;
+  padding-inline-start: var(--space-5);
+  text-align: start;
+}
+.setup-steps p {
+  margin: 0 0 var(--space-1);
+}
+.setup-lock {
+  text-align: start;
+}
 fieldset.secrets {
   border: 1px solid var(--border);
   border-radius: var(--radius-md);

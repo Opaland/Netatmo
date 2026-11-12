@@ -9,6 +9,7 @@ import { clearLockNotice } from '../session';
 import { hideUnreadableNotes, showUnreadableNotes } from '../sealed-notes';
 import { bindReveal, hideSecrets, revealButton } from '../reveal';
 import { alertHtml, formMsg, switchField } from '../components';
+import { lazyAction } from '../lazy';
 
 /** `notice`: an information, not an error (S-7.9: key erased by the browser, data intact). */
 export function renderLock(message = '', hasRealData = true, notice = '') {
@@ -32,7 +33,9 @@ export function renderLock(message = '', hasRealData = true, notice = '') {
         ${switchField('Rester connecté sur cet appareil (30 jours au plus)', true, { id: 'remember' })}
         <button class="primary" type="submit">Déverrouiller</button>
       </form>`
-          : alertHtml('info', "Aucune donnée n'a encore été collectée. Suivez le guide d'installation du README, ou essayez la démo.")
+          : `${alertHtml('info', "Aucune donnée n'a encore été collectée. Suivez l'assistant d'installation (ou le guide du README), ou essayez la démo.")}
+        <button class="primary" type="button" id="setup-lock">Ouvrir l’assistant d’installation</button>
+        <section id="setup-zone" class="setup-lock" hidden></section>`
       }
       ${formMsg(message, { id: 'lock-msg' })}
       <button class="link" id="demo" type="button">Essayer avec des données de démonstration</button>
@@ -52,6 +55,17 @@ export function renderLock(message = '', hasRealData = true, notice = '') {
     await open('data', pass, remember);
   });
   document.getElementById('demo')!.addEventListener('click', () => open('demo', 'demo', false));
+  // #40: nothing collected yet: the first-launch assistant, loaded on demand
+  const setup = document.getElementById('setup-lock');
+  setup?.addEventListener('click', () => {
+    const zone = document.getElementById('setup-zone');
+    void lazyAction(setup, () => import('./setup'), (m) => {
+      if (!zone) return;
+      zone.hidden = false;
+      setup.remove();
+      m.mountSetup(zone, false);
+    }, 'Assistant d’installation');
+  });
 }
 
 /** #254: one unlock at a time (passphrase or demo), the other buttons wait. */
