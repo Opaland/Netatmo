@@ -25,6 +25,7 @@ import { parseFlags } from './onboarding';
 import { STOP_REASONS, parseStopped } from './room-offline';
 import { MAX_PURCHASES, SPECIES, parseWood } from './wood';
 import { HISTORY_PAGES, METER_PAGES, SETTINGS, TOOLS, parseRoute, routeKey } from './router';
+import { LOWER_KINDS, MAX_LOWER_MARKERS, MAX_LOWER_ROOMS, validLower } from './lower';
 import { lockNotice } from './session';
 import { readShellyPrefs } from './shelly-prefs';
 import { INPUT_FIELDS, MAX_ROOFS, ROOF_FIELDS, parseLocation, parseLocationDraft, parsePvgisFile, parseSolarDoc, parseSolarInputs } from './solar';
@@ -164,6 +165,25 @@ function storageWith(raw: string | null): Storage {
 afterEach(() => vi.unstubAllGlobals());
 
 describe('#359 fuzz : préférences relues de cet appareil', () => {
+  it('#452 niveau inférieur : pièces et sonde bornées, repères aux vrais jours, une nature connue', () => {
+    const real = (d: string) => new Date(`${d}T00:00:00Z`).toISOString().slice(0, 10) === d;
+    fuzz('validLower', (r) => {
+      const marker = () => (r() < 0.5 ? anyValue(r) : { day: pick(r, [...STRINGS, '2026-01-12', '2026-02-30']), kind: anyValue(r), label: anyValue(r) });
+      const raw = r() < 0.4 ? anyValue(r) : { rooms: r() < 0.5 ? anyValue(r) : [anyValue(r), 'r-ch2', anyValue(r)], probe: anyValue(r), markers: Array.from({ length: Math.floor(r() * 4) }, marker) };
+      const p = validLower(raw);
+      assert(Array.isArray(p.rooms) && p.rooms.length <= MAX_LOWER_ROOMS && p.rooms.every((x) => isStr(x) && /^[\w.:-]{1,64}$/.test(x)), 'pièces');
+      assert(new Set(p.rooms).size === p.rooms.length, 'pièces en double');
+      assert(p.probe === null || (isStr(p.probe) && /^[\w.:-]{1,64}$/.test(p.probe)), 'sonde');
+      assert(p.markers.length <= MAX_LOWER_MARKERS, 'trop de repères');
+      for (const m of p.markers) {
+        assert(isStr(m.day) && real(m.day), `jour ${m.day}`);
+        assert(Object.hasOwn(LOWER_KINDS, m.kind), `nature ${m.kind}`);
+        assert(isStr(m.label) && m.label.length <= 80, 'précision');
+      }
+      assert(new Set(p.markers.map((m) => m.day)).size === p.markers.length, 'deux repères le même jour');
+    });
+  });
+
   it('brouillon de l\'alerte froid : null ou des champs bornés (days ∈ 1, 2, 3)', () => {
     fuzz('parseColdDraft', (r) => {
       const raw = r() < 0.5 ? anyValue(r) : { threshold: pick(r, NUMBERS), days: anyValue(r), rooms: anyValue(r) };
