@@ -60,7 +60,8 @@ const GRADES: Grade[] = ['très bien isolé', 'bien isolé', 'moyennement isolé
  *   W/°C (the surfaces are optional; the kWh/m² grid says the per-m² part).
  * - Heating kWh/m² per year: the bands of the energy labels' heating part (≈ 50 / 90 / 150),
  *   rounded. Ruled out: the DPE letters themselves (primary energy, hot water and cooling
- *   included, a conventional climate: not what is measured here).
+ *   included, a conventional climate: not what is measured here); the report puts the measured
+ *   heating + hot water against them apart, as a mark that is not a DPE (#127, dpeMark below).
  */
 export const W_PER_K_GRID: readonly [number, number, number] = [100, 170, 280];
 export const KWH_M2_GRID: readonly [number, number, number] = [50, 90, 150];
@@ -121,4 +122,88 @@ export function roomPerM2Text(kwh: number, m2: number, stove: boolean, fmt: (v: 
   const v = kwh / m2;
   if (stove && v < WOOD_ONLY_KWH_M2) return 'chauffée au bois';
   return `${fmt(v)} kWh/m²${stove ? ' + bois' : ''}`;
+}
+
+// ------------------------------------------------------------------ #127: a kWh/m²/an mark against the DPE thresholds
+/**
+ * The energy label of the DPE (arrêté du 31 mars 2021, annexe 5; unchanged above 40 m² by the
+ * arrêté du 25 mars 2024 on small homes): kWh of PRIMARY energy per m² per year, heating + hot water
+ * (+ cooling, lighting, auxiliaries: not measured here), upper bounds of A to F, G above. The
+ * official class is the worse of this label and the climate one (kg CO₂/m²/an), not computed here.
+ */
+export const DPE_ENERGY_GRID: readonly number[] = [70, 110, 180, 250, 330, 420];
+export const DPE_CLASSES = ['A', 'B', 'C', 'D', 'E', 'F', 'G'] as const;
+export type DpeClass = (typeof DPE_CLASSES)[number];
+
+/** The class of a value: A up to 70 included, B up to 110 included… G above 420. */
+export function dpeClassOf(primaryPerM2: number): DpeClass {
+  return DPE_CLASSES[DPE_ENERGY_GRID.filter((t) => primaryPerM2 > t).length];
+}
+
+/**
+ * Factor from final to primary energy of the electricity in the DPE, by the day it applies from:
+ * 2,3 (arrêté du 31 mars 2021), 1,9 from 1 January 2026 (arrêté du 13 août 2025, JO du 26 août
+ * 2025), 1,7 from 1 January 2027 (arrêté du 19 août 2026, JO du 26 août 2026, NOR VLOL2617030A).
+ * Wood and the other energies count 1.
+ */
+export const ELEC_PRIMARY: readonly (readonly [string, number])[] = [
+  ['2021-07-01', 2.3],
+  ['2026-01-01', 1.9],
+  ['2027-01-01', 1.7],
+];
+/** The factor in force on `day` (the first one before July 2021). */
+export function elecPrimaryAt(day: string): number {
+  let f = ELEC_PRIMARY[0][1];
+  for (const [from, v] of ELEC_PRIMARY) if (day >= from) f = v;
+  return f;
+}
+
+export interface DpeMark {
+  /** Heating electricity, wood and hot water (kWh, final energy) over the span. */
+  elec: number;
+  wood: number;
+  water: number;
+  m2: number;
+  /** Final energy per m² (what the meters measured). */
+  finalPerM2: number;
+  /** Primary energy per m², electricity × factor, wood × 1. */
+  primaryPerM2: number;
+  factor: number;
+  /** Indicative energy label; null when not every heating room has a surface (not graded). */
+  cls: DpeClass | null;
+  known: number;
+  rooms: number;
+}
+
+/** Under this many days of data before the end of a span, a « per year » figure is not given. */
+export const DAYS_OF_A_YEAR = 330;
+
+/**
+ * #127: heating (electricity + the stove's wood, by homePerM2: the rule of the kWh/m² above) and
+ * hot water of [from, to], over the surfaces entered, in final then primary energy (the factor in
+ * force on `day`). Null without any surface. Graded only when every heating room has a surface:
+ * the hot water of the whole home over part of its rooms would read too high.
+ */
+export function dpeMark(
+  records: DayRecord[],
+  surfaces: Record<string, number>,
+  heatingRooms: string[],
+  waterRooms: string[],
+  stove: string[],
+  daily: Map<string, [number, number]> | null,
+  from: string,
+  to: string,
+  day: string,
+): DpeMark | null {
+  const heat = homePerM2(records, surfaces, heatingRooms, stove, daily, from, to);
+  if (!heat) return null;
+  const tank = new Set(waterRooms);
+  let water = 0;
+  for (const r of records) if (r.cat === 'water_heater' && r.day >= from && r.day <= to && tank.has(r.room)) water += r.kwh;
+  const elec = heat.kwh - heat.wood;
+  const factor = elecPrimaryAt(day);
+  const finalPerM2 = (heat.kwh + water) / heat.m2;
+  const primaryPerM2 = ((elec + water) * factor + heat.wood) / heat.m2;
+  const whole = heat.known === heat.rooms;
+  return { elec, wood: heat.wood, water, m2: heat.m2, finalPerM2, primaryPerM2, factor, cls: whole ? dpeClassOf(Math.round(primaryPerM2)) : null, known: heat.known, rooms: heat.rooms };
 }
