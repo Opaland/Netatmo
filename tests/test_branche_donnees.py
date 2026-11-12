@@ -438,3 +438,91 @@ def test_readme_warns_that_a_relaunch_cancels_a_pending_collection():
     text = (ROOT / "README.md").read_text()
     section = text.split("### Branche des données", 1)[1].split("\n### ", 1)[0]
     assert "annule" in section and "en attente" in section
+
+
+# ---------------------------------------------------------------- #529: the guard has no depth limit
+def _long_history(repo: Path, branch: str, count: int) -> None:
+    """`count` commits on `branch` keeping its data/ tree (fast-import: seconds, not minutes)."""
+    _git(repo, "fetch", "-q", "origin", branch)
+    tip = _git(repo, "rev-parse", f"origin/{branch}").strip()
+    tree = _git(repo, "rev-parse", f"{tip}:data").strip()
+    lines = []
+    for i in range(count):
+        msg = f"data: nuit {i}\n"
+        lines += [f"commit refs/heads/{branch}", "committer t <t@example.com> 1700000000 +0000",
+                  f"data {len(msg.encode())}", msg.rstrip("\n"), *([f"from {tip}"] if i == 0 else []),
+                  f"M 040000 {tree} data", ""]  # fmt: skip
+    subprocess.run(["git", "fast-import", "--quiet"], cwd=repo, input="\n".join(lines) + "\n", text=True, check=True)
+    _git(repo, "push", "-q", "origin", f"refs/heads/{branch}:refs/heads/{branch}")
+
+
+@needs_git
+def test_the_way_back_is_accepted_however_long_the_data_branch_grew(tmp_path):
+    """#529, 1: main's data/ is only in the first commit of data; more nights than the old fetch
+    depth on data must not refuse the way back (HISTORY_DEPTH=3 was the old limit, now ignored)."""
+    origin, runner = _repo(tmp_path)
+    out = tmp_path / "copie"
+    env = _env(tmp_path)
+    _run(runner, env, str(SCRIPT), "copier", "main", "data", str(out))
+    _run(runner, env, str(SCRIPT), "pousser", str(out), "data")
+    for amount in range(5):
+        _night(tmp_path / "seed", "data", float(amount))
+    denv = _env(tmp_path, DATA_BRANCH="data", HISTORY_DEPTH="3")
+    r = _run(runner, denv, str(SCRIPT), "copier", "data", "main", str(out))
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert _run(runner, env, str(SCRIPT), "pousser", str(out), "main").returncode == 0
+    assert _git(origin, "rev-parse", "main:data") == _git(origin, "rev-parse", "data:data")
+
+
+@needs_git
+def test_the_guard_reads_thousands_of_commits_without_a_broken_pipe(tmp_path):
+    """#529, 2: DEST's data/ found near the tip of a long SOURCE history: the old
+    `git log | { … exit 0; }` under pipefail ended in SIGPIPE (141) and refused the copy."""
+    origin, runner = _repo(tmp_path)
+    out = tmp_path / "copie"
+    env = _env(tmp_path)
+    _run(runner, env, str(SCRIPT), "copier", "main", "data", str(out))
+    _run(runner, env, str(SCRIPT), "pousser", str(out), "data")
+    _long_history(tmp_path / "seed", "data", 3000)  # main's data/ is now in data~1 … data~3000
+    _night(tmp_path / "seed", "data", 7.0)
+    denv = _env(tmp_path, DATA_BRANCH="data", HISTORY_DEPTH="5000")
+    r = _run(runner, denv, str(SCRIPT), "copier", "data", "main", str(out))
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert not any(n in ("commits", "chemins", "arbres") for n in (p.name for p in out.iterdir()))
+
+
+@needs_git
+def test_a_refusal_says_how_many_commits_were_searched_and_both_causes(tmp_path):
+    """#529, 1 and 3: a refusal is not « not found in the last N » any more; it says every commit
+    of the source was searched, and names the two causes (nights on DEST, phrase changed on DEST)."""
+    _, runner = _repo(tmp_path)
+    out = tmp_path / "copie"
+    env = _env(tmp_path)
+    _run(runner, env, str(SCRIPT), "copier", "main", "data", str(out))
+    _run(runner, env, str(SCRIPT), "pousser", str(out), "data")
+    _night(tmp_path / "seed", "data", 7.0)
+    _night(tmp_path / "seed", "main", 1.0)
+    r = _run(runner, env, str(SCRIPT), "copier", "main", "data", str(out))
+    assert r.returncode != 0
+    assert "n'est dans aucun des 2 commits de « main »" in r.stderr, r.stderr
+    assert "nuits collectées" in r.stderr and "phrase de passe changée" in r.stderr
+
+
+def test_compare_before_names_a_passphrase_changed_since_the_last_copy(tmp_path):
+    """#529, 3: the destination before does not open with the current phrase (rekeyed between two
+    copies): a clear refusal, not a decryption traceback."""
+    from collector.compare import compare_before
+    from collector.rekey import rekey
+
+    a, before = tmp_path / "a", tmp_path / "avant"
+    _folder(before)
+    shutil.copytree(before, a)
+    rekey(a, PASS, "nouvelle phrase fictive des tests")
+    with pytest.raises(CompareError, match="phrase de passe"):
+        compare_before(before, a, "nouvelle phrase fictive des tests")
+
+
+def test_readme_says_a_rekey_between_two_copies_is_refused():
+    text = (ROOT / "README.md").read_text()
+    section = text.split("### Branche des données", 1)[1].split("\n### ", 1)[0]
+    assert "Changer la phrase de passe" in section and "tout** l'historique" in section

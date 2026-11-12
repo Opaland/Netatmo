@@ -228,7 +228,12 @@ la variable : `main` reçoit un commit dont `data/` est celui de la branche `dat
 vérifications, jamais forcé), puis supprimez la variable `DATA_BRANCH`. Le workflow ne copie jamais
 en arrière : si la destination contient des nuits que la source n'a pas (collectées sur elle depuis
 la dernière copie), il refuse et n'envoie rien ; il vérifie aussi qu'aucun fichier de la destination
-d'avant ne manque à la copie.
+d'avant ne manque à la copie. Pour le savoir, il relit **tout** l'historique de la source (et d'elle
+seule), si vieille que soit la dernière copie : un refus dit combien de commits ont été parcourus.
+Si la phrase de passe a été changée (**Actions → Changer la phrase de passe**) entre deux copies,
+l'ancien `data/` de la destination ne s'ouvre plus avec la phrase actuelle : la copie est refusée
+en le disant, rien n'est envoyé. Ne forcez rien : gardez la sauvegarde de l'étape 1 ; la suite est
+à décider (#529).
 
 En local, avec `DATA_BRANCH=data` : `git fetch origin data && git worktree add ../donnees origin/data`,
 puis `DATA_DIR=../donnees/data python -m collector verify`. `python -m collector comparer A B` dit si
