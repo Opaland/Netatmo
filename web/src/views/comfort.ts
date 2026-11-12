@@ -37,6 +37,7 @@ import { fmt1 as f1 } from '../glossary';
 import { alertHtml } from '../components';
 import { pressureCard } from './pressure';
 import { lazyCard } from '../lazy';
+import { linkRoom } from '../module-match';
 
 // #247: station hourly readings of the dataset shown; `hourly` / `hourlyFailed` refreshed from it.
 const stationDoc = datasetDoc((d) => loadStationHourly(d));
@@ -514,8 +515,7 @@ export function handleChange(t: HTMLInputElement | HTMLSelectElement): boolean {
   if (t.dataset.mapRoom !== undefined) {
     // Freeze the current links so that unlinking one room does not re-suggest its module elsewhere.
     linksOpen = true;
-    const cur = Object.fromEntries(heatingRooms().map((r) => [r.id, mapping(ds!.station).get(r.id) ?? '']));
-    setState({ roomModuleMap: { ...cur, [t.dataset.mapRoom]: t.value } });
+    setState({ roomModuleMap: linkRoom(mapping(ds!.station), heatingRooms().map((r) => r.id), t.dataset.mapRoom, t.value) });
     return true;
   }
   return false;

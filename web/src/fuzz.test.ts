@@ -19,6 +19,7 @@ import { loadVotes } from './insight';
 import { INSTALL_HASH, inviteUrl } from './invite';
 import { validInvoice } from './invoice';
 import { loadNote } from './local-store';
+import { declinedPairs } from './module-match';
 import { MAX_RANGES, parseHcRanges, periodsOfTyped, resolveOffPeak, shareOn, slotShares } from './offpeak';
 import { agreePlurals } from './glossary';
 import { parseFlags } from './onboarding';
@@ -339,6 +340,14 @@ describe('#359 fuzz : préférences relues de cet appareil', () => {
       assert(Object.values(p.names).every((n) => isStr(n) && n.length > 0 && n.length <= 60), 'noms');
       assert(Object.values(p.roles).every((x) => x === 'main' || x === 'water'), 'rôles');
       notPolluted();
+    });
+  });
+
+  it('#467 liaisons module ↔ pièce refusées : un ensemble de chaînes, jamais d’exception', () => {
+    fuzz('declinedPairs', (r) => {
+      const v = anyValue(r);
+      const s = declinedPairs(Array.isArray(v) || r() < 0.5 ? v : [v, randomString(r)]);
+      assert([...s].every(isStr), 'chaînes');
     });
   });
 
