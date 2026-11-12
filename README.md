@@ -314,12 +314,14 @@ pouvez aussi saisir vos propres prix. Ces réglages restent sur votre appareil.
 **Poêle à bois.** Le bois ne passe pas par le compteur : dans ⚙ Paramètres → Mon logement → *Poêle à
 bois*, notez chaque achat (date, stères, essence, humidité, prix). L'appli le convertit en chaleur avec
 des hypothèses affichées et modifiables (kWh par stère selon l'essence à 20 % d'humidité, correction
-d'humidité, rendement du poêle), le répartit sur la saison de chauffe qui suit l'achat au prorata des
-degrés-jours, et compte électricité **et** bois dans le coût du chauffage (Accueil, hiver contre hiver,
+d'humidité, rendement du poêle), le répartit sur la saison de chauffe qui suit l'achat, sur les soirs de
+flambée que la collecte a trouvés (ci-dessous), sinon au prorata des degrés-jours, et compte électricité **et** bois dans le coût du chauffage (Accueil, hiver contre hiver,
 « Expliquer un mois »). Sans relevé, une saison est supposée brûler tout le bois qu'elle a ; sous
 *Bois réellement brûlé* (facultatif), notez les stères brûlés d'une saison ou le stock restant au
 printemps : le relevé remplace l'hypothèse et le reste passe à la saison suivante (le plus ancien
-brûle d'abord). Enregistré pour le foyer dans le **secret** du dépôt `WOOD_JSON`, scellé dans
+brûle d'abord). Un relevé que les achats notés ne peuvent pas expliquer (plus de stères brûlés, ou plus de
+stock restant, que le stock noté ; une saison avant le premier achat) n'est pas compté, et l'écran le dit.
+Enregistré pour le foyer dans le **secret** du dépôt `WOOD_JSON`, scellé dans
 le navigateur comme la localisation, recopié chiffré par la collecte ; le journal public n'en dit rien.
 
 **Flambées du poêle.** Chaque nuit, la collecte cherche les soirs où le poêle a chauffé dans les
@@ -473,7 +475,9 @@ période du bail, sans comparaison avec l'année d'avant.
   remplacement : baisser la consigne, tout chauffer en heures creuses (celles en vigueur chaque jour,
   dans la limite de la puissance saisie), ou un chauffe-eau thermodynamique d'un COP saisi (2,5 est
   proposé comme hypothèse) ; kWh et euros économisés par an, retour sur le surcoût face à un chauffe-eau
-  électrique neuf. Toutes les hypothèses sont saisies et rappelées sous le résultat.
+  électrique neuf. Toutes les hypothèses sont saisies et rappelées sous le résultat. Les jours relevés à
+  0 kWh (chauffe-eau coupé, absence) sont écartés et l'année ramenée à 365 jours à partir des autres ;
+  le résultat le dit, avec leur nombre (#502).
 - **Localisation de la maison** (⚙ Mon logement, #204) : commune ou coordonnées, à la précision
   choisie, et chaque toit (orientation, pente, puissance, pertes). Gardée **seulement chiffrée** (secret
   `HOME_LOCATION_JSON`, puis `solar.enc.json`) ; PVGIS la reçoit arrondie à environ 1 km ; jamais dans
@@ -609,6 +613,12 @@ est déjà vérifié).
   dans le dépôt pourrait intervertir deux fichiers chiffrés. Le lier demande un format v2 et un rekey
   complet (tant que les fichiers v1 restent lisibles, un ancien fichier pourrait remplacer un nouveau) :
   reporté à la prochaine évolution du format.
+- Taille des fichiers chiffrés (#138) : avant chiffrement, chaque document est complété par des espaces
+  jusqu'à un palier (4 Ko jusqu'à 32 Ko, puis un huitième de la puissance de deux inférieure : 16 Ko
+  vers 150 Ko, 128 Ko vers 1 Mo ; `padded_length` dans `collector/crypto.py`). La taille publiée ne
+  suit donc plus l'activité du foyer jour après jour : un jour d'absence n'écrit pas un fichier plus
+  petit. Le remplissage est dans le chiffré (invisible en clair) ; les fichiers d'avant se lisent
+  comme avant. Coût : environ 5 % de plus par collecte commitée.
 - Exports CSV (application et `export-csv`) : une cellule texte (nom de pièce, de module) qui commence
   par `=`, `+`, `-`, `@`, une tabulation ou un retour chariot est préfixée d'une apostrophe, pour qu'un
   tableur ne l'exécute pas comme une formule. Les colonnes numériques (températures négatives) sont
