@@ -5,10 +5,10 @@
 // computations are in piece.ts. The household view (bedrooms grouped, opt-in) is a display
 // matter: a group page reads its bedrooms' raw documents (room30, room states) without naming them.
 import { type DayRecord, addDays, bucketKeys, bucketLabel, minusYears, pctChange, total } from '../aggregate';
-import { activeRooms, datasetDoc, ds, onDatasetLoaded, rerender, state } from '../app';
+import { activeRooms, datasetDoc, ds, onDatasetLoaded, rerender, setState, state } from '../app';
 import { barChart, chartOf, cssVar, lineChart } from '../charts';
-import { effectiveMapping, isBedroom, lastNightDay, lastNights, nightVerdict, offsetStats, signed, summarizeNights } from '../comfort';
-import { alert, comparison, countedNote, howDetails, legend, listRow, periodBar, scheduleBand, seg, tile } from '../components';
+import { effectiveMapping, indoorModules, isBedroom, lastNightDay, lastNights, nightVerdict, offsetStats, signed, summarizeNights } from '../comfort';
+import { alert, alertHtml, comparison, countedNote, howDetails, legend, listRow, periodBar, scheduleBand, seg, tile } from '../components';
 import { type Dataset, loadRoom30, loadRoomState } from '../data';
 import type { DatasetDoc } from '../loader';
 import { BEDROOMS_ID } from '../household';
@@ -37,6 +37,7 @@ import { ABSENCE_MODES, type RoomState, type StateCell, bits, modeLabel } from '
 import { lazyCard } from '../lazy';
 import { lastReadingAfterStop, offlineText } from '../room-offline';
 import { offlineEstimate, offlineLine, offlineRun } from './offline-rooms';
+import { MATCH_DAYS, type ModuleMatch, declinedPairs, linkRoom, pairKey, trackingModules } from '../module-match';
 import { roomPerM2Text } from '../isolation';
 import { stoveRooms } from './wood-state';
 
@@ -76,15 +77,51 @@ function members(id: string): string[] {
   return raw.length ? raw : [id];
 }
 
+const heatedRooms = () => activeRooms().filter((r) => r.category === 'heating');
+/** Links in force: saved choices, else the suggestion by name (comfort.ts). */
+function links(): Map<string, string> {
+  const st = ds!.station;
+  return st ? effectiveMapping(heatedRooms(), st.modules, state.roomModuleMap) : new Map();
+}
 /** Station module linked to a heated room (saved choice, or the suggestion by name). */
 function stationKey(id: string): string | undefined {
+  return links().get(id);
+}
+
+/**
+ * #467: an unlinked indoor module that follows this room's radiator probe over the last
+ * MATCH_DAYS days (module-match.ts), unless that pair was declined on this device.
+ */
+function proposedModule(id: string): ModuleMatch | undefined {
   const st = ds!.station;
-  if (!st) return undefined;
-  return effectiveMapping(
-    activeRooms().filter((r) => r.category === 'heating'),
-    st.modules,
-    state.roomModuleMap,
-  ).get(id);
+  if (!st || !ds!.temps.has(id)) return undefined;
+  const map = links();
+  if (map.has(id)) return undefined;
+  const linked = new Set(map.values());
+  const rooms = heatedRooms()
+    .map((r) => r.id)
+    .filter((r) => !map.has(r) && ds!.temps.has(r));
+  const modules = indoorModules(st.modules).filter((k) => !linked.has(k));
+  const to = lastDay();
+  const no = declinedPairs(state.moduleMatchNo);
+  return trackingModules(ds!.temps, rooms, st.daily, modules, addDays(to, -(MATCH_DAYS - 1)), to).find(
+    (m) => m.room === id && !no.has(pairKey(m.room, m.module)),
+  );
+}
+
+function proposalAlert(m: ModuleMatch): string {
+  const name = ds!.station!.modules[m.module]?.name ?? '';
+  const data = `data-room="${esc(m.room)}" data-module="${esc(m.module)}"`;
+  return alertHtml(
+    'info',
+    `<p>Le module «\u00a0${esc(name)}\u00a0» de la station suit la sonde du radiateur de cette pièce sur ${esc(plural(m.n, 'jour'))}, à ${esc(
+      fmt1(Math.abs(m.offset)),
+    )}\u00a0°C ${m.offset >= 0 ? 'au-dessus' : 'au-dessous'}. Lié à la pièce, il donne sa température à la place de la sonde, placée contre le radiateur.</p>
+    <div class="controls"><button type="button" class="btn primary" data-piece="link-module" ${data}>Lier ce module à la pièce</button>
+    <button type="button" class="btn secondary" data-piece="decline-module" ${data}>Ne pas lier</button></div>`,
+    { id: 'piece-link' },
+    'Lier ce module à la pièce ?',
+  );
 }
 
 /** Daily mean temperature of a room: the station when a module is linked, else the radiator probe. */
@@ -232,6 +269,8 @@ export function renderPiece(view: HTMLElement, id: string) {
       ),
     );
   }
+  const proposal = heating && !group ? proposedModule(id) : undefined;
+  if (proposal) parts.push(proposalAlert(proposal));
   if (heating) parts.push(nowCard(room.name, ids, group, m, r30, rs, last));
   // #388: one period for everything below « Maintenant »
   parts.push(periodBar(seg('pieces', r.period, HOME_PERIODS, 'Période'), scopeTitle(r)));
@@ -606,6 +645,16 @@ function radiatorCard(id: string, ids: string[], rs: RoomState | null | undefine
 
 // ------------------------------------------------------------------ events
 export function handleClick(el: HTMLElement): boolean {
+  const { room, module } = el.dataset;
+  if (el.dataset.piece === 'link-module' && room && module) {
+    // #467: from now on the module's reading is the room's (measured(), effectiveMapping)
+    setState({ roomModuleMap: linkRoom(links(), heatedRooms().map((r) => r.id), room, module) });
+    return true;
+  }
+  if (el.dataset.piece === 'decline-module' && room && module) {
+    setState({ moduleMatchNo: [...declinedPairs(state.moduleMatchNo), pairKey(room, module)] });
+    return true;
+  }
   if (el.dataset.piece !== 'show-air') return false;
   airShown = true;
   rerender();
