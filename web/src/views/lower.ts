@@ -39,8 +39,10 @@ let persisted = true;
 let chosen: string | null = null; // marker day compared
 let bedroomsShown = false;
 let half: Room30 | null = null;
+let setupOpen = false; // stays unfolded once used (the card is drawn again at each change)
 onDatasetLoaded(() => {
   prefs = null;
+  setupOpen = false;
   persisted = true;
   chosen = null;
   half = null;
@@ -66,10 +68,22 @@ export async function fillLower(showBedrooms: boolean) {
   if (ds === d) draw();
 }
 
+/** The control of the card that has the focus, as a selector to find it again after a redraw. */
+function focusedControl(): string | null {
+  const a = document.activeElement as HTMLElement | null;
+  if (!a || !a.closest('#lower-card')) return null;
+  if (a.id) return `#${a.id}`;
+  if (a.dataset.lowerRoom !== undefined) return `[data-lower-room="${CSS.escape(a.dataset.lowerRoom)}"]`;
+  return null;
+}
+
+/** Draw the card again; the control in use keeps the focus (the redraw can come after an await). */
 function draw() {
   const el = document.getElementById('lower-zone') ?? document.getElementById('lower-card');
   if (!el || !ds) return;
+  const sel = focusedControl();
   el.outerHTML = html(card());
+  if (sel) (document.querySelector(`#lower-card ${sel}`) as HTMLElement | null)?.focus({ preventScroll: true });
 }
 
 const rooms = () => ds!.meta.rooms.filter((r) => r.category === 'heating' && r.id !== BEDROOMS_ID);
@@ -144,18 +158,19 @@ function head(probe: boolean): string[] {
 function card(): string {
   const p = prefs!;
   const top = `<div class="card-head"><h2>Niveau inférieur <small class="muted">chaleur partie, à froid égal</small></h2></div>`;
+  // the choice of rooms comes first, so that ticking one only changes what is BELOW it (the
+  // control stays under the finger, the page does not jump)
+  const setup = setupHtml(p);
   const masked = householdStatus().active || (!bedroomsShown && p.rooms.some((r) => isBedroom(roomName(r))));
   if (masked && p.rooms.length)
-    return `<section class="card" id="lower-card">${top}
+    return `<section class="card" id="lower-card">${top}${setup}
       <p class="hint muted">Le niveau inférieur compte une chambre : son détail est masqué par défaut, par respect pour ses occupants. Il reste affiché jusqu'au prochain verrouillage.</p>
       <button type="button" class="btn secondary" data-comfort="show-bedrooms">Afficher le détail des chambres</button></section>`;
-  const setup = setupHtml(p);
   if (!p.rooms.length)
-    return `<section class="card" id="lower-card">${top}
-      <p class="hint muted">Choisissez les pièces chauffées du niveau inférieur (une chambre, l'entrée près du garage…) : la carte met en regard la consommation de leurs radiateurs, la température de la chambre et celle du dehors, à froid égal, d'un hiver à l'autre et avant / après un changement (joints de porte, rideau).</p>
-      ${setup}</section>`;
+    return `<section class="card" id="lower-card">${top}${setup}
+      <p class="hint muted">Choisissez les pièces chauffées du niveau inférieur (une chambre, l'entrée près du garage…) : la carte met en regard la consommation de leurs radiateurs, la température de la chambre et celle du dehors, à froid égal, d'un hiver à l'autre et avant / après un changement (joints de porte, rideau).</p></section>`;
   if (!ds!.weather?.size)
-    return `<section class="card" id="lower-card">${top}<p class="hint muted">La comparaison à froid égal a besoin de la température extérieure (prochaine collecte).</p>${setup}</section>`;
+    return `<section class="card" id="lower-card">${top}${setup}<p class="hint muted">La comparaison à froid égal a besoin de la température extérieure (prochaine collecte).</p></section>`;
   const x = data(p);
   const probe = !!x.probe;
   const m = p.markers.find((k) => k.day === chosen) ?? p.markers[p.markers.length - 1] ?? null;
@@ -175,10 +190,10 @@ function card(): string {
       ]
     : seasons.map((s) => [`Hiver ${s.season.replace('-', '–')} <small class="muted">${kept(s.side)}</small>`, ...sideCells(s.side, probe)]);
   return `<section class="card" id="lower-card">${top}
+    ${setup}
     ${verdict}
     ${rows.length ? table(head(probe), rows) : '<p class="hint muted">Pas encore de jour de chauffe pour ces pièces.</p>'}
     ${markersHtml(p)}
-    ${setup}
     ${persisted ? '' : '<p class="hint muted">Ces saisies dureront jusqu\'au verrouillage : reconnectez-vous avec la phrase de passe pour qu\'elles soient enregistrées (chiffrées) sur cet appareil.</p>'}
     <details class="table-details"><summary>Hypothèses</summary>
       <ul class="hint">
@@ -240,7 +255,7 @@ function markersHtml(p: LowerPrefs): string {
  */
 function setupHtml(p: LowerPrefs): string {
   const free = freeModules();
-  return `<details class="lower-setup" id="lower-setup"${p.rooms.length ? '' : ' open'}><summary>Pièces et sonde du niveau inférieur${p.rooms.length ? ` · ${p.rooms.length}` : ''}</summary>
+  return `<details class="lower-setup" id="lower-setup"${!p.rooms.length || setupOpen ? ' open' : ''}><summary>Pièces et sonde du niveau inférieur${p.rooms.length ? ` · ${p.rooms.length}` : ''}</summary>
     <fieldset class="lower-rooms"><legend>Pièces chauffées du niveau inférieur</legend>
       ${rooms()
         .map((r) => switchField(r.name, p.rooms.includes(r.id), { 'data-lower-room': r.id }))
@@ -256,12 +271,21 @@ function setupHtml(p: LowerPrefs): string {
   </details>`;
 }
 
+/** Draw at once (the control stays in place), then store, then draw again with the nights. */
 async function save(next: LowerPrefs, keepSetupOpen = false) {
+  const d = ds!;
   prefs = next;
-  persisted = await saveNote(NOTE, ds!.source, ds!.key, next);
-  if (next.rooms.length && !half && (ds!.meta.room30_years ?? []).length) half = await loadRoom30(ds!);
+  if (keepSetupOpen) setupOpen = true;
   draw();
-  if (keepSetupOpen) document.getElementById('lower-setup')?.setAttribute('open', '');
+  const ok = await saveNote(NOTE, d.source, d.key, next);
+  if (ds !== d) return; // #247: never another dataset's card
+  const more = next.rooms.length && !half && (d.meta.room30_years ?? []).length;
+  if (more) {
+    const h = await loadRoom30(d);
+    if (ds !== d) return;
+    half = h;
+  }
+  if (more || ok !== persisted) (persisted = ok), draw();
 }
 
 // #257: the controls of the card, dispatched by main.ts.
