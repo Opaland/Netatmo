@@ -87,6 +87,9 @@ export interface BeforeAfter {
   change: number | null;
 }
 
+/** A heating day: outdoor mean under this (°C), as the signature (analysis.ts fitSeason). */
+export const HEATING_DAY_BELOW = 15;
+
 /** Below this many heating days on one side, its line means nothing. */
 export const MIN_SIDE_DAYS = 20;
 
@@ -105,7 +108,7 @@ function side(heat: Map<string, number>, weather: Weather, from: string, to: str
     days++;
     points.push([w[2], k, d]);
   }
-  const heatingDays = points.filter(([t, k]) => t < 15 && k > 0.2).length;
+  const heatingDays = points.filter(([t, k]) => t < HEATING_DAY_BELOW && k > 0.2).length;
   if (heatingDays < MIN_SIDE_DAYS) return null;
   return {
     from,
