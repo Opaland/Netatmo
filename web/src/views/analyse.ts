@@ -22,6 +22,9 @@ import { windBlock } from './windsig';
 import { drawWaterHeater, hcAlerts, waterHeaterCard } from './waterheater';
 import { html } from '../trusted';
 import { tenant, tenantNote } from '../tenant'; // S-12.6: works are the owner's business
+import { withWood } from '../isolation';
+import { verdictWood } from './wood-state';
+import { fillPerM2, isolationBlock } from './isolation';
 
 // #247: documents loaded on demand for the dataset shown; a late result of another dataset is dropped.
 // #251: 12 months (water heater), 90 days (profile)
@@ -108,6 +111,10 @@ export function renderAnalyse(view: HTMLElement, records: DayRecord[], part: Ana
   const last = lastDay();
   const tempRooms = activeRooms().filter((r) => ds!.temps.has(r.id));
   const tempRoom = part === 'temps' ? (tempRooms.find((r) => r.id === room)?.id ?? null) : null;
+  // #460: the signature counts the stove's wood by default (one split of the wood: verdictWood);
+  // the electricity alone stays one touch away
+  const sigWood = part === 'signature' ? verdictWood(state.cat, state.rooms) : null;
+  const sigWithWood = !!sigWood && state.sigEnergy !== 'elec';
   const cards: [AnalysePart, () => string][] = [
     ['ia', () => (ds!.insights ? '<section class="card insight" id="insight-card" aria-busy="true"><h2>Analyse du mois</h2></section>' : '<section class="card"><p class="hint muted">Analyse du mois : à activer dans ⚙ Paramètres → Sources de données (clé Anthropic).</p></section>')],
     [
@@ -117,10 +124,12 @@ export function renderAnalyse(view: HTMLElement, records: DayRecord[], part: Ana
           ? `<section class="card" id="sig-card">
     <div class="card-head"><h2>Chauffage selon le froid dehors</h2><span class="card-period">${esc(`3 dernières saisons (sept. – août, au ${dayShort(last)})`)}</span></div>
     <p class="hint muted">Chaque point est un jour : le chauffage de la journée selon la température moyenne dehors${ds!.meta.weather_source === 'netatmo' ? ' (station Netatmo)' : ' (Open-Meteo)'}. La droite résume la saison : plus elle <strong>monte vite vers la gauche</strong>, plus la maison consomme pour chaque degré de froid ; là où elle touche zéro, c'est la température à partir de laquelle vous ne chauffez plus.</p>
+    ${sigWood ? seg('sigEnergy', sigWithWood ? 'wood' : 'elec', [['wood', 'Électricité + bois'], ['elec', 'Électricité seule']], 'Chauffage compté') : ''}
     <div class="chart tall" id="sig-chart" role="img" aria-label="Chauffage de chaque jour selon la température extérieure"></div>
     <div id="sig-table"></div>
+    <div id="sig-isolation"></div>
     <div id="sig-wind-zone"></div>
-    ${countedHtml(true)}
+    ${countedHtml(true, sigWithWood ? 'bois du poêle compris, réparti selon les degrés-jours' : '')}
   </section>
   <section class="card" id="indoor-sig" hidden></section>`
           : `<section class="card"><h2>Chauffage selon le froid dehors</h2><p class="hint muted">Disponible dès que la collecte a récupéré la météo (prochaine collecte).</p></section>`,
@@ -173,7 +182,8 @@ export function renderAnalyse(view: HTMLElement, records: DayRecord[], part: Ana
   // without heating left out; a season still too short is dashed and called « provisoire »)
   if (ds!.weather && has('sig-chart')) {
     const exclude = judgedOut(ds!.records, '0000-01-01', last); // #394: cut days too
-    const days = signatureDays(records, ds!.weather, ds!.station ?? null, null, exclude);
+    const both = withWood(records, sigWood);
+    const days = signatureDays(sigWithWood ? both : records, ds!.weather, ds!.station ?? null, null, exclude);
     const sigs = seasonSignatures(days).slice(-3);
     const cur = Number(seasonOf(last).slice(0, 4));
     scatterChart(document.getElementById('sig-chart')!, {
@@ -195,6 +205,12 @@ export function renderAnalyse(view: HTMLElement, records: DayRecord[], part: Ana
       }),
     });
     document.getElementById('sig-table')!.innerHTML = html(signatureTable(sigs, cur, false));
+    // #460: the insulation, judged on the electricity + wood whatever the chart shows
+    const whole = state.rooms === null && state.cat !== 'water_heater';
+    const judged = sigWithWood || !sigWood ? sigs : seasonSignatures(signatureDays(both, ds!.weather, ds!.station ?? null, null, exclude)).slice(-3);
+    const alone = sigWood ? (sigWithWood ? seasonSignatures(signatureDays(records, ds!.weather, ds!.station ?? null, null, exclude)).slice(-3) : sigs) : null;
+    document.getElementById('sig-isolation')!.innerHTML = html(isolationBlock(whole, judged, alone, cur, PROVISIONAL_DAYS));
+    if (whole) fillPerM2(records, sigWood, judgedOut(records, addDays(minusYears(last), 1), last).size);
     // S-3.12 (#221): the wind and the rain, on the same days
     document.getElementById('sig-wind-zone')!.innerHTML = html(windBlock(days, ds!.wind, ds!.rain, cur));
   }
@@ -243,7 +259,7 @@ export function renderAnalyse(view: HTMLElement, records: DayRecord[], part: Ana
   drawSetpoint(records);
   // S-2.15: heat pump estimate, lazy module
   if (has('hp-card')) void lazyCard(() => import('./heatpump'), (m) => m.mountHeatPump(document.getElementById('hp-card'), records), { zone: 'hp-card', what: 'Pompe à chaleur' });
-  drawIndoorSignature(records);
+  drawIndoorSignature(sigWithWood ? withWood(records, sigWood) : records); // #460: the same heating as the signature above
   // S-9.6: « volets fermés » journal, lazy module
   if (has('shutters-zone')) {
     void lazyCard(() => import('./shutters'), (m) => {

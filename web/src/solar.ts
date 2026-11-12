@@ -89,6 +89,41 @@ export function parseLocation(v: unknown): HomeLocation | null {
   return { v: 1, lat: round(lat, p), lon: round(lon, p), precision: p, commune, roofs: roofs as Roof[] };
 }
 
+/** #462: the form « Localisation et toits » as typed, kept encrypted on this device until saved or cancelled. */
+export interface LocationDraft {
+  commune: string;
+  lat: string;
+  lon: string;
+  precision: string;
+  roofs: Record<keyof Roof, string>[];
+}
+export const ROOF_FIELDS = ['name', 'azimuth', 'tilt', 'kwc', 'loss'] as const satisfies readonly (keyof Roof)[];
+const FIELD_MAX = 40; // a number typed in a field, with room to spare
+const typedText = (v: unknown, max: number): string => (typeof v === 'string' ? Array.from(v).slice(0, max).join('') : '');
+
+/**
+ * A draft read back (decrypted from this device), or null when it is not one. The fields stay as
+ * typed (« 45, » included), cut at their length; at least one roof, at most MAX_ROOFS.
+ */
+export function parseLocationDraft(v: unknown): LocationDraft | null {
+  if (!isObj(v)) return null;
+  const rawRoofs = own(v, 'roofs');
+  if (!Array.isArray(rawRoofs)) return null;
+  const roofs = rawRoofs.slice(0, MAX_ROOFS).map((r) => {
+    const o = isObj(r) ? r : {};
+    return Object.fromEntries(ROOF_FIELDS.map((k) => [k, typedText(own(o, k), k === 'name' ? NAME_MAX : FIELD_MAX)])) as Record<keyof Roof, string>;
+  });
+  if (!roofs.length) roofs.push(Object.fromEntries(ROOF_FIELDS.map((k) => [k, ''])) as Record<keyof Roof, string>);
+  const p = own(v, 'precision');
+  return {
+    commune: typedText(own(v, 'commune'), COMMUNE_MAX),
+    lat: typedText(own(v, 'lat'), FIELD_MAX),
+    lon: typedText(own(v, 'lon'), FIELD_MAX),
+    precision: p === '1' || p === '2' || p === '3' ? p : '2',
+    roofs,
+  };
+}
+
 /** The JSON written to the secret: fixed key order, so that two equal locations compare equal. */
 export function locationJson(l: HomeLocation): string {
   return JSON.stringify({

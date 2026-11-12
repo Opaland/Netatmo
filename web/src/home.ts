@@ -7,7 +7,8 @@ import { type DayRecord, addDays, bucketKeys, minusYears, pctChange } from './ag
 import { type Verdict, type Weather, verdict } from './analysis';
 import { MONTHS_LONG, MONTHS_SHORT, PERIOD, dayShort, seasonLabel, signedPct, withUnit } from './glossary';
 import { daysBetween } from './periods';
-import { woodIn, woodRecords } from './wood';
+import { woodIn } from './wood';
+import { withWood } from './isolation';
 
 export type HomePeriod = 'month' | 'season' | '12m' | 'year';
 /** The segmented control of Accueil, in its order (the swipe on the header follows it). */
@@ -159,7 +160,7 @@ export function heatVerdict(
 ): HeatVerdict {
   const first = records.reduce((a, r) => (!a || r.day < a ? r.day : a), '');
   const wood = daily ? woodIn(daily, from, to) : null;
-  const counted = daily ? [...records, ...woodRecords(daily, first)] : records;
+  const counted = withWood(records, daily); // #460: the one rule of the wood as day records
   const v = verdict(counted, from, to, weather, first);
   const m = v ? moneyVerdict(v, cost === null ? null : cost + (wood?.eur ?? 0)) : null;
   return { v, m, wood, records: counted };
