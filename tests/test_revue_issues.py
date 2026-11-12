@@ -79,3 +79,46 @@ def test_cli_check_mode(tmp_path, capsys):
     assert "1 majeure" in capsys.readouterr().out
     p.write_text("{", encoding="utf-8")
     assert ri.main([str(p)]) == 1
+
+
+# #365: the review of the promises (docs/revues-agents/revue-promesses.md)
+def promise(**kw):
+    p = {"texte": "jamais leurs noms", "emplacement": "web/src/legal.ts:100", "classement": "tenue", "preuve": "test"}
+    p.update(kw)
+    return p
+
+
+def promises_doc(promises, *findings):
+    d = doc(*findings, kind="promesses")
+    d["promesses"] = promises
+    return d
+
+
+def test_promises_classified_and_the_ones_not_kept_are_findings():
+    f = finding(titre="Jours inhabituels non dits", categorie="ia")
+    d = ri.validate(promises_doc([promise(), promise(classement="non tenue", constat="Jours inhabituels non dits")], f))
+    assert [p["classement"] for p in d["promesses"]] == ["tenue", "non tenue"]
+    assert ri.issue_labels("promesses", d["constats"][0]) == ["revue-code", "gravité: majeure", "promesses"]
+    assert ri.issue_title("promesses", d["constats"][0]) == "Revue promesses · Jours inhabituels non dits"
+
+
+@pytest.mark.parametrize(
+    "promises",
+    [
+        None,
+        [],
+        [promise(classement="peut-être")],
+        [promise(preuve="")],
+        [promise(classement="non tenue")],  # no finding named
+        [promise(classement="non tenue", constat="Un autre titre")],  # a finding that does not exist
+    ],
+)
+def test_invalid_promises_are_refused(promises):
+    with pytest.raises(ri.Invalid):
+        ri.validate(promises_doc(promises, finding(categorie="ia")))
+
+
+def test_promises_categories_and_the_code_review_ignores_them():
+    with pytest.raises(ri.Invalid):
+        ri.validate(promises_doc([promise()], finding(categorie="justesse")))
+    assert "promesses" not in ri.validate(doc(finding()))

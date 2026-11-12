@@ -1,8 +1,9 @@
 """S-1.16: turn the findings of a review agent into GitHub issues.
 
-Reads the JSON written by an agent following docs/revues-agents/revue-code.md or
-revue-design.md, checks it, and (with --create) opens one issue per finding, labelled
-`revue-code` or `revue-design`, `gravité: <level>`, and `design` for a design review.
+Reads the JSON written by an agent following docs/revues-agents/revue-code.md,
+revue-design.md or revue-promesses.md (#365), checks it, and (with --create) opens one issue per
+finding, labelled `revue-code` or `revue-design`, `gravité: <level>`, `design` for a design review
+and `promesses` for a review of the promises (whose issues are `revue-code` ones).
 Findings whose title is already an open issue are skipped, so a re-run does not duplicate.
 
     python scripts/revue_issues.py revue-constats.json            # check and print (default)
@@ -25,10 +26,15 @@ LEVELS = ("critique", "majeure", "mineure", "suggestion")
 CATEGORIES = {
     "code": ("justesse", "sécurité", "tests", "performance", "simplicité", "documentation"),
     "design": ("hiérarchie", "lisibilité", "cohérence", "accessibilité", "mobile", "langage"),
+    "promesses": ("réseau", "ia", "appareil", "chiffrement", "journaux", "texte"),
 }
+# #365: every promise read is classified; the ones not kept become findings (issues)
+VERDICTS = ("tenue", "non tenue", "invérifiable")
+MAX_PROMISES = 200
 LABEL_COLOURS = {
     "revue-code": "1d76db",
     "revue-design": "c5def5",
+    "promesses": "5319e7",
     "gravité: critique": "b60205",
     "gravité: majeure": "d93f0b",
     "gravité: mineure": "fbca04",
@@ -60,7 +66,7 @@ def validate(doc: dict) -> dict:
         raise Invalid("le document n'est pas un objet JSON")
     kind = doc.get("revue")
     if kind not in CATEGORIES:
-        raise Invalid("« revue » doit valoir « code » ou « design »")
+        raise Invalid("« revue » doit valoir « code », « design » ou « promesses »")
     findings = doc.get("constats")
     if not isinstance(findings, list):
         raise Invalid("« constats » doit être une liste")
@@ -95,12 +101,46 @@ def validate(doc: dict) -> dict:
             raise Invalid(f"constat {i} : {err}") from None
     order = {lvl: n for n, lvl in enumerate(LEVELS)}
     out.sort(key=lambda f: order[f["gravite"]])
-    return {
+    result = {
         "revue": kind,
         "version": _text(doc, "version", 20, required=False) or "?",
         "perimetre": _text(doc, "perimetre", 200, required=False),
         "constats": out,
     }
+    if kind == "promesses":
+        result["promesses"] = _promises(doc.get("promesses"), {f["titre"] for f in out})
+    return result
+
+
+def _promises(items: object, titles: set[str]) -> list[dict]:
+    """Each promise classified with its proof; a promise not kept names the finding that reports it."""
+    if not isinstance(items, list) or not items:
+        raise Invalid("« promesses » doit lister chaque promesse relevée")
+    if len(items) > MAX_PROMISES:
+        raise Invalid(f"trop de promesses ({len(items)} > {MAX_PROMISES})")
+    out = []
+    for i, p in enumerate(items, 1):
+        try:
+            if not isinstance(p, dict):
+                raise Invalid("promesse qui n'est pas un objet")
+            verdict = p.get("classement")
+            if verdict not in VERDICTS:
+                raise Invalid(f"classement « {verdict} » inconnu")
+            item = {
+                "texte": _text(p, "texte", 400),
+                "emplacement": _text(p, "emplacement", 200),
+                "classement": verdict,
+                "preuve": _text(p, "preuve"),
+            }
+            if verdict == "non tenue":
+                title = " ".join(_text(p, "constat", MAX_TITLE).split())
+                if title not in titles:
+                    raise Invalid(f"non tenue sans constat « {title} » dans « constats »")
+                item["constat"] = title
+            out.append(item)
+        except Invalid as err:
+            raise Invalid(f"promesse {i} : {err}") from None
+    return out
 
 
 def issue_title(kind: str, f: dict) -> str:
@@ -108,9 +148,9 @@ def issue_title(kind: str, f: dict) -> str:
 
 
 def issue_labels(kind: str, f: dict) -> list[str]:
-    labels = [f"revue-{kind}", f"gravité: {f['gravite']}"]
-    if kind == "design":
-        labels.append("design")
+    labels = [f"revue-{'code' if kind == 'promesses' else kind}", f"gravité: {f['gravite']}"]
+    if kind in ("design", "promesses"):
+        labels.append(kind)
     return labels
 
 
@@ -142,8 +182,9 @@ def open_titles(repo: str) -> set[str]:
 
 
 def ensure_labels(repo: str, kind: str) -> None:
+    wanted = {lbl for lvl in LEVELS for lbl in issue_labels(kind, {"gravite": lvl})}
     for name, colour in LABEL_COLOURS.items():
-        if name.startswith("revue-") and name != f"revue-{kind}":
+        if name not in wanted:
             continue
         subprocess.run(["gh", "label", "create", name, "-R", repo, "--color", colour, "--force"], check=True)
 
@@ -162,6 +203,10 @@ def main(argv: list[str] | None = None) -> int:
     kind = doc["revue"]
     counts = {lvl: sum(f["gravite"] == lvl for f in doc["constats"]) for lvl in LEVELS}
     print(f"Revue {kind} {doc['version']} : " + ", ".join(f"{n} {lvl}" for lvl, n in counts.items()))
+    if kind == "promesses":
+        print(
+            "Promesses : " + ", ".join(f"{sum(p['classement'] == v for p in doc['promesses'])} {v}" for v in VERDICTS)
+        )
     if not args.create:
         for f in doc["constats"]:
             print(f"- [{f['gravite']}] {issue_title(kind, f)}")
