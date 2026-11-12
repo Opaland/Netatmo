@@ -19,7 +19,7 @@ import {
   setToken,
   invalidFields,
 } from '../settings';
-import { contractInfo, esc, longDate, table } from '../ui';
+import { cardTable, contractInfo, esc, longDate, table } from '../ui';
 import { agreePlurals, localDateTime, localDay } from '../glossary';
 import { html } from '../trusted';
 import { lazyAction, lazyCard } from '../lazy';
@@ -139,9 +139,9 @@ export function renderSettings(view: HTMLElement, section: SettingsSection) {
     </div>
   </section>`;
   const publicCard = `
-  <section class="card">
+  <section class="card" id="public-card" data-whole>
     <div class="card-head"><h2>Ce qui est public, ce qui part chez des tiers</h2></div>
-    ${table(
+    ${cardTable(
       ['Donnée', 'Où', 'Qui peut la lire'],
       [
         ['Consommation, météo, station, Linky, analyse IA', 'Dépôt GitHub public (dossier data/)', 'Personne sans votre phrase de passe : fichiers chiffrés AES-256'],
@@ -159,23 +159,23 @@ export function renderSettings(view: HTMLElement, section: SettingsSection) {
           'Vous, et tout script de la même origine : sur &lt;compte&gt;.github.io, c\'est aussi chaque autre site GitHub Pages du compte',
         ],
       ],
-      99,
+      'Données : où elles sont, qui peut les lire',
     )}
     ${sharedOriginWarning(location.hostname)}
     <h3>Services tiers contactés par la collecte</h3>
-    ${table(
+    ${cardTable(
       ['Service', 'Pour quoi', 'Ce qui lui est envoyé'],
       [
         ['Intuis (Muller)', 'Consommation des radiateurs et du chauffe-eau', 'Vos identifiants Intuis'],
         ['Netatmo', 'Station météo (si activée)', 'Votre jeton Netatmo'],
-        ['Conso API (conso.boris.sh) → Enedis', 'Linky (si activé)', 'Votre jeton et votre PDL'],
-        ['Shelly Cloud (*.shelly.cloud)', 'Compteurs des prises Shelly (si activé)', 'Votre clé cloud Shelly'],
+        ['Conso API (conso.<wbr>boris.<wbr>sh) → Enedis', 'Linky (si activé)', 'Votre jeton et votre PDL'],
+        ['Shelly Cloud (*.shelly.<wbr>cloud)', 'Compteurs des prises Shelly (si activé)', 'Votre clé cloud Shelly'],
         ['Open-Meteo', 'Météo de la commune', 'Coordonnées arrondies à ~1 km'],
         ['PVGIS (Commission européenne)', 'Production solaire de vos toits (si localisation saisie)', 'Coordonnées arrondies à ~1 km, orientation et pente des toits'],
         ['Anthropic (Claude)', 'Analyse du mois (si activée)', 'Totaux du mois et au plus cinq jours inhabituels, pièces sous pseudonyme (fenêtres ouvertes et boost : chambres regroupées)'],
         ['CRE, api-couleur-tempo.fr', 'Tarifs et couleurs Tempo publics', 'Rien de personnel'],
       ],
-      99,
+      'Services tiers : pour quoi, ce qui leur est envoyé',
     )}
   </section>`;
   const inviteCard = `
