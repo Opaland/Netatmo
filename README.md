@@ -321,6 +321,16 @@ printemps : le relevé remplace l'hypothèse et le reste passe à la saison suiv
 brûle d'abord). Enregistré pour le foyer dans le **secret** du dépôt `WOOD_JSON`, scellé dans
 le navigateur comme la localisation, recopié chiffré par la collecte ; le journal public n'en dit rien.
 
+**Flambées du poêle.** Chaque nuit, la collecte cherche les soirs où le poêle a chauffé dans les
+relevés à la demi-heure : après le coucher du soleil, au moins deux pièces voisines se réchauffent alors
+que leur radiateur ne consomme rien, sans redoux dehors (`collector/stove.py`). Les seuils sont réglés
+sur la démo, d'après ce que vous avez observé (+1 à +2 °C dans deux chambres entre 19 h et 23 h), et
+dits dans le code ; *Historique → Flambées du poêle* montre le calendrier (heure de début, durée
+estimée, pièces témoins, netteté) et pose la question « poêle allumé ce soir ? » : vos réponses restent
+chiffrées sur l'appareil et disent combien de soirs la détection a vus juste. Le bois du poêle est alors
+réparti sur ces soirs plutôt que sur les degrés-jours (les jours non lisibles gardent les degrés-jours).
+Rien de tout cela n'entre dans le journal public.
+
 **Radiateur arrêté ou retiré.** Une pièce chauffée autrement dont les radiateurs sont coupés ou
 démontés se déclare dans ⚙ Paramètres → Mon logement → *Radiateurs arrêtés volontairement*, avec une
 date et un motif (poêle, radiateurs retirés, autre chauffage, pièce inoccupée, autre). À partir de cette

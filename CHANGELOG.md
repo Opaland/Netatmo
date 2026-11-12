@@ -2,6 +2,16 @@
 
 ## v1.8 — en cours
 
+- **Flambées du poêle** (#469) : la collecte lit chaque nuit, dans les relevés à la demi-heure, les
+  soirs où au moins deux pièces voisines du poêle se réchauffent radiateur à 0 W, après le coucher
+  du soleil et sans redoux (`collector/stove.py`, fonction pure, `meta.stove_fires` chiffré, rien
+  dans le journal). Seuils calibrés sur la démo (un poêle fictif et deux chambres voisines, d'après
+  les chiffres du propriétaire), écrits dans le code avec la façon de les ajuster sur de vraies
+  données, et tenus par `tests/test_flambees.py`. Historique › « Flambées du poêle » (chargée à la
+  demande) : calendrier, heure de début, durée estimée, pièces témoins, netteté, et « poêle allumé ce
+  soir ? oui / non » gardé chiffré sur l'appareil, qui donne la confiance. Le bois du poêle est
+  réparti sur les soirs de flambée (au prorata de leur durée) dans les jours lisibles, les
+  degrés-jours ailleurs ou sans détection : toujours la seule répartition (`woodDaily`).
 - **Bois : stock et bois réellement brûlé** (#465) : sous ⚙ Mon logement › Poêle à bois, « Bois
   réellement brûlé (facultatif) » note, par saison, les stères brûlés ou le stock restant au
   printemps ; le relevé remplace l'hypothèse « tout brûlé », et ce qui reste passe à la saison

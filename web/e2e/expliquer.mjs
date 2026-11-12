@@ -195,6 +195,39 @@ try {
       check((await wide(page)) <= 1, `${name} : défilement horizontal sur Historique (${await wide(page)} px)`);
     }
 
+    // #469: the fires of the demo's stove (two bedrooms warming at 0 W), a calendar of its own
+    // under Historique, and « poêle allumé ce soir ? » kept on the device
+    {
+      await go(page, 'historique');
+      const link = page.locator('#history-more a[href="#historique-flambees"]');
+      check((await link.count()) === 1, `${name} : Historique sans le lien « Flambées du poêle »`);
+      await go(page, 'historique-flambees');
+      const card = page.locator('#fires-card');
+      const rows = await card.locator('[data-fire-day]').count();
+      check(rows >= 5, `${name} : flambées, ${rows} soir(s) listé(s) au lieu des soirs de la démo`);
+      const text = await card.innerText();
+      check(/\d+ soirs de flambée sur \d+ soirs lisibles/.test(text), `${name} : flambées, compte des soirs absent (« ${text.slice(0, 160)} »)`);
+      check(/Confiance : à établir/.test(text), `${name} : flambées, confiance non dite`);
+      check(/2 pièces témoins · (nette|à peine marquée)/.test(text), `${name} : flambées, pièces témoins ou netteté absentes`);
+      check(/à partir de \d+ h( 30)? · ≈ \d+ h/.test(text), `${name} : flambées, heure et durée absentes`);
+      check(!/Chambre|Cuisine/.test(text), `${name} : flambées, un nom de pièce affiché`);
+      await audit(page, `${name}/flambees`, enhanced);
+      check((await wide(page)) <= 1, `${name} : défilement horizontal sur Flambées (${await wide(page)} px)`);
+      if (name === 'clair') {
+        await card.locator('[data-fire-answer="yes"]').click();
+        await page.waitForSelector('#fires-card [data-fire-answer="yes"][aria-pressed="true"]', { timeout: 10000 }).catch(() => {});
+        check((await card.locator('[data-fire-answer="yes"]').getAttribute('aria-pressed')) === 'true', `${name} : flambées, « Oui » non retenu`);
+        check(await card.locator('[data-fire-answer="yes"]').evaluate((b) => b === document.activeElement), `${name} : flambées, focus perdu après « Oui »`);
+        // kept encrypted on the device: still there after leaving and coming back
+        await go(page, 'historique');
+        await go(page, 'historique-flambees');
+        check((await page.locator('#fires-card [data-fire-answer="yes"]').getAttribute('aria-pressed')) === 'true', `${name} : flambées, réponse perdue en revenant`);
+        await page.locator('#fires-card [data-fire-answer="none"]').click();
+        await page.waitForSelector('#fires-card [data-fire-answer="yes"][aria-pressed="false"]', { timeout: 10000 }).catch(() => {});
+      }
+      await page.screenshot({ path: `${OUT}/expliquer-${BROWSER}-${name}-flambees.png`, fullPage: true });
+    }
+
     // #460: the screens that judge the insulation count the stove's wood (the one split of #433)
     if (name === 'clair' || big) {
       await go(page, 'historique-froid');

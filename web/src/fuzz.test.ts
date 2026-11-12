@@ -29,6 +29,8 @@ import { HISTORY_PAGES, METER_PAGES, SETTINGS, TOOLS, parseRoute, routeKey } fro
 import { LOWER_KINDS, MAX_LOWER_MARKERS, MAX_LOWER_ROOMS, validLower } from './lower';
 import { lockNotice } from './session';
 import { readShellyPrefs } from './shelly-prefs';
+import { MAX_ANSWERS, isCovered, parseAnswers, parseFires } from './stove-fires';
+import { addDays } from './aggregate';
 import { INPUT_FIELDS, MAX_ROOFS, ROOF_FIELDS, parseLocation, parseLocationDraft, parsePvgisFile, parseSolarDoc, parseSolarInputs } from './solar';
 import { type VoletsDoc, evenings, loadNotes, recentFailures, shutterNames, summarize } from './shutters';
 import { readMark } from './storage';
@@ -348,6 +350,37 @@ describe('#359 fuzz : préférences relues de cet appareil', () => {
       for (const s of woodSeasons(w)) assert([s.steres, s.left, s.kwh, s.eur, s.short].every((v) => Number.isFinite(v) && v >= -1e-9), `saison ${s.season}`);
       assert(w.efficiency >= 10 && w.efficiency <= 100, 'rendement');
       assert(Object.keys(w.kwhPerStere).every((k) => Object.hasOwn(SPECIES, k)) && Object.values(w.kwhPerStere).every((v) => v >= 500 && v <= 3000), 'kWh par stère');
+    });
+  });
+
+  it('#469 flambées du poêle : jours réels, plages dans l’ordre, flambées dedans, nombres bornés', () => {
+    const day = (r: () => number) => (r() < 0.7 ? addDays('2026-01-01', Math.floor(r() * 60)) : pick(r, STRINGS));
+    const n = (r: () => number) => (r() < 0.2 ? anyValue(r) : r() < 0.6 ? Math.floor(r() * 60) : (r() - 0.3) * 10 ** Math.floor(r() * 4));
+    fuzz('parseFires', (r) => {
+      const raw =
+        r() < 0.3
+          ? anyValue(r)
+          : {
+              covered: r() < 0.2 ? anyValue(r) : Array.from({ length: Math.floor(r() * 8) }, () => (r() < 0.2 ? anyValue(r) : [day(r), day(r)])),
+              fires: r() < 0.2 ? anyValue(r) : Object.fromEntries(Array.from({ length: Math.floor(r() * 20) }, () => [day(r), r() < 0.2 ? anyValue(r) : [n(r), n(r), n(r), n(r)]])),
+            };
+      const f = parseFires(raw);
+      if (!f) return;
+      let prev = '';
+      for (const [a, b] of f.covered) {
+        assert(DAY.test(a) && DAY.test(b) && a <= b && a > prev, `plage ${a} → ${b}`);
+        prev = b;
+      }
+      for (const [d, x] of f.fires) {
+        assert(DAY.test(d) && isCovered(f, d), `jour ${d}`);
+        assert(Number.isInteger(x.start) && x.start >= 0 && x.start <= 47 && x.slots >= 1 && x.slots <= 48 && x.witnesses >= 1 && x.rise >= 0 && x.rise <= 40, 'valeurs');
+      }
+    });
+    fuzz('parseAnswers', (r) => {
+      const raw = r() < 0.3 ? anyValue(r) : Object.fromEntries(Array.from({ length: Math.floor(r() * 30) }, () => [day(r), r() < 0.7 ? r() < 0.5 : anyValue(r)]));
+      const a = parseAnswers(raw);
+      assert(a.size <= MAX_ANSWERS, 'trop de réponses');
+      for (const [d, v] of a) assert(DAY.test(d) && new Date(`${d}T00:00:00Z`).toISOString().startsWith(d) && typeof v === 'boolean', `réponse ${d}`);
     });
   });
 

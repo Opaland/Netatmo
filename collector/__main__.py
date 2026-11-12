@@ -639,6 +639,9 @@ def cmd_sync(s: Settings, args: argparse.Namespace, backfill: bool = False) -> N
     wood = wood_config()
     if wood is not None or household_setting_set("WOOD_JSON"):
         extra["wood"] = wood or {"purchases": []}  # #366: the stove's wood, set from ⚙ Mon logement
+    fires = _stove_fires(store, home, stopped)
+    if fires:
+        extra["stove_fires"] = fires  # #469: encrypted meta only, never a line of the log
     cold = cold_config(_warn)
     if cold:
         extra["cold_alert"] = cold
@@ -653,6 +656,27 @@ def cmd_sync(s: Settings, args: argparse.Namespace, backfill: bool = False) -> N
     _job_summary(store, syncer, changed, rs_rows)
     if _flag("STATION_INVENTORY"):
         _station_inventory(kept.get("station"))
+
+
+def _stove_fires(store: Store, home, stopped: list[dict]) -> dict | None:
+    """#469: the evenings the stove burnt, read in the per-room half hours (collector/stove.py);
+    None without half hours. Every heated room may witness but those switched off on purpose."""
+    from .model import HEATING
+    from .stove import detect_fires, room30_of
+
+    if home is None:
+        return None
+    try:
+        r30 = room30_of(store)
+        if not r30:
+            return None
+        off = {s["room"] for s in stopped}
+        candidates = [r.id for r in home.rooms if r.category == HEATING and r.id not in off]
+        outdoor = store.doc("weather").get("outdoor", {}) or {}
+        return detect_fires(r30, candidates, outdoor, home.latitude, home.longitude, home.timezone)
+    except Exception as err:  # optional: never lose the night's data because of it
+        _warn(f"Flambées du poêle non lues ({type(err).__name__})")  # the type only, no value
+        return None
 
 
 def _note_failures(store: Store, sources: Sources, tz: str) -> None:

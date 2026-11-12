@@ -16,6 +16,7 @@ from .model import HEATING, WATER_HEATER
 from .roomstate import merge_snapshots, snapshot
 from .station import NOISY_ABOVE, aggregate_days, pressure_trends
 from .storage import KeyMap, Store
+from .stove import evening_from
 
 ROOMS = [
     ("r-salon", "Salon", HEATING, 2.2, 20.0),
@@ -523,12 +524,48 @@ def _plan(rid: str, d: date):
     return (lambda i: 14 <= i < 44), 0.35
 
 
+# #469: the kitchen's wood stove burns some evenings; the two bedrooms next to it warm up while their
+# radiators stop (warmer than the setpoint), as the owner reports it: +1 to +2 °C between about 19 h
+# and 23 h. Fictitious: lit more often the colder the day (°C, daily mean outdoors), never above 15.
+STOVE_NEIGHBOURS = ("r-ch1", "r-ch2")
+STOVE_ODDS = ((11.0, 0.8), (13.0, 0.5), (15.0, 0.2))
+STOVE_RISE = (1.0, 2.0)  # °C over the burn, per neighbour
+
+
+def stove_evenings(store: Store, today: date) -> dict[date, tuple[int, int, dict[str, float]]]:
+    """#469: the demo's fires: day -> (first half hour, half hours of burn, rise per neighbour)."""
+    rnd = random.Random(4690)  # separate stream: the rest of the demo stays identical
+    outdoor = store.doc("weather").get("outdoor", {})
+    out = {}
+    for back in range(ROOM30_DAYS, 0, -1):
+        d = today - timedelta(days=back)
+        mean = outdoor.get(d.isoformat(), [None, None, 99.0])[2]
+        odds = next((p for t, p in STOVE_ODDS if mean < t), 0.0)
+        lit, late, burn = rnd.random(), rnd.randint(0, 2), rnd.randint(6, 9)
+        rises = [rnd.uniform(*STOVE_RISE) for _ in STOVE_NEIGHBOURS]
+        if lit < odds and not is_offline(STOVE_NEIGHBOURS[0], d) and d >= STOPPED_ROOM[1]:
+            dusk = max(37, evening_from(d, None, None, "Europe/Paris"))  # lit at dusk, from 18 h 30
+            out[d] = (dusk + late, burn, dict(zip(STOVE_NEIGHBOURS, rises, strict=True)))
+    return out
+
+
+def stove_fires_of(store: Store, today: date) -> dict:
+    """#469: the fires the collection reads in the demo (collector/stove.py, as at night)."""
+    from .stove import detect_fires, room30_of
+
+    stopped = {s["room"] for s in STOPPED}
+    candidates = [r for r, _n, c, _w, _sp in ROOMS if c == HEATING and r not in stopped]
+    outdoor = store.doc("weather").get("outdoor", {})
+    return detect_fires(room30_of(store), candidates, outdoor, None, None, "Europe/Paris")
+
+
 def _room30(store: Store, today: date, office: dict[date, list[int]]) -> None:
     """S-1.26: six weeks of per-room half hours, consistent with the hourly energy of the demo:
     each hour split in two, HP / HC by the clock, a setpoint lowered by 2 °C at night, the measured
     temperature following it with some lag, and sharp drops when a window is opened (the office
     mornings of the room-state snapshots, the parents' bedroom aired at 7 h some days)."""
     rnd = random.Random(2630)  # separate stream: the rest of the demo stays identical
+    fires = stove_evenings(store, today)
     for back in range(ROOM30_DAYS, 0, -1):
         d = today - timedelta(days=back)
         day = d.isoformat()
@@ -549,12 +586,22 @@ def _room30(store: Store, today: date, office: dict[date, list[int]]) -> None:
                     open_slots = {14, 15}
                 cur = setpoint - 1.5
                 comfort, inertia = _plan(rid, d)
+                fire = fires.get(d) if rid in STOVE_NEIGHBOURS else None
                 for i in range(48):
                     sp[i] = AWAY_SETPOINT if away_mode(back, i // 2) else (setpoint if comfort(i) else setpoint - 2)
                     if i in open_slots:
                         cur -= rnd.uniform(1.2, 2.0)  # cold air: a fast fall the radiator cannot hold
+                        t[i] = cur
+                        continue
+                    noise = rnd.gauss(0, 0.08)  # the same draws, fire or not
+                    if fire and fire[0] <= i < fire[0] + fire[1]:
+                        cur += fire[2][rid] / fire[1] + noise / 4  # the stove's heat through the wall
+                        hp[i] = hc[i] = 0.0  # warmer than asked: the radiator stops
+                    elif fire and i >= fire[0] and cur > sp[i]:
+                        cur += (sp[i] - cur) * 0.08 + noise / 4  # cooling slowly, the radiator still off
+                        hp[i] = hc[i] = 0.0
                     else:
-                        cur += (sp[i] - cur) * inertia + rnd.gauss(0, 0.08)
+                        cur += (sp[i] - cur) * inertia + noise
                     t[i] = cur
             if not is_offline(rid, d):  # random draws above stay the same
                 room30.merge_day(store, rid, day, room30.to_days_from_columns(hp, hc, t, sp))
@@ -935,6 +982,7 @@ def generate(out_dir: Path, passphrase: str = "demo", start_year: int = 2022, to
         "sources": _sources(today),
         "stopped_rooms": STOPPED,
         "wood": WOOD,
+        "stove_fires": stove_fires_of(store, today),  # #469
     }
     store.replace(
         "insights",
