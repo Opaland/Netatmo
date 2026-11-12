@@ -12,6 +12,7 @@ import { BEDROOMS_ID } from '../household';
 import { loadNote, saveNote } from '../local-store';
 import { type Room30, unpack } from '../room30';
 import { html } from '../trusted';
+import { switchField } from '../components';
 import { esc, firstDay, lastDay, longDate, pct, stationMapping, table } from '../ui';
 import { fmt1 } from '../glossary';
 import { HEATING_DAY_BELOW, MIN_SIDE_DAYS } from '../works';
@@ -237,7 +238,7 @@ function setupHtml(p: LowerPrefs): string {
   return `<details class="table-details" id="lower-setup"${p.rooms.length ? '' : ' open'}><summary>Pièces et sonde du niveau inférieur${p.rooms.length ? ` · ${p.rooms.length}` : ''}</summary>
     <fieldset class="lower-rooms"><legend>Pièces chauffées du niveau inférieur</legend>
       ${rooms()
-        .map((r) => `<label class="check"><input type="checkbox" data-lower-room="${esc(r.id)}" ${p.rooms.includes(r.id) ? 'checked' : ''}> ${esc(r.name)}</label>`)
+        .map((r) => switchField(r.name, p.rooms.includes(r.id), { 'data-lower-room': r.id }))
         .join('')}
     </fieldset>
     ${
