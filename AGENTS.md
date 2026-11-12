@@ -85,9 +85,12 @@ crochet lancé avant la commande. Ne jamais reconstruire pendant qu'une porte to
 
 ## 7. Définition de « fini »
 
-PROJET.md §6 (récit et version). Ce qui demande une preuve humaine (vérification sur les vraies
-données, démonstration sur téléphone) ne se ferme pas en prétendant l'avoir faite : le dire
-dans la PR.
+PROJET.md §6 (récit et version). À la fin de chaque version, revue par les 72 personas et revue design
+obligatoires, défauts bloquants corrigés avant la clôture, puis la version suivante démarre sans
+attendre de validation ; les choix de produit, de design et d'architecture restent au propriétaire
+sans bloquer l'enchaînement (PROJET.md §9, `docs/bmad/feuille-de-route.md`). Ce qui demande une
+preuve humaine (vérification sur les vraies données, démonstration sur téléphone) ne se ferme pas en
+prétendant l'avoir faite : le dire dans la PR.
 
 ## 8. Taille et chargement
 
