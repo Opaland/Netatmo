@@ -117,6 +117,39 @@ def _station_v16(store: Store, today: date, start: date) -> None:
     assert NOISY_ABOVE  # the demo counts hours above the same threshold as the collection
 
 
+# #467: a station module named « Grenier », put in the parents' bedroom some months ago and never
+# linked to it: it follows the radiator probe of that room, 1.5 °C above (the probe sits against the
+# radiator). The app proposes to link them.
+ATTIC_KEY, ATTIC_ROOM, ATTIC_DAYS, ATTIC_ABOVE = "m4", "r-ch1", 120, 1.5
+
+
+def _station_attic(store: Store, today: date) -> None:
+    rnd = random.Random(467)  # separate stream: the rest of the demo stays identical
+    first = today - timedelta(days=ATTIC_DAYS)
+    d = first
+    while d < today:
+        probe = store.doc(str(d.year)).get("temps", {}).get(ATTIC_ROOM, {}).get(d.isoformat())
+        if probe:
+            tm = probe[0] + ATTIC_ABOVE + rnd.gauss(0, 0.12)
+            hum = 50 + rnd.gauss(0, 3)
+            row = [round(tm - 1.1, 1), round(tm + 1.3, 1), round(tm, 1), round(hum), round(820 + rnd.gauss(0, 90))]
+            store.put("station", "daily", ATTIC_KEY, d.isoformat(), row)
+            for h in range(24):
+                night = h < 7 or h >= 22
+                t = tm + (-0.5 if night else 0.35) + rnd.gauss(0, 0.2)
+                co2 = 520 + KIDS_CO2[h] * 0.7 + rnd.gauss(0, 50)
+                hour = f"{d.isoformat()}T{h:02d}"
+                store.put(
+                    f"{d.year}.station_h",
+                    "hourly",
+                    ATTIC_KEY,
+                    hour,
+                    [round(t, 1), round(hum + rnd.gauss(0, 2)), round(co2)],
+                )
+        d += timedelta(days=1)
+    aggregate_days(store, ATTIC_KEY, True, first, today)
+
+
 def is_lost(rid: str, d: date) -> bool:
     return any(a <= d <= b and (rooms is None or rid in rooms) for a, b, rooms in LOST) or is_offline(rid, d)
 
@@ -852,6 +885,7 @@ def generate(out_dir: Path, passphrase: str = "demo", start_year: int = 2022, to
     for key in ("m0", "m1", "m2", "m3"):
         aggregate_days(store, key, key != "m1", hourly_from, today)
     _station_v16(store, today, date(start_year, 1, 1))
+    _station_attic(store, today)
     store.set_top("weather", "source", "open-meteo")
     store.set_top("weather", "wind_source", "open-meteo")
     store.set_top(
@@ -862,11 +896,18 @@ def generate(out_dir: Path, passphrase: str = "demo", start_year: int = 2022, to
             "m1": {"name": "Extérieur", "type": "NAModule1", "indoor": False},
             "m2": {"name": "Chambre enfants", "type": "NAModule4", "indoor": True},
             "m3": {"name": "Cave", "type": "NAModule4", "indoor": True},
+            ATTIC_KEY: {"name": "Grenier", "type": "NAModule4", "indoor": True},
         },
     )
     # Stable module keys (collector/station.py): salted hashes of made-up ids, never the ids.
     keys = KeyMap(store, "station", "m")
-    for mid in ("70:ee:50:00:00:00", "02:00:00:00:00:01", "03:00:00:00:00:02", "03:00:00:00:00:03"):
+    for mid in (
+        "70:ee:50:00:00:00",
+        "02:00:00:00:00:01",
+        "03:00:00:00:00:02",
+        "03:00:00:00:00:03",
+        "03:00:00:00:00:04",
+    ):
         keys.key(mid)
     keys.save()
     rooms = [

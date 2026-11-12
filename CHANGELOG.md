@@ -23,6 +23,12 @@
   ouverts après une action, le rendement s'applique à la sortie du champ, avant le premier achat
   aussi. Surfaces : une valeur saisie ne reconstruit plus la grille, le focus passe au champ
   suivant. Parcours e2e `npm run e2e:logement` (Chromium et WebKit).
+- **Lier un module de la station qui suit une pièce** (#467) : un module intérieur non lié (un
+  « Cave » posé dans une chambre) dont la moyenne du jour suit celle de la sonde du radiateur sur
+  28 jours (10 jours au moins, corrélation ≥ 0,8, écart stable à 0,5 °C près et de 3 °C au plus) est
+  proposé sur la page de la pièce : « Lier ce module à la pièce ? ». Lié, sa mesure prime sur la
+  sonde ; « Ne pas lier » ne le repropose plus sur cet appareil. Règle et seuils dans
+  `web/src/module-match.ts` ; démo : un module « Grenier » posé dans la chambre parentale.
 - **Erreur du jeton GitHub** (#463) : le message nomme l'appel refusé et la permission qu'il
   demande (« droits insuffisants pour la lecture de la liste des secrets (HTTP 403) : … « Secrets »
   en lecture »), jamais une valeur, un nom de secret ni le dépôt ; il s'efface au début de chaque

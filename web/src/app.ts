@@ -70,6 +70,8 @@ export interface State {
   comfortThreshold: number; // °C, hours below it count as cold (S-11.3)
   /** S-3.8: Intuis room id -> station module key ('' = deliberately not linked). Shared later by S-12.1. */
   roomModuleMap: Record<string, string>;
+  /** #467: « room module » pairs whose proposed link was declined (read through declinedPairs). */
+  moduleMatchNo: string[];
   /**
    * S-12.2: bedrooms merged into « Chambres » on this device. Opt-in since v1.5 (the key was
    * `household`, on by default: renamed so that every device starts with the real per-room figures).
@@ -114,6 +116,7 @@ export const DEFAULT: State = {
   pinnedRoom: null,
   comfortThreshold: 19,
   roomModuleMap: {},
+  moduleMatchNo: [],
   groupBedrooms: false,
   theme: 'system',
   chart: CHART_DEFAULT,
