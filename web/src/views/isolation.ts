@@ -29,7 +29,8 @@ export function isolationBlock(whole: boolean, judged: SeasonSignatures[], alone
     // graded on the figure as written (rounded to 5 W/°C), so that « 100 W/°C » is never « très bien »
     const w = Math.round(wattsPerDegree(s.outdoor!.slope) / 5) * 5;
     const a = alone?.find((x) => x.season === s.season)?.outdoor;
-    wk = `<p id="iso-wk">Pertes du logement ≈ <strong>${nf0.format(w)} W/°C</strong>${alone ? ', électricité + bois' : ''} (${esc(label(s.season))}) : <strong>${gradeOf(w, W_PER_K_GRID)}</strong>.${
+    // #499: the words of the grid first (« bien isolé »), the figure and its unit in detail
+    wk = `<p id="iso-wk">Logement <strong>${gradeOf(w, W_PER_K_GRID)}</strong>, à titre indicatif (pertes ≈ ${nf0.format(w)} W/°C${alone ? ', électricité + bois' : ''}, ${esc(label(s.season))}).${
       a ? ` <span class="muted">Électricité seule : ${nf0.format(Math.round(wattsPerDegree(a.slope) / 5) * 5)} W/°C.</span>` : ''
     }</p>`;
   }

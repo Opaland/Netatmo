@@ -333,7 +333,7 @@ sur la démo, d'après ce que vous avez observé (+1 à +2 °C dans deux chambre
 dits dans le code ; *Historique → Flambées du poêle* montre le calendrier (heure de début, durée
 estimée, pièces témoins, netteté) et pose la question « poêle allumé ce soir ? » : vos réponses restent
 chiffrées sur l'appareil et disent combien de soirs la détection a vus juste. Le bois du poêle est alors
-réparti sur ces soirs plutôt que sur les degrés-jours (les jours non lisibles gardent les degrés-jours).
+réparti sur ces soirs plutôt que sur les degrés-jours (les jours où la détection ne peut pas juger gardent les degrés-jours).
 Rien de tout cela n'entre dans le journal public.
 
 **Radiateur arrêté ou retiré.** Une pièce chauffée autrement dont les radiateurs sont coupés ou
