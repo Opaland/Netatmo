@@ -9,12 +9,12 @@ const nf0 = new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 0 });
 export function weatherSourceLabel(source: string | null | undefined): string {
   return source === 'netatmo'
     ? 'module extérieur de la station Netatmo'
-    : 'service Open-Meteo (réanalyse ERA5, maille d’environ 25 km autour du logement)';
+    : 'service Open-Meteo, réanalyse ERA5 à maille d’environ 25 km autour du logement';
 }
 
 /** Base, method and source in one sentence. */
 export function djuMethodText(source: string | null | undefined): string {
-  return `base ${DJU_BASE} °C ; chaque jour, ${DJU_BASE} °C moins la moyenne du minimum et du maximum, zéro s’il fait plus doux (méthode de Météo-France) ; températures du ${weatherSourceLabel(source)}`;
+  return `base ${DJU_BASE} °C ; chaque jour, ${DJU_BASE} °C moins la moyenne du minimum et du maximum, zéro s’il fait plus doux, selon la méthode de Météo-France ; températures du ${weatherSourceLabel(source)}`;
 }
 
 /**

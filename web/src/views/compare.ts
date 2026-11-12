@@ -363,7 +363,7 @@ function yearsCard(records: DayRecord[], first: string, last: string, uncertain:
     ${caveats.length ? `<p class="hint muted">* À lire avec prudence :</p><ul class="hint muted caveats">${caveats.map((c) => `<li>${esc(c)}</li>`).join('')}</ul>` : ''}
     ${
       withCold
-        ? `<p class="hint muted">Le froid de chaque année se compte en ${term('dju')} : plus il y en a, plus il a fait froid (${esc(djuMethodText(ds!.meta.weather_source))}). Le chauffage par degré-jour compare le chauffage d’une année à l’autre sans l’effet de la météo : s’il baisse, le logement chauffe mieux.</p>`
+        ? `<p class="hint muted">Le froid de chaque année se compte en ${term('dju')} : plus il y en a, plus il a fait froid. Calcul : ${esc(djuMethodText(ds!.meta.weather_source))}. Le chauffage par degré-jour compare le chauffage d’une année à l’autre sans l’effet de la météo : s’il baisse, le logement chauffe mieux.</p>`
         : ''
     }
     <p class="hint muted">L'évolution de l'année en cours compare la même période des deux années : du 1er janvier au ${dayLong(last, false)}. Quand l'année précédente a commencé en cours d'année (début de la collecte), l'évolution porte sur la même période des deux années.</p>
