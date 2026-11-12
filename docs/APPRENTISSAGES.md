@@ -147,3 +147,23 @@ quand un outil la rend impossible à refaire.
   dans ce mode-là en CI (`SWEEP_SCOPE=ci`, `e2e/sweep.mjs`) ; ce qu'un graphique dessine se
   mesure sur ce que zrender a posé et se note sur l'élément (`data-legend-cut`, comme
   `data-axis-overlap-y`), pour que le balayage le lise.
+
+### A15 · 12/11/2026 — Des captures de référence « régénérées » dans la police du poste, pas celle de la CI (revue v1.8)
+
+- **Ce qui s'est passé** : les captures de `web/e2e/screenshots/` étaient rendues avec la police
+  `sans-serif` du poste de travail (Inter), alors que la CI rend en DejaVu Sans ; les e2e ne
+  forcent DejaVu Sans que pour certaines mesures (A6). La revue v1.7 (#438) et #475 (120 captures)
+  ont ainsi commité des références qu'aucun runner ne produit. Rien ne pouvait le voir : les
+  captures sont des artefacts, pas des comparaisons.
+- **Conduite** : une porte qui régénère les références tourne avec la police de la CI imposée au
+  système (fichier `FONTCONFIG_FILE` qui écarte les autres polices et met DejaVu Sans pour
+  `system-ui` et `sans-serif`), et `fc-match sans-serif` se vérifie avant de committer des captures.
+
+### A16 · 12/11/2026 — Un invariant borné laissait passer le cas le plus exposé (revue v1.8)
+
+- **Ce qui s'est passé** : l'invariant « mot-coupe » du balayage ne regardait que les mots de 2 à
+  12 lettres. « thermodynamique » (15), coupé au milieu dans le titre du simulateur (#496), et
+  « autoconsommation » (16) à 200 % passaient : les mots longs sont justement ceux qui ne tiennent
+  pas. Vus sur une capture, pas par la suite verte.
+- **Conduite** : la borne d'un invariant se justifie par le cas qu'elle écarte, et ce cas se
+  cherche dans l'appli avant de la poser ; ici, plus de borne (`e2e/sweep.mjs`).
