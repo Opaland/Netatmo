@@ -1,12 +1,12 @@
 # Historique des versions
 
-## v1.9 — en cours : sécurité et méthode
+## v1.9 — novembre 2026 : sécurité et méthode
 
 Argon2id, paliers de taille, ensoleillement, repère kWh/m²/an, objectif à climat égal et rapport
 anonyme ([feuille de route](docs/bmad/feuille-de-route.md)), plus les issues ouvertes par la revue de
 fin de v1.8. Revue de fin de version par les **72 personas**, revue design des écrans nouveaux ou
-changés et revue de code par agent : [`docs/bmad/revues/v1.9.md`](docs/bmad/revues/v1.9.md). Entrée
-« en cours » jusqu'à la clôture ; les décisions du propriétaire (revue, § 10) ne bloquent pas
+changés et revue de code par agent : [`docs/bmad/revues/v1.9.md`](docs/bmad/revues/v1.9.md). Close
+après sa revue (PR #519, aucun défaut bloquant) ; les décisions du propriétaire (revue, § 10) ne bloquent pas
 l'enchaînement vers la v2.0 (règle de passage, feuille de route).
 
 - **Chiffrement et réglages**
