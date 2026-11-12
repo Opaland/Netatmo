@@ -15,6 +15,7 @@ import { addDays, seasonOf } from './aggregate';
 import { type Weather, dju } from './analysis';
 import { isDay } from './invoice';
 import { HEATING_DAY_BELOW, MIN_SIDE_DAYS } from './works';
+import { median } from './sun';
 
 export type LowerKind = 'joints' | 'rideau' | 'porte' | 'isolation' | 'autre';
 export const LOWER_KINDS: Record<LowerKind, string> = {
@@ -112,10 +113,8 @@ export function lowerDays(i: LowerInput): LowerDay[] {
  * half of the heating days are kept, the sunnier half is set aside. Null without any radiation.
  */
 export function sunCut(days: LowerDay[]): number | null {
-  const s = days.map((d) => d.sun).filter((v): v is number => v !== null).sort((a, b) => a - b);
-  if (!s.length) return null;
-  const m = Math.floor(s.length / 2);
-  return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
+  // #117: the same median splits the days for « Jours inhabituels » (sun.ts sunMedian)
+  return median(days.map((d) => d.sun).filter((v): v is number => v !== null));
 }
 
 /** Days kept for the comparison: little sun (or every heating day when no radiation is known). */

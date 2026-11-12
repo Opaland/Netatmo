@@ -310,6 +310,11 @@ try {
         } catch (err) {
           errors.push(`${name}/historique: explication des jours inhabituels absente (${err})`);
         }
+        // #117: the sun of the day, cited for a day under the expected heating only, as a hypothesis
+        const rows = await page.locator('#unusual-card tbody tr').evaluateAll((trs) => trs.map((tr) => [tr.querySelector('.delta')?.classList.contains('down') ?? false, tr.lastElementChild?.textContent ?? '']));
+        const sunny = rows.filter(([, t]) => t.includes('journée ensoleillée'));
+        if (!sunny.length) errors.push(`${name}/historique: aucun jour inhabituel n’a l’ensoleillement pour explication (#117)`);
+        if (sunny.some(([down]) => !down)) errors.push(`${name}/historique: ensoleillement cité pour un jour au-dessus de l’attendu (#117)`);
         await go(page, 'historique');
       }
       const charts = await page.locator('.chart canvas').count();
