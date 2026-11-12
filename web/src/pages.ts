@@ -170,6 +170,7 @@ function historyLinks(): string {
   const weather = !!ds!.weather;
   const rows = (Object.keys(HISTORY_PAGES) as HistoryPage[])
     .filter((p) => p !== 'station' || !!ds!.station)
+    .filter((p) => p !== 'flambees' || !!(ds!.meta as { stove_fires?: unknown }).stove_fires) // #469: found by the collection
     .map((p) => ({
       title: HISTORY_PAGES[p],
       sub: {
@@ -178,6 +179,7 @@ function historyLinks(): string {
         froid: weather ? 'le chauffage selon le froid dehors' : 'avec la météo (prochaine collecte)',
         jours: weather ? 'quand le chauffage dévie de la météo' : 'avec la météo (prochaine collecte)',
         calendrier: 'chaque jour de l’année, les absences',
+        flambees: 'les soirs où le poêle a chauffé',
         station: 'température, humidité et CO₂',
       }[p],
       href: `#${routeKey({ page: 'historique-detail', sub: p })}`,
@@ -203,7 +205,24 @@ function renderHistoryDetail(view: HTMLElement, route: Route) {
       return stack(view, head, [(el) => analyse.renderAnalyse(el, records, 'calendrier')]);
     case 'station':
       return stack(view, head, [(el) => analyse.renderAnalyse(el, records, 'station')]);
+    case 'flambees':
+      return stack(view, '', [renderFiresPart]);
   }
+}
+
+// #469: « Flambées du poêle », loaded on demand
+let fires: typeof import('./views/fires') | null = null;
+function renderFiresPart(el: HTMLElement) {
+  if (fires) return fires.renderFires(el);
+  el.innerHTML = html('<p class="empty">Chargement…</p>');
+  void lazyCard(
+    () => import('./views/fires'),
+    (m) => {
+      fires = m;
+      if (el.isConnected) m.renderFires(el);
+    },
+    { zone: el, what: 'Flambées du poêle' },
+  );
 }
 
 

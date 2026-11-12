@@ -64,6 +64,7 @@ export const HISTORY_PAGES = {
   froid: 'Le logement face au froid',
   jours: 'Jours inhabituels',
   calendrier: 'Calendrier et absences',
+  flambees: 'Flambées du poêle',
   station: 'Station météo',
 } as const;
 export type HistoryPage = keyof typeof HISTORY_PAGES;

@@ -7,6 +7,7 @@ import type { Dataset } from '../data';
 import { loadNote, saveNote } from '../local-store';
 import { type WoodSettings, parseWood, woodDaily, woodIn, woodJson } from '../wood';
 import { lastDay } from '../ui';
+import { type StoveFires, parseFires } from '../stove-fires';
 import { stoppedRooms } from './offline-rooms';
 import { stoveHeated } from '../room-offline';
 
@@ -49,6 +50,14 @@ export const woodPersisted = () => persisted;
 /** What the app applies: this device's draft, else the household's settings. */
 export const woodSettings = (): WoodSettings => woodDraft() ?? sharedWood();
 
+const fireMemo = new WeakMap<object, StoveFires | null>();
+/** #469: the fires the collection found (meta.stove_fires), read back once per dataset; null: none. */
+export function stoveFires(): StoveFires | null {
+  const meta = (rawDataset() ?? ds)!.meta;
+  if (!fireMemo.has(meta)) fireMemo.set(meta, parseFires((meta as { stove_fires?: unknown }).stove_fires));
+  return fireMemo.get(meta)!;
+}
+
 const memo = new WeakMap<Dataset, { key: string; daily: Map<string, [number, number]> }>();
 /** Wood heat (kWh) and cost (€) per day, for the dataset shown. */
 export function woodDays(): Map<string, [number, number]> {
@@ -57,7 +66,7 @@ export function woodDays(): Map<string, [number, number]> {
   const key = woodJson(w);
   const hit = memo.get(d);
   if (hit?.key === key) return hit.daily;
-  const daily = woodDaily(w, d.weather, lastDay());
+  const daily = woodDaily(w, d.weather, lastDay(), stoveFires()); // #469: on the fires found, if any
   memo.set(d, { key, daily });
   return daily;
 }
