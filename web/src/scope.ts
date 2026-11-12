@@ -5,7 +5,7 @@
 // names to the app's path (« intuis-history@Netatmo:… ») stops another copy of this app (a fork,
 // a demo) published on the same account from reading or overwriting this one's state, notes or
 // remembered key by mistake. It is NOT an isolation: any script of the same origin can still
-// list and use them. Only an origin of its own (custom domain) isolates; see
+// list and use them. Only an origin of its own (custom domain, dedicated organisation) isolates; see
 // docs/etudes/origine-dediee.md and the README (Sécurité).
 //
 // Served at the root of its origin (custom domain, `vite preview`, tests), the historical names

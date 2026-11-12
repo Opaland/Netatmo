@@ -4,7 +4,9 @@
 // - build.json reaches the deployed commit within 2 minutes (Pages may serve the previous one);
 // - manifest.webmanifest: id, ≥ 3 shortcuts, a maskable icon, each icon served;
 // - sw.js served, registered, and controlling the page;
-// - the demo opens; no JavaScript error, no file of the site answering 4xx / 5xx.
+// - the demo opens; no JavaScript error, no file of the site answering 4xx / 5xx;
+// - #229: the « other site of the account » warning, absent in a fresh browser, present next to
+//   « Rester connecté » when another site left a key (only this real origin can show it).
 // Run: SITE_URL=https://<compte>.github.io/<dépôt>/ EXPECTED_COMMIT=<sha> node e2e/en-ligne.mjs
 // Without SITE_URL: skipped (exit 0) with the reason.
 import { chromium } from 'playwright';
@@ -75,9 +77,28 @@ try {
     return !!navigator.serviceWorker.controller;
   });
   check(controlled, 'service worker : la page n’est pas contrôlée');
+  // #229: a fresh browser keeps nothing but the app's own names: no « other site » warning.
+  if (await page.$('#remember')) check(!(await page.$('#origin-traces')), '#229 : avertissement « autre site » sans autre site');
   await page.click('#demo');
   await page.waitForSelector('#view[data-ready]', { state: 'attached', timeout: 60000 }).catch(() => errors.push('démo : ne s’ouvre pas'));
   await ctx.close();
+
+  // #229: on the real <compte>.github.io origin, a key left by another Pages site of the account
+  // (written before the app loads) brings the warning next to « Rester connecté ». Only when the
+  // lock screen has its form (real data published).
+  const other = await browser.newContext({ viewport: { width: 390, height: 844 } });
+  await other.addInitScript(() => localStorage.setItem('un-autre-site:etat', '1'));
+  const p2 = await other.newPage();
+  p2.on('pageerror', (e) => errors.push(`page (#229) : ${e.message}`));
+  await p2.goto(base, { waitUntil: 'load' });
+  if (await p2.$('#remember')) {
+    const next = await p2
+      .waitForSelector('#origin-traces', { timeout: 20000 })
+      .then(() => p2.evaluate(() => document.getElementById('remember')?.closest('label')?.nextElementSibling?.id ?? ''))
+      .catch(() => '');
+    check(next === 'origin-traces', '#229 : pas d’avertissement à côté de « Rester connecté » malgré la trace d’un autre site');
+  }
+  await other.close();
 } finally {
   await browser.close();
 }
