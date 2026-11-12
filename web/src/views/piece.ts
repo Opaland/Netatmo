@@ -494,7 +494,7 @@ function tilesRow(
       );
   }
   const note = tiles.some((t) => t.includes('piece-at-setpoint'))
-    ? `<p class="hint muted" id="piece-at-setpoint-def">Temps à la consigne : part des heures où la pièce était à la température demandée aux radiateurs, à 0,5 °C près (hors hors-gel).</p>`
+    ? `<p class="hint muted" id="piece-at-setpoint-def">Temps à la consigne : part des heures où la pièce était à la température demandée aux radiateurs, à 0,5 °C près, sans compter les heures en hors-gel.</p>`
     : heating && r30 && daysBetween(from, to) > HALF_HOURS
       ? '<p class="hint muted">Temps à la consigne : sur la période « Mois » seulement (relevés à la demi-heure des 40 derniers jours).</p>'
       : '';
