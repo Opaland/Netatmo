@@ -1,6 +1,6 @@
 // #139: Argon2id beside PBKDF2. The shared vector is written by the collector (argon2-cffi) and
 // read again by tests/test_argon2.py: one key, two implementations.
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { argon2idKey } from './argon2';
 import { buildBundle } from './backup';
 import {
@@ -11,6 +11,9 @@ import {
   type Argon2Info,
   BadEnvelope,
   type Envelope,
+  INSECURE_MESSAGE,
+  InsecureContext,
+  insecureContext,
   type KeyInfo,
   WrongPassphrase,
   checkEnvelope,
@@ -83,5 +86,29 @@ describe('#139 Argon2id', () => {
     const bundle = await buildBundle(async (n) => served[n] ?? null, { years: [] } as never);
     expect(bundle.keyinfo).toEqual(info);
     expect(bundle.files['meta.enc.json']).toEqual(env);
+  });
+});
+
+describe('#524 page en HTTP hors localhost : WebCrypto absent', () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('la garde reconnaît un contexte non sûr ou un crypto.subtle absent, et seulement eux', () => {
+    expect(insecureContext({ isSecureContext: true, crypto: { subtle: {} } })).toBe(false);
+    expect(insecureContext({ crypto: { subtle: {} } })).toBe(false); // Node: no isSecureContext
+    expect(insecureContext({ isSecureContext: false, crypto: { subtle: {} } })).toBe(true);
+    expect(insecureContext({ isSecureContext: true, crypto: {} })).toBe(true);
+    expect(insecureContext({ isSecureContext: true })).toBe(true);
+    expect(INSECURE_MESSAGE).toMatch(/HTTPS ou sur localhost/);
+  });
+
+  it('dériver ou déchiffrer le dit en clair, et jamais « phrase de passe incorrecte »', async () => {
+    const old: KeyInfo = { salt: pbkdf2.salt, iter: pbkdf2.iter };
+    const key = await deriveKey('test', old);
+    vi.stubGlobal('isSecureContext', false);
+    await expect(deriveKey('test', info)).rejects.toThrow(InsecureContext);
+    await expect(deriveKey('test', old)).rejects.toThrow(INSECURE_MESSAGE);
+    const err = await decryptEnvelope(pbkdf2 as Envelope, key).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(InsecureContext);
+    expect(err).not.toBeInstanceOf(WrongPassphrase);
   });
 });

@@ -68,8 +68,10 @@ L'application déchiffre les données avec l'API de chiffrement du navigateur (W
 navigateurs ne donnent qu'aux pages **HTTPS** (ou `localhost`). Ouverte en `http://<nas>:8080`, la
 copie s'affiche (écran de la phrase de passe) mais **ne peut pas déchiffrer** : mesuré dans
 Chromium sur une adresse du réseau local en HTTP, `isSecureContext` faux et `crypto.subtle`
-absent ; sur `http://localhost`, les deux présents et le service worker installé. Il faut donc la servir en HTTPS, par le proxy
-inversé de DSM :
+absent ; sur `http://localhost`, les deux présents et le service worker installé. Depuis #524,
+l'écran de la phrase de passe le dit lui-même (« Cette adresse n'est pas sécurisée (HTTP) … »,
+avec un lien vers cette page) et ses boutons restent grisés. Il faut donc la servir en HTTPS, par
+le proxy inversé de DSM :
 
 1. **Panneau de configuration → Portail de connexion → Avancé → Proxy inversé → Créer**.
 2. Source : protocole **HTTPS**, nom d'hôte `<nas>` (le nom ou l'adresse du NAS chez vous), port

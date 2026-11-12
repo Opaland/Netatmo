@@ -22,6 +22,28 @@ export class WrongPassphrase extends Error {}
 /** #236: an envelope or a keyinfo.json the app refuses to use (format, weak derivation). */
 export class BadEnvelope extends Error {}
 
+/** #524: the page is not in a secure context (HTTP outside localhost): WebCrypto is absent. */
+export class InsecureContext extends Error {}
+
+export const INSECURE_DOC = 'https://github.com/Opaland/Netatmo/blob/main/docs/nas-copie-locale.md';
+export const INSECURE_MESSAGE =
+  "Cette adresse n'est pas sécurisée (HTTP) : le navigateur refuse d'y déchiffrer les données. Ouvrez l'application en HTTPS ou sur localhost.";
+
+/**
+ * #524: WebCrypto (crypto.subtle) exists only in a secure context (HTTPS or localhost). Without
+ * it every decryption fails with « Cannot read properties of undefined ». One check, read by the
+ * lock screen before anything is typed and by every use of the key below (where the action is).
+ * `g` is injected by the tests.
+ */
+export function insecureContext(g: { isSecureContext?: boolean; crypto?: { subtle?: unknown } } = globalThis): boolean {
+  return g.isSecureContext === false || !g.crypto?.subtle;
+}
+
+function subtle(): SubtleCrypto {
+  if (insecureContext()) throw new InsecureContext(INSECURE_MESSAGE);
+  return crypto.subtle;
+}
+
 /** Envelope format written by collector/crypto.py. */
 export const ENVELOPE_VERSION = 1;
 export const KDF = 'PBKDF2-SHA256';
@@ -97,18 +119,19 @@ const USAGES: KeyUsage[] = ['decrypt', 'encrypt'];
 
 export async function deriveKey(passphrase: string, info: KeyInfo): Promise<CryptoKey> {
   checkKeyInfo(info);
+  subtle(); // #524: said before an Argon2id derivation of several seconds, not after
   if (isArgon2Info(info)) {
     // #139: hash-wasm (WebAssembly) is loaded only for a folder migrated to Argon2id, never with the first screen.
     const { argon2idKey } = await import('./argon2');
     const raw = await argon2idKey(passphrase, fromB64(info.salt), info);
     try {
-      return await crypto.subtle.importKey('raw', raw, AES, false, USAGES);
+      return await subtle().importKey('raw', raw, AES, false, USAGES);
     } finally {
       raw.fill(0);
     }
   }
-  const base = await crypto.subtle.importKey('raw', new TextEncoder().encode(passphrase), 'PBKDF2', false, ['deriveKey']);
-  return crypto.subtle.deriveKey({ name: 'PBKDF2', salt: fromB64(info.salt), iterations: info.iter, hash: 'SHA-256' }, base, AES, false, USAGES);
+  const base = await subtle().importKey('raw', new TextEncoder().encode(passphrase), 'PBKDF2', false, ['deriveKey']);
+  return subtle().deriveKey({ name: 'PBKDF2', salt: fromB64(info.salt), iterations: info.iter, hash: 'SHA-256' }, base, AES, false, USAGES);
 }
 
 // No associated data (file name) in AES-GCM yet: binding it needs a v2 format written by the
@@ -116,8 +139,9 @@ export async function deriveKey(passphrase: string, info: KeyInfo): Promise<Cryp
 // binding would protect nothing. Deferred to a format change with a full rekey (README, sécurité).
 export async function decryptEnvelope<T>(env: Envelope, key: CryptoKey): Promise<T> {
   checkEnvelope(env);
+  const api = subtle(); // #524: outside the try, an insecure page is not a wrong passphrase
   try {
-    const pt = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: fromB64(env.iv) }, key, fromB64(env.ct));
+    const pt = await api.decrypt({ name: 'AES-GCM', iv: fromB64(env.iv) }, key, fromB64(env.ct));
     return JSON.parse(new TextDecoder().decode(pt)) as T;
   } catch {
     throw new WrongPassphrase('Phrase de passe incorrecte');
@@ -129,11 +153,11 @@ const toB64 = (b: Uint8Array) => btoa(String.fromCharCode(...b));
 /** Small private JSON kept on this device (localStorage), encrypted with the data key. */
 export async function sealLocal(value: unknown, key: CryptoKey): Promise<{ iv: string; ct: string }> {
   const iv = crypto.getRandomValues(new Uint8Array(12));
-  const ct = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, new TextEncoder().encode(JSON.stringify(value)));
+  const ct = await subtle().encrypt({ name: 'AES-GCM', iv }, key, new TextEncoder().encode(JSON.stringify(value)));
   return { iv: toB64(iv), ct: toB64(new Uint8Array(ct)) };
 }
 
 export async function openLocal<T>(sealed: { iv: string; ct: string }, key: CryptoKey): Promise<T> {
-  const pt = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: fromB64(sealed.iv) }, key, fromB64(sealed.ct));
+  const pt = await subtle().decrypt({ name: 'AES-GCM', iv: fromB64(sealed.iv) }, key, fromB64(sealed.ct));
   return JSON.parse(new TextDecoder().decode(pt)) as T;
 }

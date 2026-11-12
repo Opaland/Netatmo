@@ -1,7 +1,7 @@
 // Unlock screen (passphrase or demo) and loading skeleton.
 import { app, rerender, setDataset } from '../app';
 import { disposeAll, escapeHtml as esc } from '../charts';
-import { WrongPassphrase } from '../crypto';
+import { INSECURE_DOC, INSECURE_MESSAGE, InsecureContext, WrongPassphrase, insecureContext } from '../crypto';
 import { type Dataset, type Source, load, rememberKey, unlock } from '../data';
 import { html } from '../trusted';
 import { INSTALL_HASH, installSteps } from '../invite';
@@ -15,6 +15,9 @@ import { lazyAction } from '../lazy';
 export function renderLock(message = '', hasRealData = true, notice = '') {
   hideUnreadableNotes(); // #139: said again at the next unlock if still there
   disposeAll(app);
+  // #524: HTTP outside localhost: nothing can be decrypted here, said before anything is typed
+  const insecure = insecureContext();
+  const off = insecure ? ' disabled' : '';
   app.innerHTML = html`
   <main class="lock">
     <div class="lock-card">
@@ -22,23 +25,24 @@ export function renderLock(message = '', hasRealData = true, notice = '') {
       <h1>Historique énergie</h1>
       <p class="muted">Radiateurs et chauffe-eau Intuitiv / Intuis — vos données restent chiffrées, elles ne sont déchiffrées que sur cet appareil.</p>
       ${notice ? alertHtml('info', esc(notice), { id: 'lock-notice', role: 'status' }) : ''}
+      ${insecure ? alertHtml('bad', `${esc(INSECURE_MESSAGE)} <a href="${INSECURE_DOC}" target="_blank" rel="noopener">Copie locale sur le NAS : la marche à suivre</a>.`, { id: 'lock-insecure' }) : ''}
       ${
         hasRealData
           ? `<form id="unlock">
         <label for="pass">Phrase de passe</label>
         <div class="secret-field">
-          <input id="pass" type="password" autocomplete="current-password" required autofocus spellcheck="false" autocapitalize="off">
+          <input id="pass" type="password" autocomplete="current-password" required autofocus spellcheck="false" autocapitalize="off"${off}>
           ${revealButton('pass')}
         </div>
         ${switchField('Rester connecté sur cet appareil (30 jours au plus)', true, { id: 'remember' })}
-        <button class="primary" type="submit">Déverrouiller</button>
+        <button class="primary" type="submit"${off}>Déverrouiller</button>
       </form>`
           : `${alertHtml('info', "Aucune donnée n'a encore été collectée. Suivez l'assistant d'installation (ou le guide d'installation), ou essayez la démo.")}
         <button class="primary" type="button" id="setup-lock">Ouvrir l’assistant d’installation</button>
         <section id="setup-zone" class="setup-lock" hidden></section>`
       }
       ${formMsg(message, { id: 'lock-msg' })}
-      <button class="link" id="demo" type="button">Essayer avec des données de démonstration</button>
+      <button class="link" id="demo" type="button"${off}>Essayer avec des données de démonstration</button>
       <details class="install-help" id="install-help" ${location.hash === INSTALL_HASH ? 'open' : ''}>
         <summary>Installer l'appli sur ce téléphone</summary>
         ${installSteps()}
@@ -93,7 +97,8 @@ async function open(source: Source, pass: string, remember: boolean) {
     renderLoading();
     opened = await load(source, key);
   } catch (err) {
-    renderLock(err instanceof WrongPassphrase ? 'Phrase de passe incorrecte.' : `Erreur : ${(err as Error).message}`);
+    // #524: an insecure page is already said by the lock screen itself
+    renderLock(err instanceof WrongPassphrase ? 'Phrase de passe incorrecte.' : err instanceof InsecureContext ? '' : `Erreur : ${(err as Error).message}`);
     return;
   } finally {
     opening = false;
