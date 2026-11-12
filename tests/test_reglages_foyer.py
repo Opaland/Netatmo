@@ -70,6 +70,20 @@ def test_the_collection_reads_each_household_setting_from_a_secret():
     assert {"collect.yml", "diagnostic.yml"} <= seen
 
 
+def test_diagnostic_hands_a_household_setting_to_the_quality_report_only():
+    """#502: in Diagnostic, a household setting (secret or old plaintext variable) is passed only
+    when the quality report is asked for, the one step that reads it."""
+    lines = (ROOT / ".github" / "workflows" / "diagnostic.yml").read_text().splitlines()
+    seen = 0
+    for line in lines:
+        if any(
+            f"secrets.{n} " in line or f"vars.{n} " in line for n in (*cli.HOUSEHOLD_SETTINGS, "HOME_LOCATION_JSON")
+        ):
+            assert "inputs.qualite &&" in line, line
+            seen += 1
+    assert seen >= 2
+
+
 def test_the_same_household_settings_as_the_app():
     """One list each side (AGENTS.md §5): web/src/settings.ts HOUSEHOLD_SECRETS."""
     src = (ROOT / "web" / "src" / "settings.ts").read_text()
