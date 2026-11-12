@@ -126,6 +126,7 @@ export function renderReport(view: HTMLElement) {
       }),
     )}
     <div id="report-extras"></div>
+    <div id="report-dpe-zone"></div>
     <p class="hint muted">Rapport généré le ${longDate(localDay())} par l'application Historique énergie. Données Intuis${ds!.weather ? ', météo ' + (ds!.meta.weather_source === 'netatmo' ? 'station Netatmo' : 'Open-Meteo') : ''}${ds!.linky.size ? ', compteur Linky' : ''}.${w && wPrev ? ` Degrés-jours : ${esc(djuMethodText(ds!.meta.weather_source))}.` : ''}</p>
   </section>`;
   const m = monthlyByYear(all);
@@ -151,6 +152,8 @@ export function renderReport(view: HTMLElement) {
   drawWaterfall(document.getElementById('report-waterfall')!, deltas, year, windowSuffix(win));
   // S-6.3: offer comparator and maximum power, lazy module (entry chunk budget)
   void lazyCard(() => import('./annual-share'), (m) => m.renderReportExtras(document.getElementById('report-extras'), year), { zone: 'report-extras', what: 'Comparateur d’offres' });
+  // #127: kWh/m²/an against the DPE thresholds, hidden without any surface (lazy module)
+  void lazyCard(() => import('./dpe'), (m) => m.renderDpe(document.getElementById('report-dpe-zone'), end), { zone: 'report-dpe-zone', what: 'Repère en kWh/m²/an' });
 }
 
 // ------------------------------------------------------------------ events
