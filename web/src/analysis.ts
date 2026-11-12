@@ -58,6 +58,19 @@ export function tariffSplit(records: DayRecord[], tariffs: TariffMap): [number, 
 
 // ------------------------------------------------------------------ weather
 export type Weather = Map<string, [number, number, number]>; // day -> [min, max, mean]
+/**
+ * #464: the base and the method of the degree days are a CHOICE, not a measure of the home:
+ * - base 18 °C, the base Météo-France and the energy statistics publish (DJU « chauffage »),
+ *   so a total can be read against any public figure; a base of the home's own (the outdoor
+ *   temperature below which it really heats, ~15-16 °C on the signature) would need its own
+ *   data to be set and is NOT invented here (AGENTS.md §2) — the signature shows it instead;
+ * - the « méthode météo »: 18 − (min + max) / 2 each day, 0 when it is warmer, every day of the
+ *   year. Not the COSTIC method (min / max weighted on mild days, ~3 % more over a year).
+ * Same rule in the collector (collector/weather.py DJU_BASE, degree_days), kept equal by
+ * web/src/dju.test.ts. Measured on the public Météo-France data of Lyon-Bron (pytest -m reseau,
+ * test_degres_jours_*): 2 030 DJ in 2025 with this method, 2 226 on average over 1991-2020 and
+ * 2 379 over 1981-2010 — « 2 300 à 2 500 » is an older normal, not an error of the base.
+ */
 export const DJU_BASE = 18;
 
 /** Degree days (méthode météo : base 18 °C, moyenne de min et max). */

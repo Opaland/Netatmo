@@ -1,6 +1,7 @@
 // Printable annual report ("Rapport annuel").
 import { type Category, type DayRecord, MONTHS_SHORT, monthlyByYear, pctChange } from '../aggregate';
 import { djuBetween, fitSeason, roomDeltas, signaturePoints } from '../analysis';
+import { djuMethodText } from '../dju';
 import { ds, setState, state } from '../app';
 import { barChart } from '../charts';
 import { uncertainDays } from '../checks';
@@ -125,7 +126,7 @@ export function renderReport(view: HTMLElement) {
       }),
     )}
     <div id="report-extras"></div>
-    <p class="hint muted">Rapport généré le ${longDate(localDay())} par l'application Historique énergie. Données Intuis${ds!.weather ? ', météo ' + (ds!.meta.weather_source === 'netatmo' ? 'station Netatmo' : 'Open-Meteo') : ''}${ds!.linky.size ? ', compteur Linky' : ''}.</p>
+    <p class="hint muted">Rapport généré le ${longDate(localDay())} par l'application Historique énergie. Données Intuis${ds!.weather ? ', météo ' + (ds!.meta.weather_source === 'netatmo' ? 'station Netatmo' : 'Open-Meteo') : ''}${ds!.linky.size ? ', compteur Linky' : ''}.${w && wPrev ? ` Degrés-jours : ${esc(djuMethodText(ds!.meta.weather_source))}.` : ''}</p>
   </section>`;
   const m = monthlyByYear(all);
   barChart(document.getElementById('report-chart')!, {

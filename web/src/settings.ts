@@ -9,6 +9,7 @@
 // - S-12.1: the shared contract is not a secret: it goes into the repository VARIABLE
 //   CONTRACT_JSON (token permission « Variables : lecture et écriture »), the only variable
 //   the app may write.
+import { ghCall, ghErrorText } from './gh-call';
 
 export interface SecretField {
   name: string;
@@ -125,15 +126,8 @@ async function gh(path: string, init: RequestInit = {}): Promise<Response> {
       ...(init.body ? { 'Content-Type': 'application/json' } : {}),
     },
   });
-  if (!resp.ok) {
-    const hint =
-      resp.status === 401
-        ? 'jeton invalide ou expiré'
-        : resp.status === 403 || resp.status === 404
-          ? 'droits insuffisants : le jeton doit viser ce dépôt avec « Secrets », « Variables » et « Actions » en lecture et écriture'
-          : `HTTP ${resp.status}`;
-    throw new GitHubError(`GitHub : ${hint}`, resp.status);
-  }
+  // #463: the call and the permission in cause, never a value nor the repository
+  if (!resp.ok) throw new GitHubError(ghErrorText(resp.status, ghCall(path, init.method)), resp.status);
   return resp;
 }
 
