@@ -255,6 +255,9 @@ try {
         else check(fullGap && gap && num(gap[1]) === num(fullGap[1]) && gap[2] === fullGap[2] && /bois compris/.test(said), `vue Proche : écart « ${gap?.[0]} » ≠ Accueil « ${fullGap?.[0] ?? fullHead} » (#400, #433)`);
         check(fullYoy && yo && num(yo[1]) === Math.abs(num(fullYoy[1])) && (yo[2] === 'moins') === num(fullYoy[1]) < 0, `vue Proche : « ${yo?.[0]} » ≠ Accueil « ${fullYoy?.[0]} » (#400)`);
         check(num(month.replace('€', '')) === num(fullMonth.replace('€', '')), `vue Proche : mois ${month} ≠ Accueil ${fullMonth} (#400)`);
+        // #488: the month counts the hot water as the Accueil does, and says so with its words (countedWhat)
+        const monthHead = (await p.locator('#view .proche-month h3').first().innerText()).trim();
+        check(/, chauffage et eau chaude$/.test(monthHead), `vue Proche : le mois ne dit pas ce qu'il compte (« ${monthHead} », #488)`);
         check(/Chambre enfant ne répond plus depuis le 5 novembre : cette pièce n'est pas comptée\./.test(said), 'vue Proche : la pièce hors ligne n’est pas nommée (#400)');
       }
       check((await p.locator('#view [data-term=kwh]').count()) >= 1, 'vue Proche : glossaire absent');

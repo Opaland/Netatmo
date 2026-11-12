@@ -543,6 +543,9 @@ try {
   // #476: the demo's Cuisine is heated by a stove with fictitious purchases: the before / after
   // compares the electricity + wood (worksHeat), and says so
   check(/le chauffage \(électricité \+ bois\) a évolué de/.test(works), `#476 : avant / après sans « électricité + bois » (« ${works.slice(0, 300)} »)`);
+  // #488: the monthly chart counts the same heating (worksMonthly → worksHeat), and says so
+  check(/Chauffage électricité \+ bois par mois/.test(works), `#488 : « Chauffage par mois » sans le bois (« ${works.slice(0, 600)} »)`);
+  check(/^Chauffage électricité \+ bois par mois/.test((await page.locator('#works-chart').getAttribute('aria-label')) ?? ''), '#488 : graphique mensuel des travaux sans « électricité + bois » (aria-label)');
   await page.click('#works-surfaces summary');
   const inputs = page.locator('[data-works-surface]');
   const n = await inputs.count();
