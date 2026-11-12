@@ -100,19 +100,21 @@ jobs:
           INTUIS_CLIENT_SECRET: ${{ secrets.INTUIS_CLIENT_SECRET }}
           DATA_PASSPHRASE: ${{ secrets.DATA_PASSPHRASE }}
           INTUIS_ROOM_CATEGORIES: ${{ vars.INTUIS_ROOM_CATEGORIES }}
-          # S-12.1: contract shared between devices (not secret: a repository variable written by
-          # Settings). Validated by the collector, stored in the encrypted meta, never printed.
-          CONTRACT_JSON: ${{ vars.CONTRACT_JSON }}
           # #346 + #366: radiators switched off on purpose (stove…) and the stove's wood, set from
-          # ⚙ Mon logement. #459: secrets sealed in the browser; the *_VARIABLE lines read the old
-          # plaintext variables until the app migrates them (the log then names them, no value).
+          # ⚙ Mon logement; S-12.1: the contract shared between devices; S-12.5: the prolonged cold
+          # alert (rooms and threshold, disabled when unset; the issue below only carries
+          # pseudonyms, the log only counts). #459, #497: secrets sealed in the browser, validated
+          # by the collector, stored in the encrypted meta, never printed; the *_VARIABLE lines
+          # read the old plaintext variables until the app migrates them (the log then names
+          # them, no value).
           STOPPED_ROOMS_JSON: ${{ secrets.STOPPED_ROOMS_JSON }}
           WOOD_JSON: ${{ secrets.WOOD_JSON }}
+          CONTRACT_JSON: ${{ secrets.CONTRACT_JSON }}
+          COLD_ALERT_JSON: ${{ secrets.COLD_ALERT_JSON }}
           STOPPED_ROOMS_JSON_VARIABLE: ${{ vars.STOPPED_ROOMS_JSON }}
           WOOD_JSON_VARIABLE: ${{ vars.WOOD_JSON }}
-          # S-12.5: prolonged cold alert (rooms and threshold, disabled when unset). Never printed:
-          # the issue below only carries pseudonyms (Pièce A, B…), the log only counts.
-          COLD_ALERT_JSON: ${{ vars.COLD_ALERT_JSON }}
+          CONTRACT_JSON_VARIABLE: ${{ vars.CONTRACT_JSON }}
+          COLD_ALERT_JSON_VARIABLE: ${{ vars.COLD_ALERT_JSON }}
           # #204: location and roofs typed in the app (secret: sealed, never printed)
           HOME_LOCATION_JSON: ${{ secrets.HOME_LOCATION_JSON }}
           # S-1.14: optional caps on API calls per collection (empty = default, see docs/api-notes.md).
