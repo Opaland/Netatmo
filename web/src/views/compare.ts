@@ -51,6 +51,7 @@ import { alertHtml, countedNote, legend, tile } from '../components';
 import { lazyCard } from '../lazy';
 import { tenant, tenantNote } from '../tenant';
 import { verdictWood, woodOver } from './wood-state';
+import { woodSpread } from '../wood';
 
 /**
  * #337: « Pourquoi ce mois ? » — each of the last 12 months that has the same month a year
@@ -404,7 +405,7 @@ function woodYears(records: DayRecord[], first: string, last: string): string {
     });
   return `<h3 class="money-h" id="years-wood-title">Chauffage électricité + bois</h3>
     ${table(['Année', 'Chauffage (kWh)', 'dont bois', ...(ds!.weather ? ['Par degré-jour (kWh)'] : []), ...(priced ? ['Coût (hors abonnement)'] : [])], rows)}
-    <p class="hint muted">Le bois du poêle, réparti jour par jour selon les degrés-jours (comme le verdict de l’Accueil) ; le coût ajoute le prix payé pour le bois au chauffage électrique. <a class="link" href="#parametres-logement">Bois et hypothèses</a></p>`;
+    <p class="hint muted">Le bois du poêle, ${woodSpread()} (comme le verdict de l’Accueil) ; le coût ajoute le prix payé pour le bois au chauffage électrique. <a class="link" href="#parametres-logement">Bois et hypothèses</a></p>`;
 }
 
 /** The winter / year chips stay unfolded once used (a chip redraws the card). */

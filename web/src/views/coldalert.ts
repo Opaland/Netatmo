@@ -1,7 +1,8 @@
 // S-12.5: prolonged cold in a living room (lazy module).
 // - Confort: in-app alert for the rooms of the alert recorded by the collection (meta.cold_alert);
 // - Paramètres: choose rooms and threshold, see each room's state and its pseudonym, and write
-//   the repository variable COLD_ALERT_JSON (the nightly collection opens a GitHub issue).
+//   the repository secret COLD_ALERT_JSON, sealed in this browser (#497, like the household settings
+//   of #459; the nightly collection opens a GitHub issue).
 // Real names stay on this device: the public issue only shows « Pièce A, B… ».
 import { ds, householdStatus, rawDataset, rerender } from '../app';
 import { BEDROOMS_NAME, isBedroom } from '../household';
@@ -18,7 +19,8 @@ import {
   parseColdConfig,
   parseColdDraft,
 } from '../cold';
-import { hasToken, putVariable } from '../settings';
+import { hasToken } from '../settings';
+import { bindMigrate, checkPlain, plainOffer, saveSecretText, secretWhere, tokenHint } from './household-secret';
 import { esc, lastDay, longDate, table } from '../ui';
 import { html } from '../trusted';
 import '../simulators.css';
@@ -129,17 +131,21 @@ export function mountColdSettings(card: HTMLElement | null, repo: () => string, 
           )
         : '<p class="hint muted">Activez au moins une pièce.</p>'
     }
-    <p class="hint muted">Variable du dépôt <code>${COLD_VARIABLE}</code> (Settings → Secrets and variables → Actions → Variables) :</p>
+    <p class="hint muted">${secretWhere(COLD_VARIABLE)}</p>
     <code class="sim-json">${esc(chosen.length ? coldJson(cfg) : '—')}</code>
     <div class="controls">
       <button type="button" class="primary small" id="cold-save" ${canWrite && chosen.length ? '' : 'disabled'}>Enregistrer l'alerte dans GitHub</button>
       <button type="button" class="link" id="cold-off" ${canWrite && active ? '' : 'disabled'}>Désactiver l'alerte</button>
     </div>
     <p class="hint muted">${
-      demo ? 'Mode démonstration : rien n\'est enregistré.' : hasToken() ? 'Prise en compte à la prochaine collecte.' : 'Connectez un jeton GitHub ci-dessus (permission Variables) pour enregistrer, ou copiez la variable à la main.'
+      demo ? 'Mode démonstration : rien n\'est enregistré.' : hasToken() ? 'Prise en compte à la prochaine collecte.' : tokenHint
     }</p>
+    ${plainOffer(repo(), COLD_VARIABLE, canWrite)}
     ${message ? alertHtml(message.ok ? 'info' : 'bad', esc(message.text), { role: 'status' }) : ''}`;
   if (focus) card.querySelector<HTMLElement>(focus)?.focus();
+  const remount = () => (card.isConnected ? mountColdSettings(card, repo) : rerender());
+  if (canWrite) checkPlain(repo(), COLD_VARIABLE, remount);
+  bindMigrate(card, repo(), COLD_VARIABLE, (m) => (message = m), remount);
   const update = (patch: Partial<ColdConfig>, from: string) => {
     saveDraft({ ...cfg, ...patch });
     message = null;
@@ -158,15 +164,15 @@ export function mountColdSettings(card: HTMLElement | null, repo: () => string, 
   const write = (value: string, done: string) => {
     message = { ok: true, text: 'En cours…' };
     mountColdSettings(card, repo);
-    putVariable(repo(), COLD_VARIABLE, value)
-      .then(() => (message = { ok: true, text: done }))
+    saveSecretText(repo(), COLD_VARIABLE, value, done)
+      .then((text) => (message = { ok: true, text }))
       .catch((err: Error) => (message = { ok: false, text: err.message }))
       .finally(() => (card.isConnected ? mountColdSettings(card, repo) : rerender()));
   };
   card.querySelector('#cold-save')!.addEventListener('click', () => {
-    if (chosen.length) write(coldJson(cfg), `Alerte enregistrée (${chosen.length} pièce${chosen.length > 1 ? 's' : ''}). Elle s'applique à la prochaine collecte.`);
+    if (chosen.length) write(coldJson(cfg), `alerte de ${chosen.length} pièce${chosen.length > 1 ? 's' : ''}, elle s'applique à la prochaine collecte`);
   });
   card.querySelector('#cold-off')!.addEventListener('click', () => {
-    write(JSON.stringify({ threshold: cfg.threshold, days: cfg.days, rooms: [] }), 'Alerte désactivée à la prochaine collecte (l\'issue éventuelle se fermera).');
+    write(JSON.stringify({ threshold: cfg.threshold, days: cfg.days, rooms: [] }), 'alerte désactivée à la prochaine collecte (l\'issue éventuelle se fermera)');
   });
 }

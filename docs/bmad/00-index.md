@@ -43,7 +43,7 @@ Documents antérieurs, toujours valables : [README](../../README.md), [notes API
 | v1.5 : revue de code complète par agents, corrections, suites de l'audit des données | Livré ([cadrage](revues/v1.5-cadrage.md), [revue de fin](revues/v1.5.md)) ; anciens journaux de collecte à supprimer et origine (#229) à décider par le propriétaire |
 | v1.6 : revue design et UI/UX, nouveau design system | Reconstruite (tous les écrans sur le nouveau design system), **pas encore close** : [revue de fin](revues/v1.6.md) ; restent #317 (fin de migration, captures, test « hors jetons »), #383, #384 et la revue design par agents (#385) |
 | v1.7 : finitions et données de la maison (lisibilité, incidents, poêle à bois, photovoltaïque, heures creuses) | Livré et clos ([revue de fin](revues/v1.7.md), § 11 : décisions du propriétaire, PR #455 et #458) ; restent les preuves du propriétaire (localisation, bois, heures creuses) |
-| v1.8 : le bois et les réglages (bois dans l'isolation, réglages du foyer en secrets, ⚙ Mon logement, degrés-jours, stock de bois et flambées, heures creuses datées, bilan qualité) | Livré, **pas encore clos** : [revue de fin](revues/v1.8.md) (53 👍 / 18 ➖ / 1 👎) ; restent la revue de code par agent, les décisions (§ 10) et les preuves du propriétaire (§ 9) |
+| v1.8 : le bois et les réglages (bois dans l'isolation, réglages du foyer en secrets, ⚙ Mon logement, degrés-jours, stock de bois et flambées, heures creuses datées, bilan qualité) | Livré et clos ([revue de fin](revues/v1.8.md), 53 👍 / 18 ➖ / 1 👎 ; revue de code § 12, PR #503) ; restent les décisions (§ 10) et les preuves du propriétaire (§ 9) |
 | v1.9 à v2.1, jalon « Matériel » | [Feuille de route](feuille-de-route.md) |
 
 ## Conventions

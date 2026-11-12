@@ -144,7 +144,7 @@ dépôt (le procédé imposé par GitHub) et les enregistre comme secrets, puis 
 
 Il faut pour cela un [jeton GitHub « fine-grained »](https://github.com/settings/personal-access-tokens/new) :
 accès au seul dépôt, permissions **Secrets : lecture et écriture**, **Variables : lecture et écriture**
-(pour le contrat partagé, et pour migrer en secret les anciens réglages du foyer) et **Actions : lecture et écriture**, rien d'autre, expiration courte. Le jeton reste en mémoire le temps de la visite et
+(pour lire puis supprimer les anciennes variables en clair en les migrant en secret : réglages du foyer, contrat partagé, alerte froid) et **Actions : lecture et écriture**, rien d'autre, expiration courte. Le jeton reste en mémoire le temps de la visite et
 l'application ne l'enregistre jamais. Les champs du jeton et des identifiants ne sont pas dans un formulaire
 et sont marqués pour que le navigateur et les gestionnaires de mots de passe courants ne proposent pas de
 les mémoriser ; aucun navigateur ne le garantit : s'il le propose quand même, refusez.
@@ -334,7 +334,7 @@ par le code, sans IA ni réseau.
 **Prix et contrat.** Dans ⚙ Paramètres → Contrat et prix, décrivez votre contrat période par période (date de début, offre,
 puissance souscrite, par exemple 9 kVA puis 12 kVA). Pour que **tous les appareils du foyer**
 utilisent le même contrat, ouvrez Paramètres → **Contrat partagé** → *Partager ce contrat* : il est
-écrit dans la **variable** du dépôt `CONTRACT_JSON` (ce n'est pas un secret : dates, offre et
+scellé dans le navigateur et enregistré dans le **secret** du dépôt `CONTRACT_JSON` (#497 : dates, offre et
 puissance, par exemple `[{"from":"2022-01-01","offer":"edf-trv-hphc","kva":12},{"from":"2025-10-14","offer":"edf-trv-hphc","kva":9}]`),
 que la collecte vérifie puis recopie dans les données chiffrées ; le journal public n'indique que
 « Contrat partagé : oui (N périodes) ». Le contrat partagé s'applique alors partout (badge
@@ -353,12 +353,14 @@ pouvez aussi saisir vos propres prix. Ces réglages restent sur votre appareil.
 **Poêle à bois.** Le bois ne passe pas par le compteur : dans ⚙ Paramètres → Mon logement → *Poêle à
 bois*, notez chaque achat (date, stères, essence, humidité, prix). L'appli le convertit en chaleur avec
 des hypothèses affichées et modifiables (kWh par stère selon l'essence à 20 % d'humidité, correction
-d'humidité, rendement du poêle), le répartit sur la saison de chauffe qui suit l'achat au prorata des
-degrés-jours, et compte électricité **et** bois dans le coût du chauffage (Accueil, hiver contre hiver,
+d'humidité, rendement du poêle), le répartit sur la saison de chauffe qui suit l'achat, sur les soirs de
+flambée que la collecte a trouvés (ci-dessous), sinon au prorata des degrés-jours, et compte électricité **et** bois dans le coût du chauffage (Accueil, hiver contre hiver,
 « Expliquer un mois »). Sans relevé, une saison est supposée brûler tout le bois qu'elle a ; sous
 *Bois réellement brûlé* (facultatif), notez les stères brûlés d'une saison ou le stock restant au
 printemps : le relevé remplace l'hypothèse et le reste passe à la saison suivante (le plus ancien
-brûle d'abord). Enregistré pour le foyer dans le **secret** du dépôt `WOOD_JSON`, scellé dans
+brûle d'abord). Un relevé que les achats notés ne peuvent pas expliquer (plus de stères brûlés, ou plus de
+stock restant, que le stock noté ; une saison avant le premier achat) n'est pas compté, et l'écran le dit.
+Enregistré pour le foyer dans le **secret** du dépôt `WOOD_JSON`, scellé dans
 le navigateur comme la localisation, recopié chiffré par la collecte ; le journal public n'en dit rien.
 
 **Flambées du poêle.** Chaque nuit, la collecte cherche les soirs où le poêle a chauffé dans les
@@ -464,8 +466,8 @@ seuil sur une journée entière** (moyenne journalière de la sonde du radiateur
 de la station), la collecte de la nuit ouvre une *issue* « 🥶 Alerte froid prolongé » (GitHub vous
 prévient par e-mail) ; elle se ferme seule au retour au-dessus du seuil.
 
-Réglage : Paramètres → **Alerte froid prolongé** (pièces, seuil, durée de 1 à 3 jours), qui écrit la
-**variable** du dépôt `COLD_ALERT_JSON`, par exemple `{"threshold": 14, "days": 1, "rooms": ["1234567890"]}`
+Réglage : Paramètres → **Alerte froid prolongé** (pièces, seuil, durée de 1 à 3 jours), scellé dans le
+navigateur et enregistré dans le **secret** du dépôt `COLD_ALERT_JSON` (#497), par exemple `{"threshold": 14, "days": 1, "rooms": ["1234567890"]}`
 (identifiants Intuis ou de modules de la station, dans l'ordre des pseudonymes). L'issue étant
 publique, elle ne donne **ni température ni nom de pièce** : seulement « Pièce A », « Pièce B »… dans
 l'ordre de la liste ; la correspondance n'est affichée que dans l'application. Le journal public
@@ -512,7 +514,9 @@ période du bail, sans comparaison avec l'année d'avant.
   remplacement : baisser la consigne, tout chauffer en heures creuses (celles en vigueur chaque jour,
   dans la limite de la puissance saisie), ou un chauffe-eau thermodynamique d'un COP saisi (2,5 est
   proposé comme hypothèse) ; kWh et euros économisés par an, retour sur le surcoût face à un chauffe-eau
-  électrique neuf. Toutes les hypothèses sont saisies et rappelées sous le résultat.
+  électrique neuf. Toutes les hypothèses sont saisies et rappelées sous le résultat. Les jours relevés à
+  0 kWh (chauffe-eau coupé, absence) sont écartés et l'année ramenée à 365 jours à partir des autres ;
+  le résultat le dit, avec leur nombre (#502).
 - **Localisation de la maison** (⚙ Mon logement, #204) : commune ou coordonnées, à la précision
   choisie, et chaque toit (orientation, pente, puissance, pertes). Gardée **seulement chiffrée** (secret
   `HOME_LOCATION_JSON`, puis `solar.enc.json`) ; PVGIS la reçoit arrondie à environ 1 km ; jamais dans

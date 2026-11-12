@@ -1,6 +1,6 @@
 // #453: the water heater's options, on fictitious days and prices only (never a real reading).
 import { describe, expect, it } from 'vitest';
-import { HW_FIELDS, type HotWaterDay, type HotWaterInputs, parseHotWaterInputs, simulateHotWater } from './hotwater';
+import { HW_FIELDS, type HotWaterDay, type HotWaterInputs, parseHotWaterInputs, simulateHotWater, zeroAssumption } from './hotwater';
 
 const NONE: HotWaterInputs = parseHotWaterInputs(null);
 const DAYS: HotWaterDay[] = [
@@ -16,9 +16,23 @@ describe('simulateHotWater', () => {
     const sim = simulateHotWater(DAYS, NONE, PRICE, EIGHT_HOURS)!;
     const now = row(sim, 'now');
     expect(sim.days).toBe(2);
+    expect(sim.zeroDays).toBe(0);
     expect(sim.share).toBeCloseTo(0.8);
     expect(now.year!.kwh).toBeCloseTo(3650); // 10 kWh × 365
     expect(now.year!.eur).toBeCloseTo(2.2 * 365); // 8 × 0,2 + 2 × 0,3 a day
+  });
+
+  it('#502: the days read at 0 kWh are left out, counted, and the year is the others scaled to 365', () => {
+    // 335 days at 10 kWh, 30 at 0 (an absence): the simulation says 3 650 kWh a year, not 3 350
+    const year = Array.from({ length: 365 }, (_, n) => ({ day: `d${String(n).padStart(3, '0')}`, kwh: n < 30 ? 0 : 10, off: n < 30 ? 0 : 8 }));
+    const sim = simulateHotWater(year, NONE, PRICE, EIGHT_HOURS)!;
+    expect(sim.days).toBe(335);
+    expect(sim.zeroDays).toBe(30);
+    expect(row(sim, 'now').year!.kwh).toBeCloseTo(3650); // each day at 0 counted as an average day (the rule said on screen)
+    const said = zeroAssumption(sim);
+    expect(said).toContain('30 jours à 0\u00a0kWh relevés');
+    expect(said).toContain('sont écartés : l’année est ramenée à 365 jours à partir des 335 jours avec de l’énergie');
+    expect(zeroAssumption({ days: 300, zeroDays: 1 })).toMatch(/^1 jour à 0\u00a0kWh relevé dans la période .* est écarté .* comme si c’était un jour moyen/);
   });
 
   it('a heat-pump water heater: energy ÷ COP, same off-peak share, payback on what it costs more than a new tank', () => {

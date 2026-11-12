@@ -12,6 +12,7 @@ import { html } from '../trusted';
 import { avgPrice, costAvailable, esc, fmtKwh, lastDay, table, tableToggle } from '../ui';
 import { offlineInfo } from './offline-rooms';
 import { stoveName, woodDays, woodSettings } from './wood-state';
+import { woodSpread } from '../wood';
 import { cutDays } from './quality';
 
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
@@ -199,7 +200,7 @@ function woodCard(e: Explanation, { now, ref }: ReturnType<typeof explainWood>, 
       ],
       'Le bois du poêle',
     )}
-    <p class="hint muted">Le bois ne passe pas par le compteur : il n’entre pas dans les parts ci-dessus. Chaleur d’après vos achats et les hypothèses de <a class="link" href="#parametres-logement">⚙ Mon logement</a>, répartie selon le froid de chaque jour.</p>
+    <p class="hint muted">Le bois ne passe pas par le compteur : il n’entre pas dans les parts ci-dessus. Chaleur d’après vos achats et les hypothèses de <a class="link" href="#parametres-logement">⚙ Mon logement</a>, ${woodSpread(true)}.</p>
   </section>`;
 }
 
