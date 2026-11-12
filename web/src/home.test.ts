@@ -10,6 +10,7 @@ import {
   HOME_PERIODS,
   changeText,
   countedLine,
+  countedWhat,
   countedRows,
   expectedLabel,
   homePeriod,
@@ -69,6 +70,13 @@ describe('period of Accueil', () => {
   it('the line « ce qui est compté »', () => {
     expect(countedLine({ cat: 'all', rooms: 7, allRooms: 7, euros: true })).toBe('chauffage et eau chaude, hors abonnement');
     expect(countedLine({ cat: 'heating', rooms: 3, allRooms: 7, euros: false })).toBe('chauffage seul · 3 pièces sur 7, en kWh (prix à renseigner)');
+  });
+
+  it('#466: what a total counts, the words of the scope line', () => {
+    for (const [cat, words] of [['all', 'chauffage et eau chaude'], ['heating', 'chauffage seul'], ['water_heater', 'eau chaude seule']]) {
+      expect(countedWhat(cat)).toBe(words);
+      expect(countedLine({ cat, rooms: 7, allRooms: 7, euros: true }).startsWith(words)).toBe(true);
+    }
   });
 });
 
