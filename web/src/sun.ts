@@ -42,5 +42,5 @@ const nf1 = new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 1 });
 export function sunHint(day: string, below: boolean, sun: Map<string, number> | undefined, cut: number | null): string | null {
   if (!below) return null;
   const mj = sunnyDay(day, sun, cut);
-  return mj === null ? null : `journée ensoleillée (${nf1.format(mj)} MJ/m²) : le soleil a pu chauffer à la place des radiateurs`;
+  return mj === null ? null : `journée ensoleillée (${nf1.format(mj)} MJ/m²)`; // #518: what the sun may have done is said once, under the table
 }

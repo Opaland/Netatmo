@@ -245,8 +245,18 @@ try {
       check(/^1 note gardée sur cet appareil ne s’ouvre pas/.test(banner), `notes : bandeau attendu, lu « ${banner} »`);
       await page.screenshot({ path: `${OUT}/${BROWSER}-notes-illisibles.png`, fullPage: true });
       await audit(page, 'notes-illisibles');
+      // #518: never erased in one gesture: asked again, « Garder » keeps it and takes the focus
       await page.click('#notes-erase');
-      check(!(await page.locator('#notes-banner').count()), 'notes : le bandeau reste après « Effacer »');
+      check(await page.locator('#notes-confirm').isVisible(), 'notes : pas de confirmation avant d’effacer');
+      check((await page.evaluate(() => document.activeElement?.id)) === 'notes-erase-no', 'notes : le focus ne va pas sur « Garder »');
+      check((await page.evaluate(() => localStorage.getItem('intuis-history:works:data'))) === NOTES['intuis-history:works:data'], 'notes : effacée avant la confirmation');
+      await audit(page, 'notes-illisibles-confirmer');
+      await page.click('#notes-erase-no');
+      check(!(await page.locator('#notes-confirm').isVisible()) && (await page.locator('#notes-erase').isVisible()), 'notes : « Garder » ne referme pas la confirmation');
+      check((await page.evaluate(() => localStorage.getItem('intuis-history:works:data'))) === NOTES['intuis-history:works:data'], 'notes : « Garder » a effacé la note');
+      await page.click('#notes-erase');
+      await page.click('#notes-erase-yes');
+      check(!(await page.locator('#notes-banner').count()), 'notes : le bandeau reste après « Effacer définitivement »');
       check((await page.evaluate(() => localStorage.getItem('intuis-history:works:data'))) === null, 'notes : la note illisible n’a pas été effacée');
     } catch (err) {
       errors.push(`${BROWSER} argon2id : ${err}`);
@@ -648,9 +658,15 @@ try {
   await go(page, 'rapport');
   const dpe = (await page.locator('#report-dpe').innerText().catch(() => '')).replace(/\s+/g, ' ');
   check(
-    /Repère en kWh\/m²\/an, pas un DPE/.test(dpe) && /Mesuré : [\d\u202f\u00a0]+ kWh\/m² d’énergie finale \(chauffage, électricité \+ bois, et eau chaude/.test(dpe) && /classe [A-G] à titre indicatif/.test(dpe) && /Pas un DPE/.test(dpe),
+    /Repère en kWh\/m²\/an, pas un DPE/.test(dpe) && /Mesuré : [\d\u202f\u00a0]+ kWh\/m² d’énergie finale \(chauffage, électricité \+ bois, et eau chaude/.test(dpe) && /classe [A-G] à titre indicatif/.test(dpe) && /Comment c’est calculé/.test(dpe),
     `#127 : repère kWh/m²/an incomplet (« ${dpe.slice(0, 300)} »)`,
   );
+  // #518: why it is not a DPE, the factors and the grid are folded, the grid is a list of 7 classes
+  check(!(await page.locator('#report-dpe details').evaluate((d) => d.open)) && !/Pas un DPE :/.test(dpe), '#518 : l’explication « pas un DPE » n’est pas repliée');
+  await page.locator('#report-dpe details summary').click();
+  const grid = await page.locator('#dpe-grid li').allInnerTexts();
+  check(grid.length === 7 && grid[0] === 'A : 70 ou moins' && grid[6] === 'G : plus de 420', `#518 : grille du DPE (« ${grid.join(' | ')} »)`);
+  check(/Pas un DPE : /.test(await page.locator('#report-dpe details').innerText()), '#518 : « Pas un DPE » absent du repli');
   await go(page, 'piece-r-cuisine');
   const kitchen = await page.locator('#view').innerText();
   check(/Surface · kWh par m²[\s\S]{0,40}m² · chauffée au bois/.test(kitchen), `pièce Cuisine : surface sans « chauffée au bois » (${kitchen.slice(0, 200)})`);

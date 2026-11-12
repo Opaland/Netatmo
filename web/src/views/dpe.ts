@@ -10,16 +10,17 @@ import { localDay } from '../glossary';
 import { displaySurfaces } from '../household';
 import { html } from '../trusted';
 import { esc, longDate, nf0 } from '../ui';
+import { howDetails } from '../components';
 import { loadWorks } from './works';
 import { stoveRooms, verdictWood } from './wood-state';
 
 const f1 = (v: number) => v.toLocaleString('fr-FR', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 
-/** « A ≤ 70 · B ≤ 110 · … · G > 420 ». */
-export const dpeGridText = () =>
-  `${DPE_CLASSES.slice(0, -1)
-    .map((c, i) => `${c} ≤ ${DPE_ENERGY_GRID[i]}`)
-    .join(' · ')} · G > ${DPE_ENERGY_GRID[DPE_ENERGY_GRID.length - 1]}`;
+/** #518: the thresholds of the energy label as a list (« A : 70 ou moins » … « G : plus de 420 »). */
+export const dpeGridItems = (): string[] => [
+  ...DPE_CLASSES.slice(0, -1).map((c, i) => `${c} : ${DPE_ENERGY_GRID[i]} ou moins`),
+  `${DPE_CLASSES[DPE_CLASSES.length - 1]} : plus de ${DPE_ENERGY_GRID[DPE_ENERGY_GRID.length - 1]}`,
+];
 
 /** « 2,3 avant 2026, 1,9 à partir de 2026, 1,7 à partir de 2027 ». */
 const factorsText = () =>
@@ -47,7 +48,16 @@ export async function dpeHtml(end: string): Promise<string> {
     m.cls ? ` : <strong>classe ${m.cls}</strong> à titre indicatif.` : '.'
   }</p>`;
   const partial = m.cls ? '' : `<p class="hint muted">Pas de classe : ${m.known} pièce${m.known > 1 ? 's' : ''} chauffée${m.known > 1 ? 's' : ''} sur ${m.rooms} ont leur surface ; l’eau chaude de tout le logement sur une partie de sa surface paraîtrait trop haute. Complétez les surfaces dans <a class="link" href="#parametres-logement">⚙ Mon logement</a>.</p>`;
-  const why = `<p class="hint muted">Pas un DPE : le diagnostic calcule une consommation <em>conventionnelle</em> (climat du département, 19 °C, occupation type), compte aussi l’éclairage, les auxiliaires et le refroidissement, rapporte tout à la surface habitable (ici, celle des pièces chauffées saisies), et sa classe est la moins bonne de l’étiquette énergie et de l’étiquette climat (CO₂, non calculée ici). Ici, la consommation réellement mesurée, ramenée en énergie primaire comme le DPE : électricité × ${esc(f1(m.factor))} (coefficient en vigueur le ${esc(longDate(today))} ; ${esc(factorsText())}), bois × 1. Seuils de l’étiquette énergie, en kWh d’énergie primaire par m² et par an (logement de plus de 40 m²) : ${esc(dpeGridText())}.</p>`;
+  // #518: the figure and the class on screen; why it is not a DPE, the dated factors and the grid folded
+  const why = howDetails(
+    'Comment c’est calculé',
+    `<p class="hint muted">Pas un DPE : le diagnostic calcule une consommation <em>conventionnelle</em> (climat du département, 19 °C, occupation type), compte aussi l’éclairage, les auxiliaires et le refroidissement, rapporte tout à la surface habitable (ici, celle des pièces chauffées saisies), et sa classe est la moins bonne de l’étiquette énergie et de l’étiquette climat (CO₂, non calculée ici).</p>
+    <p class="hint muted">Ici, la consommation réellement mesurée, ramenée en énergie primaire comme le DPE : électricité × ${esc(f1(m.factor))} (coefficient en vigueur le ${esc(longDate(today))} ; ${esc(factorsText())}), bois × 1.</p>
+    <p class="hint muted" id="dpe-grid-title">Seuils de l’étiquette énergie, en kWh d’énergie primaire par m² et par an (logement de plus de 40 m²) :</p>
+    <ul class="hint muted" id="dpe-grid" aria-labelledby="dpe-grid-title">${dpeGridItems()
+      .map((t) => `<li>${esc(t)}</li>`)
+      .join('')}</ul>`,
+  );
   return wrap(figures + partial + why);
 }
 
