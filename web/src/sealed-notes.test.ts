@@ -6,6 +6,7 @@ import { loadNote, noteKey, saveNote, writeSealed } from './local-store';
 import { NS } from './scope';
 import { eraseUnreadable, migrateSealed, recordSealParams, sealedEntries, unreadableNotes } from './sealed-notes';
 import vector from './__fixtures__/kdf-vector.json';
+import { type Dataset, openRemembered } from './data';
 
 function memoryStorage(): Storage {
   const m = new Map<string, string>();
@@ -88,5 +89,24 @@ describe('#139 notes de cet appareil après un rekey', () => {
     store.setItem(`${NS}:invoices:data`, JSON.stringify(await sealLocal([2], k)));
     store.setItem(`${NS}:prefs:data`, JSON.stringify({ iv: 'x', ct: 'y', other: 1 }));
     expect(sealedEntries('data')).toEqual([`${NS}:invoices:data`]);
+  });
+});
+
+describe('#517 ouverture par clé mémorisée pendant un rekey', () => {
+  it('les paramètres retenus sont ceux lus avant l’ouverture, pas ceux publiés pendant', async () => {
+    let published: KeyInfo = before;
+    const info = vi.fn(async () => published);
+    const open = vi.fn(async () => {
+      published = after; // the rekey commit lands while the data open with the old key
+      return {} as Dataset;
+    });
+    await openRemembered('data', {} as CryptoKey, open, info);
+    expect(JSON.parse(store.getItem(`${NS}:sealed-with:data`)!)).toEqual(before);
+  });
+
+  it('hors ligne : rien n’est retenu, les données s’ouvrent quand même', async () => {
+    const ds = {} as Dataset;
+    expect(await openRemembered('data', {} as CryptoKey, async () => ds, async () => Promise.reject(new Error('hors ligne')))).toBe(ds);
+    expect(store.getItem(`${NS}:sealed-with:data`)).toBeNull();
   });
 });

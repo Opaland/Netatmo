@@ -344,9 +344,8 @@ export function renderPiece(view: HTMLElement, id: string) {
 /** « Mon défi » of a heated room: a goal of kWh per degree day against last winter, and the way to it. */
 function goalCard(id: string, mine: DayRecord[], last: string): string {
   const goal = goalOf(validGoals(state.roomGoals), id);
-  const choices = `<div class="seg" role="radiogroup" aria-label="Objectif face à l’hiver dernier">${[null, ...GOAL_CHOICES]
-    .map((g) => `<button type="button" role="radio" aria-checked="${g === goal}" data-piece="goal" data-room="${esc(id)}" data-goal="${g ?? ''}">${g === null ? 'Aucun' : esc(signedPct(-g))}</button>`)
-    .join('')}</div>`;
+  const options: [string, string][] = [['', 'Aucun'], ...GOAL_CHOICES.map((g): [string, string] => [String(g), signedPct(-g)])];
+  const choices = seg('goal', goal === null ? '' : String(goal), options, 'Objectif face à l’hiver dernier', (v) => ({ 'data-piece': 'goal', 'data-room': id, 'data-goal': v }));
   const head = '<div class="card-head"><h2>Mon défi</h2></div><p class="card-sub">Chauffer moins par degré de froid que l’hiver dernier : un hiver plus froid ne compte pas contre vous.</p>';
   const counted = countedNote('chauffage de la pièce par degré-jour, saison de chauffe en cours face aux mêmes jours de l’hiver dernier');
   if (goal === null) return `<section class="card" id="piece-goal">${head}${choices}${counted}</section>`;
