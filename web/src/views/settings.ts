@@ -21,6 +21,7 @@ import {
 import { cardTable, contractInfo, esc, longDate, table } from '../ui';
 import { agreePlurals, localDateTime, localDay } from '../glossary';
 import { html } from '../trusted';
+import { SOURCE_REPO } from '../source-repo';
 import { lazyAction, lazyCard } from '../lazy';
 import { showBuild } from '../build';
 import { track } from '../ready';
@@ -34,7 +35,7 @@ import { checkPlain, migrateText, plainOffer, saveSecretText } from './household
 /** #497: the shared contract is a household secret, sealed in this browser. */
 const CONTRACT_SECRET = 'CONTRACT_JSON';
 
-let settingsRepo = repoFromLocation() ?? 'Opaland/Netatmo';
+let settingsRepo = repoFromLocation() ?? SOURCE_REPO; // #533: a copy proposes itself
 /** The repository the settings write to (#346: radiators switched off, ⚙ Mon logement). */
 export const currentRepo = () => settingsRepo;
 /** #40: the repository typed in the first-launch assistant is the one of the other cards too. */

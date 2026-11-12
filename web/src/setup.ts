@@ -19,8 +19,8 @@ export const REQUIRED_SECRETS: readonly string[] = [...INTUIS_SECRETS, PASSPHRAS
 /** The collection workflow, run once with the whole history. */
 export const COLLECT_WORKFLOW = 'collect.yml';
 
-/** owner/repo as GitHub accepts it; anything else is refused before building a link or a call. */
-export const validRepo = (repo: string) => /^[A-Za-z0-9-]{1,39}\/[A-Za-z0-9._-]{1,100}$/.test(repo) && !repo.endsWith('/.') && !repo.endsWith('/..');
+/** owner/repo as GitHub accepts it (one rule, source-repo.ts). */
+export { validRepo } from './source-repo';
 
 /** The GitHub pages of the gestures by hand. */
 export const links = (repo: string) => ({
