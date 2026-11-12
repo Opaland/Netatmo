@@ -313,12 +313,14 @@ pouvez aussi saisir vos propres prix. Ces réglages restent sur votre appareil.
 **Poêle à bois.** Le bois ne passe pas par le compteur : dans ⚙ Paramètres → Mon logement → *Poêle à
 bois*, notez chaque achat (date, stères, essence, humidité, prix). L'appli le convertit en chaleur avec
 des hypothèses affichées et modifiables (kWh par stère selon l'essence à 20 % d'humidité, correction
-d'humidité, rendement du poêle), le répartit sur la saison de chauffe qui suit l'achat au prorata des
-degrés-jours, et compte électricité **et** bois dans le coût du chauffage (Accueil, hiver contre hiver,
+d'humidité, rendement du poêle), le répartit sur la saison de chauffe qui suit l'achat, sur les soirs de
+flambée que la collecte a trouvés (ci-dessous), sinon au prorata des degrés-jours, et compte électricité **et** bois dans le coût du chauffage (Accueil, hiver contre hiver,
 « Expliquer un mois »). Sans relevé, une saison est supposée brûler tout le bois qu'elle a ; sous
 *Bois réellement brûlé* (facultatif), notez les stères brûlés d'une saison ou le stock restant au
 printemps : le relevé remplace l'hypothèse et le reste passe à la saison suivante (le plus ancien
-brûle d'abord). Enregistré pour le foyer dans le **secret** du dépôt `WOOD_JSON`, scellé dans
+brûle d'abord). Un relevé que les achats notés ne peuvent pas expliquer (plus de stères brûlés, ou plus de
+stock restant, que le stock noté ; une saison avant le premier achat) n'est pas compté, et l'écran le dit.
+Enregistré pour le foyer dans le **secret** du dépôt `WOOD_JSON`, scellé dans
 le navigateur comme la localisation, recopié chiffré par la collecte ; le journal public n'en dit rien.
 
 **Flambées du poêle.** Chaque nuit, la collecte cherche les soirs où le poêle a chauffé dans les

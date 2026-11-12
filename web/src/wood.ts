@@ -8,6 +8,7 @@
 //                        × moisture factor × efficiency of the stove
 //   in time            = the season the purchase feeds (Sept → Aug), spread over its days in
 //                        proportion to the degree days (the colder, the more wood burnt).
+//                        Said in one sentence everywhere (WOOD_SPREAD, #501).
 //   #469: the fires     = where the collection found the stove's fires (stove-fires.ts), the wood
 //                        of the days it could see goes to those evenings (onFireDays).
 //   #465: the stock     = what a season does not burn is carried to the next one. Without a
@@ -17,6 +18,16 @@ import { type DayRecord, addDays } from './aggregate';
 import { type Weather, dju } from './analysis';
 import { type StoveFires, isCovered } from './stove-fires';
 import { ADEME_PER_DEGREE } from './checks';
+
+/**
+ * #501: the rule that places the wood on the days, in one sentence for every screen that counts
+ * it (woodDaily: the evenings of fire the collection found, else the degree days). `feminine`:
+ * after « la chaleur ». A test fails if a view writes the degree days alone.
+ */
+export const woodSpread = (feminine = false) => {
+  const e = feminine ? 'e' : '';
+  return `réparti${e} sur les soirs de flambée que la collecte a trouvés, sinon selon le froid de chaque jour (degrés-jours)`;
+};
 
 export type Species = 'chene' | 'hetre' | 'charme' | 'frene' | 'melange' | 'resineux';
 export const SPECIES: Record<Species, string> = {
@@ -172,6 +183,8 @@ export interface WoodSeason {
   reading: WoodBurnt | null;
   /** Stères noted burnt beyond the stock recorded (purchases missing?): not counted. */
   short: number;
+  /** #501: stock noted left in spring beyond the stock recorded (purchases missing?): not counted. */
+  over: number;
 }
 
 /**
@@ -204,7 +217,8 @@ export function woodSeasons(s: WoodSettings): WoodSeason[] {
     const r = readings.get(y) ?? null;
     const want = r ? (r.steres ?? Math.max(0, have - r.left!)) : have;
     let burn = Math.min(want, have);
-    const w: WoodSeason = { season: y, bought, carried, steres: burn, kwh: 0, eur: 0, left: 0, reading: r, short: Math.max(0, want - have) };
+    const over = r?.left !== undefined ? Math.max(0, r.left - have) : 0;
+    const w: WoodSeason = { season: y, bought, carried, steres: burn, kwh: 0, eur: 0, left: 0, reading: r, short: Math.max(0, want - have), over };
     while (burn > EPS && lots.length) {
       const l = lots[0];
       const take = Math.min(l.steres, burn);
@@ -218,6 +232,14 @@ export function woodSeasons(s: WoodSettings): WoodSeason[] {
     if (have > EPS || r) out.push(w);
   }
   return out;
+}
+
+/**
+ * #501: a reading noted for a season before the first purchase is not in any season (the stock
+ * starts with the first purchase): ignored, and said beside the reading.
+ */
+export function readingIgnored(s: WoodSettings, b: WoodBurnt): boolean {
+  return !s.purchases.length || b.season < Math.min(...s.purchases.map((p) => seasonFed(p.day)));
 }
 
 const seasonDays = (y: number, last: string): [string, string] => [`${y}-09-01`, `${y + 1}-08-31` < last ? `${y + 1}-08-31` : last];
@@ -404,5 +426,6 @@ export function seasonText(s: WoodSeason): string {
   else parts.push(`${st(s.steres)} brûlé${s.steres >= 2 ? 's' : ''} (${s.reading.left !== undefined ? 'stock relevé au printemps' : 'relevé'})`);
   if (s.left > 1e-9) parts.push(`reste ${st(s.left)}`);
   if (s.short > 1e-9) parts.push(`${st(s.short)} de plus que les achats notés, non compté${s.short >= 2 ? 's' : ''}`);
+  if (s.over > 1e-9) parts.push(`stock relevé : ${st(s.over)} de plus que les achats notés, non compté${s.over >= 2 ? 's' : ''}`);
   return parts.join(' · ');
 }
