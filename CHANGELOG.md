@@ -16,6 +16,13 @@
   jamais 0. Une seule répartition du bois, celle du verdict de l'Accueil (#433). Verdict
   « Isolation, à titre indicatif » sous « Chauffage selon le froid » : W/°C et kWh/m² par an, grilles indicatives affichées
   (`web/src/isolation.ts`), jours estimés signalés.
+- **Saisies gardées dans ⚙ Mon logement** (#462) : « Localisation et toits » garde ce qui est tapé
+  dans un brouillon chiffré sur l'appareil (clé des données), qui survit à un changement d'onglet, à
+  un passage par ⚙ Sources de données et à un rechargement, et s'efface après « Enregistrer pour le
+  foyer » ou « Annuler ». Poêle à bois : « Noter un achat de bois » et « Hypothèses » restent
+  ouverts après une action, le rendement s'applique à la sortie du champ, avant le premier achat
+  aussi. Surfaces : une valeur saisie ne reconstruit plus la grille, le focus passe au champ
+  suivant. Parcours e2e `npm run e2e:logement` (Chromium et WebKit).
 
 ## v1.7 — novembre 2026 : finitions et données de la maison
 

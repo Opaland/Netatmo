@@ -58,11 +58,42 @@ export async function fillWorks(records: DayRecord[]) {
   if (ds === d) draw(); // #247: else the new dataset's render fills its own card
 }
 
-function draw() {
+function draw(keepGrid = false) {
   const el = document.getElementById('works-zone') ?? document.getElementById('works-card');
   if (!el || !ds) return;
-  el.outerHTML = html(card());
+  const grid = keepGrid ? el.querySelector('#works-surfaces > .works-surfaces') : null;
+  if (grid) patchAround(el, card(), grid);
+  else el.outerHTML = html(card());
   drawCharts();
+}
+
+/**
+ * #462: redraw the card around the grid of surfaces, which stays the same element: the field
+ * being typed in keeps its focus and caret (a whole redraw dropped them at each value, and the
+ * phone keyboard's « next » landed nowhere). Every ancestor of the grid up to the card is kept
+ * too; their other children are replaced by the fresh ones, in order.
+ */
+function patchAround(card: Element, fresh: string, grid: Element) {
+  const t = document.createElement('template');
+  t.innerHTML = html(fresh);
+  const freshCard = t.content.firstElementChild;
+  let keep: Element = grid;
+  let freshKeep: Element | null | undefined = freshCard?.querySelector('#works-surfaces > .works-surfaces');
+  if (!freshCard || !freshKeep) return void (card.outerHTML = html(fresh));
+  while (keep !== card) {
+    const parent: Element = keep.parentElement!;
+    const freshParent: Element = freshKeep.parentElement!;
+    // a fold the reader opened stays open (`open` is theirs, not the template's)
+    for (const a of [...parent.attributes]) if (a.name !== 'open' && !freshParent.hasAttribute(a.name)) parent.removeAttribute(a.name);
+    for (const a of [...freshParent.attributes]) parent.setAttribute(a.name, a.value);
+    for (const c of [...parent.childNodes]) if (c !== keep) c.remove();
+    const nodes = [...freshParent.childNodes];
+    const at = nodes.indexOf(freshKeep);
+    keep.before(...nodes.slice(0, at));
+    keep.after(...nodes.slice(at + 1));
+    keep = parent;
+    freshKeep = freshParent;
+  }
 }
 
 const num1 = (v: number) => v.toLocaleString('fr-FR', { maximumFractionDigits: 1 });
@@ -251,10 +282,10 @@ function drawCharts() {
   }
 }
 
-async function save(next: HomeWorks) {
+async function save(next: HomeWorks, keepGrid = false) {
   works = next;
   persisted = await saveNote(NOTE, ds!.source, ds!.key, next);
-  draw();
+  draw(keepGrid);
 }
 
 // #257: the controls of the card, dispatched by main.ts (no `onclick =` on the elements).
@@ -271,7 +302,7 @@ onCard({
       const surfaces = { ...works.surfaces };
       if (t.value === '' || !(v > 0 && v <= MAX_SURFACE)) delete surfaces[t.dataset.worksSurface];
       else surfaces[t.dataset.worksSurface] = Math.round(v * 10) / 10;
-      void save({ ...works, surfaces }).then(() => document.getElementById('works-surfaces')?.setAttribute('open', ''));
+      void save({ ...works, surfaces }, true);
       return true;
     }
     return false;
