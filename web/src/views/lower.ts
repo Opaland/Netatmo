@@ -233,9 +233,14 @@ function markersHtml(p: LowerPrefs): string {
     <p class="hint" id="lower-msg" role="status"></p>`;
 }
 
+/**
+ * The setup is a `.lower-setup`, not a `.table-details`: it opens by itself while no room is
+ * chosen, and main.ts reads the toggle of a `.table-details` as « show every table » (Accueil grew
+ * by its values table after a visit to Air et confort).
+ */
 function setupHtml(p: LowerPrefs): string {
   const free = freeModules();
-  return `<details class="table-details" id="lower-setup"${p.rooms.length ? '' : ' open'}><summary>Pièces et sonde du niveau inférieur${p.rooms.length ? ` · ${p.rooms.length}` : ''}</summary>
+  return `<details class="lower-setup" id="lower-setup"${p.rooms.length ? '' : ' open'}><summary>Pièces et sonde du niveau inférieur${p.rooms.length ? ` · ${p.rooms.length}` : ''}</summary>
     <fieldset class="lower-rooms"><legend>Pièces chauffées du niveau inférieur</legend>
       ${rooms()
         .map((r) => switchField(r.name, p.rooms.includes(r.id), { 'data-lower-room': r.id }))

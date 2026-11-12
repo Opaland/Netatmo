@@ -135,6 +135,12 @@ try {
     // ---------------------------------------------------------------- Air et confort: radiator vs station
     progress(`${name} : Air et confort`);
     await go(page, 'confort');
+    // #452: the setup of « Niveau inférieur » opens by itself; it must not turn « Voir les valeurs »
+    // on for every table of the app (Accueil grew by a table after a visit to Air et confort)
+    await page.waitForSelector('#lower-card #lower-setup[open]', { timeout: 15000 });
+    await go(page, 'accueil');
+    check((await page.locator('#view details.table-details[open]').count()) === 0, `${name} : visiter Air et confort ouvre les tableaux de l'Accueil`);
+    await go(page, 'confort');
     await page.waitForSelector('#probe-card', { timeout: 15000 });
     const card = await page.locator('#probe-card').innerText();
     check(/écart moyen/i.test(card) && /recalez la consigne/.test(card), `${name} : la carte radiateur/station n'explique pas l'écart moyen ni son usage`);
