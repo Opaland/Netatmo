@@ -158,7 +158,7 @@ donc sensibles au texte système. Mode simple : `--font-md` passe à 1,25 rem pa
 | **Tableau** | en-têtes fixes, colonne 1 figée, **ombre de défilement** visible | simple, repliable « Voir les valeurs » | `.table-wrap` |
 | **Graphique** | titre de carte, résumé en une phrase au-dessus, graphique, légende **directe** (étiquettes en bout de série), tableau en repli | barres, courbes, aires, nuage, calendrier, cascade | `.chart` + hauteurs en ligne |
 | **Formulaire** | libellé au-dessus, aide sous le libellé, champ 44 px, erreur sous le champ (texte + icône), bouton principal en bas | texte, nombre avec unité, date (format français), sélection, interrupteur | 4 façons de libeller, `.toggle` / `.check` |
-| **Boutons** | principal (accent plein), **secondaire** (contour), tertiaire (texte), destructif | normal, petit | `.primary`, `.link`, bouton natif gris |
+| **Boutons** | principal (accent plein), **secondaire** (contour), tertiaire (texte), destructif | normal, petit | `.primary`, `.link`, bouton natif gris ; destructif : `.btn.danger` (contour `--state-bad`), toujours après une confirmation (#518) |
 | **Feuille** (bottom sheet) / **dialogue** | poignée, titre, contenu, actions ; focus piégé, Échap, retour au déclencheur | feuille (mobile), dialogue centré (bureau) | menu ⋮, panneaux `details` |
 | **État vide / à activer** | icône, phrase, action | vide, à activer, hors ligne, erreur | `.empty`, cartes absentes |
 | **Pastille de couleur** | carré 12 px + motif | — | `.swatch`, `.share-legend i`, `.tt-key` (3 → 1) |

@@ -133,7 +133,8 @@ l'application rouvre ces notes avec l'ancienne clé (même phrase, paramètres r
 les rechiffre avec la nouvelle : rien ne se perd. Une note qu'aucune des deux clés n'ouvre (phrase
 changée, ou appareil pas ouvert à l'étape 0) n'est **jamais écrasée** : un bandeau le dit, une
 nouvelle saisie du même genre ne dure alors que jusqu'au verrouillage, et le bouton « Effacer ces
-notes illisibles » les supprime seulement si vous le demandez. Pour la retrouver : remettre
+notes… » les supprime seulement si vous le demandez, après une confirmation (« Effacer
+définitivement »). Pour la retrouver : remettre
 l'ancienne version (retour arrière ci-dessous) puis déverrouiller sur cet appareil.
 
 En local, même chose : `DATA_PASSPHRASE=… python -m collector rekey --kdf argon2id`. La copie d'avant
