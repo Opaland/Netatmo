@@ -101,6 +101,12 @@ sans jalon.
   ou d'identifiants (voir `collector/diagnose.py`).
 - IA : seuls les totaux du mois et au plus cinq jours inhabituels sont envoyés, pièces et capteurs sous
   pseudonyme ; l'application montre exactement ce qui a été envoyé.
+- Origine de l'application (#229) : sur `<compte>.github.io`, l'origine est **partagée** par tous les
+  sites Pages du compte (stockage, clé « Rester connecté », caches, service workers ; le site
+  `<compte>.github.io` lui-même peut prendre la main sur l'appli). Règle : **aucun autre site Pages**
+  sur le compte qui sert l'appli ; tout nom gardé dans le navigateur passe par `web/src/scope.ts`.
+  L'appli signale sur l'appareil la trace d'un autre site (`web/src/origin-traces.ts`). Transfert
+  vers une origine dédiée : décision du propriétaire, gestes dans `docs/etudes/origine-dediee.md`.
 
 ## 8. Rituels (projet personnel, rythme léger)
 

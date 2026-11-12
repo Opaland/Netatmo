@@ -1,8 +1,9 @@
 # Étude : donner à l'appli une origine web qui ne soit qu'à elle
 
-*Statut : terminée, novembre 2026. Issue #229 (reste ouverte : la décision d'acheter un domaine
-revient au propriétaire). Coût : de 0 € à une dizaine d'euros par an. Recommandation en fin de
-document.*
+*Statut : terminée, novembre 2026, mise à jour le 12/11/2026 (v2.0). Issue #229 (reste ouverte
+jusqu'au transfert). **Décision du propriétaire (9 et 10/11/2026)** : option B, l'organisation
+GitHub **Netatmodepoche**, au moment de la v2.0 ; gestes exacts en fin de document. Coût : de 0 €
+à une dizaine d'euros par an.*
 
 ## Situation
 
@@ -29,9 +30,19 @@ navigateur, peut donc :
    page et ce qui y est tapé, **phrase de passe comprise**. Ce point vaut aussi sans « Rester
    connecté ».
 
-Ce qui ne passe **pas** : un autre site ne peut pas enregistrer de service worker qui contrôle
-`/<dépôt>/` (portée limitée au dossier de son script, et GitHub Pages n'envoie pas l'en-tête
-`Service-Worker-Allowed`) ; la politique Trusted Types refuse un `sw.js` d'un autre chemin (#229).
+4. **prendre la main sur l'appli, durablement**, par un service worker. *(Corrigé le 12/11/2026 :
+   la version précédente de cette étude disait que cela ne passait pas.)* Un site de **dépôt**
+   (`/<autre>/sw.js`) ne peut pas viser `/<dépôt>/` : sa portée s'arrête à son dossier et GitHub
+   Pages n'envoie pas l'en-tête `Service-Worker-Allowed`. Mais le **site du compte lui-même** (dépôt
+   `<compte>.github.io`, servi à la racine) peut enregistrer `/sw.js` avec la portée `/`, qui couvre
+   `/<dépôt>/` ; et tout script de l'origine peut **désinscrire** le service worker de l'appli
+   (`navigator.serviceWorker.getRegistration('/<dépôt>/')` puis `unregister()`). Le service worker
+   racine sert alors les pages de l'appli comme il veut, **à chaque ouverture suivante**, même après
+   la fermeture du site hostile, jusqu'à ce que le navigateur l'oublie.
+
+Ce que l'appli peut encore refuser chez elle : la politique Trusted Types n'accepte qu'un `sw.js`
+au chemin exact de l'appli (#229) ; elle ne protège pas d'un service worker enregistré par une
+**autre page** de l'origine.
 
 Le risque suppose qu'un autre site Pages **du même compte** devienne hostile (dépendance
 compromise, page de test oubliée, contribution malveillante acceptée sur un autre dépôt). Il est
@@ -47,6 +58,26 @@ faible tant que le compte ne publie que cette appli, mais il n'est pas nul et il
   **oubliée** (la phrase de passe est redemandée une fois après la mise à jour).
 - Service worker : seul `sw.js` **au chemin exact** de l'appli est accepté comme script.
 - Avertissement dans Paramètres (« Ce qui est public ») et dans le README (Sécurité).
+- **v2.0 : la règle se vérifie sur l'appareil** (`web/src/origin-traces.ts`). Sur `*.github.io`,
+  l'écran de déverrouillage regarde ce que le navigateur garde pour l'origine (clés de
+  localStorage, bases IndexedDB, caches, service workers) ; tout nom qui n'est pas celui de l'appli
+  est la trace d'un autre site du compte ouvert dans ce navigateur, et un avertissement s'affiche à
+  côté de « Rester connecté ». C'est une détection, pas une protection : un script hostile peut
+  effacer ses traces, et un site jamais ouvert ici n'en laisse pas. Rien n'est effacé (ce peut être
+  le site du propriétaire).
+
+### Pistes écartées dans le code (elles n'atténuent rien de réel)
+
+- **CSP limitée au chemin** (`script-src https://<compte>.github.io/<dépôt>/` au lieu de `'self'`) :
+  elle ne s'applique qu'aux pages de l'appli. Le danger est un script d'une **autre** page de
+  l'origine, que cette CSP ne voit pas ; et chez elle, l'appli n'injecte aucun script (Trusted Types
+  refuse tout balisage exécutable). Elle forcerait en plus le nom du compte dans le build.
+- **Portée du service worker** : elle est déjà le dossier de l'appli (`/<dépôt>/`), le plus juste
+  possible ; une portée plus étroite laisserait des pages hors ligne sans rien protéger.
+- **Contrôler le service worker qui sert la page** depuis le JavaScript de l'appli : si la page est
+  servie par un service worker hostile, ce JavaScript est le sien ; le contrôle ne prouve rien.
+- **Décocher « Rester connecté » d'office** quand une trace est vue : possible et sans risque, mais
+  c'est un choix de produit (confort au quotidien) : proposé au propriétaire, pas fait.
 
 Seule une origine propre supprime le partage. Trois façons d'y arriver.
 
@@ -97,8 +128,11 @@ secrets, variables et l'environnement Pages ont suivi (à revérifier après tra
 au besoin), réactiver Pages. Comme pour A, nouvelle origine : réinstaller, retaper la phrase.
 
 **Limites** : l'isolation tient **tant que personne ne publie d'autre site Pages** dans cette
-organisation ; c'est une règle à se rappeler, pas une garantie technique. L'adresse change si le
-dépôt bouge à nouveau, et GitHub ne redirige pas les adresses Pages après un transfert.
+organisation ; c'est une règle à se rappeler, pas une garantie technique. Le pire cas est un dépôt
+`<organisation>.github.io` : servi à la racine, il peut prendre la main durablement par un service
+worker (point 4). L'adresse change si le dépôt bouge à nouveau, et GitHub ne redirige pas les
+adresses Pages après un transfert (à vérifier le jour du transfert). La détection de l'appareil
+(`origin-traces.ts`) continue de signaler une trace d'un autre site dans l'organisation.
 
 ## Option C : rester sur l'origine partagée, sans « Rester connecté »
 
@@ -119,7 +153,7 @@ dépôt bouge à nouveau, et GitHub ne redirige pas les adresses Pages après un
 | Adresse stable si l'hébergement change | **oui** | non | non |
 | Confort au quotidien | inchangé | inchangé | phrase à chaque ouverture |
 
-## Recommandation
+## Recommandation de l'étude (9/11/2026), puis décision
 
 **Option A, avec un sous-domaine** (`energie.<domaine du foyer>`) : c'est la seule qui donne une
 origine propre **garantie par la technique** plutôt que par une règle, elle garde « Rester
@@ -135,6 +169,58 @@ En attendant la décision :
 
 Si l'achat d'un domaine est écarté, **l'option B** donne le même résultat gratuitement, au prix d'une
 discipline à tenir (rien d'autre publié dans l'organisation).
+
+**Décision du propriétaire** (commentaires de #229, 9 et 10/11/2026) : **option B**, organisation
+**Netatmodepoche** ; l'appli sera servie sous `https://netatmodepoche.github.io/Netatmo/`. Règles :
+aucun autre site Pages dans cette organisation, et **pas de dépôt `netatmodepoche.github.io`**.
+L'option A (sous-domaine) reste possible plus tard, par-dessus B, sans autre transfert.
+
+## Le transfert vers Netatmodepoche : gestes exacts du propriétaire
+
+Rien de ceci n'est fait par un agent : chaque geste touche le compte, l'organisation ou les
+appareils. Ordre conseillé, un jour sans collecte en cours (après 05:00 UTC).
+
+**Avant**
+
+1. Sur chaque appareil : Outils → Exporter mes données → **Télécharger une sauvegarde chiffrée**, et
+   noter ce qui n'est gardé que sur l'appareil (factures, surfaces, travaux, absences, réglages) :
+   la nouvelle origine **ne le reprend pas**. Noter les totaux de l'année.
+2. Relever la liste des secrets et variables du dépôt (Settings → Secrets and variables → Actions) :
+   noms seulement, pour vérifier après le transfert.
+3. Vérifier que l'organisation **Netatmodepoche** n'a aucun autre dépôt avec Pages, ni de dépôt
+   `netatmodepoche.github.io`.
+
+**Le transfert**
+
+4. Dépôt → Settings → General → *Danger Zone* → **Transfer ownership** → Netatmodepoche, nom
+   inchangé (`Netatmo`).
+5. Dans le dépôt transféré : Settings → Pages → *Source* : **GitHub Actions** ; Settings → Actions →
+   General : workflows autorisés, et *Workflow permissions* qui laissent les workflows demander
+   l'écriture (la collecte commite ; un réglage d'organisation peut l'interdire) ; environnement
+   `github-pages` présent. Comparer secrets et variables à la liste de l'étape 2,
+   ressaisir ce qui manque.
+6. Lancer **Actions → Déploiement GitHub Pages**, puis **Actions → Collecte quotidienne** à la main :
+   le résumé du déploiement donne l'adresse `https://netatmodepoche.github.io/Netatmo/`.
+
+**Ce qui nomme l'ancien compte** (une PR après le transfert ; GitHub redirige les adresses de
+dépôt, pas celles de Pages) :
+
+- `scripts/nas/volets.sh` (`DEPOT='Opaland/Netatmo'`) et, sur le NAS, la variable `DEPOT` ; le jeton
+  à accès fin du NAS (*Only select repositories*) est à recréer sur le dépôt transféré
+  (`docs/etudes/volets-wiser.md`) ;
+- les liens du README (`SITE=https://opaland.github.io/Netatmo`, `gh attestation verify -R …`),
+  `SECURITY.md`, `.github/ISSUE_TEMPLATE/config.yml`, `web/src/legal.ts`, le dépôt par défaut de
+  `web/src/views/settings.ts`, les `User-Agent` du collecteur (`collector/enedis.py`, `shelly.py`,
+  `scripts/tempo_jours.py`), `scripts/revue_issues.py` ;
+- les tests qui citent l'adresse comme exemple peuvent rester (données fictives).
+
+**Après, sur chaque appareil**
+
+7. Ouvrir la nouvelle adresse, **réinstaller l'icône** (une PWA est liée à son origine), retaper la
+   phrase de passe, ressaisir les notes de l'étape 1. Vérifier les totaux.
+8. Sur l'ancienne adresse : rien à garder. Paramètres → *Recharger l'application* puis effacer les
+   données du site `opaland.github.io` dans le navigateur, si aucun autre site de ce compte n'y sert.
+9. Fermer #229.
 
 ## Sources (lues le 9 novembre 2026)
 
