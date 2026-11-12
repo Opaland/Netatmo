@@ -16,7 +16,7 @@ import {
   ABSENCE_RATIO,
   type AbsenceEdits,
   LINKY_RATIO,
-  MIN_DJU,
+  MIN_DJU_DAY,
   NO_EDITS,
   type Period,
   absencePeriods,
@@ -124,7 +124,7 @@ function teleworkCard(): string {
   const res = dayTypeCost(perDay, ds!.weather, from, last, plan.group);
   const label: Record<string, string> = { telework: 'Jour de télétravail', office: 'Jour ouvré au bureau', weekday: 'Jour ouvré (lun.–ven.)', weekend: 'Jour de week-end' };
   if (!res || kinds.some((k) => !res.groups.has(k))) {
-    return `<section class="card" id="telework-card">${head}<p class="hint muted">Pas assez de jours chauffés dans cette pièce sur 12 mois pour comparer (au moins 3 jours de chaque sorte, à plus de ${MIN_DJU} degrés-jours).</p></section>`;
+    return `<section class="card" id="telework-card">${head}<p class="hint muted">Pas assez de jours chauffés dans cette pièce sur 12 mois pour comparer (au moins 3 jours de chaque sorte, à plus de ${MIN_DJU_DAY} degrés-jours).</p></section>`;
   }
   const money = (k: number) => (price !== null ? `${(k * price).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €` : '—');
   const g = (k: string) => res.groups.get(k)!;
@@ -145,7 +145,7 @@ function teleworkCard(): string {
       kinds.map((k) => [label[k], num1(g(k).kwh), money(g(k).kwh), g(k).n]),
     )}
     <details class="table-details"><summary>Comment c'est calculé</summary>
-      <p class="hint">Jours chauffés des 12 derniers mois (au moins ${MIN_DJU} degrés-jours) de la pièce choisie, classés par sorte de jour. Pour chaque sorte, une droite kWh = a + b × DJU est ajustée${[...res.groups.values()].some((x) => x.method === 'ratio') ? ' (ou, avec moins de 10 jours, le rapport kWh / DJU)' : ''}, puis lue au même climat pour toutes : ${num1(res.dju)} degrés-jours, la moyenne des ${res.days} jours. Prix : ${
+      <p class="hint">Jours chauffés des 12 derniers mois (au moins ${MIN_DJU_DAY} degrés-jours) de la pièce choisie, classés par sorte de jour. Pour chaque sorte, une droite kWh = a + b × DJU est ajustée${[...res.groups.values()].some((x) => x.method === 'ratio') ? ' (ou, avec moins de 10 jours, le rapport kWh / DJU)' : ''}, puis lue au même climat pour toutes : ${num1(res.dju)} degrés-jours, la moyenne des ${res.days} jours. Prix : ${
         price !== null ? `${price.toLocaleString('fr-FR', { maximumFractionDigits: 3 })} €/kWh, coût moyen de cette pièce sur la période` : 'aucun prix renseigné'
       }. Les jours fériés et les congés comptent comme des jours ouvrés : ils diluent un peu l'écart.</p>
     </details>
