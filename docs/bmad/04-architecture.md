@@ -18,7 +18,7 @@
  │   station.py   ── refresh tournant ──► Netatmo (option)  shelly.py ──► Shelly (option)│
  │   insights.py  ── agrégats seulement ──► API Claude (option, mensuel)                 │
  │   errors.py (erreurs sûres) + redact.py (journal, stdout, stderr expurgés)            │
- │   storage.py + crypto.py : AES-256-GCM, PBKDF2-SHA256 600 000 it.                     │
+ │   storage.py + crypto.py : AES-256-GCM, PBKDF2-SHA256 600 000 it. ou Argon2id (#139)  │
  │ scripts/commit-data.sh : commit de data/ si le clair change, push avec reprise        │
  │ « Sauvegarde du jeton Netatmo renouvelé » : même en cas d'échec                       │
  └────────────────────┬─────────────────────────────────────────────────────────────────┘
@@ -38,7 +38,9 @@ Points clés : aucun serveur, aucune base ; l'enveloppe chiffrée est volontaire
 WebCrypto la déchiffre : `{"v":1,"kdf":"PBKDF2-SHA256","iter":N,"salt":b64,"iv":b64,"ct":b64}`
 (ou, après `rekey --kdf argon2id`, `"kdf":"Argon2id","m":65536,"t":2,"p":1` à la place de `iter`, #139)
 (`ct` inclut l'étiquette GCM de 16 octets) ; l'appli refuse une autre version, une autre dérivation ou
-moins de 600 000 itérations. Une écriture n'a lieu que si le texte clair change, ce qui évite un commit
+des paramètres hors des bornes de `collector/kdf.json` (une seule règle des deux côtés, #139). Le clair
+est complété par des espaces jusqu'à un palier de taille avant chiffrement (#138, `pad` dans
+`collector/crypto.py`) : la taille publiée ne suit plus l'activité du foyer. Une écriture n'a lieu que si le texte clair change, ce qui évite un commit
 par nuit sans nouveauté. Le journal des Actions est **public** : rien de personnel n'y est écrit
 (ADR-14).
 

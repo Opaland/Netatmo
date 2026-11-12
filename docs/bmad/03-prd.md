@@ -60,7 +60,7 @@ Statut : ✅ livré · 🔄 en cours v1.1 · ⏳ à faire.
 
 | ID | Catégorie | Exigence | Vérification |
 |---|---|---|---|
-| NFR-1 | Sécurité | Tout fichier de `data/` hors `keyinfo.json` est chiffré AES-256-GCM, clé PBKDF2-SHA256 600 000 itérations ; aucun secret dans le dépôt ni dans le site | Test croisé Python ↔ TS ; scan de secrets en CI |
+| NFR-1 | Sécurité | Tout fichier de `data/` hors `keyinfo.json` est chiffré AES-256-GCM, clé PBKDF2-SHA256 600 000 itérations, ou Argon2id après la migration par `rekey` (#139) ; contenu complété jusqu'à un palier de taille (#138) ; aucun secret dans le dépôt ni dans le site | Test croisé Python ↔ TS ; scan de secrets en CI |
 | NFR-2 | Vie privée | Le site ne contacte aucun tiers et n'envoie rien ; pas de télémétrie. Seule exception future : chat IA, sur action explicite, avec la clé de l'utilisateur | Revue CSP `connect-src` ; test Playwright interceptant les requêtes |
 | NFR-3 | Vie privée IA | Seuls des agrégats (mensuels, par pièce, sans nom de personne) partent vers l'API Claude ; le contenu exact envoyé est archivé chiffré | Test unitaire du constructeur de prompt |
 | NFR-4 | Performance | Premier graphique < 3 s sur téléphone d'entrée de gamme (CPU ×4 bridé) une fois la clé mémorisée ; JS initial < 400 Ko gzip (cible, à mesurer) | Playwright + budget de taille en CI |
