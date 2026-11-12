@@ -42,6 +42,7 @@ import { offlineEstimate, offlineLine, offlineNow, offlineRun, stoppedIn } from 
 import { offlineText, runStart } from '../room-offline';
 import { type Scope, fmtMoney, homeScope, money, yoy } from './verdict-scope';
 import { stoveName, verdictWood, woodOver } from './wood-state';
+import { woodSpread } from '../wood';
 
 const ord = (day: string) => (Number(day.slice(8, 10)) === 1 ? '1er' : String(Number(day.slice(8, 10))));
 const END_LABEL = { month: 'fin du mois', season: 'fin de saison', year: "fin d'année", '12m': '' } as const;
@@ -153,7 +154,7 @@ function verdictBlock(r: HomeRange, sc: Scope): string {
         `<p class="hint">Attendu = consommation des mêmes dates des années passées (jusqu'à quatre)${
           v.climate ? ', le chauffage corrigé des degrés-jours (le froid réellement constaté)' : ''
         }, ${m.unit === '€' ? 'au prix payé sur la période' : 'en kWh (prix non renseignés)'}. ${
-          sc.wood ? 'Avec le poêle, le bois de vos achats (⚙ Mon logement), réparti selon le froid de chaque jour, s’ajoute à l’électricité, cette année comme les années passées. ' : ''
+          sc.wood ? `Avec le poêle, le bois de vos achats (⚙ Mon logement), ${woodSpread()}, s’ajoute à l’électricité, cette année comme les années passées. ` : ''
         }${
           endTxt ? `La projection ajoute le reste de la période comme les années passées, au rythme constaté ; elle suppose un hiver normal. ` : ''
         }${m.unit === '€' ? 'Prix du contrat en vigueur chaque jour, hors abonnement.' : ''}</p>`,
