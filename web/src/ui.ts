@@ -41,6 +41,21 @@ export function table(head: string[], rows: (string | number)[][], numericFrom =
     .join('')}</tbody></table></div>`;
 }
 
+/**
+ * #484: a table whose every column matters, read as stacked cards: one card per row, its first
+ * cell as title, the other cells under their column name (a definition list). Nothing hides
+ * behind a horizontal scroll at 360 px or text 200 % (`.table-wrap` scrolls: fine for figures,
+ * not for « ce qui est envoyé »). Cells are HTML already safe, as in table().
+ */
+export function cardTable(head: string[], rows: string[][], label: string) {
+  return `<ul class="card-table" aria-label="${esc(label)}">${rows
+    .map(
+      ([title, ...cells]) =>
+        `<li><p class="card-table-title">${title}</p><dl>${cells.map((c, i) => `<div><dt>${esc(head[i + 1])}</dt><dd>${c}</dd></div>`).join('')}</dl></li>`,
+    )
+    .join('')}</ul>`;
+}
+
 export function tableToggle(content: string) {
   return `<details class="table-details" ${state.showTables ? 'open' : ''}><summary>Voir les valeurs</summary>${content}</details>`;
 }
