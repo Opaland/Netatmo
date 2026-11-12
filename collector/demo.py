@@ -83,6 +83,7 @@ WARMER = ("r-ch1", date(2025, 12, 20), date(2026, 1, 31), 1.0)
 # #280: the home cut off (every radiator out of reach): hours before the two restarts of the gateway
 # (power cuts) and two evenings without Internet (no restart); sources failed some nights.
 CUT_HOURS = ((80, (1, 2)), (26, (13,)), (47, (8,)), (9, (19, 20, 21)))  # (days before today, hours)
+SUN_SEED = 4520
 WIND_SEED = 222  # S-3.12: wind and rain stream of the demo (one where the rain shows no chance effect)
 FAILED_NIGHTS = ((12, ["linky"]), (33, ["netatmo"]))
 
@@ -728,6 +729,7 @@ def generate(out_dir: Path, passphrase: str = "demo", start_year: int = 2022, to
     curve_from = today - timedelta(days=CURVE_DAYS)
     rnd_curve = random.Random(30)  # separate stream as well
     rnd_wind = random.Random(WIND_SEED)  # S-3.12: wind and rain, separate stream (the rest is unchanged)
+    rnd_sun = random.Random(SUN_SEED)  # #452: daily radiation, separate stream (the rest is unchanged)
     tariffs_from = date(2025, 1, 1)
     # The house gets a little better each year (réglages, isolation).
     efficiency = {y: 1.0 - 0.05 * (y - start_year) for y in range(start_year, today.year + 1)}
@@ -825,6 +827,10 @@ def generate(out_dir: Path, passphrase: str = "demo", start_year: int = 2022, to
             store.put("weather", "rain", d.isoformat(), None, round(rnd_wind.expovariate(1 / 4.5), 1))
         else:
             store.put("weather", "rain", d.isoformat(), None, 0.0)
+        # #452: global radiation (MJ/m²): a clear-sky curve around 45° N (≈ 5 in December, ≈ 29 in
+        # June) times a cloud factor of the day — fictitious, for « jours peu ensoleillés »
+        clear = 17 + 12 * math.cos((doy - 172) / 365 * 2 * math.pi)
+        store.put("weather", "sun", d.isoformat(), None, round(clear * rnd_sun.uniform(0.15, 1.0), 1))
         if d >= date(start_year + 1, 1, 1):  # Linky history shorter than the radiators'
             other = 9500 + (1800 if weekend else 0) + 900 * math.cos((doy - 15) / 365 * 2 * math.pi) + rnd.gauss(0, 900)
             other = max(other, 7000)

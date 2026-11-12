@@ -10,6 +10,9 @@ else in calls of their own (`open_meteo_wind`). weather.enc.json:
   "wind": {"YYYY-MM-DD": [mean km/h, gust max km/h | null]}, "rain": {"YYYY-MM-DD": mm},
   "wind_source": "open-meteo"
 A refusal of these variables (HTTP 400) never costs the temperatures: they are asked again alone.
+
+#452: the daily global radiation (`shortwave_radiation_sum`, MJ/m²) comes with them, to tell the
+days with little sun (a south-facing door hides its losses on sunny days): "sun": {"YYYY-MM-DD": MJ/m²}.
 """
 
 from __future__ import annotations
@@ -30,7 +33,7 @@ log = logging.getLogger(__name__)
 ARCHIVE = "https://archive-api.open-meteo.com/v1/archive"
 FORECAST = "https://api.open-meteo.com/v1/forecast"
 DAILY = "temperature_2m_min,temperature_2m_max,temperature_2m_mean"
-WIND = "wind_speed_10m_mean,wind_gusts_10m_max,precipitation_sum"
+WIND = "wind_speed_10m_mean,wind_gusts_10m_max,precipitation_sum,shortwave_radiation_sum"
 
 
 class WeatherError(SourceError):
@@ -61,8 +64,8 @@ def _get_with_wind(http: httpx.Client, url: str, params: dict) -> dict:
     return _get(http, url, {**params, "daily": DAILY})
 
 
-def _wind_rows(body: dict) -> list[tuple[str, list | None, float | None]]:
-    """(day, [mean km/h, gust km/h | None] or None, rain mm or None) per day of the answer."""
+def _wind_rows(body: dict) -> list[tuple[str, list | None, float | None, float | None]]:
+    """(day, [mean km/h, gust km/h | None] or None, rain mm or None, radiation MJ/m² or None) per day."""
     d = body.get("daily", {})
     out = []
 
@@ -73,15 +76,18 @@ def _wind_rows(body: dict) -> list[tuple[str, list | None, float | None]]:
     for i, day in enumerate(d.get("time", [])):
         mean, gust, rain = col("wind_speed_10m_mean", i), col("wind_gusts_10m_max", i), col("precipitation_sum", i)
         wind = None if mean is None else [round(mean, 1), None if gust is None else round(gust)]
-        out.append((day, wind, None if rain is None else round(rain, 1)))
+        sun = col("shortwave_radiation_sum", i)
+        out.append((day, wind, None if rain is None else round(rain, 1), None if sun is None else round(sun, 1)))
     return out
 
 
 def _store_wind(store: Store, body: dict, today: str) -> int:
     n = 0
-    for day, wind, rain in _wind_rows(body):
+    for day, wind, rain, sun in _wind_rows(body):
         if day > today:
             continue
+        if sun is not None:
+            store.put("weather", "sun", day, None, sun)
         if wind is not None:
             store.put("weather", "wind", day, None, wind)
             n += 1
@@ -118,6 +124,7 @@ def open_meteo(store: Store, lat: float, lon: float, tz: str, first_day: str, ht
         (
             *_first_missing(doc.get("outdoor", {}), start, today - timedelta(days=10)),
             *_first_missing(doc.get("wind", {}), start, today - timedelta(days=10)),
+            *_first_missing(doc.get("sun", {}), start, today - timedelta(days=10)),  # #452
         ),
         default=None,
     )
@@ -148,8 +155,12 @@ def open_meteo_wind(
     http = http or httpx.Client(timeout=30.0)
     today = datetime.now(ZoneInfo(tz)).date()
     start = date.fromisoformat(first_day)
-    have = store.doc("weather").get("wind", {})
-    missing_from = min(_first_missing(have, start, today - timedelta(days=10)), default=None)
+    doc = store.doc("weather")
+    stop = today - timedelta(days=10)
+    missing_from = min(
+        (*_first_missing(doc.get("wind", {}), start, stop), *_first_missing(doc.get("sun", {}), start, stop)),
+        default=None,
+    )
     params = {**_params(lat, lon, tz), "daily": WIND}
     spec = schema.OPEN_METEO_WIND
     n = 0
