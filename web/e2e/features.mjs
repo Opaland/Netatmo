@@ -533,9 +533,18 @@ try {
   await page.waitForFunction(() => /kWh\/m²/.test(document.querySelector('#works-card')?.textContent ?? ''), null, { timeout: 10000 }).catch(() => {});
   works = await page.locator('#works-card').innerText();
   check(/kWh\/m²/.test(works), 'travaux : kWh/m² absent après saisie des surfaces');
+  // #460: the stove's wood counted in the kWh/m² of the home; the Cuisine (stove) never at 0 kWh/m²
+  check(/12 derniers mois : [\d,]+ kWh\/m² de chauffage électricité \+ bois/.test(works), `travaux : kWh/m² du logement sans le bois (${works.slice(0, 300)})`);
+  check(/Cuisine\t[\d,]+ m²\t[^\n]*\tchauffée au bois/.test(works), `travaux : la Cuisine (poêle) n'est pas « chauffée au bois » (${works.slice(-500)})`);
   await page.locator('#works-card').screenshot({ path: `${OUT}/${BROWSER}-travaux.png` });
   await audit(page, 'parametres-logement');
   await checkViolations(page, 'parametres-logement');
+  await go(page, 'historique-froid');
+  const isoM2 = await page.locator('#iso-m2').innerText();
+  check(/Chauffage des 12 derniers mois ≈ \d+ kWh\/m², électricité \+ bois, sur \d+ m² : (très bien|bien|moyennement|mal) isolé\./.test(isoM2), `isolation : kWh/m² électricité + bois absent (« ${isoM2} »)`);
+  await go(page, 'piece-r-cuisine');
+  const kitchen = await page.locator('#view').innerText();
+  check(/Surface · kWh par m²[\s\S]{0,40}m² · chauffée au bois/.test(kitchen), `pièce Cuisine : surface sans « chauffée au bois » (${kitchen.slice(0, 200)})`);
 
   // #308: no card lost, each one at its new place; #309: every setting in ⚙ (one page each)
   progress('destinations des cartes');

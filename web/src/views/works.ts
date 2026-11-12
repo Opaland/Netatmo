@@ -3,11 +3,13 @@
 // chosen marker (two lines), kWh/m², monthly heating with the markers drawn on it.
 // Surfaces and markers stay on this device, encrypted with the data key (local-store.ts).
 import { type DayRecord, addDays, bucketKey, bucketKeys, bucketLabel, minusYears } from '../aggregate';
-import { ds, onDatasetLoaded } from '../app';
+import { ds, onDatasetLoaded, state } from '../app';
 import { barChart, chartOf, cssVar, scatterChart } from '../charts';
 import { loadNote, saveNote } from '../local-store';
 import { BEDROOMS_ID, displaySurfaces } from '../household';
 import { html } from '../trusted';
+import { homePerM2, roomPerM2Text } from '../isolation';
+import { stoveRooms, verdictWood } from './wood-state';
 import { onCard } from '../events';
 import { activeRooms, catColor, esc, firstDay, fmtKwh, lastDay, longDate, nf0, pct, table, referenceColor } from '../ui';
 import {
@@ -56,11 +58,42 @@ export async function fillWorks(records: DayRecord[]) {
   if (ds === d) draw(); // #247: else the new dataset's render fills its own card
 }
 
-function draw() {
+function draw(keepGrid = false) {
   const el = document.getElementById('works-zone') ?? document.getElementById('works-card');
   if (!el || !ds) return;
-  el.outerHTML = html(card());
+  const grid = keepGrid ? el.querySelector('#works-surfaces > .works-surfaces') : null;
+  if (grid) patchAround(el, card(), grid);
+  else el.outerHTML = html(card());
   drawCharts();
+}
+
+/**
+ * #462: redraw the card around the grid of surfaces, which stays the same element: the field
+ * being typed in keeps its focus and caret (a whole redraw dropped them at each value, and the
+ * phone keyboard's « next » landed nowhere). Every ancestor of the grid up to the card is kept
+ * too; their other children are replaced by the fresh ones, in order.
+ */
+function patchAround(card: Element, fresh: string, grid: Element) {
+  const t = document.createElement('template');
+  t.innerHTML = html(fresh);
+  const freshCard = t.content.firstElementChild;
+  let keep: Element = grid;
+  let freshKeep: Element | null | undefined = freshCard?.querySelector('#works-surfaces > .works-surfaces');
+  if (!freshCard || !freshKeep) return void (card.outerHTML = html(fresh));
+  while (keep !== card) {
+    const parent: Element = keep.parentElement!;
+    const freshParent: Element = freshKeep.parentElement!;
+    // a fold the reader opened stays open (`open` is theirs, not the template's)
+    for (const a of [...parent.attributes]) if (a.name !== 'open' && !freshParent.hasAttribute(a.name)) parent.removeAttribute(a.name);
+    for (const a of [...freshParent.attributes]) parent.setAttribute(a.name, a.value);
+    for (const c of [...parent.childNodes]) if (c !== keep) c.remove();
+    const nodes = [...freshParent.childNodes];
+    const at = nodes.indexOf(freshKeep);
+    keep.before(...nodes.slice(0, at));
+    keep.after(...nodes.slice(at + 1));
+    keep = parent;
+    freshKeep = freshParent;
+  }
 }
 
 const num1 = (v: number) => v.toLocaleString('fr-FR', { maximumFractionDigits: 1 });
@@ -109,7 +142,12 @@ function card(): string {
   const shown = shownSurfaces();
   const perRoom = perRoomM2(lastRecords, shown, from12, last);
   const surf = surfaceOf(shown, rooms.map((r) => r.id));
-  const heat12 = lastRecords.filter((r) => r.cat === 'heating' && r.day >= from12 && shown[r.room]).reduce((s, r) => s + r.kwh, 0);
+  // #460: the stove's wood counted with the electricity (one split: verdictWood); its rooms say
+  // « chauffée au bois », never 0 kWh/m²
+  const wood = verdictWood(state.cat, state.rooms);
+  const stove = new Set(stoveRooms().map((id) => ds!.roomMap?.get(id) ?? id));
+  const home = homePerM2(lastRecords, shown, rooms.map((r) => r.id), [...stove], wood, from12, last);
+  const perRoomRows = rooms.filter((r) => perRoom.has(r.id) || (stove.has(r.id) && shown[r.id] > 0));
   return `<section class="card" id="works-card">
     <div class="card-head"><h2>Travaux et surfaces <small class="muted">avant / après</small></h2>
       ${
@@ -162,13 +200,13 @@ function card(): string {
         )
         .join('')}</div>
       ${
-        perRoom.size
-          ? `<p>12 derniers mois : <strong>${num1(heat12 / Math.max(1, surf.m2))} kWh/m²</strong> de chauffage sur les pièces renseignées.</p>
+        home && perRoomRows.length
+          ? `<p id="works-home-m2">12 derniers mois : <strong>${num1(home.perM2)} kWh/m²</strong> de chauffage${home.wood ? ' électricité + bois' : ''} sur les pièces renseignées.</p>
         ${table(
           ['Pièce', 'Surface', 'Chauffage 12 mois', 'Par m²'],
-          rooms.filter((r) => perRoom.has(r.id)).map((r) => {
-            const p = perRoom.get(r.id)!;
-            return [esc(r.name), `${num1(p.m2)} m²`, fmtKwh(p.kwh), `${num1(p.perM2)} kWh/m²`];
+          perRoomRows.map((r) => {
+            const kwh = perRoom.get(r.id)?.kwh ?? 0;
+            return [esc(r.name), `${num1(shown[r.id])} m²`, fmtKwh(kwh), roomPerM2Text(kwh, shown[r.id], stove.has(r.id), num1)];
           }),
         )}`
           : ''
@@ -244,10 +282,10 @@ function drawCharts() {
   }
 }
 
-async function save(next: HomeWorks) {
+async function save(next: HomeWorks, keepGrid = false) {
   works = next;
   persisted = await saveNote(NOTE, ds!.source, ds!.key, next);
-  draw();
+  draw(keepGrid);
 }
 
 // #257: the controls of the card, dispatched by main.ts (no `onclick =` on the elements).
@@ -264,7 +302,7 @@ onCard({
       const surfaces = { ...works.surfaces };
       if (t.value === '' || !(v > 0 && v <= MAX_SURFACE)) delete surfaces[t.dataset.worksSurface];
       else surfaces[t.dataset.worksSurface] = Math.round(v * 10) / 10;
-      void save({ ...works, surfaces }).then(() => document.getElementById('works-surfaces')?.setAttribute('open', ''));
+      void save({ ...works, surfaces }, true);
       return true;
     }
     return false;
