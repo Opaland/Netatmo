@@ -75,6 +75,16 @@ copie du dépôt, vider ce qui appartient au foyer d'origine, la phrase de passe
 la première collecte et l'installation sur le téléphone, puis un script facultatif qui vérifie que
 le dépôt est prêt (`scripts/depot_pret.py`). Les options ci-dessous s'ajoutent après coup.
 
+**Assistant de premier lancement** (#40) : sur l'écran d'ouverture d'un site sans données, ou dans
+⚙ Paramètres → Sources de données → **Premier lancement**. Avec le jeton décrit dans le guide
+([guide, « l'écran Paramètres »](docs/INSTALLER.md#autre-voie--lécran-paramètres-de-lapplication)), il vérifie chaque étape du guide (secrets
+présents, collecte activée, dernière collecte et publication du site), enregistre lui-même les
+secrets Intuis (chiffrés dans le navigateur), réactive la collecte quotidienne si GitHub l'a arrêtée
+et lance la première collecte. Il ne fait **pas** le reste, et donne le lien de la page GitHub : la
+phrase de passe (`DATA_PASSPHRASE`, jamais écrite par l'application) et l'activation de GitHub Pages
+(le jeton n'a pas la permission « Pages » ; une publication réussie, ou la page servie par le site
+du dépôt, le confirme).
+
 ### Sur le téléphone
 
 **Mises à jour** (#357) : une nouvelle version attend qu'on la demande ; un bandeau « Nouvelle version

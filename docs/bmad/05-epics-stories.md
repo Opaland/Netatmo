@@ -130,7 +130,7 @@ dans les [issues GitHub](https://github.com/Opaland/Netatmo/issues) (une par ré
 | ID | Récit | Critères d'acceptation | T | P | Statut |
 |---|---|---|---|---|---|
 | S-10.1 | En tant que possesseur d'Intuitiv, je veux un dépôt modèle et un guide, afin d'installer seul | G un compte GitHub vierge · Q je suis le guide · A données visibles en < 30 min sans aide | M | C | À faire |
-| S-10.3 | En tant que nouvel utilisateur, je veux un assistant de premier lancement dans Paramètres, afin d'installer sans lire le README | G un dépôt vierge · Q je suis l'assistant · A secrets, Pages et première collecte faits depuis l'application | L | C | À faire |
+| S-10.3 | En tant que nouvel utilisateur, je veux un assistant de premier lancement dans Paramètres, afin d'installer sans lire le README | G un dépôt vierge · Q je suis l'assistant · A secrets, Pages et première collecte faits depuis l'application | L | C | Partiel (#40) : l'assistant vérifie et fait ce que le jeton permet ; phrase de passe et Pages restent des gestes dans GitHub |
 | S-10.2 | En tant qu'utilisateur, je veux l'appli sur les stores, afin de l'installer comme les autres | G la PWA · Q je l'emballe (TWA / Capacitor) · A publication acceptée | L | W | À faire |
 
 ## Backlog v1.3 (revue de cadrage, 52 personas)

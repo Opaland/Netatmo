@@ -37,6 +37,19 @@ const CONTRACT_SECRET = 'CONTRACT_JSON';
 let settingsRepo = repoFromLocation() ?? 'Opaland/Netatmo';
 /** The repository the settings write to (#346: radiators switched off, ⚙ Mon logement). */
 export const currentRepo = () => settingsRepo;
+/** #40: the repository typed in the first-launch assistant is the one of the other cards too. */
+export const setCurrentRepo = (repo: string) => {
+  if (repo !== settingsRepo) configured = null;
+  settingsRepo = repo;
+};
+
+/** The token to create (one text: Sources de données and the first-launch assistant, #40). */
+export const tokenAdvice = (repo: string) => `Créez un <a href="${TOKEN_HELP_URL}" target="_blank" rel="noopener">jeton GitHub « fine-grained »</a> :
+      accès au seul dépôt <strong>${esc(repo)}</strong>, permissions <strong>Secrets : lecture et écriture</strong>,
+      <strong>Variables : lecture et écriture</strong> (contrat partagé) et
+      <strong>Actions : lecture et écriture</strong>, <strong>rien d'autre</strong> (surtout pas « Contents »), expiration courte (7 jours). Le jeton reste en mémoire le temps de la visite :
+      l'application ne l'enregistre jamais, ni sur l'appareil, ni ailleurs. Les champs du jeton et des identifiants sont marqués pour que
+      le navigateur ne propose pas de les mémoriser ; si votre navigateur ou votre gestionnaire de mots de passe le propose quand même, refusez.`;
 let configured: Set<string> | null = null;
 let settingsMsg: { ok: boolean; text: string } | null = null;
 /** #463: the action that failed last (tried again by « Réessayer »), and its failures in a row. */
@@ -112,12 +125,7 @@ export function renderSettings(view: HTMLElement, section: SettingsSection) {
   }</span></summary>${statusList}</details>`;
   const loginCard = `<section class="card">
     <div class="card-head"><h2>1. Autoriser l'application à écrire vos secrets</h2>${scopeTag('foyer')}</div>
-    <p class="hint muted">Créez un <a href="${TOKEN_HELP_URL}" target="_blank" rel="noopener">jeton GitHub « fine-grained »</a> :
-      accès au seul dépôt <strong>${esc(settingsRepo)}</strong>, permissions <strong>Secrets : lecture et écriture</strong>,
-      <strong>Variables : lecture et écriture</strong> (contrat partagé) et
-      <strong>Actions : lecture et écriture</strong>, <strong>rien d'autre</strong> (surtout pas « Contents »), expiration courte (7 jours). Le jeton reste en mémoire le temps de la visite :
-      l'application ne l'enregistre jamais, ni sur l'appareil, ni ailleurs. Les champs du jeton et des identifiants sont marqués pour que
-      le navigateur ne propose pas de les mémoriser ; si votre navigateur ou votre gestionnaire de mots de passe le propose quand même, refusez.</p>
+    <p class="hint muted">${tokenAdvice(settingsRepo)}</p>
     <div id="gh-login" class="inline-form" role="group" aria-label="Connexion à GitHub">
       <label>Dépôt<input name="repo" value="${esc(settingsRepo)}" ${noSaveAttrs(false)}${demo ? ' disabled' : ''}></label>
       <label>Jeton GitHub<input name="token" ${noSaveAttrs(true)} placeholder="github_pat_…" ${hasToken() ? 'value="••••••••" disabled' : demo ? 'disabled' : ''}></label>
@@ -132,6 +140,12 @@ export function renderSettings(view: HTMLElement, section: SettingsSection) {
     ${groups}
     <button class="primary" type="button" id="secrets-save" ${hasToken() ? '' : 'disabled'}>Chiffrer et enregistrer dans GitHub</button>
     ${formMsg('', { id: 'secrets-msg' })}
+  </section>`;
+  // #40: the first-launch assistant, loaded on demand (./setup)
+  const setupCard = `<section class="card" id="setup-zone">
+    <div class="card-head"><h2>Premier lancement</h2>${scopeTag('foyer')}</div>
+    <p class="hint muted">Un assistant pas à pas : ce qui est déjà fait dans le dépôt, ce que l’appli fait elle-même avec le jeton, et les gestes à faire à la main dans GitHub, avec le lien.</p>
+    <button type="button" class="btn secondary small" id="setup-open">Ouvrir l’assistant</button>
   </section>`;
   const collectCard = `<section class="card">
     <h2>3. Lancer la collecte</h2>
@@ -199,7 +213,7 @@ export function renderSettings(view: HTMLElement, section: SettingsSection) {
   <section class="card" id="devices-card" hidden></section>
   <section class="card"><div class="card-head"><h2>Home Assistant, liaison des pièces</h2></div>
     <p class="hint muted">L'état des capteurs Home Assistant importés et l'accord fenêtre / radiateur se lisent dans <a href="#confort">Pièces → Air et confort</a>, comme la liaison entre pièces et modules de la station.</p></section>
-  ${loginCard}${demo ? '' : secretsCard + collectCard}${msg}`,
+  ${setupCard}${loginCard}${demo ? '' : secretsCard + collectCard}${msg}`,
     etat: `${statusFold}<details class="card fold" id="devices-fold"><summary><h2>État des appareils</h2> <span class="fold-sub">modules, piles, passerelle</span></summary><div id="devices-card" data-reading hidden></div></details>`,
     contrat: `${tenant().on ? tenantNote('Le contrat partagé est masqué') : contractSection()}${demo || hasToken() ? '' : '<p class="hint muted">Pour partager le contrat, connectez-vous à GitHub dans <a href="#parametres-sources">Sources de données</a>.</p>'}${msg}`,
     foyer: `${inviteCard}
@@ -416,6 +430,10 @@ export function handleClick(btn: HTMLElement): boolean {
   }
   if (btn.dataset.migratePlain === CONTRACT_SECRET) {
     void settingsAction(() => migrateText(settingsRepo, CONTRACT_SECRET));
+    return true;
+  }
+  if (btn.id === 'setup-open') {
+    void lazyAction(btn, () => import('./setup'), (m) => m.mountSetup(document.getElementById('setup-zone'), ds!.source === 'demo'), 'Assistant de premier lancement');
     return true;
   }
   if (btn.id === 'legal-open') {

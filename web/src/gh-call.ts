@@ -26,6 +26,10 @@ export function ghCall(path: string, method = 'GET'): GhCall {
       ? { what: m === 'POST' ? 'la création d’une variable' : m === 'DELETE' ? 'la suppression d’une variable' : 'la mise à jour d’une variable', permission: '« Variables » en écriture' }
       : { what: 'la lecture d’une variable', permission: '« Variables » en lecture' };
   if (/\/actions\/workflows\/[^/]+\/dispatches$/.test(p)) return { what: 'le lancement de la collecte', permission: '« Actions » en écriture' };
+  // #40: the first-launch assistant
+  if (/\/actions\/workflows\/[^/]+\/enable$/.test(p)) return { what: 'l’activation de la collecte', permission: '« Actions » en écriture' };
+  if (/\/actions\/workflows\/[^/]+\/runs$/.test(p) || /\/actions\/runs\/\d+\/jobs$/.test(p)) return { what: 'la lecture des collectes passées', permission: '« Actions » en lecture' };
+  if (/\/actions\/workflows\/[^/]+$/.test(p)) return { what: 'la lecture de l’état de la collecte', permission: '« Actions » en lecture' };
   return { what: 'un appel à GitHub', permission: ALL };
 }
 
