@@ -148,21 +148,50 @@ export function showUnreadableNotes(source: string, doc: Document = document) {
   const p = doc.createElement('p');
   const strong = doc.createElement('strong');
   strong.textContent = `${plural(n, 'note gardée', 'notes gardées')} sur cet appareil ne ${agree(n, 's’ouvre', 's’ouvrent')} pas avec cette phrase de passe.`;
+  // #518: shorter, and how to get it back (README, « Les notes de l'appareil »)
   p.append(
     strong,
-    ` ${agree(n, 'Elle a été écrite', 'Elles ont été écrites')} avec une autre phrase (factures, travaux, absences… saisies ici). ${agree(n, 'Elle est gardée telle quelle et ne sera pas remplacée', 'Elles sont gardées telles quelles et ne seront pas remplacées')} ; tant qu’${agree(n, 'elle est là', 'elles sont là')}, une nouvelle saisie du même genre ne dure que jusqu’au verrouillage.`,
+    ` ${agree(n, 'Écrite', 'Écrites')} avec une autre phrase (factures, travaux, absences…), ${agree(n, 'elle est gardée telle quelle', 'elles sont gardées telles quelles')}. Pour ${agree(n, 'la', 'les')} retrouver : remettre les données d’avant le changement de clé (retour arrière), puis déverrouiller ici : guide du dépôt, « Les notes de l’appareil ». D’ici là, une nouvelle saisie du même genre ne dure que jusqu’au verrouillage.`,
   );
-  const b = doc.createElement('button');
-  b.type = 'button';
-  b.className = 'btn';
-  b.id = 'notes-erase';
-  b.textContent = agree(n, 'Effacer cette note illisible', 'Effacer ces notes illisibles');
+  const b = button(doc, 'notes-erase', 'btn secondary', agree(n, 'Effacer cette note…', 'Effacer ces notes…'));
+  // #518: erasing is final (the note could still open after going back): asked again, in the
+  // banner, with the destructive button of the design system; « Garder » takes the focus.
+  const ask = doc.createElement('div');
+  ask.id = 'notes-confirm';
+  ask.className = 'notes-confirm';
+  ask.hidden = true;
+  ask.setAttribute('role', 'group');
+  ask.setAttribute('aria-label', 'Confirmer l’effacement');
+  const q = doc.createElement('p');
+  q.textContent = `Effacer définitivement ? ${agree(n, 'Elle ne pourra plus être retrouvée', 'Elles ne pourront plus être retrouvées')}, même en revenant à l’ancienne phrase.`;
+  const yes = button(doc, 'notes-erase-yes', 'btn danger', 'Effacer définitivement');
+  const no = button(doc, 'notes-erase-no', 'btn secondary', 'Garder');
+  ask.replaceChildren(q, yes, no);
   b.addEventListener('click', () => {
+    ask.hidden = false;
+    b.hidden = true;
+    no.focus();
+  });
+  no.addEventListener('click', () => {
+    ask.hidden = true;
+    b.hidden = false;
+    b.focus();
+  });
+  yes.addEventListener('click', () => {
     eraseUnreadable(source);
     box.remove();
   });
-  box.replaceChildren(p, b);
+  box.replaceChildren(p, b, ask);
   doc.body.insertBefore(box, doc.getElementById('app'));
+}
+
+function button(doc: Document, id: string, cls: string, text: string): HTMLButtonElement {
+  const b = doc.createElement('button');
+  b.type = 'button';
+  b.id = id;
+  b.className = cls;
+  b.textContent = text;
+  return b;
 }
 
 export const hideUnreadableNotes = (doc: Document = document) => doc.getElementById('notes-banner')?.remove();

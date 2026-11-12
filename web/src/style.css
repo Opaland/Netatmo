@@ -1314,6 +1314,12 @@ th {
   color: var(--accent-text);
   border-color: var(--border-strong);
 }
+/* #518: destructive (design system § 4, Boutons): what cannot be undone, always after a confirmation */
+.btn.danger {
+  background: var(--surface-card);
+  color: var(--state-bad);
+  border-color: var(--state-bad);
+}
 .btn.tertiary {
   background: none;
   color: var(--accent-text);

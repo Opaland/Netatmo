@@ -21,6 +21,17 @@
 .update-banner .btn {
   flex: 0 0 auto;
 }
+/* #518: the confirmation of an erasure, on its own line in the banner */
+.update-banner .notes-confirm {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+  flex: 1 1 100%;
+}
+.update-banner .notes-confirm[hidden] {
+  display: none;
+}
 .app-card .controls {
   display: flex;
   flex-wrap: wrap;
