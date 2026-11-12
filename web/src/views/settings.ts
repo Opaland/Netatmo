@@ -302,7 +302,7 @@ export function sharedOriginWarning(host: string): string {
       ${esc(host.replace(/\.github\.io$/, ''))}. La clé gardée sur cet appareil ne peut pas être copiée, mais un script d'un autre site
       Pages de ce compte, ouvert dans ce navigateur, pourrait s'en servir pour déchiffrer vos données et vos notes.
       Ne publiez aucun autre site Pages sur ce compte, ou désactivez « Rester connecté » (la phrase de passe est alors demandée
-      à chaque ouverture). Un domaine personnel dédié supprime ce risque (README, section Sécurité).`,
+      à chaque ouverture). Une adresse à l'appli seule (organisation GitHub ou domaine dédiés) supprime ce risque (README, section Sécurité).`,
     { id: 'shared-origin' },
   );
 }
