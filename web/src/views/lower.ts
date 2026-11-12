@@ -166,9 +166,7 @@ function card(): string {
     return `<section class="card" id="lower-card">${top}${setup}
       <p class="hint muted">Le niveau inférieur compte une chambre : son détail est masqué par défaut, par respect pour ses occupants. Il reste affiché jusqu'au prochain verrouillage.</p>
       <button type="button" class="btn secondary" data-comfort="show-bedrooms">Afficher le détail des chambres</button></section>`;
-  if (!p.rooms.length)
-    return `<section class="card" id="lower-card">${top}${setup}
-      <p class="hint muted">Choisissez les pièces chauffées du niveau inférieur (une chambre, l'entrée près du garage…) : la carte met en regard la consommation de leurs radiateurs, la température de la chambre et celle du dehors, à froid égal, d'un hiver à l'autre et avant / après un changement (joints de porte, rideau).</p></section>`;
+  if (!p.rooms.length) return `<section class="card" id="lower-card">${top}${setup}</section>`;
   if (!ds!.weather?.size)
     return `<section class="card" id="lower-card">${top}${setup}<p class="hint muted">La comparaison à froid égal a besoin de la température extérieure (prochaine collecte).</p></section>`;
   const x = data(p);
@@ -256,6 +254,7 @@ function markersHtml(p: LowerPrefs): string {
 function setupHtml(p: LowerPrefs): string {
   const free = freeModules();
   return `<details class="lower-setup" id="lower-setup"${!p.rooms.length || setupOpen ? ' open' : ''}><summary>Pièces et sonde du niveau inférieur${p.rooms.length ? ` · ${p.rooms.length}` : ''}</summary>
+    <p class="hint muted" id="lower-help">Choisissez les pièces chauffées du niveau inférieur (une chambre, l'entrée près du garage…) : la carte met en regard la consommation de leurs radiateurs, la température de la chambre et celle du dehors, à froid égal, d'un hiver à l'autre et avant / après un changement (joints de porte, rideau).</p>
     <fieldset class="lower-rooms"><legend>Pièces chauffées du niveau inférieur</legend>
       ${rooms()
         .map((r) => switchField(r.name, p.rooms.includes(r.id), { 'data-lower-room': r.id }))

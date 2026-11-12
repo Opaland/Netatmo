@@ -28,6 +28,7 @@ import { STOP_REASONS, parseStopped } from './room-offline';
 import { BURNT_SEASONS, MAX_BURNT_STERES, MAX_PURCHASES, SPECIES, parseWood, woodSeasons } from './wood';
 import { HISTORY_PAGES, METER_PAGES, SETTINGS, TOOLS, parseRoute, routeKey } from './router';
 import { LOWER_KINDS, MAX_LOWER_MARKERS, MAX_LOWER_ROOMS, validLower } from './lower';
+import { MAX_GOAL, goalOf, validGoals } from './goal';
 import { lockNotice } from './session';
 import { readShellyPrefs } from './shelly-prefs';
 import { MAX_ANSWERS, isCovered, parseAnswers, parseFires } from './stove-fires';
@@ -186,6 +187,20 @@ describe('#359 fuzz : préférences relues de cet appareil', () => {
         assert(isStr(m.label) && m.label.length <= 80, 'précision');
       }
       assert(new Set(p.markers.map((m) => m.day)).size === p.markers.length, 'deux repères le même jour');
+    });
+  });
+
+  it('#152 objectifs de pièce : clés sûres et propres, pourcentages entiers de 1 à MAX_GOAL', () => {
+    fuzz('validGoals', (r) => {
+      const raw = r() < 0.4 ? anyValue(r) : Object.fromEntries(Array.from({ length: Math.floor(r() * 5) }, () => [r() < 0.5 ? pick(r, KEYS) : 'r-ch', r() < 0.5 ? pick(r, NUMBERS) : anyValue(r)]));
+      const g = validGoals(raw);
+      assert(Object.getPrototypeOf(g) === Object.prototype, 'prototype');
+      for (const [k, v] of Object.entries(g)) {
+        assert(/^[\w.:-]{1,64}$/.test(k) && k !== '__proto__', `pièce ${k}`);
+        assert(Number.isInteger(v) && v >= 1 && v <= MAX_GOAL, `objectif ${v}`);
+        assert(goalOf(g, k) === v, `relu ${k}`);
+      }
+      for (const k of ['constructor', 'toString', '__proto__', 'hasOwnProperty']) assert(goalOf(g, k) === null || Object.hasOwn(g, k), `héritée ${k}`);
     });
   });
 

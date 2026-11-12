@@ -195,6 +195,13 @@ try {
     await go(page, 'confort');
     await page.waitForSelector('#lower-card [data-lower-room="r-bureau"]', { timeout: 15000 });
     check(/Choisissez les pièces chauffées du niveau inférieur/.test(await page.locator('#lower-card').innerText()), `${name} : niveau inférieur sans consigne de départ`);
+    // #499: the help sits under the label of the setup, before the controls (design system § 4)
+    const helpFirst = await page.evaluate(() => {
+      const help = document.getElementById('lower-help');
+      const rooms = document.querySelector('#lower-card .lower-rooms');
+      return !!help && !!rooms && !!(help.compareDocumentPosition(rooms) & Node.DOCUMENT_POSITION_FOLLOWING);
+    });
+    check(helpFirst, `${name} : #499 l'aide du niveau inférieur n'est pas avant ses réglages`);
     await page.locator('#lower-card [data-lower-room="r-bureau"]').click();
     await page.waitForSelector('#lower-card [data-lower-room="r-bureau"]:checked', { state: 'attached', timeout: 15000 });
     await page.locator('#lower-card [data-lower-room="r-ch2"]').click();

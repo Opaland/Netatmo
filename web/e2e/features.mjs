@@ -96,7 +96,7 @@ const DESTINATIONS = {
   // #356: production profile, result per size (prices of the contract offered), amiante, hypotheses
   'outils-solaire': ['#solar-card #solar-profile strong', '#solar-result h3', '#solar-result .list .row', '.sim-note', 'text:amiante', 'text:Hypothèses de ce résultat', 'text:pilotage avant la batterie'],
   // #453: the water heater's year, the three options (COP offered as an assumption), legionella under 55 °C not shown by default
-  'outils-thermodynamique': ['#hw-card #hw-result .list .row', '.sim-note', 'text:Hypothèses de ce résultat', 'text:Un chauffe-eau thermodynamique', 'text:proposé, non saisi'],
+  'outils-thermodynamique': ['#hw-card #hw-result .list .row', '.sim-note', 'text:Hypothèses de ce résultat', 'text:Un chauffe-eau thermodynamique', 'text:proposé, non saisi', 'text:de moins par an'], // #499: a saving, not a negative cost
   outils: ['a[href="#etat"] .swatch', 'a[href="#outils-offres"] .s', 'a[href="#parametres-securite"]', 'text:Sauvegarde chiffrée'],
   'outils-consigne': ['#setpoint-card #sp-result', '.sim-note', 'text:Simulation'],
   'outils-teletravail': ['#telework-card'],

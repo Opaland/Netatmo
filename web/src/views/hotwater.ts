@@ -118,6 +118,7 @@ function rowSub(r: HwRow, i: HotWaterInputs): string {
   if (!r.year) return `à compléter : ${r.missing.join(', ')}`;
   const parts = [`${kwh(r.year.kwh)} par an`, `${nf0.format(r.year.kwh > 0 ? (r.year.off / r.year.kwh) * 100 : 0)} % en heures creuses`];
   if (r.key !== 'now' && r.savedKwh !== null && Math.round(r.savedKwh) > 0) parts.push(`${kwh(r.savedKwh)} de moins`);
+  if (r.key !== 'now' && r.savedEur !== null && Math.round(r.savedEur) !== 0) parts.push(savedText(r.savedEur));
   if (r.key === 'setpoint') parts.push(`${nf0.format(i.newSetpoint!)} °C au lieu de ${nf0.format(i.setpoint!)} °C`);
   if (r.key === 'thermo') parts.push(`COP ${nf1.format(i.cop!)}`);
   if (r.overflowDays) parts.push(`${r.overflowDays} jour${r.overflowDays > 1 ? 's' : ''} où la chauffe dépasserait les heures creuses`);
@@ -125,6 +126,12 @@ function rowSub(r: HwRow, i: HotWaterInputs): string {
     parts.push(r.payback === 0 ? 'pas plus cher qu’un électrique neuf' : r.payback !== null ? `retour ${nf1.format(r.payback)} ans` : i.cost === null ? 'retour : saisissez son coût' : r.savedEur !== null ? 'ne se rembourse pas' : '');
   return parts.filter(Boolean).join(' · ');
 }
+
+/**
+ * #499: « 7 € de moins par an », said under the option; the column holds what each option costs a year
+ * (a « −7 €/an » beside « 250 €/an » read as a negative cost).
+ */
+const savedText = (eur: number) => (eur < 0 ? `${fmtEur(-eur)} de plus par an` : `${fmtEur(eur)} de moins par an`);
 
 function result(sim: HwSim, i: HotWaterInputs, days: HotWaterDay[], hc: OffPeak, copOffered: boolean): string {
   const [now, , , thermo] = sim.rows;
@@ -137,7 +144,7 @@ function result(sim: HwSim, i: HotWaterInputs, days: HotWaterDay[], hc: OffPeak,
     sim.rows.map((r) => ({
       title: NAMES[r.key],
       sub: rowSub(r, i),
-      value: r.key === 'now' ? (r.year?.eur != null ? `${fmtEur(r.year.eur)}/an` : '') : r.savedEur !== null ? `−${fmtEur(r.savedEur)}/an` : '',
+      value: r.year?.eur != null ? `${fmtEur(r.year.eur)}/an` : '', // #499: a column of costs only
     })),
     'Pistes pour l’eau chaude',
   );

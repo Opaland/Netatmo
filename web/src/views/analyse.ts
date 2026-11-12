@@ -17,6 +17,7 @@ import { activeRooms, catColor, esc, fmt1, isOutdoor, moduleColor, roomName, fmt
 import { hour } from '../glossary';
 import { SUSPECT_RATIO } from '../reconstitute';
 import { judgedOut } from './quality';
+import { sunHint, sunMedian } from '../sun';
 import { drawSetpoint, setpointCard } from './setpoint';
 import { windBlock } from './windsig';
 import { drawWaterHeater, hcAlerts, waterHeaterCard } from './waterheater';
@@ -50,15 +51,21 @@ function loadExplanations() {
   if (ds!.meta.has_roomstate) explainDoc.get(ds, (ok) => ok && redraw());
 }
 
-/** « fenêtre ouverte N h » / « mode absence », or '—' (S-13.3). */
-function explanation(day: string): string {
-  if (explainDoc.status(ds) === 'failed') return '—';
-  const explain = explainDoc.get(ds);
-  if (!explain) return '…';
+/**
+ * « fenêtre ouverte N h » / « mode absence » (S-13.3), « journée ensoleillée » for a day heated less
+ * than expected (#117, sun.ts), or '—'. `states`: the hourly room states are collected.
+ */
+function explanation(day: string, below: boolean, states: boolean, cut: number | null): string {
   const parts: string[] = [];
-  const open = explain.open.get(day) ?? 0;
-  if (open >= 1) parts.push(`fenêtre ouverte ${fmt1(open)} h`);
-  if (explain.away.has(day)) parts.push('mode absence');
+  if (states && explainDoc.status(ds) !== 'failed') {
+    const explain = explainDoc.get(ds);
+    if (!explain) return '…';
+    const open = explain.open.get(day) ?? 0;
+    if (open >= 1) parts.push(`fenêtre ouverte ${fmt1(open)} h`);
+    if (explain.away.has(day)) parts.push('mode absence');
+  }
+  const sun = sunHint(day, below, ds!.sun, cut);
+  if (sun) parts.push(sun);
   return parts.join(', ') || '—';
 }
 
@@ -279,19 +286,22 @@ function anomaliesCard(records: DayRecord[]) {
   if (!list.length) return alerts ? `<section class="card"><h2>Jours inhabituels</h2>${alerts}${countedHtml(true)}</section>` : '';
   const withStates = !!ds!.meta.has_roomstate;
   if (withStates) loadExplanations();
+  // #117: the sun of the day, when the radiation is collected (Open-Meteo)
+  const cut = ds!.sun?.size ? sunMedian(ds!.sun, ds!.weather) : null;
+  const withExplain = withStates || cut !== null;
   const since = list[list.length - 1].day;
   return `<section class="card" id="unusual-card"><div class="card-head"><h2>Jours inhabituels</h2><span class="card-period">${esc(`les ${list.length} plus récents, depuis le ${dayShort(since, true)}`)}</span></div>
     ${alerts}
     <p class="hint muted">Jours où le chauffage s'écarte nettement de ce qu'annonçait la température dehors (plus de 2 fois l'écart habituel et plus de 3 kWh) : fenêtre ouverte, absence, invités, réglage oublié… « Attendu » : le chauffage d'un jour ordinaire à la même température, lu sur la saison. Les jours perdus chez Intuis ou estimés, et ceux d'une coupure de courant ou d'Internet (journal des incidents), n'y figurent pas ; un jour très en dessous de l'attendu est marqué <strong>à vérifier</strong> (donnée peut-être incomplète, voir « État des données » dans Outils).</p>
-    ${withStates ? '<p class="hint muted">« Explication possible » : heures de fenêtre ouverte de toutes les pièces ce jour-là, ou mode absence relevé (relevé horaire de l’état des pièces). Une fenêtre ouverte coupe le radiateur de la pièce, qui relance ensuite : le jour peut se retrouver au-dessus ou en dessous de l’attendu.</p>' : ''}
+    ${withExplain ? `<p class="hint muted">« Explication possible », une piste et non une certitude${withStates ? ' : heures de fenêtre ouverte de toutes les pièces ce jour-là, ou mode absence relevé (relevé horaire de l’état des pièces). Une fenêtre ouverte coupe le radiateur de la pièce, qui relance ensuite : le jour peut se retrouver au-dessus ou en dessous de l’attendu' : ''}${cut !== null ? `${withStates ? '. Pour un jour en dessous de l’attendu' : ' : pour un jour en dessous de l’attendu'}, une journée ensoleillée (plus que la moitié des jours de chauffe : rayonnement du jour au-dessus de ${esc(fmt1(cut))}\u00a0MJ/m², d’après Open-Meteo) : le soleil entré par les fenêtres a pu chauffer à la place des radiateurs` : ''}.</p>` : ''}
     ${table(
-      ['Jour', 'Consommé', 'Attendu', 'Écart', ...(withStates ? ['Explication possible'] : [])],
+      ['Jour', 'Consommé', 'Attendu', 'Écart', ...(withExplain ? ['Explication possible'] : [])],
       list.map((a) => [
         longDate(a.day),
         fmtKwh(a.kwh),
         fmtKwh(Math.max(0, a.expected)),
         `<span class="delta ${a.z > 0 ? 'up' : 'down'}"><span aria-hidden="true">${a.z > 0 ? '▲' : '▼'}</span> ${a.z > 0 ? '+' : '−'}${fmtKwh(Math.abs(a.kwh - a.expected))}</span>${suspect(a) ? ' <span class="badge-suspect" title="Très en dessous de l’attendu : donnée peut-être incomplète chez Intuis">à vérifier</span>' : ''}`,
-        ...(withStates ? [explanation(a.day)] : []),
+        ...(withExplain ? [esc(explanation(a.day, a.z < 0, withStates, cut))] : []),
       ]),
     )}${countedHtml(true)}</section>`;
 }

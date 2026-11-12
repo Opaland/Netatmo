@@ -19,7 +19,8 @@ Ce que l'application mobile ne fait pas, et que celle-ci fait :
   l'**écart intérieur − extérieur** mesuré par la station, avec intervalles de confiance à 95 % ;
 - un **calendrier** de consommation, des **profils horaires**, les **températures** des pièces ;
 - la **part du chauffage et du chauffe-eau** dans la consommation totale (compteur **Linky**) ;
-- **par pièce** : classement, évolution N-1 → N en cascade, détail mensuel ;
+- **par pièce** : classement, évolution N-1 → N en cascade, détail mensuel, et un **défi** à climat
+  égal (−5, −10 ou −15 % de kWh par degré-jour face à l'hiver dernier), gardé sur l'appareil ;
 - un **rapport annuel** imprimable (PDF), avec le comparateur d'offres et la puissance maximale, et sa
   version **anonymisée** à remettre à un tiers (pièces en pseudonymes, ni nom, ni identifiant, ni
   donnée horaire, ni station) ;
@@ -370,7 +371,7 @@ sur la démo, d'après ce que vous avez observé (+1 à +2 °C dans deux chambre
 dits dans le code ; *Historique → Flambées du poêle* montre le calendrier (heure de début, durée
 estimée, pièces témoins, netteté) et pose la question « poêle allumé ce soir ? » : vos réponses restent
 chiffrées sur l'appareil et disent combien de soirs la détection a vus juste. Le bois du poêle est alors
-réparti sur ces soirs plutôt que sur les degrés-jours (les jours non lisibles gardent les degrés-jours).
+réparti sur ces soirs plutôt que sur les degrés-jours (les jours où la détection ne peut pas juger gardent les degrés-jours).
 Rien de tout cela n'entre dans le journal public.
 
 **Radiateur arrêté ou retiré.** Une pièce chauffée autrement dont les radiateurs sont coupés ou
@@ -404,8 +405,9 @@ donne l'état des pièces qu'en instantané. Pour en garder l'historique :
    les jours d'aération, l'énergie estimée pendant les boosts, les absences confirmées par le mode
    de consigne et les délestages face au pic Linky. Les chambres y sont regroupées par défaut.
 4. Ailleurs dans l'appli : « Pourquoi cette pièce était froide ? » dans les **Questions types**
-   (rapport), une colonne « Explication possible » (fenêtre ouverte N h, mode absence) dans les
-   **Jours inhabituels** (Analyse), les **absences confirmées par le mode de consigne** dans « Absences
+   (rapport), une colonne « Explication possible » (fenêtre ouverte N h, mode absence ; et, pour un
+   jour sous l'attendu, une journée ensoleillée d'après le rayonnement Open-Meteo, en hypothèse) dans
+   les **Jours inhabituels** (Analyse), les **absences confirmées par le mode de consigne** dans « Absences
    probables » (la détection par la consommation reste le repli), le **délestage par pièce** sous la
    puissance maximale (Synthèse), le **mode du contacteur** dans la carte chauffe-eau (Analyse). Si
    l'analyse IA est activée, elle reçoit les heures de fenêtre ouverte et de boost **du mois**, par
