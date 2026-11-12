@@ -1,12 +1,36 @@
 name: Changer la phrase de passe
 
+# Lancé seulement à la main (workflow_dispatch) : jamais par une collecte ni par une fusion.
+#
+# Changer la phrase de passe :
 # 1. Ajoutez le secret NEW_DATA_PASSPHRASE (la nouvelle phrase).
 # 2. Lancez ce workflow : toutes les données sont rechiffrées et la robustesse est vérifiée.
 # 3. Remplacez la valeur du secret DATA_PASSPHRASE par la nouvelle phrase, puis supprimez
 #    NEW_DATA_PASSPHRASE. Entre les étapes 2 et 3, la collecte de la nuit échouerait.
+#
+# Passer la clé à Argon2id (#139), même phrase de passe : sans NEW_DATA_PASSPHRASE, lancez ce
+# workflow avec « derivation » = argon2id. Aucun secret à changer.
+#
+# Dans les deux cas, avant de remplacer quoi que ce soit, `rekey` relit chaque fichier rechiffré
+# et compare les totaux de `verify` (rien n'est affiché : le journal est public). Les fichiers
+# d'avant sont gardés dans l'artefact « avant-rekey » (chiffrés, 30 jours). Retour arrière :
+# `git revert` du commit « data: rechiffrement… » (et, si la phrase a changé, remettre l'ancienne
+# dans DATA_PASSPHRASE). Détail : README, « Sécurité ».
 on:
   workflow_dispatch:
+    inputs:
+      derivation:
+        description: "Dérivation de la clé : inchangée, ou argon2id (#139)"
+        type: choice
+        options: [inchangée, argon2id]
+        default: inchangée
 
+# Never at the same time as a run that writes data/: the nightly collection (workflow group
+# « collect ») and the shutters sent by the NAS (job group « volets », volets.yml). A volets
+# commit pushed over a rekey would otherwise be written with the old key, which the app cannot
+# read. volets.yml keeps its own group: in the « collect » group, a second pending volets night
+# or collection would cancel the first (GitHub keeps one pending run per group), which costs a
+# night of data; a rekey is rare and launched by hand, so it is the one that waits.
 concurrency:
   group: collect
   cancel-in-progress: false
@@ -17,6 +41,9 @@ permissions:
 jobs:
   rekey:
     runs-on: ubuntu-latest
+    concurrency:
+      group: volets
+      cancel-in-progress: false
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-python@v7
@@ -29,15 +56,37 @@ jobs:
         env:
           DATA_PASSPHRASE: ${{ secrets.DATA_PASSPHRASE }}
           NEW_DATA_PASSPHRASE: ${{ secrets.NEW_DATA_PASSPHRASE }}
-        run: python -m collector rekey
+          DERIVATION: ${{ inputs.derivation }}
+        run: |
+          set -- --sauvegarde "$RUNNER_TEMP/avant-rekey"
+          if [ "$DERIVATION" = "argon2id" ]; then set -- "$@" --kdf argon2id; fi
+          python -m collector rekey "$@"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: avant-rekey
+          path: ${{ runner.temp }}/avant-rekey
+          retention-days: 30
+          if-no-files-found: error
       - name: Commit
+        env:
+          DERIVATION: ${{ inputs.derivation }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add data/
-          git commit -m "data: changement de phrase de passe"
+          git commit -m "data: rechiffrement (dérivation : $DERIVATION)"
           git push
       - name: Étape suivante
+        env:
+          NEW_DATA_PASSPHRASE: ${{ secrets.NEW_DATA_PASSPHRASE }}
         run: |
-          echo "## Données rechiffrées" >> "$GITHUB_STEP_SUMMARY"
-          echo "Remplacez maintenant le secret **DATA_PASSPHRASE** par la nouvelle phrase, puis supprimez **NEW_DATA_PASSPHRASE**." >> "$GITHUB_STEP_SUMMARY"
+          {
+            echo "## Données rechiffrées"
+            echo "Chaque fichier a été relu et les totaux comparés avant remplacement. Fichiers d'avant : artefact **avant-rekey** (30 jours)."
+            echo "Retour arrière : \`git revert\` du commit « data: rechiffrement »."
+            if [ -n "$NEW_DATA_PASSPHRASE" ]; then
+              echo "Remplacez maintenant le secret **DATA_PASSPHRASE** par la nouvelle phrase, puis supprimez **NEW_DATA_PASSPHRASE**."
+            else
+              echo "Même phrase de passe : aucun secret à changer."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"

@@ -90,7 +90,7 @@ def test_is_on():
 def test_snapshot_is_encrypted_and_read_back(tmp_path):
     store = Store(tmp_path / "data", "pw")
     snap = roomstate.snapshot(status(), 1700000000, calls=2)
-    path = roomstate.write_snapshot(tmp_path / "out", snap, "pw", store.salt, 100_000)
+    path = roomstate.write_snapshot(tmp_path / "out", snap, "pw", store.salt, 600_000)
     raw = path.read_text()
     assert "open_window" not in raw
     assert set(json.loads(raw)) == {"v", "kdf", "iter", "salt", "iv", "ct"}
@@ -237,7 +237,7 @@ def test_nightly_sync_aggregates_snapshots_and_reports_counts_only(tmp_path, mon
     day = datetime.fromordinal(yesterday).date().isoformat()
     for h in range(20):
         roomstate.write_snapshot(
-            folder, roomstate.snapshot(status(open_window=h < 2), ts(day, h), calls=2), "pw", store.salt, 100_000
+            folder, roomstate.snapshot(status(open_window=h < 2), ts(day, h), calls=2), "pw", store.salt, 600_000
         )
     client = IntuisClient(
         SETTINGS, http=httpx.Client(transport=httpx.MockTransport(intuis_handler(calls))), min_interval=0

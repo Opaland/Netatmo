@@ -497,7 +497,7 @@ def test_several_homes_logs_a_count_never_a_name(caplog):
 def test_decrypt_refuses_an_unbounded_iteration_count_without_deriving():
     from collector.crypto import DecryptError, decrypt_json, encrypt_json
 
-    env = encrypt_json({"a": 1}, "pw", b"0" * 16, iterations=100_000)
+    env = encrypt_json({"a": 1}, "pw", b"0" * 16, 600_000)
     for bad in (10**9, 1, "600000", True, None):
         start = time.monotonic()
         with pytest.raises(DecryptError):
