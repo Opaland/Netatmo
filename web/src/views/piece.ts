@@ -8,12 +8,13 @@ import { type DayRecord, addDays, bucketKeys, bucketLabel, minusYears, pctChange
 import { activeRooms, datasetDoc, ds, onDatasetLoaded, rerender, setState, state } from '../app';
 import { barChart, chartOf, cssVar, lineChart } from '../charts';
 import { effectiveMapping, indoorModules, isBedroom, lastNightDay, lastNights, nightVerdict, offsetStats, signed, summarizeNights } from '../comfort';
-import { alert, alertHtml, comparison, countedNote, howDetails, legend, listRow, periodBar, scheduleBand, seg, tile } from '../components';
+import { alert, alertHtml, comparison, countedNote, gauge, howDetails, legend, listRow, periodBar, scheduleBand, seg, tile } from '../components';
 import { type Dataset, loadRoom30, loadRoomState } from '../data';
 import type { DatasetDoc } from '../loader';
 import { BEDROOMS_ID } from '../household';
 import { periodsFromR30, rangesOn, rangesText, toHours } from '../offpeak';
-import { NO_REFERENCE, TEMP, dayLong, dayShort, fmt1, fmtTemp, hourMin, hourRange, plural, vsLabel } from '../glossary';
+import { NO_REFERENCE, TEMP, dayLong, dayShort, fmt1, fmtTemp, hourMin, hourRange, plural, signedPct, vsLabel } from '../glossary';
+import { GOAL_CHOICES, goalOf, goalProgress, goalSentence, validGoals, withGoal } from '../goal';
 import { HOME_PERIODS, type HomeRange, homePeriod, homeRange, scopeTitle } from '../home';
 import { daysBetween } from '../periods';
 import { bucketMarks } from '../periods';
@@ -281,6 +282,8 @@ export function renderPiece(view: HTMLElement, id: string) {
   const proposal = heating && !group ? proposedModule(id) : undefined;
   if (proposal) parts.push(proposalAlert(proposal));
   if (heating) parts.push(nowCard(room.name, ids, group, m, r30, rs, last));
+  // #152: a goal at equal climate, over the heating season (apart from the period below, as « Maintenant »)
+  if (heating) parts.push(goalCard(id, mine, last));
   // #388: one period for everything below « Maintenant »
   parts.push(periodBar(seg('pieces', r.period, HOME_PERIODS, 'Période'), scopeTitle(r)));
   parts.push(tilesRow(mine, m, r30, ids, r, heating));
@@ -335,6 +338,30 @@ export function renderPiece(view: HTMLElement, id: string) {
       { zone: 'piece-surface', what: 'Surface' },
     );
   }
+}
+
+// ------------------------------------------------------------------ #152: a goal at equal climate
+/** « Mon défi » of a heated room: a goal of kWh per degree day against last winter, and the way to it. */
+function goalCard(id: string, mine: DayRecord[], last: string): string {
+  const goal = goalOf(validGoals(state.roomGoals), id);
+  const choices = `<div class="seg" role="radiogroup" aria-label="Objectif face à l’hiver dernier">${[null, ...GOAL_CHOICES]
+    .map((g) => `<button type="button" role="radio" aria-checked="${g === goal}" data-piece="goal" data-room="${esc(id)}" data-goal="${g ?? ''}">${g === null ? 'Aucun' : esc(signedPct(-g))}</button>`)
+    .join('')}</div>`;
+  const head = '<div class="card-head"><h2>Mon défi</h2></div><p class="card-sub">Chauffer moins par degré de froid que l’hiver dernier : un hiver plus froid ne compte pas contre vous.</p>';
+  const counted = countedNote('chauffage de la pièce par degré-jour, saison de chauffe en cours face aux mêmes jours de l’hiver dernier');
+  if (goal === null) return `<section class="card" id="piece-goal">${head}${choices}${counted}</section>`;
+  const w = ds!.weather;
+  const p = w ? goalProgress(mine, id, w, last, goal) : null;
+  if (!p) {
+    const why = w ? 'Pas encore assez de froid cette saison, ou pas de chauffage relevé l’hiver dernier : la progression viendra avec les jours froids.' : 'Disponible dès que la collecte a récupéré la météo.';
+    return `<section class="card" id="piece-goal">${head}${choices}<p class="hint muted">${esc(why)}</p>${counted}</section>`;
+  }
+  const done = Math.min(1, p.share);
+  return `<section class="card" id="piece-goal">${head}${choices}
+    <p id="goal-progress"><strong>${esc(goalSentence(p))}</strong></p>
+    ${gauge({ label: `${Math.round(done * 100)} % de l’objectif de ${signedPct(-goal)}`, value: done, max: 1, scale: ['0', signedPct(-goal)] })}
+    ${countedNote(esc(`chauffage de la pièce par degré-jour, du ${dayShort(p.from, true)} au ${dayShort(p.to, true)}, face aux mêmes jours un an plus tôt (${plural(p.days, 'jour')} avec la température dehors les deux années)`))}
+  </section>`;
 }
 
 // ------------------------------------------------------------------ « maintenant » and planning
@@ -658,6 +685,11 @@ export function handleClick(el: HTMLElement): boolean {
   if (el.dataset.piece === 'link-module' && room && module) {
     // #467: from now on the module's reading is the room's (measured(), effectiveMapping)
     setState({ roomModuleMap: linkRoom(links(), heatedRooms().map((r) => r.id), room, module) });
+    return true;
+  }
+  if (el.dataset.piece === 'goal' && room) {
+    const g = Number(el.dataset.goal);
+    setState({ roomGoals: withGoal(validGoals(state.roomGoals), room, el.dataset.goal && Number.isInteger(g) ? g : null) });
     return true;
   }
   if (el.dataset.piece === 'decline-module' && room && module) {
