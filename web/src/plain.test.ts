@@ -18,7 +18,10 @@ import {
   whenWord,
   roomFeel,
   heatingSentence,
+  homeMonthTitle,
+  monthLabel,
 } from './plain';
+import { countedWhat } from './home';
 
 /** Every text of the simple mode, for a spread of inputs. */
 function allTexts(): string[] {
@@ -123,6 +126,11 @@ describe('figures shared with the Accueil (#400)', () => {
     expect(s).toBe("Chambre enfant ne répond plus depuis le 5 novembre : cette pièce n'est pas comptée.");
     expect(leftSentence('Bureau', null)).toBe("Bureau n'est pas comptée : cette pièce ne répondait pas l'an dernier.");
     for (const n of sentenceLengths(s)) expect(n).toBeLessThanOrEqual(15);
+  });
+  // #488: the month of the home counts the hot water too, and says so with the Accueil's words
+  it('the month of the home says what it counts (countedWhat)', () => {
+    expect(homeMonthTitle('2026-11-08')).toBe("Novembre, jusqu'au 8, chauffage et eau chaude");
+    expect(homeMonthTitle('2026-11-08')).toBe(`${monthLabel('2026-11-08')}, ${countedWhat('all')}`);
   });
 });
 

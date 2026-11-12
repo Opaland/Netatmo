@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { addDays } from './aggregate';
 import type { Weather } from './analysis';
 import type { DayRecord } from './aggregate';
-import { MIN_SIDE_DAYS, NO_WORKS, beforeAfter, heatPerDay, perRoomM2, surfaceOf, validWorks, worksHeat } from './works';
+import { MIN_SIDE_DAYS, NO_WORKS, beforeAfter, heatPerDay, perRoomM2, surfaceOf, validWorks, worksHeat, worksMonthly } from './works';
 
 describe('validWorks', () => {
   it('keeps clean surfaces and markers, sorted', () => {
@@ -92,6 +92,38 @@ describe('worksHeat (#476)', () => {
     const w = worksHeat(records, null);
     expect(w.wood).toBe(false);
     expect(w.heat).toEqual(heatPerDay(records));
+  });
+});
+
+describe('worksMonthly (#488)', () => {
+  const recs: DayRecord[] = [
+    { day: '2025-01-05', room: 'a', cat: 'heating', kwh: 10 },
+    { day: '2025-01-05', room: 'b', cat: 'water_heater', kwh: 4 },
+    { day: '2025-02-03', room: 'a', cat: 'heating', kwh: 6 },
+  ];
+  // the stove's wood of two days, one before the first record (not counted: withWood's rule)
+  const daily = new Map<string, [number, number]>([
+    ['2024-12-31', [50, 0]],
+    ['2025-01-20', [7, 0]],
+    ['2025-02-10', [3, 0]],
+  ]);
+
+  it('counts the wood of each month with the electricity, as the before / after', () => {
+    const m = worksMonthly(recs, daily);
+    expect(m.wood).toBe(true);
+    expect([...m.perMonth]).toEqual([
+      ['2025-01', 17],
+      ['2025-02', 9],
+    ]);
+  });
+
+  it('without wood, the heating electricity alone (never the hot water)', () => {
+    const m = worksMonthly(recs, null);
+    expect(m.wood).toBe(false);
+    expect([...m.perMonth]).toEqual([
+      ['2025-01', 10],
+      ['2025-02', 6],
+    ]);
   });
 });
 
