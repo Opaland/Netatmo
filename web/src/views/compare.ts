@@ -18,6 +18,7 @@ import { activeRooms, ds, setState, state } from '../app';
 import { type Series, barChart, chartCaption, cssVar, lineChart } from '../charts';
 import { SEASON_DEFINITION, dayLong, dayShort, monthLong, monthShort, plural, seasonLabel, signedPct } from '../glossary';
 import { historyCounted, yearLine, yearsLine } from '../history';
+import { countedWhat } from '../home';
 import { term } from '../plain';
 import { routeKey } from '../router';
 import { uncertainDays } from '../checks';
@@ -481,11 +482,14 @@ function seasonTiles(records: DayRecord[], picked: number[], current: number, cl
         tile({ label: seasonLabel(b), value: fmtKwh(tbEq), sub: `<small class="muted">à climat égal (mesuré : ${esc(fmtKwh(tb))})</small>` })
       : tile({ label: seasonLabel(a), value: fmtKwh(ta), sub: money(a) }) + tile({ label: seasonLabel(b), value: fmtKwh(tb), sub: money(b) });
   const vs = `vs l'hiver ${seasonLabel(b)}`;
+  // #466: the figure says what it counts (« chauffage et eau chaude »), the words of the Accueil's scope
+  const words = countedWhat(state.cat);
+  const what = `${words[0].toUpperCase()}${words.slice(1)} : `;
   const sentence =
     eq !== null && raw !== null
-      ? `<b>${signedPct(eq)} ${esc(vs)}, à climat égal</b> (${signedPct(raw)} mesuré). ${colder}`
+      ? `${esc(what)}<b>${signedPct(eq)} ${esc(vs)}, à climat égal</b> (${signedPct(raw)} mesuré). ${colder}`
       : raw !== null
-        ? `<b>${signedPct(raw)} ${esc(vs)}</b>.`
+        ? `${esc(what)}<b>${signedPct(raw)} ${esc(vs)}</b>.`
         : '';
   // #348: the shared tiles of Accueil (#311): side by side when there is room, an amount never cut
   return `<div class="kpis season-tiles">${tiles}</div><p>${sentence}</p>${woodSeasons2(records, a, b)}`;
