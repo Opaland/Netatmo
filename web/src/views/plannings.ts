@@ -38,7 +38,9 @@ const dur = (slots: number) => {
   return m < 60 ? `${m} min` : hourMin(Math.floor(m / 60), m % 60);
 };
 const pct = (v: number) => `${nf0.format(Math.round(v * 100))} %`;
-const range = (lo: number, hi: number) => (hi < 1 ? 'moins de 1 €' : `${lo < 1 ? 'moins de 1' : nf0.format(Math.floor(lo))} à ${fmtEur(Math.ceil(hi))}`);
+// #469: « moins de 1 à 2 € » overflowed its tile at 360 px, text 200 % (a tile's amount stays on one
+// line, #311): a range from under 1 € says « jusqu'à 2 € », as true and shorter
+const range = (lo: number, hi: number) => (hi < 1 ? 'moins de 1 €' : lo < 1 ? `jusqu’à ${fmtEur(Math.ceil(hi))}` : `${nf0.format(Math.floor(lo))} à ${fmtEur(Math.ceil(hi))}`);
 
 /** Raw room ids behind a room shown (the bedrooms of « Chambres » in household view). */
 function members(id: string): string[] {
