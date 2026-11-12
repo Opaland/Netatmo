@@ -68,7 +68,8 @@ Les données de démonstration se régénèrent avec `python -m collector demo` 
 1. **Une issue** d'abord, avec le gabarit adapté (*Récit utilisateur*, *Bug*, *Étude*) : « En tant
    que…, je veux…, afin de… » et des critères Given / When / Then.
 2. **Une branche** par sujet : `<prénom>/<sujet>` pour un humain, `claude/<sujet>` pour un agent IA.
-   Jamais de commit direct sur `main` (seule la collecte automatique y écrit les données).
+   Jamais de commit direct sur `main` (seule la collecte automatique y écrit les données, ou dans
+   la branche `data` quand la variable `DATA_BRANCH` est posée).
 3. **Une pull request** qui suit le [gabarit](.github/pull_request_template.md) : `Closes #n`, ce qui a
    été vérifié, captures mobile et bureau (clair et sombre) si l'interface change, README / docs /
    `CHANGELOG.md` à jour. Une PR = un sujet.
