@@ -10,6 +10,9 @@
 //                        proportion to the degree days (the colder, the more wood burnt).
 //   #469: the fires     = where the collection found the stove's fires (stove-fires.ts), the wood
 //                        of the days it could see goes to those evenings (onFireDays).
+//   #465: the stock     = what a season does not burn is carried to the next one. Without a
+//                        reading, a season burns all it has (the assumption, shown); a reading
+//                        of the stères burnt, or of the stock left in spring, takes its place.
 import { type DayRecord, addDays } from './aggregate';
 import { type Weather, dju } from './analysis';
 import { type StoveFires, isCovered } from './stove-fires';
@@ -47,20 +50,50 @@ export interface WoodPurchase {
   price: number;
 }
 
+/**
+ * #465: what a season really burnt, noted by the owner (optional): the stères burnt, or the stock
+ * left in the woodshed in spring. Exactly one of the two.
+ */
+export interface WoodBurnt {
+  /** The heating season (Sept → Aug), by its first year. */
+  season: number;
+  steres?: number;
+  left?: number;
+}
+
 export interface WoodSettings {
   purchases: WoodPurchase[];
+  /** #465: readings of the wood really burnt, one per season at most, oldest first. */
+  burnt: WoodBurnt[];
   /** Stove efficiency, %. */
   efficiency: number;
   /** kWh per stère at 20 % moisture, per species. */
   kwhPerStere: Record<Species, number>;
 }
 
-export const NO_WOOD: WoodSettings = { purchases: [], efficiency: DEFAULT_EFFICIENCY, kwhPerStere: { ...KWH_PER_STERE } };
+export const NO_WOOD: WoodSettings = { purchases: [], burnt: [], efficiency: DEFAULT_EFFICIENCY, kwhPerStere: { ...KWH_PER_STERE } };
 
 const DAY_RE = /^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/;
 const realDay = (d: string) => DAY_RE.test(d) && new Date(`${d}T00:00:00Z`).toISOString().slice(0, 10) === d;
 const num = (v: unknown, lo: number, hi: number): number | null => (typeof v === 'number' && Number.isFinite(v) && v >= lo && v <= hi ? v : null);
 export const MAX_PURCHASES = 60;
+/** #465: bounds of a reading (stères burnt or left) and of its season (same in collector/devices.py). */
+export const MAX_BURNT_STERES = 200;
+export const BURNT_SEASONS: [number, number] = [2000, 2100];
+
+/** #465: the readings, cleaned: a known season, exactly one bounded quantity, the first per season. */
+function parseBurnt(v: unknown): WoodBurnt[] {
+  const out: WoodBurnt[] = [];
+  for (const x of Array.isArray(v) ? v.slice(0, MAX_PURCHASES) : []) {
+    const b = x && typeof x === 'object' && !Array.isArray(x) ? (x as Record<string, unknown>) : {};
+    const season = num(b.season, BURNT_SEASONS[0], BURNT_SEASONS[1]);
+    const steres = Object.hasOwn(b, 'steres') ? num(b.steres, 0, MAX_BURNT_STERES) : null;
+    const left = Object.hasOwn(b, 'left') ? num(b.left, 0, MAX_BURNT_STERES) : null;
+    if (season === null || !Number.isInteger(season) || (steres === null) === (left === null) || out.some((o) => o.season === season)) continue;
+    out.push(steres !== null ? { season, steres } : { season, left: left! });
+  }
+  return out.sort((a, b) => a.season - b.season);
+}
 
 /** The settings kept in the meta (WOOD_JSON) or on this device, cleaned (never trusted, #359). */
 export function parseWood(v: unknown): WoodSettings {
@@ -82,7 +115,7 @@ export function parseWood(v: unknown): WoodSettings {
     const v = Object.hasOwn(kwh, k) ? num(kwh[k], 500, 3000) : null;
     if (v !== null) kwhPerStere[k] = v;
   }
-  return { purchases, efficiency: num(o.efficiency, 10, 100) ?? DEFAULT_EFFICIENCY, kwhPerStere };
+  return { purchases, burnt: parseBurnt(o.burnt), efficiency: num(o.efficiency, 10, 100) ?? DEFAULT_EFFICIENCY, kwhPerStere };
 }
 /** Value of the repository variable WOOD_JSON: the assumptions only when they differ from the defaults. */
 export function woodJson(w: WoodSettings): string {
@@ -90,6 +123,7 @@ export function woodJson(w: WoodSettings): string {
   const kwh = Object.fromEntries((Object.keys(SPECIES) as Species[]).filter((k) => c.kwhPerStere[k] !== KWH_PER_STERE[k]).map((k) => [k, c.kwhPerStere[k]]));
   return JSON.stringify({
     purchases: c.purchases,
+    ...(c.burnt.length ? { burnt: c.burnt } : {}),
     ...(c.efficiency !== DEFAULT_EFFICIENCY ? { efficiency: c.efficiency } : {}),
     ...(Object.keys(kwh).length ? { kwhPerStere: kwh } : {}),
   });
@@ -123,27 +157,72 @@ export function seasonFed(day: string): number {
 
 export interface WoodSeason {
   season: number;
+  /** Stères bought for this season (seasonFed). */
+  bought: number;
+  /** Stères carried from the season before (#465). */
+  carried: number;
+  /** Stères burnt, their heat (kWh) and their cost (€): what the days of the season count. */
   steres: number;
   kwh: number;
   eur: number;
+  /** Stères left for the next season. */
+  left: number;
+  /** The reading noted for this season, or null: all it had is assumed burnt. */
+  reading: WoodBurnt | null;
+  /** Stères noted burnt beyond the stock recorded (purchases missing?): not counted. */
+  short: number;
 }
-/** Wood bought per season it feeds, oldest first. */
+
+/**
+ * #465: the one stock rule. Season after season, oldest first: the stock carried plus the wood
+ * bought for it; it burns what was noted (stères burnt, or all but the stock left in spring),
+ * else all of it (the assumption). The oldest wood burns first; its heat and cost follow it.
+ */
 export function woodSeasons(s: WoodSettings): WoodSeason[] {
-  const map = new Map<number, WoodSeason>();
+  if (!s.purchases.length) return [];
+  const lots: { steres: number; kwh: number; eur: number }[] = []; // per stère, oldest first
+  const fed = new Map<number, WoodPurchase[]>();
   for (const p of s.purchases) {
     const y = seasonFed(p.day);
-    const w = map.get(y) ?? map.set(y, { season: y, steres: 0, kwh: 0, eur: 0 }).get(y)!;
-    w.steres += p.steres;
-    w.kwh += heatOf(p, s);
-    w.eur += p.price;
+    (fed.get(y) ?? fed.set(y, []).get(y)!).push(p);
   }
-  return [...map.values()].sort((a, b) => a.season - b.season);
+  const readings = new Map(s.burnt.map((b) => [b.season, b]));
+  const first = Math.min(...fed.keys());
+  const last = Math.max(...fed.keys(), ...s.burnt.map((b) => b.season));
+  const out: WoodSeason[] = [];
+  const EPS = 1e-9;
+  // after the last purchase or reading, the stock left burns in the next season (no reading: all of it)
+  for (let y = first; y <= last || lots.length; y++) {
+    const carried = lots.reduce((a, l) => a + l.steres, 0);
+    let bought = 0;
+    for (const p of fed.get(y) ?? []) {
+      bought += p.steres;
+      lots.push({ steres: p.steres, kwh: heatOf(p, s) / p.steres, eur: p.price / p.steres });
+    }
+    const have = carried + bought;
+    const r = readings.get(y) ?? null;
+    const want = r ? (r.steres ?? Math.max(0, have - r.left!)) : have;
+    let burn = Math.min(want, have);
+    const w: WoodSeason = { season: y, bought, carried, steres: burn, kwh: 0, eur: 0, left: 0, reading: r, short: Math.max(0, want - have) };
+    while (burn > EPS && lots.length) {
+      const l = lots[0];
+      const take = Math.min(l.steres, burn);
+      w.kwh += take * l.kwh;
+      w.eur += take * l.eur;
+      burn -= take;
+      l.steres -= take;
+      if (l.steres <= EPS) lots.shift();
+    }
+    w.left = lots.reduce((a, l) => a + l.steres, 0);
+    if (have > EPS || r) out.push(w);
+  }
+  return out;
 }
 
 const seasonDays = (y: number, last: string): [string, string] => [`${y}-09-01`, `${y + 1}-08-31` < last ? `${y + 1}-08-31` : last];
 
 /**
- * Wood heat and cost per day: each season's wood spread over its days in proportion to their
+ * Wood heat and cost per day: each season's wood burnt (woodSeasons: the stock rule) spread over its days in proportion to their
  * degree days (base 18 °C). A season still running is spread over the degree days of an average
  * whole season (the complete ones of the weather): what is still in the woodshed is not counted
  * yet. Without weather, evenly from October to April.
@@ -166,7 +245,7 @@ export function woodDaily(s: WoodSettings, weather: Weather | null, last: string
   const usual = whole.length ? whole.reduce((a, b) => a + b, 0) / whole.length : null;
   for (const w of seasons) {
     const [from, to] = seasonDays(w.season, last);
-    if (from > last) continue;
+    if (from > last || (w.kwh <= 0 && w.eur <= 0)) continue;
     const weight = new Map<string, number>();
     for (let d = from; d <= to; d = addDays(d, 1)) {
       const m = Number(d.slice(5, 7));
@@ -235,4 +314,20 @@ export function woodRecords(daily: Map<string, [number, number]>, first = ''): D
 export function purchaseText(p: WoodPurchase): string {
   const n = String(p.steres).replace('.', ',');
   return `${n} stère${p.steres >= 2 ? 's' : ''} ${p.species === 'melange' ? 'de feuillus mélangés' : p.species === 'resineux' ? 'de résineux' : `de ${SPECIES[p.species].toLowerCase()}`} à ${p.moisture} %`;
+}
+
+const st = (v: number) => `${v.toLocaleString('fr-FR', { maximumFractionDigits: 2 })} stère${v >= 2 ? 's' : ''}`;
+/**
+ * #465: what a season counts, said with its assumption: « 2 stères achetés · tout brûlé (supposé) »,
+ * « 0,5 stère reporté · 2 stères achetés · 1,5 stère brûlé (relevé) · reste 1 stère ».
+ */
+export function seasonText(s: WoodSeason): string {
+  const parts: string[] = [];
+  if (s.carried > 1e-9) parts.push(`${st(s.carried)} reporté${s.carried >= 2 ? 's' : ''}`);
+  if (s.bought > 0 || !parts.length) parts.push(`${st(s.bought)} acheté${s.bought >= 2 ? 's' : ''}`);
+  if (!s.reading) parts.push('tout brûlé (supposé)');
+  else parts.push(`${st(s.steres)} brûlé${s.steres >= 2 ? 's' : ''} (${s.reading.left !== undefined ? 'stock relevé au printemps' : 'relevé'})`);
+  if (s.left > 1e-9) parts.push(`reste ${st(s.left)}`);
+  if (s.short > 1e-9) parts.push(`${st(s.short)} de plus que les achats notés, non compté${s.short >= 2 ? 's' : ''}`);
+  return parts.join(' · ');
 }

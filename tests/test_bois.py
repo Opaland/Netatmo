@@ -38,6 +38,15 @@ def test_parse_wood_keeps_the_purchases_sorted_and_the_assumptions():
         json.dumps({"purchases": [{**PURCHASE, "moisture": True}]}),
         json.dumps({"purchases": [{**PURCHASE, "price": "150 €"}]}),
         json.dumps({"purchases": [PURCHASE] * 61}),
+        # #465: the readings of the wood burnt
+        json.dumps({"purchases": [PURCHASE], "burnt": {"season": 2025, "steres": 150}}),
+        json.dumps({"purchases": [PURCHASE], "burnt": [{"season": 2025, "steres": 150, "left": 1}]}),
+        json.dumps({"purchases": [PURCHASE], "burnt": [{"season": 2025}]}),
+        json.dumps({"purchases": [PURCHASE], "burnt": [{"season": "2025", "steres": 150}]}),
+        json.dumps({"purchases": [PURCHASE], "burnt": [{"season": 1999, "steres": 150}]}),
+        json.dumps({"purchases": [PURCHASE], "burnt": [{"season": 2025, "left": 1500}]}),
+        json.dumps({"purchases": [PURCHASE], "burnt": [{"season": 2025, "steres": True}]}),
+        json.dumps({"purchases": [PURCHASE], "burnt": [{"season": 2025, "steres": 150}, {"season": 2025, "left": 9}]}),
     ],
 )
 def test_parse_wood_refuses_without_quoting_the_value(bad):
@@ -64,3 +73,25 @@ def test_demo_wood_is_valid_and_in_the_meta(tmp_path):
     assert devices.parse_wood(json.dumps(WOOD))["purchases"] == sorted(WOOD["purchases"], key=lambda p: p["day"])
     generate(tmp_path)
     assert Store(tmp_path, "demo").meta["wood"] == WOOD
+
+
+def test_parse_wood_keeps_the_readings_of_the_wood_burnt():
+    """#465: what a season really burnt (stères burnt, or stock left in spring), sorted; absent
+    when none (the format of before), as the app writes it (web/src/wood.ts woodJson)."""
+    raw = json.dumps({"purchases": [PURCHASE], "burnt": [{"season": 2026, "left": 0.5}, {"season": 2025, "steres": 1}]})
+    assert devices.parse_wood(raw)["burnt"] == [{"season": 2025, "steres": 1}, {"season": 2026, "left": 0.5}]
+    assert "burnt" not in devices.parse_wood(json.dumps({"purchases": [PURCHASE], "burnt": []}))
+    assert "burnt" not in devices.parse_wood(json.dumps({"purchases": [PURCHASE]}))
+
+
+def test_the_app_reads_the_wood_with_the_same_limits():
+    """AGENTS.md §5: the limits of the collection and of the app (web/src/wood.ts) agree."""
+    import re
+    from pathlib import Path
+
+    ts = (Path(__file__).parent.parent / "web" / "src" / "wood.ts").read_text(encoding="utf-8")
+    assert re.search(rf"MAX_PURCHASES = {devices.MAX_PURCHASES};", ts)
+    assert re.search(rf"MAX_BURNT_STERES = {devices.MAX_BURNT_STERES};", ts)
+    lo, hi = devices.BURNT_SEASONS
+    assert re.search(rf"BURNT_SEASONS: \[number, number\] = \[{lo}, {hi}\];", ts)
+    assert all(f"{k}: '" in ts for k in devices.WOOD_SPECIES)

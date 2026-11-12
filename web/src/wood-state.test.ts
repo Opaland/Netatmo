@@ -26,9 +26,9 @@ const ROOMS = [
   { id: 'r-ch', name: 'Chambre' },
 ];
 /** A new dataset each time (the wood of a dataset is computed once). */
-function setup(stopped: Partial<StoppedRoom>[], purchases: unknown[], roomMap?: Map<string, string>) {
+function setup(stopped: Partial<StoppedRoom>[], purchases: unknown[], roomMap?: Map<string, string>, burnt?: unknown[]) {
   h.stopped = stopped.map((s) => ({ from: '2025-10-14', label: '', ...s }));
-  h.ds = { source: 'demo', key: null, meta: { rooms: ROOMS, wood: { purchases }, last_day: '2026-11-08' }, weather: null, roomMap };
+  h.ds = { source: 'demo', key: null, meta: { rooms: ROOMS, wood: { purchases, burnt }, last_day: '2026-11-08' }, weather: null, roomMap };
 }
 
 describe('the rooms the stove heats (#440)', () => {
@@ -84,5 +84,12 @@ describe('the wood the Accueil verdict counts (#433)', () => {
     setup([{ room: 'r-ch', reason: 'poele' }], [PURCHASE], new Map([['r-ch', 'chambres']]));
     expect(verdictWood('all', ['chambres'])).not.toBeNull();
     expect(verdictWood('all', ['r-salon'])).toBeNull();
+  });
+  it('#465: the wood really burnt, noted for a season, is what the verdict counts (one stock rule)', () => {
+    const season = (w: Map<string, [number, number]>) => [...w].filter(([d]) => d >= '2025-09-01' && d <= '2026-08-31').reduce((s, [, [, eur]]) => s + eur, 0);
+    setup([{ room: 'r-salon', reason: 'retires' }], [PURCHASE]);
+    expect(season(verdictWood('all', null)!)).toBeCloseTo(90, 6);
+    setup([{ room: 'r-salon', reason: 'retires' }], [PURCHASE], undefined, [{ season: 2025, steres: 0.5 }]);
+    expect(season(verdictWood('all', null)!)).toBeCloseTo(45, 6);
   });
 });
