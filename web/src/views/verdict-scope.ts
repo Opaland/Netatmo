@@ -7,7 +7,7 @@ import type { Verdict } from '../analysis';
 import { ds } from '../app';
 import { type MoneyVerdict, heatVerdict } from '../home';
 import { costAvailable, costOf, fmtEur, fmtKwh } from '../ui';
-import { comparableRecords } from './offline-rooms';
+import { comparableRecords, referenceLeftOut } from './offline-rooms';
 
 export interface Money {
   value: number;
@@ -47,6 +47,8 @@ export interface Scope {
   v: Verdict | null;
   /** The same, priced: what the screens write. */
   m: MoneyVerdict | null;
+  /** #570: the rooms not measured on both sides of a reference (left out of every figure), named. */
+  unmeasured: { names: string[]; phrase: string };
 }
 
 /**
@@ -54,10 +56,14 @@ export interface Scope {
  * of each day (`wood`, verdictWood) counted as heating, this year and in the reference years.
  */
 export function homeScope(all: DayRecord[], from: string, to: string, wood: Map<string, [number, number]> | null = null): Scope {
-  const cmp = comparableRecords(all, from, to);
+  const off = comparableRecords(all, from, to);
+  // #570: a room without readings on one side of a reference year (the water heater missing all
+  // year, a radiator added since) is left out of both sides and named, never the reference year
+  const both = referenceLeftOut(off.records, from, to);
+  const cmp = { records: both.records, left: off.left };
   const elec = money(cmp.records, from, to);
   const h = heatVerdict(cmp.records, from, to, ds!.weather, elec.unit === '€' ? elec.value : null, wood);
   const w = h.wood;
   const spent = w ? { value: elec.value + (elec.unit === '€' ? w.eur : w.kwh), unit: elec.unit, kwh: elec.kwh + w.kwh } : elec;
-  return { records: h.records, left: cmp.left, spent, elec, wood: !!w, v: h.v, m: h.m };
+  return { records: h.records, left: cmp.left, spent, elec, wood: !!w, v: h.v, m: h.m, unmeasured: { names: both.names, phrase: both.phrase } };
 }

@@ -101,11 +101,30 @@ def test_counts(archive, monkeypatch, capsys):
     assert rows["2024-02"][5:] == ["75", "%", "88", "%", "75", "%", "0/0", "m0", "29/29", "m1", "28/29"]
     assert "Total 2024 : chauffage 98/5/3/1/0 pièces-jours ; Linky 58/2 jours" in out
     assert "1 jours Intuis > Linky, 3 jours Linky sans Intuis" in out
-    assert "plus long trou (Intuis, toutes les pièces) : 3 j, à partir de 2024-01" in out
-    assert "plus long trou (Intuis, au moins une pièce) : 3 j, à partir de 2024-01" in out
+    assert "plus long trou (Intuis, toutes les pièces chauffées) : 3 j, à partir de 2024-01" in out
+    assert "plus long trou (Intuis, au moins une pièce chauffée) : 3 j, à partir de 2024-01" in out
+    assert "plus long trou (Intuis, chauffe-eau) : 3 j, à partir de 2024-01" in out
     assert "plus long trou (Linky jour) : 2 j, à partir de 2024-01" in out
     assert "plus long trou (station (tous modules)) : aucun" in out
     assert "Pièces suivies : 2 chauffage, 1 chauffe-eau ; modules de la station : 2." in out
+
+
+def test_water_heater_gap_is_not_a_room_gap(tmp_path):
+    """#570: the real report said « au moins une pièce : 490 j » for the water heater's own gap."""
+    store = Store(tmp_path, PASSPHRASE)
+    for day in _days("2024-01-01", "2024-03-31"):
+        store.merge(A, day, 7777)
+        if not "2024-01-20" <= day <= "2024-03-09":  # 50 days without the water heater
+            store.merge(W, day, 3333)
+    rooms = [
+        {"id": A, "name": NAMES[A], "category": "heating"},
+        {"id": W, "name": NAMES[W], "category": "water_heater"},
+    ]
+    store.save({"name": "Famille Zorglub", "timezone": "Europe/Paris"}, rooms, {})
+    gaps = Report(Store(tmp_path, PASSPHRASE)).gaps()
+    assert gaps["Intuis, au moins une pièce chauffée"] == {}
+    assert gaps["Intuis, toutes les pièces chauffées"] == {}
+    assert sum(n for n, _ in gaps["Intuis, chauffe-eau"].values()) == 50
 
 
 def test_report_reads_without_writing(archive):

@@ -10,7 +10,7 @@ import { offlineText } from '../room-offline';
 import { routeKey } from '../router';
 import { html } from '../trusted';
 import { avgPrice, costAvailable, esc, fmtKwh, lastDay, table, tableToggle } from '../ui';
-import { offlineInfo } from './offline-rooms';
+import { offlineInfo, stoppedShown } from './offline-rooms';
 import { stoveName, woodDays, woodSettings } from './wood-state';
 import { woodSpread } from '../wood';
 import { cutDays } from './quality';
@@ -44,6 +44,7 @@ export function renderExplain(view: HTMLElement, asked?: string) {
     runs: off.runs,
     estimate: off.estimate,
     cuts: cutDays(),
+    stopped: stoppedShown(),
   });
   const select = `<label class="select"><span>Mois expliqué</span> <select data-explain-month>${months
     .map((m) => `<option value="${m}"${m === month ? ' selected' : ''}>${esc(cap(monthLong(m)))}</option>`)
@@ -148,9 +149,13 @@ function offlineBlock(e: Explanation): string {
     .map((o) =>
       alert(
         'warn',
-        `${o.name} : ${offlineText({ from: o.since, to: e.to, ongoing: o.ongoing })}`,
-        o.estimated !== null
-          ? `Sa consommation n’est plus mesurée. Ce mois-ci, le compteur en voit ≈ ${fmtKwh(o.estimated)} (Linky moins les autres pièces et les usages habituels) : c’est une estimation, comptée dans « ${STEP_LABEL.horsligne} ». Hors ligne, le radiateur garde son dernier réglage : ni planning, ni mode absence.`
+        `${o.name} : ${offlineText({ from: o.since, to: o.until, ongoing: o.ongoing })}`,
+        o.unmeasured
+          ? e.basis === 'linky'
+            ? 'Aucun relevé sur l’un des deux mois : sa consommation est comptée avec les autres usages (compteur Linky), des deux côtés, et non comme une hausse ou une baisse.'
+            : 'Aucun relevé sur l’un des deux mois : elle est laissée hors de la comparaison, des deux côtés.'
+          : o.estimated !== null
+          ?`Sa consommation n’est plus mesurée. Ce mois-ci, le compteur en voit ≈ ${fmtKwh(o.estimated)} (Linky moins les autres pièces et les usages habituels) : c’est une estimation, comptée dans « ${STEP_LABEL.horsligne} ». Hors ligne, le radiateur garde son dernier réglage : ni planning, ni mode absence.`
           : 'Sa consommation n’est plus mesurée et aucun compteur Linky ne permet de l’estimer : sa baisse n’est pas une économie.',
         `<p><a class="link" href="#${routeKey({ page: 'piece', room: o.id })}">Voir la pièce</a></p>`,
       ),

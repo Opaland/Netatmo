@@ -4,6 +4,7 @@ import {
   type Category,
   type DayRecord,
   addDays,
+  measuredValues,
   aggregate,
   bucketLabel,
   minusYears,
@@ -11,12 +12,13 @@ import {
 } from '../aggregate';
 import { ds, setState, state } from '../app';
 import { type Series, barChart } from '../charts';
-import { OTHER, activeRooms, avgPrice, catColor, esc, eurOf, firstDay, fmtKwh, lastDay, nf0, roomColor, roomGroup, roomName, seg, table, tableToggle } from '../ui';
+import { OTHER, activeRooms, avgPrice, catColor, esc, eurOf, firstDay, fmtKwh, lastDay, nf0, roomColor, roomGroup, roomName, seg, table, tableToggle, UNMEASURED_CELL } from '../ui';
 import { rangeLabel, usageLabel } from '../glossary';
 import { yearGranularityAllowed } from '../history';
 import { countedHtml } from './counted';
 import { chartMarks, cutDays, cutDaysIn, uncertainDays } from './quality';
-import { cutText } from '../periods';
+import { INCOMPLETE, bucketMarks, bucketRange, cutText } from '../periods';
+import { stoppedRooms } from './offline-rooms';
 import { html } from '../trusted';
 import { lazyCard } from '../lazy';
 import { ENERGY_ONLY, EUROS_NOTE } from '../synthese';
@@ -83,7 +85,7 @@ export function renderOverview(view: HTMLElement, records: DayRecord[], part: Ov
         ${seg('split', split, [['category', 'Par usage'], ['room', 'Par pièce']], 'Détail')}
       </div>
     </div>
-    <p class="period-total"><strong>${fmtKwh(periodTotal)}</strong> ${periodEur ? `· ${periodEur} ${ENERGY_ONLY}` : ''}${estimatedNote(records, from, to)}</p>
+    <p class="period-total"><strong>${fmtKwh(periodTotal)}</strong>${uncertainDays(records, new Set(), from, to).size ? ` <small class="muted">${INCOMPLETE}</small>` : ''} ${periodEur ? `· ${periodEur} ${ENERGY_ONLY}` : ''}${estimatedNote(records, from, to)}</p>
     ${
       shares.length > 1
         ? `<div class="share" aria-hidden="true">${shares
@@ -103,10 +105,12 @@ export function renderOverview(view: HTMLElement, records: DayRecord[], part: Ov
     split === 'category'
       ? (['heating', 'water_heater'] as string[]).filter((k) => set.groups.has(k))
       : [...activeRooms().map((r) => r.id), OTHER].filter((k) => set.groups.has(k));
+  const stopFrom = new Map(stoppedRooms().map((s) => [ds!.roomMap?.get(s.room) ?? s.room, s.from] as const));
   const ser: Series[] = order.map((k) => ({
     name: split === 'category' ? usageLabel(k as Category) : roomName(k),
     color: split === 'category' ? catColor(k as Category) : roomColor(k),
-    data: set.groups.get(k)!.map((v) => Math.round(v * 10) / 10),
+    // #570: a bucket without its measure is no 0; a room switched off on purpose does use 0 after its stop
+    data: measuredValues(set, k, (v) => Math.round(v * 10) / 10).map((v, i) => (v === null && stopFrom.has(k) && bucketRange(set.keys[i], gran)[1] >= stopFrom.get(k)! ? 0 : v)),
   }));
   const labels = set.keys.map((k) => bucketLabel(k, gran));
   // #297: partial buckets hatched, buckets with estimated or lost days paler, both explained in the tooltip
@@ -114,11 +118,19 @@ export function renderOverview(view: HTMLElement, records: DayRecord[], part: Ov
   // #386: by usage, the share line above already names the two colours (no second legend)
   const ownLegend = split === 'category' && shares.length > 1;
   barChart(document.getElementById('main-chart')!, { labels, series: ser, stacked: true, price: avgPrice(records), zoom: labels.length > 60, ...marks, ...(ownLegend ? { legend: false } : {}) });
+  // #570: a period that holds days without any reading writes « incomplet » by its total; a usage
+  // or a room without any reading in it writes « — », never 0
+  const lo = firstDay() > from ? firstDay() : from;
+  const hi = lastDay() < to ? lastDay() : to;
+  const lost = bucketMarks(set.keys, gran, lo, hi, uncertainDays(records, new Set(), lo, hi));
   document.getElementById('main-table')!.innerHTML = html(tableToggle(
     table(
       ['Période', ...ser.map((s) => s.name), 'Total'],
       labels
-        .map((l, i) => [esc(l), ...ser.map((s) => s.data[i] ?? 0), ser.reduce((a, s) => a + (s.data[i] ?? 0), 0)])
+        .map((l, i) => {
+          const sum = ser.reduce((a, s) => a + (s.data[i] ?? 0), 0);
+          return [esc(l), ...ser.map((s) => s.data[i] ?? UNMEASURED_CELL), lost[i].uncertain ? `${nf0.format(sum)} <small class="muted">${INCOMPLETE}</small>` : sum];
+        })
         .reverse(),
     ),
   ));

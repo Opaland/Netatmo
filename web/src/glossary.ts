@@ -48,6 +48,10 @@ export const usageLabel = (c: Category): string => (c === 'heating' ? CATEGORY.h
 
 /** « 1 jour », « 3 jours », « 0 jour » (French: singular under 2). `many`: an irregular plural. */
 export const plural = (n: number, one: string, many = `${one}s`): string => `${n} ${n > 1 ? many : one}`;
+
+/** « Chambre enfant », « Chambre enfant et Bureau », « A, B et C ». */
+export const andList = (a: string[]) => (a.length < 2 ? (a[0] ?? '') : `${a.slice(0, -1).join(', ')} et ${a.at(-1)}`);
+
 /**
  * #406: « 2 module(s) injoignable(s) » → « 2 modules injoignables ». Every « word(s) » takes the
  * number written last before it (a note written by the collector before v1.7, kept in the data).

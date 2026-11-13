@@ -16,7 +16,7 @@ import { ADEME_PER_DEGREE } from './checks';
 import { MONTHS_LONG, monthLong, signedPct } from './glossary';
 import type { CutKind } from './incidents';
 import { woodIn } from './wood';
-import { type OfflineEstimate, type OfflineRun, type StoppedRoom, offlineDaysIn, offlineText } from './room-offline';
+import { type OfflineEstimate, type OfflineRun, type StoppedRoom, offlineDaysIn, offlineText, unmeasuredPhrase, unmeasuredReasons } from './room-offline';
 
 export type StepKey = 'meteo' | 'consignes' | 'mode' | 'pieces' | 'horsligne' | 'eau' | 'autres';
 export const STEP_LABEL: Record<StepKey, string> = {
@@ -74,7 +74,10 @@ export interface Explanation {
   setpoint: { now: number; ref: number } | null;
   other: { now: number; ref: number } | null;
   water: { now: number; ref: number };
-  offline: { id: string; name: string; since: string; ongoing: boolean; estimated: number | null }[];
+  /** #570: `until` the run's last day; `unmeasured`: no reading in one of the two months, counted in « autres usages ». */
+  offline: { id: string; name: string; since: string; until: string; ongoing: boolean; estimated: number | null; unmeasured: boolean }[];
+  /** #570: the rooms without readings on one side (unmeasuredPhrase, « hors … »): counted in « autres usages » with the meter, else left out. */
+  unmeasured: string;
   /** Rooms switched off on purpose over the month or a year earlier. */
   stopped: { id: string; name: string; text: string; stop: StoppedRoom }[];
   /** #394: days of the month left out with their day a year earlier (a cut on either), and the cause. */
@@ -93,6 +96,8 @@ export interface ExplainInput {
   estimate: OfflineEstimate;
   /** #394: days touched by a power or Internet cut (incidents.ts). */
   cuts?: Map<string, CutKind>;
+  /** #570: the rooms switched off on purpose (stoppedShown): they stay in the comparison. */
+  stopped?: Set<string>;
 }
 
 const monthEnd = (ym: string) => addDays(`${nextMonth(ym)}-01`, -1);
@@ -180,9 +185,20 @@ export function explainMonth(i: ExplainInput): Explanation | null {
     }
     return { dju: s, days: n };
   };
-  const followed = i.rooms.filter((r) => r.category !== 'ignore');
   const refAny = i.records.some((r) => r.day >= refFrom && r.day <= refTo);
   if (!refAny) return null;
+  // #570: a room (water heater included) without any reading in one of the two months is no part of
+  // the change: with the meter it is counted in « autres usages » on both sides, without the meter
+  // it is left out of both; never « +135 kWh d'eau chaude » for a water heater not measured then
+  // a run counts when it touches one of the two months (not the year between them)
+  const touches = (x: OfflineRun) => (x.to >= from && x.from <= to) || (x.to >= refFrom && x.from <= refTo);
+  // a heated room offline keeps its estimate from the meter (#346): only the water heater and a
+  // radiator added since (no run: it was not there yet) are taken out
+  const waterIds = new Set(i.rooms.filter((r) => r.category === 'water_heater').map((r) => r.id));
+  const unmeasured = new Map(
+    [...unmeasuredReasons(i.records, from, to, refFrom, refTo, i.stopped)].filter(([id]) => waterIds.has(id) || !i.runs.some((x) => !x.stopped && x.room === id && touches(x))),
+  );
+  const followed = i.rooms.filter((r) => r.category !== 'ignore' && !unmeasured.has(r.id));
   const heat = followed.filter((r) => r.category === 'heating');
   const waterRooms = followed.filter((r) => r.category === 'water_heater');
   // weather: the degree days of both periods, when every day is known
@@ -246,13 +262,16 @@ export function explainMonth(i: ExplainInput): Explanation | null {
   if (offRooms.length) steps.push({ key: 'horsligne', label: STEP_LABEL.horsligne, kwh: offRooms.reduce((s, r) => s + r.rest, 0), estimated: offRooms.some((r) => r.estimated > 0) });
   if (waterRooms.length) steps.push({ key: 'eau', label: STEP_LABEL.eau, kwh: water.now - water.ref });
   if (other) steps.push({ key: 'autres', label: STEP_LABEL.autres, kwh: other.now - other.ref });
-  const offline = heat
-    .concat(waterRooms)
+  const offline = i.rooms
+    .filter((r) => r.category !== 'ignore')
     .flatMap((r) => {
-      const run = i.runs.filter((x) => !x.stopped && x.room === r.id && x.to >= refFrom && x.from <= to).pop();
+      const run = i.runs.filter((x) => !x.stopped && x.room === r.id && touches(x)).pop();
       if (!run) return [];
-      return [{ id: r.id, name: r.name, since: run.from, ongoing: run.ongoing, estimated: estimatedIn(i.estimate, r.id, from, to) }];
+      const out = unmeasured.has(r.id);
+      return [{ id: r.id, name: r.name, since: run.from, until: run.to, ongoing: run.ongoing, estimated: out ? null : estimatedIn(i.estimate, r.id, from, to), unmeasured: out }];
     });
+  const name = new Map(i.rooms.map((r) => [r.id, r.name]));
+  const unmeasuredText = unmeasuredPhrase(unmeasured, (id) => name.get(id) ?? id);
   return {
     month: i.month,
     from,
@@ -272,6 +291,7 @@ export function explainMonth(i: ExplainInput): Explanation | null {
     other,
     water,
     offline,
+    unmeasured: unmeasuredText,
     stopped: changed.map((r) => ({ id: r.id, name: r.name, stop: r.stopped!, text: offlineText({ from: r.stopped!.from, to, ongoing: true, stopped: r.stopped }) })),
     cuts,
   };
@@ -311,7 +331,8 @@ export function stepNote(e: Explanation, s: Step): string {
     case 'eau':
       return 'chauffe-eau';
     default:
-      return 'compteur − chauffage − eau chaude';
+      // #570: a device without any reading in one of the two months is in this part, on both sides
+      return `compteur − chauffage − eau chaude${e.unmeasured ? `, ${e.unmeasured.replace(/^hors /, 'dont ')}` : ''}`;
   }
 }
 

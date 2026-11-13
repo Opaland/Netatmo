@@ -19,6 +19,9 @@ import {
   offlineText,
   parseStopped,
   runIn,
+  referenceUnmeasured,
+  unmeasuredPhrase,
+  unmeasuredReasons,
 } from '../room-offline';
 import { lsKey } from '../scope';
 import { fmtKwh } from '../ui';
@@ -115,3 +118,31 @@ export function stoppedIn(from: string, to: string): { id: string; name: string;
     .runs.filter((r) => r.stopped && r.to >= from && r.from <= to && names.has(r.room))
     .map((run) => ({ id: run.room, name: names.get(run.room)!, run }));
 }
+
+/** Ids shown of the rooms switched off on purpose: they stay in every comparison (#346). */
+export const stoppedShown = (): Set<string> => new Set(stoppedRooms().map((s) => ds!.roomMap?.get(s.room) ?? s.room));
+
+/** The rooms of `reasons` out of `records`, their names and the sentence that says so (#570). */
+function leftOutOf(records: DayRecord[], reasons: Map<string, string | null>): { records: DayRecord[]; ids: Set<string>; names: string[]; phrase: string } {
+  const ids = new Set(reasons.keys());
+  if (!ids.size) return { records, ids, names: [], phrase: '' };
+  const name = new Map(activeRooms().map((r) => [r.id, r.name]));
+  const nameOf = (id: string) => name.get(id) ?? id;
+  return {
+    records: records.filter((r) => !ids.has(r.room)),
+    ids,
+    names: [...ids].map(nameOf).sort((a, b) => a.localeCompare(b, 'fr')),
+    phrase: unmeasuredPhrase(reasons, nameOf),
+  };
+}
+
+/**
+ * #570: the rooms shown left out of a comparison of [from, to] with [prevFrom, prevTo] because one
+ * side has no reading of them (unmeasuredReasons: the water heater missing all year, a radiator
+ * added since), the records without them, and the sentence that names them.
+ */
+export const measuredOnBoth = (records: DayRecord[], from: string, to: string, prevFrom: string, prevTo: string) =>
+  leftOutOf(records, unmeasuredReasons(records, from, to, prevFrom, prevTo, stoppedShown()));
+
+/** #570: the same over every reference window of a verdict of [from, to] (referenceUnmeasured). */
+export const referenceLeftOut = (records: DayRecord[], from: string, to: string) => leftOutOf(records, referenceUnmeasured(records, from, to, stoppedShown()));

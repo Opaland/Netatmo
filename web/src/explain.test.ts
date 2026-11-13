@@ -57,6 +57,28 @@ function input(o: { cold?: number; sp?: number; other?: number; offline?: boolea
 const step = (e: ReturnType<typeof explainMonth>, k: string) => e!.steps.find((s) => s.key === k)?.kwh ?? 0;
 const sumSteps = (e: ReturnType<typeof explainMonth>) => e!.steps.reduce((s, x) => s + x.kwh, 0);
 
+// #570: the water heater without any reading in the reference month (a real account: Sept. 2023 to
+// Jan. 2025): its whole consumption read as « Eau chaude +93 kWh » and « Autres usages −93 kWh »
+describe('a device without any reading in one of the two months (#570)', () => {
+  const base = input();
+  const gone = [rec('2024-12-31', 'a', 10), rec('2024-12-31', 'ce', 3), ...base.records.filter((r) => !(r.room === 'ce' && r.day < '2025-02-01'))];
+  const runs = offlineRuns(gone, ROOMS, '2026-01-31');
+  const i = { ...base, records: gone, runs, estimate: estimateOffline(gone, runs, base.linky, base.weather) };
+  it('with the meter: no « Eau chaude » part, the water heater counted in « autres usages » on both sides', () => {
+    const e = explainMonth(i)!;
+    expect(e.steps.find((s) => s.key === 'eau')).toBeUndefined();
+    expect(step(e, 'autres')).toBeCloseTo(0, 6);
+    expect(sumSteps(e)).toBeCloseTo(e.delta, 6);
+    expect(stepNote(e, e.steps.find((s) => s.key === 'autres')!)).toBe('compteur − chauffage − eau chaude, dont Chauffe-eau (sans relevé sur l’une des périodes comparées)');
+  });
+  it('a run is listed when it touches one of the two months, said with its own end', () => {
+    const late = gone.filter((r) => !(r.room === 'b' && r.day >= '2025-12-10' && r.day <= '2025-12-20'));
+    const runs2 = offlineRuns(late, ROOMS, '2026-01-31');
+    const e = explainMonth({ ...i, records: late, runs: runs2 })!;
+    expect(e.offline.map((o) => [o.name, o.until, o.unmeasured])).toEqual([['Chauffe-eau', '2025-01-31', true]]);
+  });
+});
+
 describe('explain a month', () => {
   it('#394: a day of cut is left out of both months, with its day a year earlier', () => {
     const i = input();
@@ -160,7 +182,7 @@ describe('a change of heating (a radiator switched off on purpose)', () => {
     const runs = applyStopped(i.runs, [stop]);
     // the stove uses no electricity: the meter does not see the room either
     const linky = new Map([...i.linky].map(([d, v]) => [d, d >= '2026-01-01' ? v - 0.25 * (18 - i.weather!.get(d)![2]) * 1.5 : v]));
-    const e = explainMonth({ ...i, runs, linky, estimate: estimateOffline(i.records, runs, linky, i.weather) })!;
+    const e = explainMonth({ ...i, runs, linky, estimate: estimateOffline(i.records, runs, linky, i.weather), stopped: new Set([stop.room]) })!;
     const mode = e.steps.find((x) => x.key === 'mode')!;
     expect(mode.label).toBe('Changement de mode de chauffage (poêle : Cuisine)');
     expect(mode.kwh).toBeCloseTo(-0.25 * 13 * 31, 6); // all of January 2025, not scaled by the weather
@@ -178,7 +200,7 @@ describe('a change of heating (a radiator switched off on purpose)', () => {
     const stop = { room: 'b', from: '2026-01-01', reason: 'retires' as const, label: '' };
     const runs = applyStopped(i.runs, [stop]);
     const linky = new Map([...i.linky].map(([d, v]) => [d, d >= '2026-01-01' ? v - 0.25 * (18 - i.weather!.get(d)![2]) * 1.5 : v]));
-    const e = explainMonth({ ...i, runs, linky, estimate: estimateOffline(i.records, runs, linky, i.weather) })!;
+    const e = explainMonth({ ...i, runs, linky, estimate: estimateOffline(i.records, runs, linky, i.weather), stopped: new Set([stop.room]) })!;
     const mode = e.steps.find((x) => x.key === 'mode')!;
     expect(mode.label).toBe('Changement de mode de chauffage (radiateurs retirés : Cuisine)');
     expect(mode.kwh).toBeCloseTo(-0.25 * 13 * 31, 6);
@@ -196,7 +218,7 @@ describe('on the demo: January 2026, the owner’s question', () => {
     const last = ds.meta.last_day!;
     const runs = applyStopped(offlineRuns(ds.records, ds.meta.rooms, last), parseStopped((ds.meta as { stopped_rooms?: unknown }).stopped_rooms));
     const estimate = estimateOffline(ds.records, runs, ds.linky, ds.weather);
-    const e = explainMonth({ month: '2026-01', last, records: ds.records, rooms: ds.meta.rooms, weather: ds.weather, linky: ds.linky, temps: ds.temps, runs, estimate })!;
+    const e = explainMonth({ month: '2026-01', last, records: ds.records, rooms: ds.meta.rooms, weather: ds.weather, linky: ds.linky, temps: ds.temps, runs, estimate, stopped: new Set(['r-cuisine']) })!;
     expect(e.basis).toBe('linky');
     expect(sumSteps(e)).toBeCloseTo(e.delta, 6);
     expect(step(e, 'mode')).toBeCloseTo(-170, 0); // all of the kitchen of January 2025

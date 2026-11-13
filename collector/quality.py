@@ -173,7 +173,11 @@ class Report:
         self.rooms_with_data: dict[str, int] = {}
         self.real_wh: dict[str, float] = {}  # day -> Intuis real Wh (cross-check, never printed)
         self.intuis_days: set[str] = set()  # days with at least one Intuis value
-        self.room_missing: set[str] = set()  # days where at least one room is missing (not stopped)
+        self.heating_days: set[str] = set()  # days with at least one heated room's value
+        # #570: days where at least one heated room is missing (not stopped), and the water heater's
+        # own: a long water-heater gap is not a gap « of a room »
+        self.room_missing: set[str] = set()
+        self.water_missing: set[str] = set()
         # #569: the missing days of each room (same rule as `room_days`), what `rattrapage` asks for
         self.missing: dict[str, set[str]] = {}
         for rid, days in values.items():
@@ -184,6 +188,8 @@ class Report:
             est = flagged.get(rid, set())
             for day, v in days.items():
                 self.intuis_days.add(day)
+                if self.kind[rid] == "heating":
+                    self.heating_days.add(day)
                 if day not in est and _valid(v):
                     self.real_wh[day] = self.real_wh.get(day, 0.0) + float(v)
             if self.last:
@@ -194,7 +200,8 @@ class Report:
                     and d.isoformat() not in est
                     and not stopped_on(self.stopped, rid, d.isoformat())
                 }
-                self.room_missing |= self.missing[rid]
+                # #570: a heated room's gap, or the water heater's own (not « a room »)
+                (self.room_missing if self.kind[rid] == "heating" else self.water_missing).update(self.missing[rid])
 
         linky = store.doc("linky").get("daily", {}) or {}
         self.linky = {d: v for d, v in linky.items() if isinstance(d, str) and len(d) == 10}
@@ -288,8 +295,9 @@ class Report:
 
     def gaps(self) -> dict[str, dict[int, tuple[int, str]]]:
         all_missing: list[date] = []
-        if self.first and self.last:
-            all_missing = [d for d in _days(_day(self.first), _day(self.last)) if d.isoformat() not in self.intuis_days]
+        if self.heating_days and self.last:
+            first = _day(min(self.heating_days))
+            all_missing = [d for d in _days(first, _day(self.last)) if d.isoformat() not in self.heating_days]
         linky_missing: list[date] = []
         if self.linky:
             lo, hi = _day(min(self.linky)), _day(max(self.linky))
@@ -301,8 +309,9 @@ class Report:
             lo, hi = _day(min(any_station)), _day(max(any_station))
             station_missing = [d for d in _days(lo, hi) if d.isoformat() not in any_station]
         return {
-            "Intuis, toutes les pièces": _longest(all_missing),
-            "Intuis, au moins une pièce": _longest(_day(d) for d in self.room_missing),
+            "Intuis, toutes les pièces chauffées": _longest(all_missing),
+            "Intuis, au moins une pièce chauffée": _longest(_day(d) for d in self.room_missing),
+            "Intuis, chauffe-eau": _longest(_day(d) for d in self.water_missing),
             "Linky jour": _longest(linky_missing),
             "station (tous modules)": _longest(station_missing),
         }

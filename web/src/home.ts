@@ -5,7 +5,7 @@
 // temperature). The view (views/home.ts) only lays them out.
 import { type DayRecord, addDays, bucketKeys, minusYears, pctChange } from './aggregate';
 import { type Verdict, type Weather, verdict } from './analysis';
-import { MONTHS_LONG, MONTHS_SHORT, PERIOD, dayShort, seasonLabel, signedPct, withUnit } from './glossary';
+import { MONTHS_LONG, MONTHS_SHORT, PERIOD, andList, dayShort, seasonLabel, signedPct, withUnit } from './glossary';
 import { daysBetween } from './periods';
 import { woodIn } from './wood';
 import { withWood } from './isolation';
@@ -191,8 +191,6 @@ export function verdictHeadline(m: MoneyVerdict): string {
   return `${amount(gap, m.unit)} de ${gap < 0 ? 'moins' : 'plus'} que d'habitude`;
 }
 
-/** « Chambre enfant », « Chambre enfant et Bureau », « A, B et C ». */
-const andList = (a: string[]) => (a.length < 2 ? (a[0] ?? '') : `${a.slice(0, -1).join(', ')} et ${a.at(-1)}`);
 
 /** #383: the scope of the verdict when rooms are left out: « hors Chambre enfant, hors ligne ». */
 export const leftOut = (left: string[]) => (left.length ? `hors ${andList(left)}, hors ligne` : '');

@@ -11,8 +11,9 @@
 //     ⚙ Mon logement: « arrêté depuis le … (poêle) », no alert, no estimate (a stove uses next to
 //     no electricity), and its fall is a change of heating, not « vos réglages ».
 import { type DayRecord, addDays, minusYears } from './aggregate';
-import { type Weather, dju, linearFit } from './analysis';
-import { dayShort } from './glossary';
+import { type Weather, dju, linearFit, referenceWindows } from './analysis';
+import { andList, dayShort } from './glossary';
+import { WOOD_ROOM } from './wood';
 
 /** 48 h without a daily reading make a room « hors ligne » (alert of the collection as well). */
 export const OFFLINE_MIN_DAYS = 2;
@@ -218,6 +219,79 @@ export function notComparable(runs: OfflineRun[], from: string, to: string): Set
   const out = new Set<string>();
   for (const r of runs) if (!r.stopped && (offlineDaysIn([r], r.room, from, to) || offlineDaysIn([r], r.room, minusYears(from), minusYears(to)))) out.add(r.room);
   return out;
+}
+
+// ------------------------------------------------------------------ measured on both sides (#570)
+/**
+ * #570: « non mesuré » over [from, to]: the records of one device (or one usage) exist in the
+ * archive but none falls in the window — the water heater over all of 2024 on a real account. It is
+ * never 0. The one definition of it: the « non mesuré » cells of « Année par année » and of the
+ * annual report, and unmeasuredRooms below, all ask this.
+ */
+export const unmeasuredIn = (records: DayRecord[], from: string, to: string): boolean => records.length > 0 && !records.some((r) => r.day >= from && r.day <= to);
+
+/**
+ * #570: the rooms (water heater included) measured on one side of a comparison of [from, to] with
+ * [prevFrom, prevTo] and not on the other, each with its reason:
+ *   - null: no reading at all in one of the two windows (unmeasuredIn);
+ *   - a day: its first reading, after the start of the earlier window (a radiator added since: it
+ *     was not counted all along). « The start » is the later of `prevFrom` and the household's
+ *     first day of data, so that a room read from the first day is never « added ».
+ * Comparing with them makes a rise, or a fall, out of a measure that does not exist: they are left
+ * out of BOTH sides and named, never the whole period. The rooms of `keep` stay: a radiator
+ * switched off on purpose is a change of heating (#346), its fall is real. Day records that are no
+ * room (the stove's wood, WOOD_ROOM) stay too. One rule for every comparison of two periods.
+ */
+export function unmeasuredReasons(records: DayRecord[], from: string, to: string, prevFrom: string, prevTo: string, keep: Set<string> = new Set()): Map<string, string | null> {
+  const byRoom = new Map<string, DayRecord[]>();
+  let dataFirst = '';
+  for (const r of records) {
+    if (r.room === WOOD_ROOM) continue;
+    if (!dataFirst || r.day < dataFirst) dataFirst = r.day;
+    if (keep.has(r.room)) continue;
+    (byRoom.get(r.room) ?? byRoom.set(r.room, []).get(r.room)!).push(r);
+  }
+  const start = prevFrom > dataFirst ? prevFrom : dataFirst;
+  const out = new Map<string, string | null>();
+  for (const [room, rs] of byRoom) {
+    const now = !unmeasuredIn(rs, from, to);
+    const prev = !unmeasuredIn(rs, prevFrom, prevTo);
+    if (!now && !prev) continue; // not in the comparison at all
+    const first = rs.reduce((a, r) => (r.day < a ? r.day : a), rs[0].day);
+    if (first > start) out.set(room, first);
+    else if (!now || !prev) out.set(room, null);
+  }
+  return out;
+}
+
+/** The rooms of unmeasuredReasons. */
+export const unmeasuredRooms = (records: DayRecord[], from: string, to: string, prevFrom: string, prevTo: string, keep: Set<string> = new Set()): Set<string> =>
+  new Set(unmeasuredReasons(records, from, to, prevFrom, prevTo, keep).keys());
+
+/**
+ * #570: the rooms left out of a verdict of [from, to] (Accueil, « Ce mois est-il normal ? »): those
+ * not measured on both sides of any of its reference windows (verdict's referenceWindows). The
+ * room goes, not the reference year.
+ */
+export function referenceUnmeasured(records: DayRecord[], from: string, to: string, keep: Set<string> = new Set()): Map<string, string | null> {
+  const first = records.reduce((a, r) => (r.room !== WOOD_ROOM && (!a || r.day < a) ? r.day : a), '');
+  const out = new Map<string, string | null>();
+  for (const w of referenceWindows(from, to, first))
+    for (const [room, why] of unmeasuredReasons(records, from, to, w.f, w.t, keep)) if (!out.has(room) || why) out.set(room, why);
+  return out;
+}
+
+/**
+ * « hors Bureau (ajouté le 20 oct. 2025) et Chauffe-eau (sans relevé sur l’une des périodes
+ * comparées) », or '' — the one sentence for the rooms of unmeasuredReasons (`name` of each id).
+ */
+export function unmeasuredPhrase(reasons: Map<string, string | null>, name: (id: string) => string): string {
+  if (!reasons.size) return '';
+  const items = [...reasons]
+    .map(([id, added]) => ({ n: name(id), added }))
+    .sort((a, b) => a.n.localeCompare(b.n, 'fr'))
+    .map(({ n, added }) => `${n} (${added ? `ajouté le ${dayShort(added, true)}` : 'sans relevé sur l’une des périodes comparées'})`);
+  return `hors ${andList(items)}`;
 }
 
 // ------------------------------------------------------------------ estimate from the meter

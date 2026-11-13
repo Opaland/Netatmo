@@ -17,7 +17,8 @@ import { NO_REFERENCE, TEMP, dayLong, dayShort, fmt1, fmtTemp, hourMin, hourRang
 import { GOAL_CHOICES, goalOf, goalProgress, goalSentence, validGoals, withGoal } from '../goal';
 import { HOME_PERIODS, type HomeRange, homePeriod, homeRange, scopeTitle } from '../home';
 import { daysBetween } from '../periods';
-import { bucketMarks } from '../periods';
+import { bucketMarks, countIn, missingText } from '../periods';
+import { uncertainDays } from '../checks';
 import {
   type ColdDay,
   byCost,
@@ -655,10 +656,20 @@ function consoCard(cat: string, mine: DayRecord[], r: HomeRange): string {
   const before = total(mine, minusYears(r.from), minusYears(r.to));
   const eurBefore = before > 0 ? costOf(mine, minusYears(r.from), minusYears(r.to)) : null;
   const amount = (k: number, e: number | null) => (e === null ? esc(fmtKwh(k)) : `${esc(fmtEur(e))} (${esc(fmtKwh(k))})`);
+  // #570: the days of the room without any reading, now and a year earlier, said with the amounts
+  const lost = uncertainDays(mine, new Set(), minusYears(r.from), r.to);
+  const doubt = [
+    [r.from, r.to],
+    [minusYears(r.from), minusYears(r.to)],
+  ]
+    .map(([f, t]) => [f.slice(0, 4), countIn(lost, f, t)] as const)
+    .filter(([, n]) => n)
+    .map(([y, n]) => `${y} : ${missingText(n)}`);
+  const doubtHtml = doubt.length ? ` <small class="muted">(${esc(doubt.join(' · '))})</small>` : '';
   return `<section class="card" id="piece-conso">
     <div class="card-head"><h2>Consommation et coût</h2></div>
     ${countedNote(`${esc(scopeTitle(r))} ; le graphique : kWh par mois, ${esc(r.period === 'month' ? 'les 12 derniers mois' : 'les mois de la période')}, comparés aux mêmes mois un an plus tôt`)}
-    <p><b>${amount(kwh, eur)}</b>${before > 0 ? `, contre ${amount(before, eurBefore)} un an plus tôt aux mêmes dates` : ''}.</p>
+    <p><b>${amount(kwh, eur)}</b>${before > 0 ? `, contre ${amount(before, eurBefore)} un an plus tôt aux mêmes dates` : ''}${doubtHtml}.</p>
     <div class="chart" id="room-detail" role="img" aria-label="${esc(cat === 'water_heater' ? 'Chauffe-eau' : 'Chauffage de la pièce')}, kWh par mois"></div>
   </section>`;
 }
@@ -671,7 +682,7 @@ function drawConso(el: HTMLElement, cat: string, mine: DayRecord[], r: HomeRange
   for (const x of mine) per.set(x.day.slice(0, 7), (per.get(x.day.slice(0, 7)) ?? 0) + x.kwh);
   const prevKey = (k: string) => `${Number(k.slice(0, 4)) - 1}${k.slice(4)}`;
   const first = mine.reduce((a, x) => (x.day < a ? x.day : a), last);
-  const marks = bucketMarks(keys, 'month', first, last);
+  const marks = bucketMarks(keys, 'month', first, last, uncertainDays(mine, ds!.estimated, first, last)); // #570: months with days lost
   const labels = keys.map((k, i) => (i === 0 || k.endsWith('-01') ? bucketLabel(k, 'month') : bucketLabel(k, 'month').split(' ')[0]));
   const val = (k: string) => (per.has(k) ? Math.round(per.get(k)!) : null);
   barChart(el, {
@@ -683,7 +694,7 @@ function drawConso(el: HTMLElement, cat: string, mine: DayRecord[], r: HomeRange
         data: keys.map(val),
         raw: keys.map((k) => per.get(k) ?? null),
         notes: marks.map((x) => x.note),
-        marks: marks.map((x) => x.partial),
+        marks: marks.map((x) => x.partial || x.uncertain > 0),
       },
       { name: 'Un an plus tôt', color: cssVar('--usage-other'), data: keys.map((k) => val(prevKey(k))), lastYear: true },
     ],

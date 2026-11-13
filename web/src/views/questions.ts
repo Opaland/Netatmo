@@ -6,6 +6,7 @@ import { BEDROOMS_ID } from '../household';
 import { QUESTIONS, type QuestionId, answer, answerableMonths, defaultMonth, monthLabel } from '../questions';
 import { activeRooms, costAvailable, costOf, esc, lastDay } from '../ui';
 import { html } from '../trusted';
+import { stoppedShown } from './offline-rooms';
 import { type Drops, type RoomState, bedroomGrouping } from '../windows';
 
 let month: string | null = null;
@@ -59,6 +60,7 @@ export function mountQuestions(el: HTMLElement | null) {
         roomState,
         groupOf: bedroomGrouping((rawDataset() ?? ds).meta.rooms, false),
         drops: drops?.ds === raw ? (drops.value ?? undefined) : undefined,
+        stopped: stoppedShown(),
       })
     : null;
   el.innerHTML = html`<div class="card-head"><h2>Questions types <small class="muted">réponses calculées, sans IA</small></h2>

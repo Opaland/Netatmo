@@ -117,7 +117,7 @@ function verdictBlock(r: HomeRange, sc: Scope): string {
     const amount = spent.unit === '€' ? fmtEur(spent.value) : fmtKwh(spent.kwh);
     const what = `<b class="num">${esc(amount)}</b>${
       sc.wood ? ` ${WOOD_WORDS}${spent.unit === '€' ? ` (${esc(fmtKwh(spent.kwh))})` : ''}` : `${spent.unit === '€' ? ` (${esc(fmtKwh(spent.kwh))})` : ''} ${spent.unit === '€' ? 'dépensés' : 'consommés'}`
-    }${left.length ? ` ${scopeHtml(left)},` : ''} ${esc(periodPhrase(r))}`;
+    }${left.length ? ` ${scopeHtml(left)},` : ''}${sc.unmeasured.phrase ? ` ${esc(sc.unmeasured.phrase)},` : ''} ${esc(periodPhrase(r))}`;
     return `<section class="verdict" aria-labelledby="verdict-title">
     <span class="verdict-icon" aria-hidden="true">·</span>
     <div><h2 class="verdict-title" id="verdict-title">${esc(amount)} ${esc(periodPhrase(r))}</h2>
@@ -147,7 +147,7 @@ function verdictBlock(r: HomeRange, sc: Scope): string {
     <span class="verdict-icon" aria-hidden="true">${icon}</span>
     <div>
       <h2 class="verdict-title" id="verdict-title">${esc(w.headline)}</h2>
-      <p class="verdict-sub"><b class="num">${esc(w.spent)}</b> ${esc(w.spentVerb)}${left.length ? ` ${scopeHtml(left)},` : ''} ${esc(periodPhrase(r))}, pour ${esc(w.expected)}.${offlineNote(left)}${explainLink(r)}</p>
+      <p class="verdict-sub"><b class="num">${esc(w.spent)}</b> ${esc(w.spentVerb)}${left.length ? ` ${scopeHtml(left)},` : ''}${sc.unmeasured.phrase ? ` ${esc(sc.unmeasured.phrase)},` : ''} ${esc(periodPhrase(r))}, pour ${esc(w.expected)}.${offlineNote(left)}${explainLink(r)}</p>
       ${g}
       ${howDetails(
         'Comment c’est calculé',
@@ -174,7 +174,7 @@ function tiles(records: DayRecord[], last: string, wood: Map<string, [number, nu
   const mo = ms.elec;
   const yr = money(records, yearFrom, last);
   const mv = ms.v;
-  const mOut = leftOut(ms.left);
+  const mOut = leftOut([...ms.left, ...ms.unmeasured.names]); // #570: the rooms out of the verdict, named
   const versus = (from: string, to: string) => {
     const p = yoy(records, from, to);
     return p === null ? `<span class="delta neutral">${NO_REFERENCE}</span>` : comparison(p, vsLabel(from, to)) + yoyGapNote(records, from, to);
