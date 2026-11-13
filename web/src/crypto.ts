@@ -1,5 +1,6 @@
 // Decrypts the files written by collector/crypto.py (AES-256-GCM, key derived by PBKDF2-SHA256
 // or, since #139, Argon2id; the Argon2id code is loaded on demand from ./argon2).
+import { repoDoc } from './source-repo';
 
 export interface Envelope {
   v: number;
@@ -25,7 +26,7 @@ export class BadEnvelope extends Error {}
 /** #524: the page is not in a secure context (HTTP outside localhost): WebCrypto is absent. */
 export class InsecureContext extends Error {}
 
-export const INSECURE_DOC = 'https://github.com/Opaland/Netatmo/blob/main/docs/nas-copie-locale.md';
+export const INSECURE_DOC = repoDoc('docs/nas-copie-locale.md'); // #533: the guide of this copy (source-repo.ts)
 export const INSECURE_MESSAGE =
   "Cette adresse n'est pas sécurisée (HTTP) : le navigateur refuse d'y déchiffrer les données. Ouvrez l'application en HTTPS ou sur localhost.";
 

@@ -66,14 +66,13 @@ export async function sharedOriginTraces(host = location.hostname, base = docume
   return foreignTraces(await readInventory(), { ns: NS, scope: new URL('.', base).href, caches: [DATA_CACHE, TARIFF_CACHE] });
 }
 
-/** The sentence shown next to « Rester connecté » and in Sécurité (plain text, escaped by the caller). */
-export function tracesText(kinds: TraceKind[], host: string): string {
+/** The sentence shown next to « Rester connecté » (plain text, escaped by the caller). #533 (revue
+ *  design v2.0): in everyday words and short, the kinds of traces (stockage, base, cache, service
+ *  worker) are not named: they meant nothing to the personas 22 and 59 and pushed « Déverrouiller »
+ *  down. */
+export function tracesText(host: string): string {
   const account = host.replace(/\.github\.io$/, '');
-  return (
-    `Ce navigateur garde aussi des données d'un autre site GitHub Pages du compte ${account} (${kinds.join(', ')}). ` +
-    `Ce site partage l'adresse de l'appli : un de ses scripts pourrait se servir de la clé gardée sur cet appareil. ` +
-    `Ici, mieux vaut ne pas activer « Rester connecté ».`
-  );
+  return `Ce navigateur a aussi ouvert un autre site du compte ${account}, à la même adresse que l'appli : il pourrait lire la clé gardée ici. Laissez « Rester connecté » désactivé.`;
 }
 
 /**
@@ -86,7 +85,7 @@ export async function warnNear(field: Element | null, host: string, inspect = sh
   const doc = field.ownerDocument;
   if (!kinds.length || doc.getElementById('origin-traces')) return kinds;
   const box = doc.createElement('div');
-  box.innerHTML = html(alertHtml('warn', esc(tracesText(kinds, host)), { id: 'origin-traces', role: 'status' }));
+  box.innerHTML = html(alertHtml('warn', esc(tracesText(host)), { id: 'origin-traces', role: 'status' }));
   if (box.firstElementChild) field.after(box.firstElementChild);
   return kinds;
 }

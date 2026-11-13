@@ -107,8 +107,13 @@ def check_github(repo: str, gh: Gh) -> list[tuple[str, str]]:
             out.append((OK, "les cinq secrets obligatoires existent (valeurs non lues)."))
     try:
         build = gh(["api", f"repos/{repo}/pages", "--jq", ".build_type"]).strip()
-    except RuntimeError:
-        out.append((TODO, "GitHub Pages n'est pas activé : Settings → Pages → Source : GitHub Actions (étape 5)."))
+    except RuntimeError as err:
+        # #533: only « Not Found » says Pages is off; a refusal (403), `gh` missing or not logged in
+        # says nothing about it, like the same failure on the secrets above
+        if "HTTP 404" in str(err):
+            out.append((TODO, "GitHub Pages n'est pas activé : Settings → Pages → Source : GitHub Actions (étape 5)."))
+        else:
+            out.append((CHECK, f"Pages illisible ({err}) : `gh auth login`, et un compte qui administre {repo}."))
     else:
         if build == "workflow":
             out.append((OK, "GitHub Pages publie depuis GitHub Actions."))

@@ -52,10 +52,12 @@ describe('#229 traces d’un autre site de la même origine github.io', () => {
     expect(await readInventory(refused)).toEqual({ storageKeys: [], databases: [], caches: [], workerScopes: [] });
   });
 
-  it('la phrase nomme le compte et ce qui a été vu, jamais un nom de clé', () => {
-    const t = tracesText(['stockage', 'service worker'], 'compte.github.io');
-    expect(t).toContain('compte (stockage, service worker)');
+  it('la phrase nomme le compte, en mots de tous les jours, jamais un nom de clé', () => {
+    const t = tracesText('compte.github.io');
+    expect(t).toContain('du compte compte,');
     expect(t).toContain('« Rester connecté »');
+    // #533 (revue design v2.0): technical words, for the personas 22 and 59
+    for (const word of ['stockage', 'base', 'cache', 'service worker', 'script', 'GitHub Pages']) expect(t).not.toContain(word);
   });
 
   function fakeField() {
@@ -85,7 +87,7 @@ describe('#229 traces d’un autre site de la même origine github.io', () => {
     await warnNear(field, 'compte.github.io', async () => ['cache']);
     expect(inserted).toHaveLength(1);
     expect(inserted[0].id).toBe('origin-traces');
-    expect(inserted[0].html).toContain('compte (cache)');
+    expect(inserted[0].html).toContain('du compte compte,');
     expect(inserted[0].html).toContain('class="alert warn"');
   });
 

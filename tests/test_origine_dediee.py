@@ -37,3 +37,10 @@ def test_every_file_naming_the_account_is_in_the_transfer_list():
     section = section.split("**Après, sur chaque appareil**", 1)[0]
     missing = [p for p in tracked_code_files() if names_the_account(p) and p not in section]
     assert not missing, f"à ajouter à « Ce qui nomme l'ancien compte » (origine-dediee.md) : {missing}"
+
+
+def test_the_app_names_the_origin_in_one_place():
+    # #533: the app's links and default repository follow the repository of the build
+    # (web/src/source-repo.ts); the repository of origin is written there only (AGENTS.md §5)
+    app = [p for p in tracked_code_files() if p.startswith("web/src/") and names_the_account(p)]
+    assert app == ["web/src/source-repo.ts"], f"le dépôt d'origine est écrit ailleurs que dans source-repo.ts : {app}"
