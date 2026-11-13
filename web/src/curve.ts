@@ -91,6 +91,7 @@ export function curveDayWh(curve: Curve, tz: string, day: string): number | null
 }
 
 export interface CurveVsDay {
+  day: string;
   dayKwh: number; // the meter's total of the day: it is the one that counts
   curveKwh: number | null; // the half hours added up, null when some are missing
   halves: number; // half hours present
@@ -103,10 +104,20 @@ export function curveVsDay(curve: Curve, tz: string, day: string, dayKwh: number
   if (dayKwh === undefined || !Number.isFinite(dayKwh)) return null;
   const wh = curveDayWh(curve, tz, day);
   const halves = [...curve.keys()].filter((k) => k.startsWith(`${day}T`)).length;
-  return { dayKwh, curveKwh: wh === null ? null : wh / 1000, halves, expected: halfHourCounts(tz, day)?.size ?? 48, ok: wh !== null && !dayGapExceeded(wh, dayKwh * 1000) };
+  return { day, dayKwh, curveKwh: wh === null ? null : wh / 1000, halves, expected: halfHourCounts(tz, day)?.size ?? 48, ok: wh !== null && !dayGapExceeded(wh, dayKwh * 1000) };
 }
 
 const kwh1 = new Intl.NumberFormat('fr-FR', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+const nf0 = new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 0 });
+/** An energy said so that a small one is not « 0,0 kWh »: in Wh under 1 kWh. */
+const energy = (kwh: number) => (Math.abs(kwh) < 1 ? `${nf0.format(kwh * 1000)}\u00a0Wh` : `${kwh1.format(kwh)}\u00a0kWh`);
+
+/**
+ * #568: the half hours of the curve were read before the reading of the 2026 format (a step given
+ * once at the top, one quantity among several); days stored before it keep the former reading
+ * until the owner has them fetched again.
+ */
+export const CURVE_READING_SINCE = '2026-11-13';
 
 /**
  * #568: what the « Une journée » card says under a day's curve. The meter's total of the day is
@@ -115,10 +126,15 @@ const kwh1 = new Intl.NumberFormat('fr-FR', { minimumFractionDigits: 1, maximumF
  */
 export function dayNote(c: CurveVsDay | null): string {
   if (!c) return '';
-  const day = `${kwh1.format(c.dayKwh)} kWh`;
-  if (c.curveKwh === null) return `Total du jour (compteur) : ${day}. Courbe incomplète ce jour-là (${c.halves} demi-heures sur ${c.expected}) : le total du jour fait foi.`;
-  if (c.ok) return `Total du jour (compteur) : ${day}, que la courbe retrouve.`;
-  return `Total du jour (compteur) : ${day}. Les demi-heures de la courbe font ${kwh1.format(c.curveKwh)} kWh : elles ne retrouvent pas le total du jour, qui fait foi ; la courbe de ce jour est à lire avec prudence.`;
+  const head = `Total du jour (compteur) : ${energy(c.dayKwh)}`;
+  if (c.curveKwh === null) {
+    if (!c.halves) return `${head}. Pas de courbe ce jour-là : le total du jour fait foi.`;
+    const n = `${c.halves} demi-heure${c.halves > 1 ? 's' : ''} sur ${c.expected}`;
+    return `${head}. Courbe incomplète ce jour-là (${n}) : le total du jour fait foi.`;
+  }
+  if (c.ok) return `${head}, que la courbe retrouve.`;
+  const old = c.day < CURVE_READING_SINCE ? ' Ce jour a été rangé avec l’ancienne lecture de la courbe, pas encore reprise.' : '';
+  return `${head}. Les demi-heures de la courbe font ${energy(c.curveKwh)} : elles ne retrouvent pas le total du jour, qui fait foi ; la courbe de ce jour est à lire avec prudence.${old}`;
 }
 
 /** Average power in W over the half hour(s) behind one curve key. */

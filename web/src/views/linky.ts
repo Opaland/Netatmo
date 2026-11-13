@@ -276,8 +276,9 @@ function drawDay(zone: HTMLElement, v: Loaded) {
   const note = dayNote(curveVsDay(v.curve, tz(), pickedDay, ds!.linky.get(pickedDay)));
   el.setAttribute(
     'aria-label',
-    (vals.length ? `Courbe de charge du ${longDate(pickedDay)} : maximum ${kw(maxW)} à ${labels[maxI]}.` : `Pas de courbe de charge le ${longDate(pickedDay)}.`) + (note ? ` ${note}` : ''),
+    vals.length ? `Courbe de charge du ${longDate(pickedDay)} : maximum ${kw(maxW)} à ${labels[maxI]}.` : `Pas de courbe de charge le ${longDate(pickedDay)}.`,
   );
+  // #568: the day total is said once, in the visible text under the chart (not again in the label)
   const total = zone.querySelector<HTMLElement>('#curve-day-total');
   if (total) total.textContent = note;
 }

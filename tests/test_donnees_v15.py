@@ -430,8 +430,18 @@ def test_linky_inventory_says_what_the_load_curve_holds(capsys):
     routes = {"courbe_de_charge_consommation": (200, curve)}
     res = inventory_linky("tok", PRM, http=linky_client(routes), today=date(2026, 11, 9), min_interval=0)
     out = capsys.readouterr().out
-    assert res["curve_shape"] == {"grandeurs": ["PA", "PRI"], "unites": ["VAr", "W"], "pas": ["PT30M"], "par_jour": 96}
-    assert "grandeurs : PA, PRI ; unités : VAr, W ; pas : PT30M ; points par jour : 96" in out
+    assert res["curve_shape"] == {
+        "grandeurs": ["PA", "PRI"],
+        "unites": ["VAr", "W"],
+        "pas": ["PT30M"],
+        "par_jour": 96,
+        "gardee": "PA",
+        "metiers": [],
+    }
+    assert (
+        "grandeurs : PA, PRI ; unités : VAr, W ; pas : PT30M ; points par jour : 96 ; gardée par la collecte : PA"
+        in out
+    )
     for leak in (PRM, "4321", "2026-11-01", "tok"):
         assert leak not in out
 

@@ -774,9 +774,10 @@ def _v2_curve(day: str, step: str, grandeurs: dict[str, tuple[str, int]]) -> dic
 
 
 def test_load_curve_reads_the_step_given_once_at_the_top_of_the_2026_answer():
-    """#568: the 2026 format gives `pas` once, not per point. A 15-min curve (96 points a day, the
-    count the inventory saw on the real account: 672 points for 7 days) was read as 30-min points,
-    two per half hour, each counted 30 min: the half hours twice their energy."""
+    """#568: in the 2026 shape of the reference client, `pas` is given once, not per point. Read
+    before, a 15-min curve (96 points a day: the count the inventory saw on the real account, 672
+    points for 7 days, whatever its cause) would have been read as 30-min points, two per half
+    hour, each counted 30 min: the half hours twice their energy."""
     from collector.enedis import parse_curve
 
     half = parse_curve(_v2_curve("2024-01-01", "PT15M", {"PA": ("W", 1000)}), "Europe/Paris")
@@ -786,8 +787,8 @@ def test_load_curve_reads_the_step_given_once_at_the_top_of_the_2026_answer():
 
 
 def test_load_curve_keeps_the_active_power_when_the_answer_has_several_quantities():
-    """#568: two quantities in one answer (active power and another one) were added into the same
-    half hour: a day above the meter's total, the more so as the other quantity weighs."""
+    """#568: two quantities in one answer (active power and another one) would have been added into
+    the same half hour: a day above the meter's total, the more so as the other quantity weighs."""
     from collector.enedis import parse_curve
 
     body = _v2_curve("2024-07-01", "PT30M", {"PRI": ("VAr", 300), "PA": ("W", 1000)})
@@ -795,6 +796,34 @@ def test_load_curve_keeps_the_active_power_when_the_answer_has_several_quantitie
     assert len(curve) == 48 and set(curve.values()) == {500.0}
     kw = parse_curve(_v2_curve("2024-07-01", "PT30M", {"PA": ("kW", 1)}), "Europe/Paris")
     assert set(kw.values()) == {500.0}  # a curve in kW is converted, never read as W
+
+
+def test_load_curve_keeps_one_quantity_never_a_sum(caplog):
+    """#568 review: unnamed quantities without unit were still added (+30 % here); one is kept, the
+    consumption before another `grandeurMetier`, an energy per step (Wh) is not read as watts, and
+    the log names the codes left out (never a value)."""
+    from collector.enedis import parse_curve
+
+    def part(v, **kw):
+        return {**kw, "points": [{"d": p["d"], "v": str(v)} for p in _curve_points("2024-01-01", "PT30M", v)]}
+
+    def body(*parts):
+        return {"pas": "PT30M", "grandeur": list(parts)}
+
+    unnamed = parse_curve(body(part(1000), part(300)), "Europe/Paris")
+    assert len(unnamed) == 48 and set(unnamed.values()) == {500.0}
+    metier = body(
+        part(4000, grandeurMetier="PROD", grandeurPhysique="PA", unite="W"), part(1000, grandeurMetier="CONS")
+    )
+    assert set(parse_curve(metier, "Europe/Paris").values()) == {500.0}
+    energy = body(part(250, grandeurPhysique="PA", unite="Wh"))
+    assert set(parse_curve(energy, "Europe/Paris").values()) == {250.0}  # Wh per step, as is
+    caplog.clear()
+    with caplog.at_level("WARNING", logger="collector.enedis"):
+        parse_curve(
+            body(part(1000, grandeurPhysique="PA", unite="W"), part(300, grandeurPhysique="PRI")), "Europe/Paris"
+        )
+    assert "gardée : PA, laissées : PRI" in caplog.text and "300" not in caplog.text
 
 
 def _curve_handler(calls: list, empty: bool = False):

@@ -49,6 +49,18 @@ describe('#568 : la courbe d’un jour face au total du compteur', () => {
     expect(c).toMatchObject({ ok: true, halves: 46, expected: 46 });
   });
 
+  it('relecture : pas de « 0 demi-heures », singulier pour une, petites énergies en Wh', () => {
+    expect(dayNote(curveVsDay(new Map(), TZ, '2026-07-14', 4.8))).toBe('Total du jour (compteur) : 4,8 kWh. Pas de courbe ce jour-là : le total du jour fait foi.');
+    expect(dayNote(curveVsDay(day('2026-07-14', 100, ['12:00']), TZ, '2026-07-14', 0.04))).toBe(
+      'Total du jour (compteur) : 40 Wh. Courbe incomplète ce jour-là (1 demi-heure sur 48) : le total du jour fait foi.',
+    );
+  });
+
+  it('un jour rangé avant la nouvelle lecture le dit, pas un jour d’après', () => {
+    expect(dayNote(curveVsDay(day('2026-07-14', 120), TZ, '2026-07-14', 4.8))).toContain('rangé avec l’ancienne lecture de la courbe, pas encore reprise');
+    expect(dayNote(curveVsDay(day('2026-11-20', 120), TZ, '2026-11-20', 4.8))).not.toContain('ancienne lecture');
+  });
+
   it('sans total du compteur ce jour-là, rien n’est dit', () => {
     expect(curveVsDay(day('2026-07-14', 100), TZ, '2026-07-14', undefined)).toBeNull();
     expect(dayNote(null)).toBe('');
