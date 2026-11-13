@@ -1,6 +1,6 @@
 // Fetching the encrypted files and remembering the derived key on this device.
 
-import { type DayRecord, type Meta, mergeFlatYear, mergeYear, toRecords } from './aggregate';
+import { type DayRecord, type Meta, mergeYear, toRecords } from './aggregate';
 import { loadOffers, loadTempo } from './offers';
 import { type Hourly, type TariffMap, type TempoRow, type TrveRow, type Weather, parseTrveCsv } from './analysis';
 import type { ShellyDoc } from './breakdown';
@@ -370,10 +370,8 @@ export function loadCurve(ds: Dataset): Promise<Map<string, number>> {
 
 async function fetchCurve(ds: Dataset): Promise<Map<string, number>> {
   const years = (ds.meta as Meta & { linky_curve_years?: number[] }).linky_curve_years ?? [];
-  const docs = await Promise.all(years.map((y) => optional<{ curve?: Record<string, number> }>(ds.source, `${y}.linky30`, ds.key)));
-  const out = new Map<string, number>();
-  docs.forEach((doc, i) => mergeFlatYear(doc?.curve, years[i], out)); // #550: as the energy
-  return out;
+  const docs = await Promise.all(years.map((y) => optional<import('./curve').CurveDoc>(ds.source, `${y}.linky30`, ds.key)));
+  return (await import('./curve')).curveOfDocs(docs, years); // #550: as the energy; #582: with the marks
 }
 
 /**

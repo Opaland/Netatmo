@@ -1,0 +1,19 @@
+{
+  "_doc": "#582: the days of the Linky curve marked as read with the 2026 reading, as the collector writes them (enedis._mark_read), held by tests/test_courbe_lecture.py (collect_curve then catch_up_curve on an archive of former_days, Enedis leaving out left_out) and read by web/src/curve-day.test.ts (curveOfDocs, dayNote). Fictitious dates.",
+  "today": "2026-11-14",
+  "first_day": "2026-11-03",
+  "former_days": ["2026-11-05", "2026-11-07", "2026-11-11", "2026-11-12"],
+  "left_out": ["2026-11-11T12:30"],
+  "read": {
+    "2026": {
+      "2026-11-03": 2,
+      "2026-11-04": 2,
+      "2026-11-06": 2,
+      "2026-11-08": 2,
+      "2026-11-09": 2,
+      "2026-11-10": 2,
+      "2026-11-12": 2,
+      "2026-11-13": 2
+    }
+  }
+}
