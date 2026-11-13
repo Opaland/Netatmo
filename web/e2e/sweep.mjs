@@ -370,6 +370,24 @@ function pageChecks() {
       }
     }
   }
+  // #541 (revue design v2.1): the same floor for the words drawn in a drawing (the plan of the
+  // house): an SVG text is sized in units of its drawing, which the screen scales; what is
+  // painted is its font size times the scale of the drawing (getScreenCTM). The charts are
+  // measured by charts.ts (canvas).
+  {
+    const min = tokenPx('font-size', 'var(--font-xs)') - 0.3;
+    let small = 0;
+    for (const t of document.querySelectorAll('#app svg text')) {
+      if (small >= 3 || !t.textContent.trim() || t.closest('.chart, .sr-only') || getComputedStyle(t).visibility === 'hidden' || getComputedStyle(t).display === 'none') continue;
+      const box = t.getBoundingClientRect();
+      if (!box.width || !box.height) continue;
+      const px = parseFloat(getComputedStyle(t).fontSize) * Math.abs(t.getScreenCTM()?.a ?? 1);
+      if (px < min) {
+        small++;
+        out.push({ kind: 'texte-dessin-trop-petit', detail: `${px.toFixed(1)} px : « ${t.textContent.trim().slice(0, 30)} »`, quiet: `${px.toFixed(1)} px : ${path(t)}` });
+      }
+    }
+  }
   // #405: every control is at least --target-min (44 px) high. Left aside: a button that is a word
   // of a sentence (.link, .term: the inline exception of WCAG 2.5.8) and a slider (its label is).
   {
@@ -862,6 +880,16 @@ async function selfTest(browser, run, display) {
       Object.assign(hyphen.style, { width: '6ch', hyphens: 'auto' });
       view.append(hyphen);
       // #398: a chart whose axis wrote « 20 » for two values (as charts.ts notes it)
+      // #541: a word drawn in an SVG at 6 px on the screen (a drawing scaled down)
+      const drawing = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      drawing.setAttribute('viewBox', '0 0 100 20');
+      drawing.setAttribute('width', '200');
+      const svgWord = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+      Object.assign(svgWord, { textContent: 'secret-piece-44' });
+      svgWord.setAttribute('y', '10');
+      svgWord.setAttribute('font-size', '3');
+      drawing.append(svgWord);
+      view.append(drawing);
       const chart = document.createElement('div');
       chart.className = 'chart';
       chart.id = 'auto-controle-axe';
@@ -885,7 +913,7 @@ async function selfTest(browser, run, display) {
     });
     const found = await s.page.evaluate(pageChecks);
     const kinds = found.map((f) => f.kind);
-    const missing = ['texte-interdit', 'carte-vide', 'defilement-horizontal', 'textes-recouverts', 'texte-coupe', 'mot-coupe', 'etiquettes-axe-en-double', 'etiquettes-axe-recouvertes', 'legende-coupee', 'colonne-cachee', 'titre-axe-coupe'].filter((k) => !kinds.includes(k));
+    const missing = ['texte-interdit', 'carte-vide', 'defilement-horizontal', 'textes-recouverts', 'texte-coupe', 'mot-coupe', 'etiquettes-axe-en-double', 'etiquettes-axe-recouvertes', 'legende-coupee', 'colonne-cachee', 'titre-axe-coupe', 'texte-dessin-trop-petit'].filter((k) => !kinds.includes(k));
     if (kinds.filter((k) => k === 'mot-coupe').length < 2) missing.push('mot-coupe (césure par trait, #434)');
     if (found.some((f) => /recouver|coupe/.test(f.kind) && /secret|Salon/i.test(f.quiet ?? ''))) throw new Error('auto-contrôle : le diagnostic discret d’un texte recouvert ou coupé cite un contenu');
     if (missing.length) throw new Error(`auto-contrôle : invariants muets (${missing.join(', ')})`);
@@ -970,7 +998,7 @@ try {
     const browser = await chromium.launch();
     try {
       await selfTest(browser, runs[0], displays[0]);
-      console.log('Auto-contrôle : les invariants voient un « NaN », une carte vide, un débordement, deux textes l’un sur l’autre, un texte coupé par sa carte, un mot coupé en son milieu ou par un trait de césure, un axe aux étiquettes en double, des noms d’axe l’un sur l’autre et une légende coupée ; le diagnostic discret ne cite aucun contenu.');
+      console.log('Auto-contrôle : les invariants voient un « NaN », une carte vide, un débordement, deux textes l’un sur l’autre, un texte coupé par sa carte, un mot coupé en son milieu ou par un trait de césure, un axe aux étiquettes en double, des noms d’axe l’un sur l’autre, une légende coupée et un mot trop petit dans un dessin ; le diagnostic discret ne cite aucun contenu.');
     } finally {
       await browser.close();
     }

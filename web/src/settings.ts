@@ -160,10 +160,26 @@ export const APP_SECRETS = new Set(['HOME_LOCATION_JSON', 'STOPPED_ROOMS_JSON', 
  */
 export const HOUSEHOLD_SECRETS = new Set(['STOPPED_ROOMS_JSON', 'WOOD_JSON', 'CONTRACT_JSON', 'COLD_ALERT_JSON']);
 
+/**
+ * #541: GitHub limits a secret to 48 KB. Whether it counts the value or what is sent (the sealed
+ * box in base64: the value + 48 bytes, a third larger) is not said by its documentation, and it
+ * was not tried (no secret is written to check it): the app keeps to the stricter reading.
+ */
+export const SECRET_MAX_BYTES = 48 * 1024;
+/** Length of what putSecret sends for a value: base64 of the sealed box (value in UTF-8 + 48 bytes). */
+export const sealedLength = (value: string) => 4 * Math.ceil((new TextEncoder().encode(value).length + 48) / 3);
+/** Why a value cannot be a secret (its size, in words), or null when it can. */
+export function secretTooBig(value: string): string | null {
+  const n = sealedLength(value);
+  return n > SECRET_MAX_BYTES ? `${Math.ceil(n / 1024)} ko une fois chiffré, pour ${SECRET_MAX_BYTES / 1024} ko au plus dans un secret GitHub` : null;
+}
+
 export async function putSecret(repo: string, name: string, value: string): Promise<void> {
   if (FORBIDDEN.has(name) || !(APP_SECRETS.has(name) || GROUPS.some((g) => g.fields.some((f) => f.name === name)))) {
     throw new GitHubError(`${name} ne peut pas être modifié depuis l'application`, 400);
   }
+  const big = secretTooBig(value);
+  if (big) throw new GitHubError(`Trop grand pour être enregistré : ${big}.`, 413);
   const { default: sodium } = await import('libsodium-wrappers');
   await sodium.ready;
   if (!publicKey) publicKey = (await (await gh(`/repos/${repo}/actions/secrets/public-key`)).json()) as typeof publicKey;

@@ -30,9 +30,11 @@ shutters; devices). The dates and overlap checks:
   (stored in UTC instead of local time?) or by a whole day (stored under the wrong day);
 - `decalage-jour-linky`: Intuis above the Linky meter on many days of a month, but not once one of
   the two is shifted by a day;
-- `estime-sur-reel`: a day flagged « estimé » (spread from the monthly total, same share for every
-  day spread) whose value differs from the other estimated days of its month: a real value under
-  the flag? And `marque-sans-valeur`: a day flagged estimated with no value;
+- `estime-sur-reel`: a day flagged « estimé » (spread from the monthly total) that has measured
+  hours (Intuis hourly or 30 min): a measure exists for a day the app counts as estimated. (Two
+  estimated days of a month may differ: the backfill spreads a month cut by two of its yearly
+  windows twice, collector/sync.py, so a different share is not a finding.) And
+  `marque-sans-valeur`: a day flagged estimated with no value;
 - `tarifs-additionnes`: a day whose energy is twice the sum of its tariffs (two measure families
   added) or below it (impossible: the day keeps the largest family, collector/sync.py);
 - `deux-sources`: a plug (Shelly) or a Home Assistant energy sensor that measures the same energy
@@ -145,10 +147,10 @@ CHECKS: dict[str, Check] = {
     ),
     "estime-sur-reel": Check(
         "dates",
-        "Jour estimé qui ressemble à un jour réel",
-        "le jour est marqué « estimé » (part égale du total du mois) mais sa valeur diffère des autres "
-        "jours estimés du mois",
-        "le jour est compté une fois, comme estimé : jamais ajouté à une valeur réelle",
+        "Jour estimé qui a des heures mesurées",
+        "le jour est marqué « estimé » (part du total du mois), mais Intuis a des relevés à l'heure ou à la "
+        "demi-heure ce jour-là : une mesure existe",
+        "le jour est compté une fois, comme estimé : jamais ajouté aux heures mesurées",
         "a-verifier",
     ),
     "marque-sans-valeur": Check(
@@ -192,8 +194,10 @@ CHECKS: dict[str, Check] = {
     "unite": Check(
         "valeurs",
         "Énergie mille fois trop petite ou trop grande",
-        "des jours mille fois plus petits ou plus grands que les jours voisins : kWh rangés comme des Wh, ou l'inverse",
+        "des jours mille fois plus petits ou plus grands que les jours voisins : kWh rangés comme des Wh, ou l'inverse "
+        "(ou un appareil éteint une semaine et plus)",
         "la valeur est comptée telle quelle : elle fausse le total",
+        "a-verifier",
     ),
     "valeur-figee": Check(
         "valeurs",
@@ -289,10 +293,10 @@ THRESHOLDS: dict[str, Threshold] = {
         True,
     ),
     "jours_unite": Threshold(
-        3,
+        7,
         "jours",
-        "jours de suite mille fois trop petits avant de parler d'unité (un jour isolé presque nul est un "
-        "radiateur éteint)",
+        "jours de suite mille fois trop petits avant de parler d'unité : un appareil éteint quelques jours "
+        "(veille de 1 à 3 Wh) donne le même rapport ; une erreur d'unité dure",
         True,
     ),
     "jours_figes": Threshold(
@@ -370,17 +374,28 @@ def _hook(pairs: list[tuple[str, object]]) -> _Obj:
     return out
 
 
-def read_docs(data_dir: Path, passphrase: str) -> dict[str, dict]:
-    """Every encrypted document of data/, decrypted and parsed with duplicate keys remembered."""
+def read_docs(data_dir: Path, passphrase: str, errors: list[str] | None = None) -> dict[str, dict]:
+    """Every encrypted document of data/, decrypted and parsed with duplicate keys remembered. A file
+    that cannot be read is named in `errors` (file name and error type) and left out."""
     out: dict[str, dict] = {}
     for p in sorted(data_dir.glob("*.enc.json")):
         name = p.name.removesuffix(".enc.json")
         if name in SKIPPED:
             continue
-        obj = json.loads(decrypt_bytes(json.loads(p.read_text()), passphrase), object_pairs_hook=_hook)
+        try:
+            obj = json.loads(decrypt_bytes(json.loads(p.read_text()), passphrase), object_pairs_hook=_hook)
+        except Exception as err:  # noqa: BLE001 - one unreadable file must not hide the others
+            if errors is not None:
+                errors.append(f"{_public_name(name)} illisible : {type(err).__name__}")
+            continue
         if isinstance(obj, dict):
             out[name] = obj
     return out
+
+
+def _public_name(name: str) -> str:
+    """A file name safe for the public log: its kind, the year shown as « AAAA »."""
+    return re.sub(r"^\d{4}", "AAAA", name) + ".enc.json"
 
 
 # ---------------------------------------------------------------- dated keys
@@ -532,6 +547,9 @@ class Audit:
     # the quality report of the same archive: Intuis real Wh per day and Linky, read by its rules
     real: Report | None = None
     findings: list[Finding] = field(default_factory=list)
+    # checks or files that could not be read: their name and the type of error, never a value
+    errors: list[str] = field(default_factory=list)
+    _fine_cache: list | None = field(default=None, repr=False)
 
     @classmethod
     def of(cls, store: Store, docs: dict[str, dict]) -> Audit:
@@ -564,24 +582,38 @@ class Audit:
         return [s for name, obj in self.docs.items() for s in series_of(name, obj)]
 
     def run(self) -> Audit:
-        all_series = self.series()
-        self.duplicate_json()
-        for s in all_series:
-            self.keys(s)
-        self.across_years(all_series)
-        self.estimated()
-        self.tariffs()
-        self.shifts()
-        self.hours_vs_linky()
-        self.linky_lag()
-        self.two_sources()
-        self.day_sums()
-        self.above_linky()
-        self.impossible()
-        self.units()
-        self.frozen()
-        self.peaks()
-        self.index_back()
+        """Every check; one that fails on an unexpected structure is named (its error type only) and
+        the others still run: the audit never stops the quality report."""
+        steps: list[tuple[str, Callable[[], None]]] = [("doublons du JSON", self.duplicate_json)]
+        all_series: list[Series] = []
+
+        def keys() -> None:
+            all_series.extend(self.series())
+            for s in all_series:
+                self.keys(s)
+
+        steps += [
+            ("clés", keys),
+            ("fichiers d'année", lambda: self.across_years(all_series)),
+            ("jours estimés", self.estimated),
+            ("tarifs", self.tariffs),
+            ("heures décalées", self.shifts),
+            ("fuseau", self.hours_vs_linky),
+            ("jour Linky", self.linky_lag),
+            ("deux sources", self.two_sources),
+            ("heures et jour", self.day_sums),
+            ("Intuis et Linky", self.above_linky),
+            ("énergies impossibles", self.impossible),
+            ("unités", self.units),
+            ("valeurs figées", self.frozen),
+            ("pics", self.peaks),
+            ("index", self.index_back),
+        ]
+        for what, step in steps:
+            try:
+                step()
+            except Exception as err:  # noqa: BLE001 - a malformed archive must not stop the report
+                self.errors.append(f"{what} : {type(err).__name__}")
         return self
 
     # ------------------------------------------------------- keys
@@ -733,27 +765,37 @@ class Audit:
                     )
                 elif _num(v) is not None:
                     by_month.setdefault(d[:7], []).append((d, float(v)))  # type: ignore[arg-type]
-            for month, pts in by_month.items():
-                if len(pts) < 2:
-                    continue
-                shares = [round(v, 1) for _d, v in pts]
-                usual = max(set(shares), key=shares.count)
-                if shares.count(usual) < 2:
-                    continue  # no common share: nothing to compare with
-                for d, v in pts:
-                    if abs(v - usual) > tolerance(usual):
-                        self.add(
-                            "estime-sur-reel",
-                            None,
-                            doc=d[:4],
-                            series=SERIES_LABEL[("", "daily")],
-                            room=rid,
-                            day=d,
-                            at=d,
-                            value=round(v, 1),
-                            other=usual,
-                            text=f"marqué estimé, mais différent de la part des autres jours estimés de {month}",
-                        )
+            measured = self._measured_hours(rid)
+            for d, v in (x for pts in by_month.values() for x in pts):
+                hours = measured.get(d)
+                if hours:
+                    self.add(
+                        "estime-sur-reel",
+                        None,
+                        doc=d[:4],
+                        series=SERIES_LABEL[("", "daily")],
+                        room=rid,
+                        day=d,
+                        at=d,
+                        value=round(hours, 1),
+                        other=round(v, 1),
+                        text="marqué estimé, alors que des heures mesurées existent ce jour-là (leur "
+                        "somme, puis l'estimation)",
+                    )
+
+    def _measured_hours(self, rid: str) -> dict[str, float]:
+        """Day -> Wh of the measured hours (Intuis hourly, else 30 min) of a room, when not zero."""
+        out: dict[str, float] = {}
+        for base, _label, room, fine, _minutes, _daily in self._fine():
+            if room != rid or base not in (".hourly", ".room30"):
+                continue
+            per_day: dict[str, float] = {}
+            for k, v in fine.items():
+                per_day[k[:10]] = per_day.get(k[:10], 0.0) + v
+            for d, total in per_day.items():
+                if total and d not in out:
+                    out[d] = total
+        return out
 
     def tariffs(self) -> None:
         daily = self._year_section("daily")
@@ -1118,7 +1160,8 @@ class Audit:
                             at=d,
                             value=values[d],
                             other=round(med[d], 1),
-                            text="mille fois plus petit que les jours voisins : kWh rangés comme des Wh ?",
+                            text="mille fois plus petit que les jours voisins : kWh rangés comme des Wh, "
+                            "ou appareil éteint ?",
                         )
 
             for i, d in enumerate(days):
@@ -1133,7 +1176,7 @@ class Audit:
                         close(small)
                         small = [d]
                     continue
-                if m and v > m * UNIT_RATIO:
+                if m and m >= MONTH_GAP_WH and v > m * UNIT_RATIO:  # a plug nearly off, then used: not a unit
                     self.add(
                         "unite",
                         None,
@@ -1261,7 +1304,12 @@ class Audit:
     # ------------------------------------------------------- series shared by the checks
     def _fine(self) -> list[tuple[str, str, str | None, dict[str, float], int, dict[str, float]]]:
         """(base, label, room, fine values by local key, minutes, real day values) for each fine
-        series compared with its day: Intuis hours and 30 min per room, the Linky curve."""
+        series compared with its day: Intuis hours and 30 min per room, the Linky curve. Built once."""
+        if self._fine_cache is None:
+            self._fine_cache = self._build_fine()
+        return self._fine_cache
+
+    def _build_fine(self) -> list[tuple[str, str, str | None, dict[str, float], int, dict[str, float]]]:
         daily = self._year_section("daily")
         flags = self._year_section("estimated")
 
@@ -1375,7 +1423,10 @@ def _slot(cell: object, i: int) -> float | None:
 
 
 def audit(store: Store) -> Audit:
-    return Audit.of(store, read_docs(store.dir, store.passphrase)).run()
+    errors: list[str] = []
+    a = Audit.of(store, read_docs(store.dir, store.passphrase, errors))
+    a.errors += errors
+    return a.run()
 
 
 def public_lines(a: Audit) -> list[str]:
@@ -1390,6 +1441,8 @@ def public_lines(a: Audit) -> list[str]:
         total = sum(months.values())
         detail = ", ".join(f"{'sans date' if m == '?' else m} {n}" for m, n in sorted(months.items()))
         out.append(f"  {c.title} [{code}] : {total}" + (f" ({detail})" if detail else ""))
+    for e in a.errors:
+        out.append(f"  Non vérifié : {e}.")
     out.append("Seuils (hypothèse = à confirmer sur ce premier bilan) :")
     for name, t in THRESHOLDS.items():
         out.append(f"  {name} = {_fmt(t.value)} {t.unit}" + (" (hypothèse)" if t.hypothesis else ""))
@@ -1428,6 +1481,7 @@ def private_doc(a: Audit, made: str) -> dict:
         ],
         "thresholds": [{"name": n, **asdict(t)} for n, t in THRESHOLDS.items()],
         "findings": findings,
+        "errors": list(a.errors),
     }
 
 

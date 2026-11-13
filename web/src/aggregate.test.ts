@@ -10,6 +10,7 @@ import {
   monthlyByYear,
   seasonOf,
   toCsv,
+  mergeYear,
   toRecords,
   weekStart,
 } from './aggregate';
@@ -49,6 +50,20 @@ describe('a day in two year files (#532)', () => {
     // own year wins even when its file comes second
     const back = toRecords(meta, { '2025': { r1: { '2024-12-31': 9000 } }, '2024': { r1: { '2024-12-31': 3000 } } });
     expect(back.map((r) => r.kwh)).toEqual([3]);
+  });
+
+  it('tariffs and temperatures follow the same rule (mergeYear)', () => {
+    const into = new Map<string, Map<string, number>>();
+    mergeYear({ r1: { '2024-12-31': 3 } }, '2024', into);
+    mergeYear({ r1: { '2024-12-31': 9, '2025-01-01': 2 } }, '2025', into);
+    expect([...into.get('r1')!]).toEqual([
+      ['2024-12-31', 3],
+      ['2025-01-01', 2],
+    ]);
+    const back = new Map<string, Map<string, number>>();
+    mergeYear({ r1: { '2024-12-31': 9 } }, '2025', back);
+    mergeYear({ r1: { '2024-12-31': 3 } }, '2024', back);
+    expect(back.get('r1')!.get('2024-12-31')).toBe(3);
   });
 });
 

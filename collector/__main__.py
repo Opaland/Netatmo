@@ -97,13 +97,25 @@ def cmd_quality(s: Settings, rapport: str | None = None) -> None:
         store = Store(s.data_dir, s.passphrase)
         # #346 / #440: a room switched off on purpose is not missing (the secret, else the old
         # plaintext variable #459, else the archive)
-        checked = audit(store)
         try:
             lines = report(store, stopped_of(store, household_setting("STOPPED_ROOMS_JSON")))
         except ValueError:  # an unreadable day key (#532): the audit below names how many, and where
             lines = ["Bilan qualité : impossible, une date illisible dans l'archive (voir l'audit ci-dessous)."]
     except DecryptError as err:
         raise SystemExit("Bilan qualité : déchiffrement impossible (DATA_PASSPHRASE ?).") from err
+    try:
+        checked = audit(store)
+    except Exception as err:  # noqa: BLE001 - #532: the audit never takes the quality report down with it
+        print(
+            "\n".join(
+                [
+                    *lines,
+                    "",
+                    f"Audit des données (#532) : impossible ({type(err).__name__}) ; le bilan ci-dessus reste valable.",
+                ]
+            )
+        )
+        return
     lines += public_lines(checked)
     if rapport:
         write_report(checked, store, Path(rapport))

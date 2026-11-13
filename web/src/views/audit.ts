@@ -47,7 +47,7 @@ function foldSub(r: AuditReport | null): string {
 function draw(el: HTMLElement, r: AuditReport | null) {
   const d = ds!;
   const open = !!el.querySelector<HTMLDetailsElement>('#audit-fold')?.open;
-  el.innerHTML = html(`<details class="card fold" id="audit-fold"${open ? ' open' : ''}><summary><h2>Audit détaillé des données</h2> <span class="fold-sub">${esc(foldSub(r))}</span></summary>
+  el.innerHTML = html(`<details class="fold" id="audit-fold"${open ? ' open' : ''}><summary><h3>Audit détaillé des données</h3> <span class="fold-sub">${esc(foldSub(r))}</span></summary>
     ${r ? reportHtml(r) : intro()}
     ${message ? alertHtml(message.ok ? 'info' : 'bad', esc(message.text), { role: 'status' }) : ''}
     <div class="controls">
@@ -92,6 +92,7 @@ function reportHtml(r: AuditReport): string {
   const who = names();
   return `<p class="card-sub">Rapport du ${esc(dayShort(r.made, true))}${r.last ? `, données jusqu’au ${esc(dayShort(r.last, true))}` : ''} : <strong>${esc(foldSub(r))}</strong>. Aucune donnée n’a été modifiée : l’audit ne fait que lire.</p>
     ${s.found.map((c) => checkHtml(r, c, who)).join('')}
+    ${r.errors.length ? alertHtml('warn', esc(`Non vérifié (l’audit n’a pas pu lire) : ${r.errors.join(' ; ')}.`)) : ''}
     ${s.clean.length ? `<p class="hint muted">Rien trouvé : ${esc(s.clean.map((c) => c.title.toLowerCase()).join(' ; '))}.</p>` : ''}
     <details class="fold" id="audit-thresholds"><summary>Seuils utilisés${s.hypotheses ? ` (${s.hypotheses} à confirmer)` : ''}</summary>
       <ul>${r.thresholds.map((t) => `<li><strong>${esc(nf.format(t.value))}${t.unit ? ` ${esc(t.unit)}` : ''}</strong> : ${esc(t.why)}${t.hypothesis ? ' <span class="tag">hypothèse</span>' : ''}</li>`).join('')}</ul>

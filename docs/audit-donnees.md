@@ -278,7 +278,7 @@ Passage du : _(date)_ — version : _(commit)_
 - *Pièce arrêtée volontairement* — _(ses jours sont comptés « a », pas « m » : vérifier qu'aucune
   pièce ne reste en manquants chaque mois sans raison)_
 
-## 8. Audit des données : dates et chevauchements (#532)
+## 8. Audit des données : dates, chevauchements et valeurs (#532)
 
 Demande du propriétaire (12/11/2026) : « reprendre toutes les données, existantes et récupérées :
 bonne date, bonne valeur ; pour les trous, vérifier qu'on n'a pas de chevauchement ou d'autre
@@ -296,7 +296,7 @@ l'archive chiffrée (`collector/audit.py`), sans rien appeler ni rien réécrire
    **`audit-donnees`** du même passage (en bas de la page du passage, gardé 7 jours). Il est
    **chiffré avec la clé des données**, comme les fichiers de `data/` : sans la phrase de passe, il ne
    dit rien. Le télécharger, le décompresser (c'est un `.zip`).
-4. Dans l'appli : **État des données** → carte **« Audit détaillé des données »** → *Ouvrir le
+4. Dans l'appli : **État des données** → repli **« Année par année »** → **« Audit détaillé des données »** → *Ouvrir le
    rapport…* → choisir `audit-donnees.enc.json`. Il est déchiffré sur l'appareil avec la clé déjà
    ouverte, rien n'est envoyé ; il reste gardé chiffré sur cet appareil (« Oublier ce rapport »
    l'efface).
@@ -317,14 +317,28 @@ appareils) : est une série tout objet dont les clés sont des dates.
 | `decalage-heures` | des heures (demi-heures) dont la somme ne retrouve le total du jour qu'une fois décalées d'1 ou 2 h (UTC au lieu de l'heure de Paris) ou d'un jour (rangées sous le mauvais jour) ; Intuis heure et demi-heure contre le jour, courbe Linky contre le jour Linky | courbes heure par heure décalées d'autant |
 | `decalage-fuseau` | la courbe heure par heure des radiateurs suit celle du Linky avec 1 ou 2 h d'écart (corrélation) | idem, et partage heures pleines / creuses décalé |
 | `decalage-jour-linky` | Intuis dépasse le Linky plusieurs jours d'un mois, mais plus si l'un des deux est pris un jour plus tôt ou plus tard | recoupement et reconstitution sur le mauvais jour |
-| `estime-sur-reel` | un jour marqué estimé (part égale du total du mois) dont la valeur diffère des autres jours estimés du mois | compté une fois, comme estimé : jamais ajouté à une valeur réelle |
+| `estime-sur-reel` | un jour marqué estimé (part du total du mois) pour lequel Intuis a pourtant des heures ou des demi-heures mesurées (deux parts différentes dans un même mois ne sont pas un défaut : la reprise d'historique répartit deux fois un mois coupé par deux de ses fenêtres d'un an) | compté une fois, comme estimé : jamais ajouté aux heures mesurées |
 | `marque-sans-valeur` | un jour marqué estimé sans valeur | compté estimé, à 0 kWh |
 | `tarifs-additionnes` | un jour qui vaut deux fois la somme de ses tarifs (deux familles de mesure additionnées) ou moins qu'elle | total du jour et partage HP / HC en désaccord |
 | `deux-sources` | une prise ou un capteur Home Assistant qui mesure jour après jour la même énergie qu'une pièce Intuis | « Autres usages » la retire deux fois du Linky |
 
+Robustesse : un fichier illisible ou une structure inattendue n'arrête ni le bilan du § 7 ni les autres contrôles ; le journal dit « Non vérifié : … » avec le nom du contrôle (ou le genre de fichier, l'année masquée) et le type d'erreur, l'appli le redit en tête du rapport.
+
 Limite connue : un décalage d'une heure se voit mal dans les **totaux** d'un jour quand la
 consommation varie peu autour de minuit ; c'est pourquoi `decalage-fuseau` compare aussi les
 **profils** horaires d'Intuis et du Linky. Sans courbe Linky, seul le décalage d'un jour est sûr.
+
+### Les contrôles des valeurs
+
+| Contrôle | Ce qu'il cherche | Ce que fait l'appli d'un tel jour |
+|---|---|---|
+| `somme-jour` | les heures (demi-heures) complètes d'un jour qui ne retrouvent pas le total du jour (Intuis heure et 30 min contre le jour Intuis, courbe Linky contre le jour Linky), hors des mois déjà signalés décalés ; « deux fois le jour » est nommé (deux familles de mesure additionnées) | le total du jour fait foi ; la courbe de ce jour ne le retrouve pas |
+| `pieces-sur-linky` | les jours où Intuis dépasse le compteur de toute la maison (la règle du bilan § 7, `quality.py` `above_meter`) | compté tel quel, « Intuis > Linky » au bilan |
+| `valeur-impossible` | énergie négative, pas un nombre, ou une pièce au-delà de 80 kWh en un jour (les jours « suspects » du bilan) | compté, marqué suspect |
+| `unite` | une semaine (ou plus) de jours mille fois plus petits que les voisins, ou un jour mille fois plus grand : kWh rangés comme Wh, ou l'inverse (à vérifier : un appareil éteint donne le même rapport) | compté tel quel |
+| `valeur-figee` | la même lecture non nulle 5 jours de suite (énergie, température et consigne, Linky, station, météo, prises ; jours estimés exclus, égaux par construction) | compté tel quel |
+| `pic-impossible` | une heure ou une demi-heure qui demande plus de puissance que le maximum relevé par le Linky ce jour-là, ou que 36 kVA sans ce relevé | compté tel quel |
+| `compteur-recule` | un index Linky plus bas que celui de la veille | la consommation déduite des index devient négative |
 
 ### Les seuils
 
@@ -342,6 +356,11 @@ rapport réel.
 | `gain_correlation` | 0,1 | gain de corrélation Intuis / Linky d'un décalage avant de le signaler | hypothèse |
 | `jours_linky_min` | 3 jours | jours où Intuis dépasse le Linky avant de chercher un décalage d'un jour | hypothèse |
 | `jours_sources_min` | 14 jours | jours communs avant de dire que deux sources mesurent la même chose | hypothèse |
+| `facteur_unite` | 300 × | un facteur 1 000 (Wh / kWh) moins la variation ordinaire d'un jour à l'autre (facteur 3) ; médiane de 15 jours de part et d'autre, au moins 100 Wh | hypothèse |
+| `jours_unite` | 7 jours | un appareil éteint quelques jours donne le même rapport ; une erreur d'unité dure | hypothèse |
+| `jours_figes` | 5 jours | lecture identique avant de parler de valeur figée | hypothèse |
+| `puissance_max` | 36 kVA | plus gros raccordement d'une maison au tarif bleu ; une moyenne sur une heure ne dépasse pas le maximum atteint (1 % d'arrondi) | justifié |
+| `suspect_jour` | 80 kWh | une pièce à 3,3 kW pendant 24 h (bilan § 7) | hypothèse |
 | `depassement_linky` | 10 % et 500 Wh | Intuis ne peut pas dépasser le compteur qui le mesure (bilan § 7, `quality.py`) | justifié |
 
 ### Ce que le propriétaire regarde

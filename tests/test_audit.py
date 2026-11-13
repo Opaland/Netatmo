@@ -68,6 +68,8 @@ def build(path: Path, *, hour_key=None, linky_shift=0, plug_like_water=False) ->
         t += timedelta(hours=1)
     for rid in (A, W):
         for key, wh in hours[rid].items():
+            if rid == A and key[:10] in EST_DAYS:
+                continue  # days lost at Intuis, kept as a monthly total only: no hours either
             store.put(f"{key[:4]}.hourly", "hourly", rid, key, wh)
         for day, wh in daily[rid].items():
             store.merge(rid, day, wh)
@@ -149,6 +151,11 @@ def encrypt_like(store: Store, ct: bytes, iv: bytes) -> dict:
     env = encrypt_json({}, PASSPHRASE, store.salt, store.kdf)
     env["iv"], env["ct"] = base64.b64encode(iv).decode(), base64.b64encode(ct).decode()
     return env
+
+
+def save(store: Store) -> Store:
+    store.save(store.meta["home"], store.meta["rooms"])
+    return Store(store.dir, PASSPHRASE)
 
 
 def codes(store: Store) -> set[str]:
@@ -238,13 +245,26 @@ def test_linky_one_day_late(tmp_path):
     assert all("le lendemain" in x.text for x in f["decalage-jour-linky"])
 
 
-def test_real_value_under_an_estimated_flag(clean):
-    clean.merge(A, EST_DAYS[1], 2222.0)  # merge (not merge_real): the flag stays
+def test_estimated_day_with_measured_hours(clean):
+    for h in range(24):
+        clean.put("2024.hourly", "hourly", A, f"{EST_DAYS[1]}T{h:02d}", 100.0)
     clean.save(clean.meta["home"], clean.meta["rooms"])
     f = found(clean)
     assert set(f) == {"estime-sur-reel"}
     x = f["estime-sur-reel"][0]
-    assert (x.day, x.value, x.other) == (EST_DAYS[1], 2222.0, EST_SHARE)
+    assert (x.day, x.value, x.other) == (EST_DAYS[1], 2400.0, EST_SHARE)
+
+
+def test_two_nights_spreading_one_month_are_not_a_finding(clean):
+    """The backfill spreads a month cut by two yearly windows twice: two shares in one month."""
+    for day in ("2024-04-20", "2024-04-21"):
+        clean.merge(A, day, 2100.0)
+        clean.put("2024", "estimated", A, day, 1)
+        hours = clean.doc("2024.hourly")["hourly"][A]
+        for k in [k for k in hours if k.startswith(day)]:
+            del hours[k]
+        clean._dirty.add("2024.hourly")
+    assert found(save(clean)) == {}
 
 
 def test_estimated_flag_without_a_value(clean):
@@ -366,9 +386,6 @@ def test_a_day_in_two_year_files_is_read_once_from_its_own_year(clean):
 
 
 # ---------------------------------------------------------------- values (part 2 of #532)
-def save(store: Store) -> Store:
-    store.save(store.meta["home"], store.meta["rooms"])
-    return Store(store.dir, PASSPHRASE)
 
 
 def test_hours_that_do_not_make_the_day(clean):
@@ -410,7 +427,7 @@ def test_room_above_what_it_can_use_in_a_day(clean):
 
 
 def test_kwh_stored_as_wh(clean):
-    days = ["2024-03-12", "2024-03-13", "2024-03-14"]
+    days = [f"2024-03-{d}" for d in range(12, 19)]
     for d in days:
         clean.put("shelly", "daily", "p0", d, round(clean.doc("shelly")["daily"]["p0"][d] / 1000, 3))
     f = found(save(clean))
@@ -418,9 +435,9 @@ def test_kwh_stored_as_wh(clean):
     assert [x.day for x in f["unite"]] == days
 
 
-def test_two_days_almost_nothing_are_not_a_unit(clean):
-    for d in ["2024-03-12", "2024-03-13"]:  # under jours_unite: a plug nearly off, not a unit
-        clean.put("shelly", "daily", "p0", d, 0.5)
+def test_six_days_almost_nothing_are_not_a_unit(clean):
+    for d in range(12, 18):  # under jours_unite: a plug off for a few days, not a unit
+        clean.put("shelly", "daily", "p0", f"2024-03-{d}", 0.4 + (d % 3) / 10)
     assert found(save(clean)) == {}
 
 
@@ -466,3 +483,89 @@ def test_meter_index_going_back(clean):
     f = found(save(clean))
     assert set(f) == {"compteur-recule"}
     assert (f["compteur-recule"][0].day, f["compteur-recule"][0].value) == ("2024-03-12", 1_005_000)
+
+
+# ---------------------------------------------------------------- guards (each seen red with its mutation)
+def bare(real=None, docs=None) -> au.Audit:
+    return au.Audit(docs or {}, TZ, "2024-04-30", {}, real)
+
+
+class FakeReport:
+    def __init__(self, intuis: dict[str, float], linky: dict[str, float]):
+        self.real_wh, self.linky = intuis, linky
+
+
+def test_linky_lag_needs_the_shift_to_remove_most_days():
+    """Above the meter 4 days at 0, still 2 with a day of shift: not a shift (4 x 2 > 4)."""
+    days = [f"2024-03-{d:02d}" for d in range(1, 16)]
+    intuis = dict.fromkeys(days, 5000.0)
+    linky = dict.fromkeys(days, 9000.0)
+    for d in ("2024-03-03", "2024-03-06", "2024-03-09", "2024-03-12"):
+        linky[d] = 1000.0  # above at lag 0 on these days; the neighbours of two of them too
+    linky["2024-03-02"] = 1000.0
+    linky["2024-03-08"] = 1000.0
+    a = bare(FakeReport(intuis, linky))
+    a.linky_lag()
+    assert a.findings == []
+
+
+def test_a_curve_key_between_two_half_hours(clean):
+    clean.put("2024.linky30", "curve", "2024-03-12T10:15", None, 50.0)
+    f = found(save(clean))
+    assert "cle-invalide" in f and f["cle-invalide"][0].at == "2024-03-12T10:15"
+
+
+def test_a_small_gain_of_correlation_is_not_a_shift(clean, monkeypatch):
+    """Lags -2..2 in order: the best (+1) only 0.05 above lag 0, under gain_correlation."""
+    values = iter([0.5, 0.55, 0.6, 0.65, 0.5] * 10)
+    monkeypatch.setattr(au, "_pearson", lambda pairs: next(values))
+    a = au.Audit.of(clean, au.read_docs(clean.dir, PASSPHRASE))
+    a.hours_vs_linky()
+    assert a.findings == []
+
+
+def test_a_plug_equal_to_a_room_half_the_days_is_not_the_same_energy(tmp_path):
+    store = build(tmp_path, plug_like_water=True)
+    days = sorted(store.doc("shelly")["daily"]["p0"])
+    for d in days[::2]:
+        store.put("shelly", "daily", "p0", d, 500.0 + len(d))
+    assert "deux-sources" not in found(save(store))
+
+
+# ---------------------------------------------------------------- robustness
+def test_an_unexpected_structure_or_file_does_not_stop_the_report(tmp_path, monkeypatch, capsys):
+    data = tmp_path / "data"
+    store = build(data)
+    store.doc("2024.hourly")["hourly"][W] = 5  # a number where a room's hours are expected
+    store._dirty.add("2024.hourly")
+    store.save(store.meta["home"], store.meta["rooms"])
+    out = run_cli(data, monkeypatch, capsys, "--rapport", str(tmp_path / "rapport"))
+    assert "Bilan qualité des données" in out and "Audit des données (#532)" in out
+    assert re.search(r"Non vérifié : [^:]+ : AttributeError\.", out), out
+    assert (tmp_path / "rapport" / au.REPORT_NAME).exists()
+    assert not re.search(r"\d{4}-\d{2}-\d{2}", out)
+
+
+def test_an_unreadable_file_is_named_and_the_others_are_audited(clean):
+    (clean.dir / "linky.enc.json").write_text("pas une enveloppe")
+    a = au.audit(Store(clean.dir, PASSPHRASE))
+    assert a.errors == ["linky.enc.json illisible : JSONDecodeError"]
+    assert "2024" in a.docs
+
+
+def test_an_audit_that_fails_leaves_the_quality_report(clean, monkeypatch, capsys):
+    def boom(_store):
+        raise RuntimeError("valeur secrète 7777")
+
+    monkeypatch.setattr(au, "audit", boom)
+    out = run_cli(clean.dir, monkeypatch, capsys)
+    assert "Bilan qualité des données" in out
+    assert "Audit des données (#532) : impossible (RuntimeError)" in out and "7777" not in out
+
+
+def test_a_plug_off_then_used_is_not_a_unit(clean):
+    """A few Wh of standby for weeks, then real use: the neighbours are too small to judge a unit."""
+    for i in range(1, 31):
+        clean.put("shelly", "daily", "p0", f"2024-03-{i:02d}", 2.0 + (i % 3) * 0.1)
+    clean.put("shelly", "daily", "p0", "2024-03-15", 900.0)  # used once
+    assert "unite" not in found(save(clean))
