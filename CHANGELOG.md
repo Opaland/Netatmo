@@ -1,6 +1,6 @@
 # Historique des versions
 
-## v2.2 — novembre 2026 : audit des données (en cours)
+## v2.2 — novembre 2026 : audit des données
 
 Toutes les données reprises et vérifiées : bonnes dates, bonnes valeurs, trous et chevauchements
 ([feuille de route](docs/bmad/feuille-de-route.md), #532, demande du propriétaire du 12/11/2026), plus
