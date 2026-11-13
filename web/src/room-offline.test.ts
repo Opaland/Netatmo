@@ -12,6 +12,7 @@ import {
   displayRuns,
   estimateOffline,
   estimatedIn,
+  incompleteParts,
   lastReadingAfterStop,
   notComparable,
   offlineDaysIn,
@@ -126,6 +127,16 @@ describe('rooms measured on one side of a comparison only (#570)', () => {
     expect(unmeasuredIn(rs.filter((r) => r.room === 'ce'), '2024-01-01', '2024-12-31')).toBe(true);
     expect(unmeasuredIn(rs.filter((r) => r.room === 'ce'), '2025-01-01', '2025-12-31')).toBe(false);
     expect(unmeasuredIn([], '2024-01-01', '2024-12-31')).toBe(false);
+  });
+
+  it('#580: a total is incomplete by the usage not measured (named) and the days of the others, never 366 for it', () => {
+    // a lost from 11 to 15 March 2024 (5 days); the water heater without any reading in 2024
+    const gaps = rs.filter((r) => !(r.room === 'a' && r.day >= '2024-03-11' && r.day <= '2024-03-15'));
+    const cats = ['heating', 'water_heater'] as const;
+    expect(incompleteParts(gaps, '2024-01-01', '2024-12-31', [...cats])).toEqual({ unmeasured: ['water_heater'], days: 5 });
+    // 2023: the water heater measured until August, its days after count as missing (with a's none)
+    expect(incompleteParts(gaps, '2023-01-01', '2023-12-31', [...cats])).toEqual({ unmeasured: [], days: 130 });
+    expect(incompleteParts(rs, '2025-02-01', '2025-02-28', [...cats])).toEqual({ unmeasured: [], days: 0 });
   });
 });
 

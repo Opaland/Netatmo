@@ -119,7 +119,7 @@ export function renderOverview(view: HTMLElement, records: DayRecord[], part: Ov
   const ownLegend = split === 'category' && shares.length > 1;
   barChart(document.getElementById('main-chart')!, { labels, series: ser, stacked: true, price: avgPrice(records), zoom: labels.length > 60, ...marks, ...(ownLegend ? { legend: false } : {}) });
   // #570: a period that holds days without any reading writes « incomplet » by its total; a usage
-  // or a room without any reading in it writes « — », never 0
+  // or a room without any reading in it writes « non mesuré » (UNMEASURED_CELL), never 0
   const lo = firstDay() > from ? firstDay() : from;
   const hi = lastDay() < to ? lastDay() : to;
   const lost = bucketMarks(set.keys, gran, lo, hi, uncertainDays(records, new Set(), lo, hi));
