@@ -63,7 +63,7 @@ par nuit sans nouveauté. Le journal des Actions est **public** : rien de person
 | `weather.enc.json` | `source`, `outdoor`: `{jour: [min, max, moy]}`, `indoor`: `{jour: moy}` | collecteur (Open-Meteo ou station) | Si présent |
 | `station.enc.json`, `YYYY.station_h.enc.json` | station Netatmo : modules `m0`…, quotidien, agrégats de nuit, piles ; relevés horaires par année ; ids en empreintes salées (ADR-22) | `station.py` | Au démarrage ; horaire à la demande |
 | `netatmo-token.enc.json` | jeton de rafraîchissement Netatmo, renouvelé à chaque usage | collecteur | Jamais |
-| `linky.enc.json`, `YYYY.linky30.enc.json` | quotidien, puissance max et son heure, index par cadran ; courbe de charge 30 min | `enedis.py` | Si présent ; courbe à la demande |
+| `linky.enc.json`, `YYYY.linky30.enc.json` | quotidien, puissance max et son heure, index par cadran ; courbe de charge 30 min, et les jours lus avec la lecture 2026 de la courbe (`read`, #582) | `enedis.py` | Si présent ; courbe à la demande |
 | `shelly.enc.json` | prises et pinces `p0`… (canaux `pNcM`), Wh par jour ; ids en empreintes salées (ADR-22) | `shelly.py` | Si présent |
 | `ha.enc.json` | agrégats quotidiens importés de Home Assistant | import manuel | Si présent |
 | `insights.enc.json` | `generated`, `model`, `period`, `markdown` | job IA (mensuel) | Si présent |

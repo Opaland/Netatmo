@@ -4,6 +4,7 @@
 // key (two real half hours), and on the spring day the skipped ones are absent: every
 // conversion to watts divides by the number of real half hours behind a key.
 
+import { mergeFlatYear } from './aggregate';
 import type { Hourly } from './analysis';
 import { memo, setKey } from './memo';
 
@@ -45,6 +46,31 @@ export function localMidnight(tz: string, day: string): number {
   let t = naive - offsetMin(tz, naive) * 60000;
   t = naive - offsetMin(tz, t) * 60000;
   return t;
+}
+
+// #582: the reading each day was stored with, as the collector marks it in the year documents
+// (YYYY.linky30 "read": {day: CURVE_READING}, collector/enedis.py `_mark_read`). Kept beside the
+// curve it came with, so that every reader of that curve (curveVsDay) sees the same marks.
+export const CURVE_READING = 2; // collector/enedis.py CURVE_READING: the 2026 reading (#568)
+export interface CurveDoc {
+  curve?: Record<string, number>;
+  read?: Record<string, unknown>;
+}
+const readDays = new WeakMap<Curve, ReadonlySet<string>>();
+const isRecord = (o: unknown): o is Record<string, unknown> => typeof o === 'object' && o !== null && !Array.isArray(o);
+
+/** The curve of the year documents (#550: a key found in two files, by keepFromYear), with the days
+ * marked as read by the 2026 reading. An archive written before #582 has no mark: read as before. */
+export function curveOfDocs(docs: (CurveDoc | null | undefined)[], years: (string | number)[]): Curve {
+  const out: Curve = new Map();
+  const read = new Map<string, unknown>();
+  docs.forEach((doc, i) => {
+    mergeFlatYear(isRecord(doc?.curve) ? doc.curve : undefined, years[i], out);
+    mergeFlatYear(isRecord(doc?.read) ? doc.read : undefined, years[i], read);
+  });
+  const days = [...read].filter(([d, v]) => /^\d{4}-\d{2}-\d{2}$/.test(d) && typeof v === 'number' && v >= CURVE_READING).map(([d]) => d);
+  readDays.set(out, new Set(days));
+  return out;
 }
 
 const nextDay = (day: string) => new Date(Date.parse(`${day}T00:00:00Z`) + DAY).toISOString().slice(0, 10);
@@ -97,6 +123,9 @@ export interface CurveVsDay {
   halves: number; // half hours present
   expected: number; // half hours of that local day (46 on the spring change)
   ok: boolean; // the half hours make the day (within DAY_GAP_*)
+  /** #582: 'new' when the day is known to be read by the 2026 reading (after CURVE_READING_SINCE,
+   * or marked by the collector), 'unknown' otherwise: stored before, or rewritten before the marks. */
+  reading: 'new' | 'unknown';
 }
 
 /** #568: a day's curve against the meter's day total (null: no day total to compare with). */
@@ -104,7 +133,8 @@ export function curveVsDay(curve: Curve, tz: string, day: string, dayKwh: number
   if (dayKwh === undefined || !Number.isFinite(dayKwh)) return null;
   const wh = curveDayWh(curve, tz, day);
   const halves = [...curve.keys()].filter((k) => k.startsWith(`${day}T`)).length;
-  return { day, dayKwh, curveKwh: wh === null ? null : wh / 1000, halves, expected: halfHourCounts(tz, day)?.size ?? 48, ok: wh !== null && !dayGapExceeded(wh, dayKwh * 1000) };
+  const reading = day >= CURVE_READING_SINCE || readDays.get(curve)?.has(day) ? 'new' : 'unknown';
+  return { day, dayKwh, curveKwh: wh === null ? null : wh / 1000, halves, expected: halfHourCounts(tz, day)?.size ?? 48, ok: wh !== null && !dayGapExceeded(wh, dayKwh * 1000), reading };
 }
 
 const kwh1 = new Intl.NumberFormat('fr-FR', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
@@ -115,7 +145,10 @@ const energy = (kwh: number) => (Math.abs(kwh) < 1 ? `${nf0.format(kwh * 1000)}\
 /**
  * #568: the half hours of the curve were read before the reading of the 2026 format (a step given
  * once at the top, one quantity among several); days stored before it keep the former reading
- * until the owner has them fetched again.
+ * until the owner has them fetched again. #582: a day before it may also have been written later,
+ * by the catch-up or the nightly re-reading, with the new one: only the collector's mark
+ * (curveOfDocs) says so, and an unmarked day is said to have POSSIBLY the former reading (the days
+ * re-read between this date and the first marks cannot be told apart).
  */
 export const CURVE_READING_SINCE = '2026-11-13';
 
@@ -133,7 +166,7 @@ export function dayNote(c: CurveVsDay | null): string {
     return `${head}. Courbe incomplète ce jour-là (${n}) : le total du jour fait foi.`;
   }
   if (c.ok) return `${head}, que la courbe retrouve.`;
-  const old = c.day < CURVE_READING_SINCE ? ' Ce jour a été rangé avec l’ancienne lecture de la courbe, pas encore reprise.' : '';
+  const old = c.reading === 'unknown' ? ' Ce jour a peut-être été rangé avec l’ancienne lecture de la courbe, pas encore reprise.' : '';
   return `${head}. Les demi-heures de la courbe font ${energy(c.curveKwh)} : elles ne retrouvent pas le total du jour, qui fait foi ; la courbe de ce jour est à lire avec prudence.${old}`;
 }
 

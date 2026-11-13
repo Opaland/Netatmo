@@ -6,8 +6,10 @@ gets a personal token. Optional: needs ENEDIS_TOKEN and ENEDIS_PRM (14-digit poi
 
 Besides the daily totals, the 30-minute load curve (S-1.11) is kept in one document per
 year, YYYY.linky30.enc.json: {"curve": {"YYYY-MM-DDTHH:MM": Wh}} (local time, key = start
-of the half hour). Enedis only records it when the customer enabled "collecte de la courbe
-de charge" on their account (à vérifier): an empty answer is not an error.
+of the half hour), and since #582 {"read": {"YYYY-MM-DD": CURVE_READING}}: the days whose half
+hours were all read by the 2026 reading of the curve (#568). An older archive has no "read".
+Enedis only records the curve when the customer enabled "collecte de la courbe de charge" on
+their account (à vérifier): an empty answer is not an error.
 """
 
 from __future__ import annotations
@@ -30,6 +32,8 @@ from .schema import FormatError, dated_records, safe_keys
 from .storage import Store
 
 if TYPE_CHECKING:
+    from collections.abc import Iterable
+
     from .rattrapage import Tally
 
 log = logging.getLogger(__name__)
@@ -486,6 +490,26 @@ def _curve_days(store: Store, years: range) -> dict[str, int]:
     return count
 
 
+# #582: the reading of the curve a day was stored with. 2 = the 2026 reading (#568: the step given
+# once at the top, ONE quantity among several); days stored before it have no mark. Read by the app
+# (web/src/curve.ts CURVE_READING), which says « ancienne lecture » only for a day without it.
+CURVE_READING = 2
+
+
+def _mark_read(store: Store, written: Iterable[str]) -> None:
+    """#582: mark the days of `written` (curve keys this run stored) whose stored half hours ALL come
+    from this run: a day that keeps one half hour of an earlier reading stays unmarked. Only the
+    days written now are touched: nothing stored before is read again or rewritten."""
+    by_day: dict[str, set[str]] = {}
+    for key in written:
+        by_day.setdefault(key[:10], set()).add(key)
+    for day, keys in sorted(by_day.items()):
+        doc = curve_doc(day[:4])
+        stored = {k for k in store.doc(doc).get("curve", {}) if k[:10] == day}
+        if stored <= keys:
+            store.put(doc, "read", day, None, CURVE_READING)
+
+
 def day_ranges(days: list[date], size: int, gap: int = 0) -> list[tuple[date, date]]:
     """Consecutive days grouped into [start, end) ranges of at most `size` days. With `gap`, two
     runs at most `gap` days apart share a range (one request instead of two; #569: the days in
@@ -536,6 +560,7 @@ def collect_curve(
         curve = parse_curve(body, tz)
         for key, wh in curve.items():
             store.put(curve_doc(key[:4]), "curve", key, None, wh)
+        _mark_read(store, curve)
         received += len(curve)
         last = (end - timedelta(days=1)).isoformat()
         if last > linky.get("curve_scan", ""):
@@ -587,11 +612,14 @@ def catch_up_curve(
         for i in range((end - begin).days):
             tally.asked(CURVE_SERIE, (begin + timedelta(days=i)).isoformat())
         added: set[str] = set()
+        written: list[str] = []
         for key, wh in parse_curve(body, tz).items():
             curve = store.doc(curve_doc(key[:4])).get("curve", {})
             if key[:10] in wanted and key not in curve:
                 store.put(curve_doc(key[:4]), "curve", key, None, wh)
                 added.add(key[:10])
+                written.append(key)
+        _mark_read(store, written)
         for day in sorted(added):
             tally.added(CURVE_SERIE, day)
             wanted.discard(day)

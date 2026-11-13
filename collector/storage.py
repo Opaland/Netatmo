@@ -18,7 +18,8 @@ data/
                            values, decided once and kept: enedis.py; daily and pmax are stored
                            converted, in Wh and kVA, whatever these say: #567)}
   2025.linky30.enc.json   {"curve":   {"YYYY-MM-DDTHH:MM": Wh}}  Linky load curve, local start of
-                           each half hour (optional, loaded on demand)
+                           each half hour (optional, loaded on demand); "read": {"YYYY-MM-DD": 2}
+                           (#582) the days whose half hours were all read by the 2026 reading
   station.enc.json        Netatmo weather station: modules, daily [min, max, mean, hum, co2],
                           small daily aggregates "nightly" / "hours" and "module_keys" (salted
                           hash of each module id → stable key "m0"…; see docs/api-notes.md)

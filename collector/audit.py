@@ -505,6 +505,7 @@ SERIES_LABEL: dict[tuple[str, str], str] = {
     (".hourly", "hourly"): "énergie par heure (Intuis)",
     (".room30", "rooms"): "pièces à la demi-heure (Intuis)",
     (".linky30", "curve"): "courbe de charge à la demi-heure (Linky)",
+    (".linky30", "read"): "jours lus avec la lecture 2026 de la courbe (Linky)",
     (".station_h", "hourly"): "station, relevés horaires",
     ("linky", "daily"): "consommation du jour (Linky)",
     ("linky", "pmax"): "puissance maximale du jour (Linky)",
