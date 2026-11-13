@@ -45,6 +45,13 @@ en la nommant ; `--rapide` (lint, types, tests) suffit avant un commit. Le déta
 `E2E_PORT=4200 npm run e2e`. Les e2e refusent de démarrer sur un `dist/` plus ancien que les sources
 (`web/e2e/dist-a-jour.mjs`) : lancer `npm run build` d'abord.
 
+Les **limites de hauteur** des pages (l'Accueil en 3 écrans d'iPhone 13, l'Historique en 4…) sont
+écrites une fois, dans `web/e2e/hauteurs-limites.mjs`, que lisent la garde (`e2e/features.mjs`) et
+`npm run e2e:hauteurs` (#556) : ce dernier imprime, en DejaVu Sans, la hauteur de chaque écran du
+tableau des revues à 360 px et à 200 %, et pour chaque limite la hauteur, la limite et la marge en
+px ; il échoue sur une limite dépassée. Il tourne dans la CI (job e2e, une quinzaine de secondes).
+Ajouter ou relever une limite est une décision du propriétaire : à proposer dans la PR.
+
 Hors de la porte, à lancer à la main : `npm run mutation` (dans `web/`, tests de mutation des calculs,
 quelques minutes, rapport dans `web/reports/mutation/`) et `pytest -m reseau` (les sources publiques
 réelles : Open-Meteo, CRE, Tempo). Lecture des résultats : `docs/bmad/06-qa-strategy.md`.

@@ -24,6 +24,9 @@ Demandée par le propriétaire le 12/11/2026.
 1. À la fin de chaque version, deux revues sont **obligatoires** :
    - une **revue par personas**, les 72, sur le modèle de [`revues/v1.7.md`](revues/v1.7.md) ;
    - une **revue design** des écrans nouveaux ou changés.
+
+   Le tableau des hauteurs d'écran de la revue et les marges sous les limites se mesurent par
+   `npm run e2e:hauteurs` (dans `web/`, après `npm run build`, #556), pas par un script hors dépôt.
 2. Leurs **défauts bloquants sont corrigés avant la clôture**.
 3. La version suivante **démarre sans attendre une validation explicite** du propriétaire.
 4. Le propriétaire reste **décideur** des choix de produit, de design et d'architecture. La revue les

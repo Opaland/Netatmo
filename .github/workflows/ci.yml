@@ -57,6 +57,7 @@ jobs:
       - run: npm run build
       - run: npm run e2e
       - run: npm run e2e:features # v1.4: facture, travaux, export recherche, clé effacée
+      - run: npm run e2e:hauteurs # v2.3 #556 : hauteur de chaque écran de la revue (360 px, 200 %, DejaVu Sans), limites et marges
       - run: npm run e2e:composants # v1.6 #310 : page de démonstration des composants (axe, 200 %, 44 px)
       - run: npm run e2e:compteur # v1.6 #301 : onglet Compteur (période, « Compté : », 360 px 200 %, axe clair/sombre/contraste)
       - run: npm run e2e:proche # v1.6 #312, #316 : premier lancement et vue Proche
