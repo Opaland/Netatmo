@@ -11,8 +11,33 @@ import { html } from './trusted';
 type Zone = HTMLElement | string | null | undefined;
 
 const online = () => navigator.onLine !== false;
-/** A module could not be fetched offline: the browser keeps that failure until a reload. */
+/** A module could not be fetched offline: Chromium keeps that failure until a reload (WebKit: #605). */
 const importFailedOffline = { value: false };
+
+/**
+ * #605: the module files whose load failed (the <link rel=modulepreload> that Vite adds for a lazy
+ * chunk and its imports). WebKit serves that failure again, to an import in the page, after a
+ * reload and after a new navigation, until the file itself is fetched again; Chromium keeps it in
+ * the page until a reload. Recorded here (a link's error does not bubble: capture phase).
+ */
+const failedModules = new Set<string>();
+if (typeof window !== 'undefined')
+  window.addEventListener(
+    'error',
+    (e) => {
+      const t = e.target;
+      if (t instanceof HTMLLinkElement && t.rel === 'modulepreload' && t.href) failedModules.add(t.href);
+    },
+    true,
+  );
+
+/** Fetch the failed module files again (same origin, past the HTTP cache), and drop their links. */
+async function refetchFailedModules(): Promise<void> {
+  const urls = [...failedModules];
+  failedModules.clear();
+  for (const link of document.querySelectorAll<HTMLLinkElement>('link[rel=modulepreload]')) if (urls.includes(link.href)) link.remove();
+  await Promise.all(urls.map((u) => fetch(u, { cache: 'reload' }).catch(() => undefined)));
+}
 
 function zoneOf(zone: Zone): HTMLElement | null {
   return typeof zone === 'string' ? document.getElementById(zone) : (zone ?? null);
@@ -25,7 +50,7 @@ const MESSAGES: Record<'offline' | 'reload' | 'error', [string, string]> = {
 };
 
 /** Replace the content of `el` with the failure message and its button (no innerHTML). */
-function showFailure(el: HTMLElement, what: string, outcome: 'offline' | 'reload' | 'error', retry: () => void) {
+function showFailure(el: HTMLElement, what: string, outcome: 'offline' | 'reload' | 'error', retry: (thenReload: boolean) => void) {
   el.hidden = false;
   el.removeAttribute('aria-busy');
   const [text, label] = MESSAGES[outcome];
@@ -40,10 +65,14 @@ function showFailure(el: HTMLElement, what: string, outcome: 'offline' | 'reload
   b.dataset.lazyRetry = outcome;
   b.addEventListener('click', (e) => {
     e.stopPropagation(); // not an app-level click
-    // back online after a module failed offline: only a reload fetches it again
-    if (outcome === 'reload' || (online() && importFailedOffline.value)) return location.reload();
+    if (outcome === 'reload') return location.reload();
     p.remove();
-    retry();
+    // Back online after a module failed offline. Chromium keeps that failure until a reload; WebKit
+    // keeps it THROUGH a reload, and even a new navigation, until the file is fetched again (#605).
+    // So: fetch the failed files again, try in place, and reload only if it fails again.
+    const afterOffline = online() && importFailedOffline.value;
+    if (!afterOffline) return retry(false);
+    void refetchFailedModules().then(() => retry(true));
   });
   p.append(b);
   el.replaceChildren(p);
@@ -56,11 +85,12 @@ function showFailure(el: HTMLElement, what: string, outcome: 'offline' | 'reload
  */
 export function lazyCard<M>(load: () => Promise<M>, fill: (m: M) => unknown, opts: { zone: Zone; what: string }): Promise<void> {
   const d = ds;
-  const run = (): Promise<void> =>
+  const run = (thenReload = false): Promise<void> =>
     track(runLazy(load, fill, { online, stale: () => ds !== d, what: opts.what, importFailedOffline }).then(({ outcome }) => {
       if (outcome === 'ok' || outcome === 'stale') return;
+      if (thenReload && outcome === 'reload') return location.reload(); // the in-place try failed (Chromium)
       const el = zoneOf(opts.zone);
-      if (el?.isConnected) showFailure(el, opts.what, outcome, () => void run());
+      if (el?.isConnected) showFailure(el, opts.what, outcome, (again) => void run(again));
     }));
   return run();
 }
