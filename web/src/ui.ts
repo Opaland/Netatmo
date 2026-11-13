@@ -45,6 +45,56 @@ export function table(head: string[], rows: (string | number)[][], numericFrom =
 }
 
 /**
+ * #594 (WCAG 2.4.11, focus not obscured): the focused element is never left under something
+ * painted over it. One listener on the document (main.ts): every view, the lazy cards included.
+ * - A table of `.table-wrap` scrolls sideways under its pinned first column (style.css), and the
+ *   browser scrolls a focused field just enough to bring it to the edge of the scroller, which is
+ *   under that column: the scroller is moved so that the field and its ring sit beside the pinned
+ *   column (and under the pinned header row), and inside the right edge when there is room.
+ * - The page: WebKit does not scroll to a field that is partly on screen, and leaves it under the
+ *   fixed tab bar (Objectifs, the solar tool…); the page is moved by what the bar covers, read
+ *   from the `scroll-padding` of the page (style.css), the one place that says it.
+ */
+export function keepFocusClear(e: FocusEvent) {
+  const el = e.target;
+  if (!(el instanceof HTMLElement)) return;
+  const cs = getComputedStyle(el);
+  const ring = cs.outlineStyle === 'none' ? 0 : (parseFloat(cs.outlineWidth) || 0) + Math.max(0, parseFloat(cs.outlineOffset) || 0);
+  besidePinned(el, ring);
+  inPage(el, ring);
+}
+
+function inPage(el: HTMLElement, ring: number) {
+  for (let n: HTMLElement | null = el; n && n !== document.body; n = n.parentElement) if (getComputedStyle(n).position === 'fixed') return; // the bars, a sheet: they do not scroll
+  const page = getComputedStyle(document.documentElement);
+  const top = (parseFloat(page.scrollPaddingTop) || 0) + ring;
+  const bottom = window.innerHeight - (parseFloat(page.scrollPaddingBottom) || 0) - ring;
+  const r = el.getBoundingClientRect();
+  if (r.bottom > bottom && r.height <= bottom - top) window.scrollBy(0, r.bottom - bottom);
+  else if (r.top < top) window.scrollBy(0, r.top - top);
+}
+
+function besidePinned(el: HTMLElement, ring: number) {
+  const wrap = el.closest<HTMLElement>('.table-wrap');
+  const cell = el.closest('th, td');
+  if (!wrap || !cell || !wrap.contains(cell)) return;
+  const r = el.getBoundingClientRect();
+  const w = wrap.getBoundingClientRect();
+  const first = cell.parentElement?.firstElementChild;
+  if (first && first !== cell) {
+    const start = first.getBoundingClientRect().right + ring; // where the field may begin
+    const end = w.left + wrap.clientLeft + wrap.clientWidth - ring; // and end (scroll bar excluded)
+    if (r.left < start) wrap.scrollLeft -= start - r.left;
+    else if (r.right > end) wrap.scrollLeft += Math.min(r.right - end, r.left - start); // never back under the column
+  }
+  const head = cell.closest('tbody') ? wrap.querySelector('thead') : null;
+  if (head) {
+    const top = head.getBoundingClientRect().bottom + ring;
+    if (r.top < top) wrap.scrollTop -= top - r.top;
+  }
+}
+
+/**
  * #484: a table whose every column matters, read as stacked cards: one card per row, its first
  * cell as title, the other cells under their column name (a definition list). Nothing hides
  * behind a horizontal scroll at 360 px or text 200 % (`.table-wrap` scrolls: fine for figures,
