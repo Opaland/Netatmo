@@ -164,8 +164,33 @@ class Store:
         """Years with hourly weather-station readings "YYYY.station_h.enc.json"."""
         return self._years_of(".station_h")
 
+    def section(self, name: str) -> dict[str, dict[str, Any]]:
+        """{room: {day: value}} of one section of the year files ("daily", "tariffs", "temps"…), read
+        as the app reads it (#550): a day in two year files once, from the file of its own year
+        (`own_year_first`)."""
+        return own_year_first([(str(y), self.doc(str(y))) for y in self.years()], name)
+
+    def daily(self) -> dict[str, dict[str, float]]:
+        """{room: {day: Wh}} as the app reads it (#550): `verify`, the CSV export, the alerts."""
+        return self.section("daily")
+
     def totals(self) -> dict[int, dict[str, float]]:
-        """Wh per year and room category: what `verify` prints, and what `rekey` compares (#139)."""
+        """Wh per year and room category, as the app counts them (#550): a day in two year files
+        once, from the file of its own year, and in the year of the day. What `verify` prints;
+        `rekey` and `compare` check it with `file_totals`."""
+        rooms = {r["id"]: r for r in self.meta.get("rooms", [])}
+        out: dict[int, dict[str, float]] = {}
+        for rid, days in self.daily().items():
+            cat = rooms.get(rid, {}).get("category", "?")
+            for d, wh in days.items():
+                per_cat = out.setdefault(int(d[:4]), {})
+                per_cat[cat] = per_cat.get(cat, 0) + wh
+        return dict(sorted(out.items()))
+
+    def file_totals(self) -> dict[int, dict[str, float]]:
+        """Wh per year file and room category, file by file (what `verify` printed before #550): a
+        day in two year files counted in each. `rekey` and `compare` check it too: a copy that
+        lost the second value of such a day keeps the totals of `totals`, not these."""
         rooms = {r["id"]: r for r in self.meta.get("rooms", [])}
         out: dict[int, dict[str, float]] = {}
         for y in self.years():
@@ -174,6 +199,10 @@ class Store:
                 cat = rooms.get(rid, {}).get("category", "?")
                 per_cat[cat] = per_cat.get(cat, 0) + sum(days.values())
         return out
+
+    def all_totals(self) -> tuple[dict[int, dict[str, float]], dict[int, dict[str, float]]]:
+        """(`totals`, `file_totals`): what `rekey` and `compare` compare between two copies."""
+        return self.totals(), self.file_totals()
 
     def delete_room(self, room_id: str) -> None:
         """Remove a room from every yearly document (daily, tariffs, temps, hourly, 30 min)."""
