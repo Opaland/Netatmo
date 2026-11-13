@@ -2,7 +2,8 @@
 // August 2026 whole. The « Une journée » card of the curve says the meter's total of the day, which
 // counts, and says when the curve of that day does not retrieve it or misses half hours.
 import { describe, expect, it } from 'vitest';
-import { type Curve, DAY_GAP_SHARE, DAY_GAP_WH, SLOTS, curveVsDay, dayGapExceeded, dayNote } from './curve';
+import { type Curve, type CurveDoc, DAY_GAP_SHARE, DAY_GAP_WH, SLOTS, curveOfDocs, curveVsDay, dayGapExceeded, dayNote } from './curve';
+import curveRead from './__fixtures__/curve-read.json';
 import sommeJour from './__fixtures__/somme-jour.json';
 
 const TZ = 'Europe/Paris';
@@ -56,13 +57,51 @@ describe('#568 : la courbe d’un jour face au total du compteur', () => {
     );
   });
 
-  it('un jour rangé avant la nouvelle lecture le dit, pas un jour d’après', () => {
-    expect(dayNote(curveVsDay(day('2026-07-14', 120), TZ, '2026-07-14', 4.8))).toContain('rangé avec l’ancienne lecture de la courbe, pas encore reprise');
+  it('un jour rangé avant la nouvelle lecture le dit comme une possibilité, pas un jour d’après', () => {
+    expect(dayNote(curveVsDay(day('2026-07-14', 120), TZ, '2026-07-14', 4.8))).toContain('a peut-être été rangé avec l’ancienne lecture de la courbe, pas encore reprise');
     expect(dayNote(curveVsDay(day('2026-11-20', 120), TZ, '2026-11-20', 4.8))).not.toContain('ancienne lecture');
   });
 
   it('sans total du compteur ce jour-là, rien n’est dit', () => {
     expect(curveVsDay(day('2026-07-14', 100), TZ, '2026-07-14', undefined)).toBeNull();
     expect(dayNote(null)).toBe('');
+  });
+});
+
+// #582: on the marks the collector writes (tests/test_courbe_lecture.py holds the vector equal to
+// collect_curve then catch_up_curve): a day caught up or read again whole by the night is not said
+// to be of the former reading, a day stored before (or keeping one former half hour) may be.
+describe('#582 : « ancienne lecture » seulement pour un jour qui a pu être lu avec elle', () => {
+  const years = Object.keys(curveRead.read);
+  // the half hours of every day of the vector, 120 Wh each: 5,76 kWh, more than the 4,8 kWh of the day
+  const all = [...new Set([...curveRead.former_days, ...Object.values(curveRead.read).flatMap((r) => Object.keys(r))])];
+  const flat = Object.fromEntries(all.flatMap((d) => SLOTS.map((s) => [`${d}T${s}`, 120])));
+  const docs: CurveDoc[] = years.map((y) => ({ curve: flat, read: (curveRead.read as Record<string, Record<string, number>>)[y] }));
+  const note = (c: Curve, d: string) => dayNote(curveVsDay(c, TZ, d, 4.8));
+
+  it('jour rattrapé, jour relu entier : pas d’ancienne lecture', () => {
+    const c = curveOfDocs(docs, years);
+    for (const d of ['2026-11-03', '2026-11-10', '2026-11-12']) {
+      expect(d < '2026-11-13').toBe(true);
+      expect(note(c, d)).toContain('à lire avec prudence');
+      expect(note(c, d)).not.toContain('ancienne lecture');
+    }
+  });
+
+  it('jour rangé avant et jamais réécrit, ou relu en partie : l’ancienne lecture reste possible', () => {
+    const c = curveOfDocs(docs, years);
+    for (const d of ['2026-11-05', '2026-11-07', '2026-11-11']) expect(note(c, d)).toContain('a peut-être été rangé avec l’ancienne lecture');
+  });
+
+  it('une archive d’avant les marques se lit sans erreur, comme avant', () => {
+    const c = curveOfDocs([{ curve: flat }, null, { curve: flat, read: 'x' as unknown as Record<string, unknown> }], ['2026', '2025', '2026']);
+    expect(c.size).toBe(Object.keys(flat).length);
+    expect(note(c, '2026-11-03')).toContain('a peut-être été rangé avec l’ancienne lecture');
+  });
+
+  it('une marque d’une autre forme n’est pas lue', () => {
+    const c = curveOfDocs([{ curve: flat, read: { '2026-11-03': 1, '2026-11-04': '2', x: 2 } }], ['2026']);
+    expect(note(c, '2026-11-03')).toContain('ancienne lecture');
+    expect(note(c, '2026-11-04')).toContain('ancienne lecture');
   });
 });
