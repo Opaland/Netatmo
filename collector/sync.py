@@ -6,11 +6,13 @@ import logging
 import time
 from dataclasses import asdict
 from datetime import UTC, datetime, timedelta
+from typing import TYPE_CHECKING
 from zoneinfo import ZoneInfo
 
 from . import room30
 from .api import SCALE_SECONDS, ApiError, IntuisClient, chunk_ranges
 from .budget import CallCapReached
+from .enedis import CATCH_UP_GAP, day_ranges
 from .model import (
     IGNORE,
     Columns,
@@ -22,6 +24,9 @@ from .model import (
     total,
 )
 from .storage import Store
+
+if TYPE_CHECKING:
+    from .rattrapage import Tally
 
 log = logging.getLogger(__name__)
 
@@ -355,6 +360,45 @@ class Syncer:
                 count,
             )
             end = begin
+
+    def catch_up(self, home: Home, missing: dict[str, set[str]], kinds: dict[str, str], tally: Tally) -> None:
+        """#569: ask Intuis again, at the day scale, the room-days the archive does not have
+        (`missing`, from the quality report: neither a value nor an estimate, room not stopped),
+        one request per measure family and per run of days, and add them. Only a non-zero value is
+        added (a zero may be a placeholder of the backend, merge_real); a day already present —
+        real or estimated — is never asked again nor rewritten, and its tariffs neither."""
+        endpoint, mtype = self.strategy or self.detect_strategy(home, int(time.time()))
+        families = TYPE_FAMILIES if mtype == ALL else (mtype,)
+        zone = ZoneInfo(home.timezone)
+        missing = {rid: set(days) for rid, days in missing.items() if days and rid in kinds}
+        every = sorted({datetime.fromisoformat(d).date() for days in missing.values() for d in days})
+        for start, end in day_ranges(every, 1000, gap=CATCH_UP_GAP):
+            lo, hi = start.isoformat(), end.isoformat()
+            rooms = {rid for rid, days in missing.items() if any(lo <= d < hi for d in days)}
+            for rid in rooms:
+                for d in sorted(x for x in missing[rid] if lo <= x < hi):
+                    tally.asked(SERIES[kinds[rid]], d)
+            # the bucket of a local day is stamped at its local midnight: start half a day before
+            begin = int(datetime.combine(start, datetime.min.time(), zone).timestamp()) - DAY // 2
+            stop = int(datetime.combine(end, datetime.min.time(), zone).timestamp())
+            best: dict[tuple[str, str], tuple[float, int, Columns | None]] = {}
+            for family in families:
+                for rid, pts in self._fetch_cols(endpoint, family, home, begin, stop, "1day", rooms=rooms).items():
+                    for ts, cols in pts:
+                        day = to_local_day(ts, home.timezone)
+                        v = total(cols)
+                        if day not in missing.get(rid, ()) or v <= best.get((rid, day), (0.0,))[0]:
+                            continue
+                        best[(rid, day)] = (v, ts, cols if family == TARIFFS else None)
+            for (rid, day), (v, ts, tariffs) in sorted(best.items()):
+                self.store.merge(rid, day, round(v, 1))
+                if tariffs is not None and day not in self.store.doc(day[:4]).get("tariffs", {}).get(rid, {}):
+                    self._store_tariffs(home, rid, ts, tariffs)
+                missing[rid].discard(day)
+                tally.added(SERIES[kinds[rid]], day)
+
+
+SERIES = {"heating": "chauffage (pièces-jours)", "water": "chauffe-eau (jours)"}
 
 
 def _month_days(month: str) -> list[str]:

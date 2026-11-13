@@ -638,6 +638,7 @@ def cmd_sync(s: Settings, args: argparse.Namespace, backfill: bool = False) -> N
         _linky(s, store, home.timezone, sources)
     if s.shelly_auth_key and s.shelly_server:
         _shelly(s, store, home.timezone, sources)
+    catch_up = _catch_up(s, store, syncer, kept) if _flag("RATTRAPAGE") else []
     _solar(store, sources)
     rs_rows = _room_states(s, store, syncer, sources)
     dev_rows, dev_alerts = _devices(store, syncer, sources)
@@ -707,9 +708,26 @@ def cmd_sync(s: Settings, args: argparse.Namespace, backfill: bool = False) -> N
     for line in _call_lines():
         print(line)
     print(_cold_label(cold, cold_counts))
+    for line in catch_up:
+        print(line)
     _job_summary(store, syncer, changed, rs_rows)
     if _flag("STATION_INVENTORY"):
         _station_inventory(kept.get("station"))
+
+
+def _catch_up(s: Settings, store: Store, syncer: Syncer, kept: dict) -> list[str]:
+    """#569: case « rattrapage » of the collection: add the missing days each source still keeps,
+    never a present one (collector/rattrapage.py). Returns the public lines (counts only)."""
+    from .quality import stopped_of
+    from .rattrapage import public_lines, run
+
+    if syncer.last_home is None:
+        return []
+    linky = (s.enedis_token, s.enedis_prm) if s.enedis_token and s.enedis_prm else None
+    # #346: a room switched off on purpose has no missing day (the secret, else the archive)
+    stopped = stopped_of(store, household_setting("STOPPED_ROOMS_JSON", warn=False))
+    tally = run(store, syncer, syncer.last_home, stopped, kept.get("station"), linky)
+    return public_lines(tally)
 
 
 def _stove_fires(store: Store, home, stopped: list[dict]) -> dict | None:

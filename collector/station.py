@@ -25,16 +25,21 @@ import hashlib
 import logging
 import time
 from datetime import date, datetime, timedelta
+from typing import TYPE_CHECKING
 from zoneinfo import ZoneInfo
 
 import httpx
 
 from . import schema
+from .enedis import CATCH_UP_GAP, day_ranges
 from .errors import SourceError, error_code, raise_for_status
 from .http import Paced
 from .model import parse_measure_columns
 from .schema import FormatError
 from .storage import KeyMap, Store
+
+if TYPE_CHECKING:
+    from .rattrapage import Tally
 from .texte import nombre
 
 log = logging.getLogger(__name__)
@@ -66,6 +71,7 @@ PRESSURE_TYPES = "pressure,min_pressure,max_pressure"
 # dB, hourly mean strictly above: a lively conversation or a loud television. Chosen by judgement
 # (no norm for a living room), only counts « noisy hours »; shown with its value in the app.
 NOISY_ABOVE = 55
+STATION_SERIE = "station (jours par module)"
 
 
 class StationError(SourceError):
@@ -237,27 +243,17 @@ class Station:
             names[key] = {"name": m["name"], "type": m["type"], "indoor": indoor}
             if m["type"] in NO_TEMPERATURE:  # G4 (#221): no temperature to ask a wind or rain gauge
                 continue
-            types = "min_temp,max_temp,temperature,humidity" + (",co2" if indoor else "")
-            for ts, cols in self._daily(m["id"], m["module"], types, begin, end):
-                tmin, tmax, tmean, hum = (list(cols) + [None] * 5)[:4]
-                co2 = cols[4] if indoor and len(cols) > 4 else None
-                if tmin is None or tmax is None:
+            for ts, cols in self._daily(m["id"], m["module"], daily_types(indoor), begin, end):
+                row = daily_row(cols, indoor)
+                if row is None:
                     continue
                 day = datetime.fromtimestamp(ts, zone).strftime("%Y-%m-%d")
-                mean = tmean if tmean is not None else (tmin + tmax) / 2
-                r = lambda v: None if v is None else round(v, 1)  # noqa: E731
-                self.store.put(
-                    "station",
-                    "daily",
-                    key,
-                    day,
-                    [r(tmin), r(tmax), r(mean), r(hum), None if co2 is None else round(co2)],
-                )
+                self.store.put("station", "daily", key, day, row)
                 if m["type"] == "NAModule1":
-                    self.store.put("weather", "outdoor", day, None, [r(tmin), r(tmax), r(mean)])
+                    self.store.put("weather", "outdoor", day, None, row[:3])
                     outdoor_days += 1
                 elif m["type"] == "NAMain":
-                    self.store.put("weather", "indoor", day, None, r(mean))
+                    self.store.put("weather", "indoor", day, None, row[2])
         self.store.set_top("station", "modules", names)
         self.health = store_health(self.store, modules, keys, tz)
         for key, m in zip(keys, modules, strict=True):
@@ -268,6 +264,44 @@ class Station:
             self.store.set_top("weather", "source", "netatmo")
         log.info("Station Netatmo : %d modules, %d jours de température extérieure", len(names), outdoor_days)
         return outdoor_days
+
+    def catch_up(self, tz: str, tally: Tally) -> None:
+        """#569: per module, the days missing between its first and its last daily reading (the
+        nightly collection only asks the 10 days before its last one), asked again from Netatmo,
+        which keeps the station's history. Only absent days are added (and the outdoor / indoor
+        weather of the day when it is absent too); a present day is never rewritten. Needs `login`."""
+        zone = ZoneInfo(tz)
+        daily = self.store.doc("station").setdefault("daily", {})
+        weather = self.store.doc("weather")
+        modules = self.modules()
+        for key, m in zip(self.module_keys(modules), modules, strict=True):
+            have = daily.get(key) or {}
+            if m["type"] in NO_TEMPERATURE or len(have) < 2:
+                continue
+            first, last = date.fromisoformat(min(have)), date.fromisoformat(max(have))
+            absent = [
+                first + timedelta(days=i)
+                for i in range((last - first).days)
+                if (first + timedelta(days=i)).isoformat() not in have
+            ]
+            indoor = m["type"] in ("NAMain", "NAModule4")
+            for start, end in day_ranges(absent, 1000, gap=CATCH_UP_GAP):
+                begin = int(datetime.combine(start, datetime.min.time(), zone).timestamp())
+                stop = int(datetime.combine(end, datetime.min.time(), zone).timestamp())
+                wanted = {(start + timedelta(days=i)).isoformat() for i in range((end - start).days)}
+                for d in sorted(wanted):
+                    tally.asked(STATION_SERIE, d)
+                for ts, cols in self._daily(m["id"], m["module"], daily_types(indoor), begin, stop):
+                    day = datetime.fromtimestamp(ts, zone).strftime("%Y-%m-%d")
+                    row = daily_row(cols, indoor)
+                    if row is None or day not in wanted or day in have:
+                        continue
+                    self.store.put("station", "daily", key, day, row)
+                    tally.added(STATION_SERIE, day)
+                    if m["type"] == "NAModule1" and day not in (weather.get("outdoor") or {}):
+                        self.store.put("weather", "outdoor", day, None, row[:3])
+                    elif m["type"] == "NAMain" and day not in (weather.get("indoor") or {}):
+                        self.store.put("weather", "indoor", day, None, row[2])
 
     # ------------------------------------------------------------ pressure (S-11.4, #220)
     def collect_pressure(self, key: str, m: dict, zone: ZoneInfo, first_day: str, end: int) -> int:
@@ -373,6 +407,24 @@ class Station:
             aggregate_days(self.store, key, indoor, first, datetime.fromtimestamp(now, zone).date())
         log.info("Station Netatmo : %d relevés horaires", n)
         return n
+
+
+def daily_types(indoor: bool) -> str:
+    """Types of the daily series of a module (CO₂ for the indoor ones only)."""
+    return "min_temp,max_temp,temperature,humidity" + (",co2" if indoor else "")
+
+
+def daily_row(cols: list, indoor: bool) -> list | None:
+    """One day of `getmeasure` (`daily_types`) → [min, max, mean, humidity, CO₂ | None], as kept in
+    station["daily"]; None without a min or a max. Shared by the nightly collection and the catch-up
+    of the missing days (#569, collector/rattrapage.py)."""
+    tmin, tmax, tmean, hum = (list(cols) + [None] * 5)[:4]
+    co2 = cols[4] if indoor and len(cols) > 4 else None
+    if tmin is None or tmax is None:
+        return None
+    mean = tmean if tmean is not None else (tmin + tmax) / 2
+    r = lambda v: None if v is None else round(v, 1)  # noqa: E731
+    return [r(tmin), r(tmax), r(mean), r(hum), None if co2 is None else round(co2)]
 
 
 def pressure_trends(store: Store, key: str) -> None:

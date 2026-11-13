@@ -407,3 +407,76 @@ signalé (§ 8, `estime-sur-reel`), compté une seule fois.
 **L'absence du foyer n'explique pas un trou** : absent, les radiateurs continuent d'envoyer leurs
 relevés (hors-gel, 0 kWh) ; elle peut expliquer une suite de 0 kWh, pas un jour sans valeur. C'est
 pourquoi elle n'est pas proposée comme cause d'un manque.
+
+## 10. Ce que chaque source garde encore, et le rattrapage sans écrasement (#569)
+
+Point de départ : le premier bilan réel (workflow **Diagnostic**, case « Bilan qualité », 13 novembre
+2026, nombres par mois seulement). Ce paragraphe dit, trou par trou, si la source a encore les jours,
+d'après sa profondeur documentée (§ 6 ; `docs/api-notes.md`) et ce que la collecte a déjà demandé.
+Rien ici n'a été lu dans les vraies données : ce sont des **hypothèses** que le premier rattrapage
+tranche (son journal dit, par mois, combien de jours il a demandés et combien la source a rendus).
+
+### Ce que la collecte redemandait jusqu'ici
+
+| Source | Profondeur de la source | Ce que la collecte demande | Un trou ancien est-il redemandé ? |
+|---|---|---|---|
+| Intuis (jour, 30 min) | au moins 1 460 jours à tous les pas, rien à 1 825 (inventaire du 9/11, § 6) | chaque nuit les 35 derniers jours ; la case « Récupérer tout l'historique disponible » redemande tout, **mais réécrit les jours présents et reconstruit le chauffe-eau** (`Syncer.run`, `delete_room`) | non, sauf par ce geste qui écrase |
+| Station Netatmo | tout l'historique depuis la mise en service (API publique, `getmeasure`) | par module, depuis son dernier jour moins 10 jours | non : un trou au milieu reste |
+| Linky, jour | 36 mois (Enedis) | la première fois 3 ans, puis les 10 derniers jours | non |
+| Linky, demi-heures | **24 mois** (documentation Enedis Data Connect : « courbe de charge », 24 mois ; à confirmer par le rattrapage) et seulement si la collecte de la courbe était activée dans l'espace Enedis | la première fois **12 mois** (`CURVE_BACKFILL_DAYS`), puis les 3 derniers jours ; un jour déjà demandé et vide n'est plus redemandé (`curve_scan`) | non |
+
+### Trou par trou
+
+| Trou (bilan du 13/11) | Encore chez la source ? | Pourquoi | Ce qui tranche |
+|---|---|---|---|
+| **Linky demi-heures avant 2025-11** | **Oui, en partie** : les 24 derniers mois, soit de mi-novembre 2024 à octobre 2025 (la fenêtre recule d'un jour chaque jour : à faire vite) ; avant, non | le Linky a vraisemblablement été branché en novembre 2026 (ses jours commencent en 2023-11, 3 ans avant), et la première collecte de la courbe ne remonte que 12 mois | le journal du rattrapage : des demi-heures ajoutées ; ou « 0 ajoutés » sur des réponses vides = la courbe n'était pas activée chez Enedis à l'époque (perdu) ; ou « refus d'Enedis dès AAAA-MM (HTTP …) » = la profondeur réelle |
+| **Station, un module, 3 jours en 2026-01** | **Oui, probablement** : Netatmo garde l'historique ; la collecte ne redemande que les 10 jours avant le dernier relevé | trou au milieu de la série, jamais redemandé | le rattrapage : 3 ajoutés, ou 0 si le module n'a rien envoyé (pile, portée), et alors c'est perdu |
+| **Chauffage, 41 jours sans aucune pièce (2023-09/10)** | **Probablement non** | dans la profondeur d'Intuis, déjà demandés par la récupération complète, sans réponse ni total du mois (aucun jour « estimé ») ; les demi-heures des pièces, une autre requête, manquent les mêmes jours (4 % en 2023-09, 62 % en 2023-10) | le rattrapage les redemande (quelques appels) : « 0/140 », « 0/65 » confirme la perte chez Intuis. Pas de Linky avant 2023-11 : rien pour estimer |
+| **Chauffage, 5 jours sans aucune pièce (2024-03)** | **Probablement non** | même constat (demi-heures à 80 % ce mois-là) | idem ; le Linky a ces 5 jours : « Jours perdus chez Intuis » peut les estimer **à part** (§ 9) |
+| **Chauffe-eau, 2023-09 → 2024-12 (≈ 490 jours)** | **À trancher** | dans la profondeur d'Intuis, et déjà demandé au niveau du module, toutes familles de mesure, sans réponse ni total du mois. Le trou commence avec celui des radiateurs (2023-09) mais dure 15 mois de plus, jusqu'au passage aux tarifs `$1`/`$2` (2025) : soit l'appareil ne remontait pas (débranché, dissocié, réinstallé, cf. #502 pour un chauffe-eau à 0 kWh), soit Intuis range cette époque sous un type que le module ne sert pas | 1) le rattrapage (le module est redemandé sur les 490 jours, les quatre familles) ; 2) Actions → **Diagnostic**, case « Tester la profondeur d'historique » : la ligne `M<n> NMW: AAAA-MM` donne la **date d'installation** du chauffe-eau (2025-01 : réinstallé, rien avant) et, pour 2023 et 2024, `M<n>=…` le nombre de jours que le module rend par type (absent = 0), puis l'échelle du mois. Des jours > 0 : récupérables (signaler, le rattrapage les prend) ; seulement des mois > 0 : totaux du mois gardés, détail perdu ; rien : l'appareil ne remontait pas, perdu |
+| **Chauffe-eau, 2025-01 (4), 2025-07 (16), 2025-08 (11)** | **À trancher** (période avec tarifs, que le module sert) | jamais redemandés : plus vieux que 35 jours | le rattrapage ; 0 rendu = perdu chez Intuis |
+
+### Le rattrapage (`collector/rattrapage.py`)
+
+Case **« rattrapage »** de **Collecte quotidienne** (variable `RATTRAPAGE=true` de l'étape « Collecte »),
+après la collecte de la nuit, dans le même passage et sous les mêmes plafonds d'appels
+(`docs/api-notes.md`, « Nombre d'appels par collecte ») :
+
+- **Intuis** : chaque pièce-jour manquant (ni valeur, ni estimation, pièce non arrêtée volontairement :
+  la règle du bilan qualité, `quality.Report.missing`) est redemandé au pas du jour, par plages
+  (deux trous à moins de 14 jours partagent une requête), une requête par famille de mesure. Seule
+  une valeur **non nulle** est ajoutée (un 0 peut être un jour pas encore rempli par Intuis) ; les
+  tarifs du jour ajouté aussi, s'ils manquent. Environ 4 appels par plage : le bilan du 13/11 en
+  donne une dizaine.
+- **Station** : par module, les jours manquants entre son premier et son dernier relevé (et la météo
+  extérieure ou intérieure du jour, si elle manque aussi).
+- **Linky, demi-heures** : les jours des 24 derniers mois **sans aucune** demi-heure, par 7 jours
+  (≈ 52 appels pour un an, plafond Linky 200). Un jour qui a une demi-heure n'est pas redemandé.
+
+**Ajouter seulement.** Un jour présent (réel, estimé, ou une demi-heure) n'est ni redemandé ni réécrit ;
+lancé deux fois, le rattrapage n'ajoute rien la seconde (tests `tests/test_rattrapage.py`, vus rouges
+sans chacune de ces gardes). Une source en échec, refusée ou au plafond s'arrête seule, garde ce qui
+est ajouté, et le journal le dit ; la collecte de la nuit est enregistrée quoi qu'il arrive. Ne jamais
+cocher en même temps « Récupérer tout l'historique disponible » : ce geste-là réécrit.
+
+**Le journal (public)** : par série et par mois, « mois ajoutés/demandés », et une note quand une source
+s'arrête (code HTTP, plafond) ; jamais une valeur, un nom, un identifiant ni un jour.
+
+### Le geste du propriétaire, pas à pas
+
+1. **Avant** : Actions → **Diagnostic**, cocher « Bilan qualité et audit des données » ; garder le journal
+   (les manquants par mois). L'état d'avant reste aussi dans l'historique Git de la branche des données
+   (le commit « data: collecte du … » précédent) : revenir en arrière est possible, et reste un geste à vous.
+2. Actions → **Collecte quotidienne** → *Run workflow* : cocher **« rattrapage »**, laisser
+   « Récupérer tout l'historique disponible » **décoché**.
+3. Lire, dans le journal de l'étape « Collecte », les lignes « Rattrapage des jours manquants » : pour
+   chaque série, les jours ajoutés sur les jours demandés, mois par mois. Une note « plafond d'appels
+   atteint » : relancer le même geste (il reprend où il s'est arrêté, sans rien réécrire).
+4. **Après** : relancer le bilan qualité (étape 1). Pour chaque mois, les jours réels augmentent
+   exactement du nombre ajouté et les manquants baissent d'autant ; aucun mois ne perd un jour réel.
+   Sur un poste, `python -m collector verify` avant et après : les totaux d'une année ne peuvent que
+   monter (un jour ajouté), jamais baisser.
+5. Pour le chauffe-eau 2023-2024 : Actions → **Diagnostic**, case « Tester la profondeur d'historique »,
+   et lire la date d'installation du module `NMW` et ses jours par type (tableau ci-dessus).
+6. Ce qui reste à 0 ajouté est perdu chez la source : l'appli le dit une fois dans État des données
+   (« Récupérable ? »).

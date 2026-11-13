@@ -14,6 +14,10 @@ on:
         description: "Après la collecte, inventaire anonyme de la station Netatmo : champs, types, échelles (S-1.19)"
         type: boolean
         default: false
+      rattrapage:
+        description: "Rattraper les jours manquants que les sources gardent encore (ajoute seulement, ne réécrit jamais un jour présent, #569)"
+        type: boolean
+        default: false
 
 concurrency:
   group: collect
@@ -154,6 +158,8 @@ jobs:
           DEVICE_FILE: ${{ runner.temp }}/devices.txt
           # S-1.19: station inventory with the access token of this collection (names and counts only).
           STATION_INVENTORY: ${{ inputs.inventaire && 'true' || '' }}
+          # #569: after the collection, add the missing days the sources still keep (never a present day).
+          RATTRAPAGE: ${{ inputs.rattrapage && 'true' || '' }}
         run: python -m collector -v ${{ inputs.backfill && 'backfill' || 'sync' }}
       # #262: the push is retried (fetch + rebase) when the data branch moved during the collection.
       - name: Commit des données chiffrées
