@@ -3,7 +3,7 @@
 // and opened here from the file the owner downloaded: decrypted on this device, kept sealed on it.
 import { ds, onLock } from '../app';
 import { alertHtml } from '../components';
-import { type AuditCheck, type AuditFinding, type AuditReport, AUDIT_ARTIFACT, AUDIT_FILE, auditSummary, findingsOf, openAuditFile, parseAuditReport } from '../audit-report';
+import { type AuditCheck, type AuditFinding, type AuditReport, AUDIT_ARTIFACT, AUDIT_FILE, auditSummary, findingValues, findingsOf, openAuditFile, parseAuditReport } from '../audit-report';
 import { dayShort, plural } from '../glossary';
 import { loadNote, saveNote } from '../local-store';
 import { html } from '../trusted';
@@ -114,7 +114,8 @@ function checkHtml(r: AuditReport, c: AuditCheck, who: Map<string, string>): str
 function findingHtml(f: AuditFinding, who: Map<string, string>): string {
   const when = f.day ? dayShort(f.day, true) : f.at ? f.at : 'sans date';
   const name = f.room ? (who.get(f.room) ?? f.room) : '';
-  const values = f.value !== undefined ? ` Valeur lue : ${nf.format(f.value)}${f.other !== undefined ? ` ; comparée à : ${nf.format(f.other)}` : ''}.` : '';
+  const said = findingValues(f);
+  const values = said ? ` ${said}` : '';
   return `<li><p><strong>${esc(when)}</strong>${name ? `, ${esc(name)}` : ''} · ${esc(f.series)}${f.doc ? ` (${esc(f.doc)}.enc.json)` : ''}</p><p>${esc(cap(f.text))}.${esc(values)}</p></li>`;
 }
 

@@ -50,7 +50,8 @@ The values checks:
   day: the « suspect » days of the quality report);
 - `unite`: a run of days a thousand times smaller than their neighbours (kWh stored as Wh), or a
   day a thousand times larger;
-- `valeur-figee`: the same non-zero reading several days in a row (frozen sensor or reading);
+- `valeur-figee`: the same non-zero reading several days in a row (frozen sensor or reading), standby
+  energy and temperatures whose half hours move left out (#550);
 - `pic-impossible`: an hour or a half hour whose energy needs more power than the meter's maximum
   that day (Linky pmax), or than the largest residential connection (36 kVA) without it;
 - `compteur-recule`: a Linky index lower than the day before.
@@ -355,6 +356,8 @@ class Finding:
     value: float | None = None
     other: float | None = None
     text: str = ""
+    unit: str | None = None  # #550: of value and other (Wh, °C, kVA, W, jours); None: no unit (a correlation)
+    other_unit: str | None = None  # of other, when it is not `unit` (valeur-figee: a number of days)
 
 
 # ---------------------------------------------------------------- reading
@@ -513,6 +516,22 @@ SERIES_LABEL: dict[tuple[str, str], str] = {
     ("volets", "days"): "volets, relevé du jour",
     ("roomstate", "seen"): "relevé horaire de l'état des pièces",
 }
+# #550: the unit of the values of a series, said with each value of the report. Series of several
+# measures (station, Home Assistant, volets, état des pièces) or of lists have none.
+SERIES_UNIT: dict[tuple[str, str], str] = {
+    ("", "daily"): "Wh",
+    ("", "tariffs"): "Wh",
+    ("", "temps"): "°C",
+    (".hourly", "hourly"): "Wh",
+    (".room30", "rooms"): "Wh",
+    (".linky30", "curve"): "Wh",
+    ("linky", "daily"): "Wh",
+    ("linky", "pmax"): "kVA",
+    ("linky", "index"): "Wh",
+    ("weather", "outdoor"): "°C",
+    ("shelly", "daily"): "Wh",
+}
+UNIT_OF_LABEL = {SERIES_LABEL[k]: u for k, u in SERIES_UNIT.items()}
 YEAR_DOC = re.compile(r"^(\d{4})(\..+)?$")
 
 
@@ -576,7 +595,18 @@ class Audit:
         doc = s.doc if s else str(kw.pop("doc", ""))
         label = s.label if s else str(kw.pop("series", ""))
         room = kw.pop("room", s.room if s else None)
+        if "unit" not in kw:  # #550: the unit of the series, unless the check says another
+            kw["unit"] = self.unit_of(label)
+        if kw.get("value") is None and kw.get("other") is None:  # nothing to say a unit of
+            kw.pop("unit", None)
+            kw.pop("other_unit", None)
         self.findings.append(Finding(code, doc, label, room=room, **kw))  # type: ignore[arg-type]
+
+    def unit_of(self, label: str) -> str | None:
+        """Unit of the values of a series, by its label (the Linky maximum may be stored in VA)."""
+        if label == SERIES_LABEL[("linky", "pmax")]:
+            return str(self.docs.get("linky", {}).get("pmax_unit") or "kVA")
+        return UNIT_OF_LABEL.get(label)
 
     def series(self) -> list[Series]:
         return [s for name, obj in self.docs.items() for s in series_of(name, obj)]
@@ -905,6 +935,7 @@ class Audit:
                 at=month,
                 value=float(cell[2 + best]),
                 other=float(ok0),
+                unit="jours",
                 text=f"{month} : {cell[2 + best]} jours sur {n} retrouvent le total du jour avec les "
                 f"heures décalées {what}, {ok0} sans décalage",
             )
@@ -968,6 +999,7 @@ class Audit:
                 at=month,
                 value=round(corr[lag], 2),
                 other=round(corr[0], 2),
+                unit=None,  # a correlation
                 text=f"{month} : les heures d'Intuis suivent le Linky {abs(lag)} h "
                 f"{'plus tôt' if lag > 0 else 'plus tard'} "
                 f"(corrélation {corr[lag]:.2f} décalée, {corr[0]:.2f} sans décalage)",
@@ -1011,6 +1043,7 @@ class Audit:
                 at=month,
                 value=float(a0),
                 other=float(best),
+                unit="jours",
                 text=f"{month} : Intuis dépasse le Linky {a0} jours, {best} seulement si le Linky est "
                 f"pris {'la veille' if k < 0 else 'le lendemain'}",
             )
@@ -1054,6 +1087,7 @@ class Audit:
                     at=f"{first}…{max(both)}",
                     value=float(same),
                     other=float(len(both)),
+                    unit="jours",
                     text=f"{name} donne {same} jours sur {len(both)} la même énergie que cette pièce Intuis",
                 )
 
@@ -1192,34 +1226,78 @@ class Audit:
             close(small)
 
     def frozen(self) -> None:
-        """The same non-zero reading FROZEN_DAYS days in a row (estimated days excluded: equal by design)."""
+        """The same non-zero reading FROZEN_DAYS days in a row (estimated days excluded: equal by design).
+
+        #550 (revue v2.2): two readings that are not frozen are left out, without a new threshold.
+        A daily energy under the absolute gap (`ecart_absolu`, the bound under which `unite` already
+        calls a device nearly off) is a device in standby, steady by nature. A room temperature
+        whose half hours move within one of the days is a live sensor: a stable room rounded to the
+        tenth gives equal days by chance; a frozen sensor is frozen within the day too. Without half
+        hours on those days (before they were collected), the days are compared as before."""
         flags = self._year_section("estimated")
         plug_flags = self.docs.get("shelly", {}).get("estimated") or {}
-        candidates: list[tuple[str, str | None, dict[str, object], set[str], Callable[[str], str]]] = []
+        moving_temps = self._moving_temperatures()
+        never: Callable[[str], bool] = lambda _d: False  # noqa: E731
+        Candidate = tuple[
+            str, str | None, dict[str, object], set[str], Callable[[str], str], bool, Callable[[str], bool]
+        ]
+        candidates: list[Candidate] = []
         for rid, days in self._year_section("daily").items():
-            candidates.append((SERIES_LABEL[("", "daily")], rid, days, set(flags.get(rid, {})), lambda d: d[:4]))
+            candidates.append(
+                (SERIES_LABEL[("", "daily")], rid, days, set(flags.get(rid, {})), lambda d: d[:4], True, never)
+            )
         for rid, days in self._year_section("temps").items():
-            candidates.append((SERIES_LABEL[("", "temps")], rid, days, set(), lambda d: d[:4]))
+            moving = moving_temps.get(rid, set())
+            candidates.append(
+                (SERIES_LABEL[("", "temps")], rid, days, set(), lambda d: d[:4], False, moving.__contains__)
+            )
         linky = self.docs.get("linky", {})
         for section in ("daily", "pmax"):
             candidates.append(
-                (SERIES_LABEL[("linky", section)], None, linky.get(section) or {}, set(), lambda _d: "linky")
+                (
+                    SERIES_LABEL[("linky", section)],
+                    None,
+                    linky.get(section) or {},
+                    set(),
+                    lambda _d: "linky",
+                    section == "daily",
+                    never,
+                )
             )
         for key, days in (self.docs.get("station", {}).get("daily") or {}).items():
-            candidates.append((SERIES_LABEL[("station", "daily")], key, days, set(), lambda _d: "station"))
+            candidates.append(
+                (SERIES_LABEL[("station", "daily")], key, days, set(), lambda _d: "station", False, never)
+            )
         weather = self.docs.get("weather", {})
         candidates.append(
-            (SERIES_LABEL[("weather", "outdoor")], None, weather.get("outdoor") or {}, set(), lambda _d: "weather")
+            (
+                SERIES_LABEL[("weather", "outdoor")],
+                None,
+                weather.get("outdoor") or {},
+                set(),
+                lambda _d: "weather",
+                False,
+                never,
+            )
         )
         for key, days in (self.docs.get("shelly", {}).get("daily") or {}).items():
             candidates.append(
-                (SERIES_LABEL[("shelly", "daily")], key, days, set(plug_flags.get(key, {})), lambda _d: "shelly")
+                (
+                    SERIES_LABEL[("shelly", "daily")],
+                    key,
+                    days,
+                    set(plug_flags.get(key, {})),
+                    lambda _d: "shelly",
+                    True,
+                    never,
+                )
             )
-        for label, room, values, skip, doc in candidates:
+        for label, room, values, skip, doc, energy, moving in candidates:
             run: list[str] = []
 
-            def close(run: list[str], doc=doc, label=label, room=room, values=values) -> None:
-                if len(run) >= FROZEN_DAYS:
+            def close(run: list[str], doc=doc, label=label, room=room, values=values, moving=moving) -> None:
+                if len(run) >= FROZEN_DAYS and not any(moving(d) for d in run):
+                    value = _num(values[run[0]])
                     self.add(
                         "valeur-figee",
                         None,
@@ -1228,14 +1306,18 @@ class Audit:
                         room=room,
                         day=run[0],
                         at=f"{run[0]}…{run[-1]}",
-                        value=_num(values[run[0]]),
+                        value=value,
                         other=float(len(run)),
+                        other_unit="jours",
+                        **({} if value is not None else {"unit": None}),
                         text=f"la même valeur {len(run)} jours de suite, du {run[0]} au {run[-1]}",
                     )
 
             for d in sorted(k for k in values if isinstance(k, str) and valid(k, "day")):
                 v = values[d]
                 live = d not in skip and v is not None and _nonzero(v)
+                if live and energy and (_num(v) or 0) < MONTH_GAP_WH:
+                    live = False  # standby: steady by nature
                 if (
                     live
                     and run
@@ -1247,6 +1329,23 @@ class Audit:
                 close(run)
                 run = [d] if live else []
             close(run)
+
+    def _moving_temperatures(self) -> dict[str, set[str]]:
+        """{room: days whose measured temperature takes two values or more over the half hours}."""
+        out: dict[str, set[str]] = {}
+        for name, doc in self.docs.items():
+            m = YEAR_DOC.match(name)
+            if not m or m.group(2) != ".room30":
+                continue
+            for rid, days in (doc.get("rooms") or {}).items():
+                if not isinstance(days, dict):
+                    continue
+                for day, cols in days.items():
+                    if isinstance(cols, list) and len(cols) > 2:
+                        seen = {x for i in range(48) if (x := _slot(cols[2], i)) is not None}
+                        if len(seen) > 1:
+                            out.setdefault(str(rid), set()).add(str(day))
+        return out
 
     def peaks(self) -> None:
         """An hour (half hour) whose energy needs more power than the day's maximum (Linky pmax),
@@ -1273,6 +1372,7 @@ class Audit:
                     at=k,
                     value=round(watts),
                     other=round(limit),
+                    unit="W",
                     text=f"{round(watts)} W en moyenne sur {minutes} min, au-delà du maximum "
                     + ("relevé par le Linky ce jour-là" if day in pmax else f"d'une maison ({_fmt(MAX_KVA)} kVA)"),
                 )

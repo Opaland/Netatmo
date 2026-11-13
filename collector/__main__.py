@@ -115,6 +115,13 @@ def cmd_quality(s: Settings, rapport: str | None = None) -> None:
                 ]
             )
         )
+        if rapport:
+            # #550: the workflow then sends the report as an artifact; say here why there is none,
+            # and stop red at this step rather than at the upload, which would not say why.
+            raise SystemExit(
+                f"Audit des données : impossible ({type(err).__name__}), pas de rapport chiffré "
+                f"({REPORT_NAME}) à envoyer ; le bilan qualité ci-dessus reste valable."
+            ) from None
         return
     lines += public_lines(checked)
     if rapport:
