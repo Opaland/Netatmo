@@ -3,6 +3,7 @@
 // 14 October 2025, collector/demo.py OFFLINE_ROOM).
 import { describe, expect, it } from 'vitest';
 import { type DayRecord, addDays } from './aggregate';
+import { WOOD_ROOM } from './wood';
 import type { Weather } from './analysis';
 import { demoDataset } from './__fixtures__/demo';
 import {
@@ -22,6 +23,7 @@ import {
   type StopReason,
   stoppedJson,
   stoppedOn,
+  unmeasuredRooms,
 } from './room-offline';
 
 const rec = (day: string, room: string, kwh = 1): DayRecord => ({ day, room, kwh, cat: room === 'ce' ? 'water_heater' : 'heating' });
@@ -71,6 +73,34 @@ describe('offline runs', () => {
     expect([...notComparable(runs, '2026-01-01', '2026-01-31')]).toEqual(['b']);
     expect([...notComparable(runs, '2025-01-01', '2025-01-31')]).toEqual(['b']);
     expect([...notComparable(runs, '2026-02-01', '2026-02-28')]).toEqual([]);
+  });
+});
+
+// #570: the shape of a real account's gaps: the water heater without any reading for all of 2024,
+// a radiator added in October 2025, a room switched off on purpose since July 2025
+describe('rooms measured on one side of a comparison only (#570)', () => {
+  const rs = [
+    ...days('2023-01-01', 1096).flatMap((d) => [
+      rec(d, 'a'),
+      ...(d < '2023-09-03' || d > '2025-01-04' ? [rec(d, 'ce')] : []),
+      ...(d >= '2025-10-09' ? [rec(d, 'b')] : []),
+      ...(d < '2025-07-01' ? [rec(d, 'k')] : []),
+      ...(d.endsWith('-15') ? [rec(d, WOOD_ROOM)] : []),
+    ]),
+  ];
+  const keep = new Set(['k']);
+  it('the water heater missing all year is out of both 2025 vs 2024 and 2024 vs 2023, the room added out of 2025 vs 2024', () => {
+    expect([...unmeasuredRooms(rs, '2025-01-01', '2025-12-31', '2024-01-01', '2024-12-31', keep)].sort()).toEqual(['b', 'ce']);
+    expect([...unmeasuredRooms(rs, '2024-01-01', '2024-12-31', '2023-01-01', '2023-12-31', keep)]).toEqual(['ce']);
+  });
+  it('a room added during the earlier window is out too (it was not counted all along), not once it is there on both', () => {
+    expect([...unmeasuredRooms(rs, '2025-11-01', '2025-11-30', '2025-10-01', '2025-10-31', keep)]).toEqual(['b']);
+    expect([...unmeasuredRooms(rs, '2025-12-01', '2025-12-31', '2025-11-01', '2025-11-30', keep)]).toEqual([]);
+  });
+  it('a room switched off on purpose and the wood stay: their fall is a change of heating', () => {
+    expect(unmeasuredRooms(rs, '2025-08-01', '2025-08-31', '2024-08-01', '2024-08-31', keep).has('k')).toBe(false);
+    expect(unmeasuredRooms(rs, '2025-08-01', '2025-08-31', '2024-08-01', '2024-08-31').has('k')).toBe(true);
+    expect(unmeasuredRooms(rs, '2025-08-01', '2025-08-14', '2024-08-15', '2024-08-31').has(WOOD_ROOM)).toBe(false);
   });
 });
 

@@ -7,7 +7,7 @@ import type { Verdict } from '../analysis';
 import { ds } from '../app';
 import { type MoneyVerdict, heatVerdict } from '../home';
 import { costAvailable, costOf, fmtEur, fmtKwh } from '../ui';
-import { comparableRecords } from './offline-rooms';
+import { comparableRecords, stoppedShown } from './offline-rooms';
 
 export interface Money {
   value: number;
@@ -47,6 +47,8 @@ export interface Scope {
   v: Verdict | null;
   /** The same, priced: what the screens write. */
   m: MoneyVerdict | null;
+  /** #570: previous years left out of the reference (a room measured now has no reading then). */
+  skipped: number[];
 }
 
 /**
@@ -56,8 +58,8 @@ export interface Scope {
 export function homeScope(all: DayRecord[], from: string, to: string, wood: Map<string, [number, number]> | null = null): Scope {
   const cmp = comparableRecords(all, from, to);
   const elec = money(cmp.records, from, to);
-  const h = heatVerdict(cmp.records, from, to, ds!.weather, elec.unit === '€' ? elec.value : null, wood);
+  const h = heatVerdict(cmp.records, from, to, ds!.weather, elec.unit === '€' ? elec.value : null, wood, stoppedShown());
   const w = h.wood;
   const spent = w ? { value: elec.value + (elec.unit === '€' ? w.eur : w.kwh), unit: elec.unit, kwh: elec.kwh + w.kwh } : elec;
-  return { records: h.records, left: cmp.left, spent, elec, wood: !!w, v: h.v, m: h.m };
+  return { records: h.records, left: cmp.left, spent, elec, wood: !!w, v: h.v, m: h.m, skipped: h.skipped };
 }

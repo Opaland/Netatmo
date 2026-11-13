@@ -13,6 +13,7 @@
 import { type DayRecord, addDays, minusYears } from './aggregate';
 import { type Weather, dju, linearFit } from './analysis';
 import { dayShort } from './glossary';
+import { WOOD_ROOM } from './wood';
 
 /** 48 h without a daily reading make a room « hors ligne » (alert of the collection as well). */
 export const OFFLINE_MIN_DAYS = 2;
@@ -217,6 +218,33 @@ export function offlineText(run: Pick<OfflineRun, 'from' | 'to' | 'ongoing' | 's
 export function notComparable(runs: OfflineRun[], from: string, to: string): Set<string> {
   const out = new Set<string>();
   for (const r of runs) if (!r.stopped && (offlineDaysIn([r], r.room, from, to) || offlineDaysIn([r], r.room, minusYears(from), minusYears(to)))) out.add(r.room);
+  return out;
+}
+
+/**
+ * #570: the rooms (water heater included) measured on one side of a comparison of [from, to] with
+ * [prevFrom, prevTo] and not on the other: no reading at all in one of the two windows (the water
+ * heater missing for all of 2024 on a real account), or a first reading after the start of the
+ * earlier window (a radiator added since: it was not counted then). Comparing with them makes a
+ * rise, or a fall, out of a measure that does not exist; they are left out of the comparison and
+ * named. The rooms of `keep` stay: a radiator switched off on purpose is a change of heating
+ * (#346), its fall is real. Day records that are no room (the stove's wood, WOOD_ROOM) stay too.
+ * One rule for every comparison of two periods: « Année par année », the annual report, winter
+ * against winter, the references of the Accueil verdict, « Expliquer un mois ».
+ */
+export function unmeasuredRooms(records: DayRecord[], from: string, to: string, prevFrom: string, prevTo: string, keep: Set<string> = new Set()): Set<string> {
+  const first = new Map<string, string>();
+  const inNow = new Set<string>();
+  const inPrev = new Set<string>();
+  for (const r of records) {
+    if (r.room === WOOD_ROOM || keep.has(r.room)) continue;
+    const f = first.get(r.room);
+    if (f === undefined || r.day < f) first.set(r.room, r.day);
+    if (r.day >= from && r.day <= to) inNow.add(r.room);
+    if (r.day >= prevFrom && r.day <= prevTo) inPrev.add(r.room);
+  }
+  const out = new Set<string>();
+  for (const room of new Set([...inNow, ...inPrev])) if (!inNow.has(room) || !inPrev.has(room) || first.get(room)! > prevFrom) out.add(room);
   return out;
 }
 

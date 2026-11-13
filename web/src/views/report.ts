@@ -6,6 +6,7 @@ import { ds, setState, state } from '../app';
 import { barChart } from '../charts';
 import { uncertainDays } from '../checks';
 import { cutDays } from './quality';
+import { measuredOnBoth, unmeasuredText } from './offline-rooms';
 import { WITH_SUBSCRIPTION } from '../synthese';
 import { bucketMarks, monthKeys, monthsCovered, shortDate, windowSuffix, yoyCaveat, yoyWindow } from '../periods';
 import { CO2_DEFAULT, CO2_SOURCE, co2Factor, fmtCo2, fmtFactor } from '../money';
@@ -47,10 +48,22 @@ export function renderReport(view: HTMLElement) {
   const win = yoyWindow(year, first, last);
   const cmpFrom = win?.from ?? from;
   const cmpTo = win?.to ?? end;
-  const caveat = yoyCaveat(win, uncertain, { toDate: false, cuts: cutDays() });
+  // #570: a room without any reading on one side (the water heater all of 2024, a radiator added
+  // since) is left out of every change and named; its own line says « non mesuré », never 0
+  const both = win ? measuredOnBoth(all, cmpFrom, cmpTo, win.prevFrom, win.prevTo) : null;
+  // the estimated or missing days of what is compared (the rooms left out are said apart)
+  const caveat = yoyCaveat(win, both?.names.length ? uncertainDays(both.records, ds!.estimated, first, last) : uncertain, { toDate: false, cuts: cutDays() });
+  const comparable = both?.records ?? all;
+  const unmeasured = unmeasuredText(both?.names ?? []);
+  const unmeasuredHtml = unmeasured ? `<br><small class="muted">${esc(unmeasured)}</small>` : '';
   const yr = all.filter((r) => r.day >= from && r.day <= end);
-  const cmp = all.filter((r) => r.day >= cmpFrom && r.day <= cmpTo);
-  const prev = win ? all.filter((r) => r.day >= win.prevFrom && r.day <= win.prevTo) : [];
+  const cmp = comparable.filter((r) => r.day >= cmpFrom && r.day <= cmpTo);
+  const prev = win ? comparable.filter((r) => r.day >= win.prevFrom && r.day <= win.prevTo) : [];
+  const has = (rs: DayRecord[], room: string) => rs.some((r) => r.room === room);
+  const allPrev = win ? all.filter((r) => r.day >= win.prevFrom && r.day <= win.prevTo) : [];
+  const allCmp = all.filter((r) => r.day >= cmpFrom && r.day <= cmpTo);
+  const waterKnown = all.some((r) => r.cat === 'water_heater');
+  const waterNone = waterKnown && !yr.some((r) => r.cat === 'water_heater');
   const sum = (rs: DayRecord[], cat?: Category) => rs.reduce((s, r) => s + (!cat || r.cat === cat ? r.kwh : 0), 0);
   const tot = sum(yr);
   // the subscription is counted on the covered days only (not before the collection started)
@@ -92,7 +105,7 @@ export function renderReport(view: HTMLElement) {
     </div>
     <h2 class="report-title">${esc(ds!.meta.home.name)} — bilan énergie ${year}${end < `${year}-12-31` ? ` <small>(au ${longDate(end)})</small>` : ''}</h2>
     <div class="kpis">
-      <article class="kpi"><h3>Consommation</h3><p class="kpi-value">${fmtKwh(tot)}</p><p class="kpi-sub">${win ? delta(sum(cmp), sum(prev), `vs ${year - 1}${fullYear ? '' : ' à date'}`) : delta(tot, 0)}${caveatHtml}</p></article>
+      <article class="kpi"><h3>Consommation</h3><p class="kpi-value">${fmtKwh(tot)}</p><p class="kpi-sub">${win ? delta(sum(cmp), sum(prev), `vs ${year - 1}${fullYear ? '' : ' à date'}`) : delta(tot, 0)}${unmeasuredHtml}${caveatHtml}</p></article>
       ${
         cost !== null && months > 0
           ? `<article class="kpi"><h3>Coût estimé (${WITH_SUBSCRIPTION})</h3><p class="kpi-value">${fmtEur(cost)}</p><p class="kpi-sub">${fmtEur(cost / months)} par mois en moyenne${
@@ -100,7 +113,7 @@ export function renderReport(view: HTMLElement) {
             }</p></article>`
           : ''
       }
-      <article class="kpi"><h3>Chauffage / chauffe-eau</h3><p class="kpi-value">${nf0.format((sum(yr, 'heating') / Math.max(tot, 1)) * 100)} % / ${nf0.format((sum(yr, 'water_heater') / Math.max(tot, 1)) * 100)} %</p><p class="kpi-sub">${fmtKwh(sum(yr, 'heating'))} · ${fmtKwh(sum(yr, 'water_heater'))}</p></article>
+      ${waterNone ? `<article class="kpi"><h3>Chauffage / chauffe-eau</h3><p class="kpi-value">${fmtKwh(sum(yr, 'heating'))}</p><p class="kpi-sub">chauffage seul : chauffe-eau non mesuré en ${year}</p></article>` : `<article class="kpi"><h3>Chauffage / chauffe-eau</h3><p class="kpi-value">${nf0.format((sum(yr, 'heating') / Math.max(tot, 1)) * 100)} % / ${nf0.format((sum(yr, 'water_heater') / Math.max(tot, 1)) * 100)} %</p><p class="kpi-sub">${fmtKwh(sum(yr, 'heating'))} · ${fmtKwh(sum(yr, 'water_heater'))}</p></article>`}
       ${w && wPrev ? `<article class="kpi"><h3>Rigueur de l'hiver (degrés-jours)</h3><p class="kpi-value">${nf0.format(w.dju)}</p><p class="kpi-sub">${delta(w.dju, wPrev.dju, "de froid vs l'hiver précédent")}</p></article>` : ''}
     </div>
     <h3>Faits marquants</h3>
@@ -117,12 +130,15 @@ export function renderReport(view: HTMLElement) {
     <h3>Par pièce</h3>
     <div class="chart" id="report-waterfall" role="img" aria-label="Évolution par pièce"></div>
     ${win?.label ? `<p class="hint muted">Comparaison sur la même période des deux années : ${esc(win.label)}.${caveat.includes('jour') ? ` ${esc(caveat)}.` : ''}</p>` : caveat ? `<p class="hint muted">${esc(caveat)} : l'évolution en est faussée.</p>` : ''}
+    ${unmeasured ? `<p class="hint muted">Évolution ${esc(unmeasured)} : « non mesuré » n’est pas 0.</p>` : ''}
     ${table(
       ['Pièce', `${year} kWh`, `${year - 1} kWh`, 'Évolution'],
       roomsSorted.map((r) => {
         const d = deltas.get(r.id)!;
-        const pc = pctChange(d.now, d.before);
-        return [esc(r.name), d.now, d.before, pc === null ? '—' : pct(pc)];
+        const off = both?.ids.has(r.id) ?? false;
+        const pc = off ? null : pctChange(d.now, d.before);
+        const cell = (rs: DayRecord[], v: number) => (off && !has(rs, r.id) ? '<small class="muted">non mesuré</small>' : v);
+        return [esc(r.name), cell(allCmp, d.now), cell(allPrev, d.before), pc === null ? '—' : pct(pc)];
       }),
     )}
     <div id="report-extras"></div>
@@ -149,7 +165,8 @@ export function renderReport(view: HTMLElement) {
     stacked: false,
     price: avgPrice(),
   });
-  drawWaterfall(document.getElementById('report-waterfall')!, deltas, year, windowSuffix(win));
+  // #570: the rooms not measured on both sides are no step of the waterfall (named above it)
+  drawWaterfall(document.getElementById('report-waterfall')!, new Map([...deltas].filter(([id]) => !both?.ids.has(id))), year, windowSuffix(win));
   // S-6.3: offer comparator and maximum power, lazy module (entry chunk budget)
   void lazyCard(() => import('./annual-share'), (m) => m.renderReportExtras(document.getElementById('report-extras'), year), { zone: 'report-extras', what: 'Comparateur d’offres' });
   // #127: kWh/m²/an against the DPE thresholds, hidden without any surface (lazy module)

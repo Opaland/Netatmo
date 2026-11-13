@@ -199,3 +199,17 @@ quand un outil la rend impossible à refaire.
 - **Conduite** : le fichier inclut la configuration du système (`/etc/fonts/fonts.conf`) et
   **écarte** les polices absentes du runner (`<rejectfont>`, ici Inter) ; une régénération qui
   change presque toutes les captures se compare à une référence avant d'être crue.
+
+### A20 · 13/11/2026 — Les jeux de démo n'avaient que des trous courts ; le vrai compte en a d'une année (#570)
+
+- **Ce qui s'est passé** : la démo et les fixtures ne perdaient que quelques jours ou une pièce
+  quelques semaines ; le premier bilan réel (journal du Diagnostic) a montré un chauffe-eau sans
+  relevé 16 mois, dont toute l'année 2024. Avec cette forme, « Année par année » écrivait 0 et
+  « +41 % », le rapport « −100 % », le verdict de l'Accueil « +28 % » (des Novembres sans
+  chauffe-eau en référence) et « Expliquer un mois » une part « Eau chaude » inventée : 1 100
+  tests verts, aucun ne pouvait le voir.
+- **Conduite** : la forme des trous réels (dates seules, d'après les nombres par mois du journal
+  public) devient une fixture (`trous-reels`, `collector/fixtures.py`) que les e2e ouvrent
+  (`npm run e2e:trous`, et le balayage) ; une comparaison de deux périodes passe par la règle
+  unique `unmeasuredRooms` (`room-offline.ts`) : un appareil sans aucun relevé d'un côté est
+  laissé hors de la comparaison et nommé, jamais compté 0.

@@ -31,6 +31,7 @@ import {
   WOOD_WORDS,
   verdictWords,
   writtenGap,
+  skippedText,
 } from '../home';
 import { lazyCard } from '../lazy';
 import { routeKey } from '../router';
@@ -121,7 +122,7 @@ function verdictBlock(r: HomeRange, sc: Scope): string {
     return `<section class="verdict" aria-labelledby="verdict-title">
     <span class="verdict-icon" aria-hidden="true">·</span>
     <div><h2 class="verdict-title" id="verdict-title">${esc(amount)} ${esc(periodPhrase(r))}</h2>
-    <p class="verdict-sub">${what}. Pas encore d'année précédente sur ces dates : la comparaison viendra avec un an de données.${offlineNote(left)}</p></div>
+    <p class="verdict-sub">${what}. ${sc.skipped.length ? esc(skippedText(sc.skipped, true)) : "Pas encore d'année précédente sur ces dates : la comparaison viendra avec un an de données."}${offlineNote(left)}</p></div>
   </section>`;
   }
   const m = sc.m;
@@ -151,7 +152,7 @@ function verdictBlock(r: HomeRange, sc: Scope): string {
       ${g}
       ${howDetails(
         'Comment c’est calculé',
-        `<p class="hint">Attendu = consommation des mêmes dates des années passées (jusqu'à quatre)${
+        `<p class="hint">Attendu = consommation des mêmes dates des années passées (jusqu'à quatre)${sc.skipped.length ? ` ; ${esc(skippedText(sc.skipped, false))}` : ''}${
           v.climate ? ', le chauffage corrigé des degrés-jours (le froid réellement constaté)' : ''
         }, ${m.unit === '€' ? 'au prix payé sur la période' : 'en kWh (prix non renseignés)'}. ${
           sc.wood ? `Avec le poêle, le bois de vos achats (⚙ Mon logement), ${woodSpread()}, s’ajoute à l’électricité, cette année comme les années passées. ` : ''

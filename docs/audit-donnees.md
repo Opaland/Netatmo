@@ -260,7 +260,7 @@ version (date de passage à indiquer).
 
 Passage du : _(date)_ — version : _(commit)_
 
-| Année | Chauffage, pièces-jours r / e / m / s / a | Plus long trou (toutes les pièces) | Plus long trou (au moins une pièce) | Chauffe-eau r / e / m | Linky jour présents / manquants | Intuis > Linky / Linky sans Intuis | Station : plus long trou |
+| Année | Chauffage, pièces-jours r / e / m / s / a | Plus long trou (toutes les pièces chauffées) | Plus long trou (au moins une pièce chauffée) | Chauffe-eau r / e / m, plus long trou | Linky jour présents / manquants | Intuis > Linky / Linky sans Intuis | Station : plus long trou |
 |---|---|---|---|---|---|---|---|
 | 2022 | | | | | | | |
 | 2023 | | | | | | | |

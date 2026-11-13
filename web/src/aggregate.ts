@@ -177,6 +177,8 @@ export function bucketKeys(from: string, to: string, g: Granularity): string[] {
 export interface SeriesSet {
   keys: string[];
   groups: Map<string, number[]>; // group id -> value per key
+  /** #570: group id -> per key, whether a record exists (an empty bucket is a missing measure, not 0). */
+  seen: Map<string, boolean[]>;
 }
 
 /** Sum records per bucket, split by `groupOf` (category, room, or a single group). */
@@ -190,6 +192,7 @@ export function aggregate(
   const keys = bucketKeys(from, to, g);
   const index = new Map(keys.map((k, i) => [k, i]));
   const groups = new Map<string, number[]>();
+  const seen = new Map<string, boolean[]>();
   for (const r of records) {
     if (r.day < from || r.day > to) continue;
     const i = index.get(bucketKey(r.day, g));
@@ -198,9 +201,16 @@ export function aggregate(
     let arr = groups.get(id);
     if (!arr) groups.set(id, (arr = new Array(keys.length).fill(0)));
     arr[i] += r.kwh;
+    let s = seen.get(id);
+    if (!s) seen.set(id, (s = new Array(keys.length).fill(false)));
+    s[i] = true;
   }
-  return { keys, groups };
+  return { keys, groups, seen };
 }
+
+/** #570: the values of a group, null for a bucket without any record of it (never drawn nor added as 0). */
+export const measuredValues = (set: SeriesSet, id: string, round = (v: number) => v): (number | null)[] =>
+  set.groups.get(id)!.map((v, i) => (set.seen.get(id)?.[i] ? round(v) : null));
 
 export function total(records: DayRecord[], from: string, to: string): number {
   let s = 0;

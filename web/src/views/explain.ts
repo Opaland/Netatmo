@@ -148,9 +148,13 @@ function offlineBlock(e: Explanation): string {
     .map((o) =>
       alert(
         'warn',
-        `${o.name} : ${offlineText({ from: o.since, to: e.to, ongoing: o.ongoing })}`,
-        o.estimated !== null
-          ? `Sa consommation n’est plus mesurée. Ce mois-ci, le compteur en voit ≈ ${fmtKwh(o.estimated)} (Linky moins les autres pièces et les usages habituels) : c’est une estimation, comptée dans « ${STEP_LABEL.horsligne} ». Hors ligne, le radiateur garde son dernier réglage : ni planning, ni mode absence.`
+        `${o.name} : ${offlineText({ from: o.since, to: o.until, ongoing: o.ongoing })}`,
+        o.unmeasured
+          ? e.basis === 'linky'
+            ? 'Aucun relevé sur l’un des deux mois : sa consommation est comptée avec les autres usages (compteur Linky), des deux côtés, et non comme une hausse ou une baisse.'
+            : 'Aucun relevé sur l’un des deux mois : elle est laissée hors de la comparaison, des deux côtés.'
+          : o.estimated !== null
+          ?`Sa consommation n’est plus mesurée. Ce mois-ci, le compteur en voit ≈ ${fmtKwh(o.estimated)} (Linky moins les autres pièces et les usages habituels) : c’est une estimation, comptée dans « ${STEP_LABEL.horsligne} ». Hors ligne, le radiateur garde son dernier réglage : ni planning, ni mode absence.`
           : 'Sa consommation n’est plus mesurée et aucun compteur Linky ne permet de l’estimer : sa baisse n’est pas une économie.',
         `<p><a class="link" href="#${routeKey({ page: 'piece', room: o.id })}">Voir la pièce</a></p>`,
       ),

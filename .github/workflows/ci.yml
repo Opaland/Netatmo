@@ -83,6 +83,7 @@ jobs:
       - run: pip install --require-hashes -r ../requirements-lock.txt
       - run: python -m collector fixtures -o web/dist/demo-fixtures
         working-directory: .
+      - run: npm run e2e:trous # v2.4 #570 : trous d'un vrai compte (forme seule) : jamais 0, « incomplet », comparaisons sans le trou
       - run: npm run e2e:sweep
       - uses: actions/upload-artifact@v4
         if: always()

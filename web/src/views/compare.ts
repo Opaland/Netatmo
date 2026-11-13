@@ -1,5 +1,6 @@
 // Compare ("Comparer"): years side by side, annual totals and the EDF offer comparator.
 import {
+  type Category,
   type DayRecord,
   MONTHS_SHORT,
   SEASON_MONTHS,
@@ -25,7 +26,8 @@ import { routeKey } from '../router';
 import { uncertainDays } from '../checks';
 import { cutDays } from './quality';
 import { WITH_SUBSCRIPTION } from '../synthese';
-import { bucketMarks, monthKeys, shortDate, yoyCaveat, yoyWindow } from '../periods';
+import { INCOMPLETE, bucketMarks, countIn, missingText, monthKeys, shortDate, uncertainText, yoyCaveat, yoyWindow } from '../periods';
+import { measuredOnBoth, unmeasuredText } from './offline-rooms';
 import {
   avgPrice,
   costAvailable,
@@ -36,6 +38,7 @@ import {
   fmtKwh,
   lastDay,
   longDate,
+  nf0,
   pct,
   seasonStyle,
   table,
@@ -314,6 +317,10 @@ function yearsCard(records: DayRecord[], first: string, last: string, uncertain:
   const lastYear = Number(last.slice(0, 4));
   const firstYear = Number(first.slice(0, 4));
   const caveats: string[] = [];
+  // #570: the days without any reading (estimated days are in the totals), and the usages measured
+  // somewhere in the archive: a year without one of them writes « non mesuré », never 0
+  const missing = uncertainDays(records, new Set(), first, last);
+  const hasCat = (c: Category, from = first, to = last) => records.some((r) => r.cat === c && r.day >= from && r.day <= to);
   // Year-over-year: the same window in both years (to date, and from the first data day
   // when the previous year started late), with its caveats (#297).
   const rows = years
@@ -328,12 +335,19 @@ function yearsCard(records: DayRecord[], first: string, last: string, uncertain:
         `${y}-12-31`,
       );
       const isCurrent = y === lastYear;
-      const d = win ? pctChange(total(records, win.from, win.to), total(records, win.prevFrom, win.prevTo)) : null;
+      // #570: a room without any reading on one side (the water heater all of 2024) is left out of
+      // the change and named, never a rise or a fall of the whole
+      const both = win ? measuredOnBoth(records, win.from, win.to, win.prevFrom, win.prevTo) : null;
+      const d = win && both ? pctChange(total(both.records, win.from, win.to), total(both.records, win.prevFrom, win.prevTo)) : null;
       // « à date » is said once under the table; what is left weakens the change of this year
-      const parts = yoyCaveat(win, uncertain, { cuts: cutDays() }).split(' · ').filter((c) => c && c !== 'à date');
+      const parts = yoyCaveat(win, both?.names.length ? uncertainDays(both.records, ds!.estimated, first, last) : uncertain, { cuts: cutDays() }).split(' · ').filter((c) => c && c !== 'à date');
+      if (both?.names.length) parts.unshift(unmeasuredText(both.names));
       const caveat = parts.length > 0;
       if (caveat && d !== null) caveats.push(`Évolution de ${y} : ${parts.map((c) => c.replace(/^(\d{4}) : /, '$1 compte ')).join(', ')}`);
       const end = isCurrent ? last : `${y}-12-31`;
+      const lost = countIn(missing, `${y}-01-01`, end);
+      if (lost) caveats.push(`Total de ${y} ${INCOMPLETE} : ${missingText(lost)}`);
+      const usage = (c: Category, kwh: number) => (hasCat(c) && !hasCat(c, `${y}-01-01`, end) ? '<small class="muted">non mesuré</small>' : kwh);
       const since = y === firstYear && first > `${y}-01-01` ? ` <small class="muted">depuis le ${shortDate(first)}</small>` : '';
       const cost = costOf(records, `${y}-01-01`, end, true);
       // #464: the cold of the year from the first day of data, « au moins » when days are missing
@@ -343,9 +357,9 @@ function yearsCard(records: DayRecord[], first: string, last: string, uncertain:
       if (w?.caveat) caveats.push(w.caveat);
       return [
         `<span class="swatch" style="background:${yearColor(y)}"></span>${y}${isCurrent ? ` <small class="muted">en cours, au ${shortDate(last)}</small>` : since}`,
-        full,
-        heat,
-        full - heat,
+        lost ? `${nf0.format(Math.round(full))} <small class="muted">${INCOMPLETE} *</small>` : full,
+        usage('heating', heat),
+        usage('water_heater', full - heat),
         ...(cost !== null ? [fmtEur(cost)] : []),
         ...(w ? [w.cell, w.perDju] : []),
         d === null ? '—' : `${pct(d)}${caveat ? ' *' : ''}`,
@@ -456,6 +470,16 @@ function seasonTiles(records: DayRecord[], picked: number[], current: number, cl
   if (done.length < 2) return '';
   const [b, a] = done;
   const span = (y: number) => [`${y}-09-01`, `${y + 1}-08-31`] as const;
+  // #570: a room without any reading in one of the two winters is left out of both and named, and
+  // the days estimated or missing of each winter are said under the change
+  const both = measuredOnBoth(records, ...span(a), ...span(b));
+  records = both.records;
+  const doubt = uncertainDays(records, ds!.estimated, span(b)[0], span(a)[1]);
+  const notes = [
+    unmeasuredText(both.names),
+    ...[a, b].map((y) => countIn(doubt, ...span(y))).flatMap((n, i) => (n ? [`${seasonLabel(i ? b : a)} : ${uncertainText(n)}`] : [])),
+  ].filter(Boolean);
+  const note = notes.length ? ` <small class="muted">${esc(notes.join(' · '))}</small>` : '';
   const sum = (y: number, heat?: boolean) => total(heat ? records.filter((r) => r.cat === 'heating') : records, ...span(y));
   const [ta, tb] = [sum(a), sum(b)];
   if (!ta || !tb) return '';
@@ -497,7 +521,7 @@ function seasonTiles(records: DayRecord[], picked: number[], current: number, cl
         ? `${esc(what)}<b>${signedPct(raw)} ${esc(vs)}</b>.`
         : '';
   // #348: the shared tiles of Accueil (#311): side by side when there is room, an amount never cut
-  return `<div class="kpis season-tiles">${tiles}</div><p>${sentence}</p>${woodSeasons2(records, a, b)}`;
+  return `<div class="kpis season-tiles">${tiles}</div><p>${sentence}${sentence ? note : ''}</p>${woodSeasons2(records, a, b)}`;
 }
 
 // ------------------------------------------------------------------ EDF offer comparator

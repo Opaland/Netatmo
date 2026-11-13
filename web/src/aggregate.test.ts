@@ -3,6 +3,7 @@ import {
   type DayRecord,
   type Meta,
   aggregate,
+  measuredValues,
   bucketKeys,
   cumulativeByYear,
   minusYears,
@@ -91,6 +92,9 @@ describe('aggregation', () => {
     expect(s.keys).toEqual(['2024-01', '2024-02', '2024-03']);
     expect(s.groups.get('heating')).toEqual([1, 4, 0]);
     expect(s.groups.get('water_heater')).toEqual([2, 0, 0]);
+    // #570: a month without any record of a group is a missing measure, never drawn nor written as 0
+    expect(measuredValues(s, 'water_heater')).toEqual([2, null, null]);
+    expect(measuredValues(s, 'heating', (v) => v * 10)).toEqual([10, 40, null]);
   });
   it('monthly by year leaves months without data as null', () => {
     const m = monthlyByYear(records);

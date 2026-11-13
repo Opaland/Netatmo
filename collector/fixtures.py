@@ -360,6 +360,44 @@ def compte_charge(f: Fixture) -> None:
             plug["name"] = f"Compteur_à_pinces_tableau_principal_sous-sol · canal {i + 1}"
 
 
+def _between(a: str, b: str) -> Callable[[str], bool]:
+    """`keep` for drop_days: every day except those of [a, b] (inclusive)."""
+    return lambda d: not (a <= d <= b)
+
+
+# #570: the shape of the gaps of a real account, read on the first real data report (public log of
+# the Diagnostic run, numbers per month only): dates of the gaps, never a value.
+REAL_GAPS = {
+    "intuis": [("2023-09-03", "2023-10-13"), ("2024-03-18", "2024-03-22")],  # every room, Linky kept them
+    "water": [("2023-09-03", "2025-01-04"), ("2025-07-17", "2025-08-12")],  # the water heater alone
+    "linky_from": "2023-11-10",  # Linky daily history starts later than the radiators'
+    "station_from": {"m1": "2023-11-30", "m2": "2024-09-14", "m3": "2024-12-28"},  # modules added later
+    "stopped": ("r-cuisine", "2025-07-01"),  # radiators taken down (« retirés »)
+    "added": ("r-bureau", "2025-10-09"),  # a radiator added: the room has no day before
+}
+
+
+def trous_reels(f: Fixture) -> None:
+    """#570: the gaps of a real account, in shape: the water heater missing for 16 months (all of
+    one calendar year), every room lost 41 days then 5 days while Linky counted them, Linky from
+    November of the second year, station modules added one by one, a room stopped on purpose since
+    July and a room added in October. Every remaining day is the demo's (fictitious)."""
+    energy = f.docs(kinds=ENERGY) + ["roomstate"]
+    for a, b in REAL_GAPS["intuis"]:
+        f.drop_days(energy, _between(a, b))
+    for a, b in REAL_GAPS["water"]:
+        f.drop_days(energy, _between(a, b), room="r-ce")
+    f.drop_days(["linky", *f.docs(kinds=("linky30",))], lambda d: d >= REAL_GAPS["linky_from"])
+    station = ["station", *f.docs(kinds=("station_h",))]
+    for module, since in REAL_GAPS["station_from"].items():
+        f.drop_days(station, lambda d, s=since: d >= s, room=module)
+    room, since = REAL_GAPS["stopped"]
+    f.drop_days(energy, lambda d: d < since, room=room)
+    f.meta["stopped_rooms"] = [{"room": room, "from": since, "reason": "retires", "label": ""}]
+    room, since = REAL_GAPS["added"]
+    f.drop_days(energy, lambda d: d >= since, room=room)
+
+
 FIXTURES: dict[str, Callable[[Fixture], None]] = {
     "annee-incomplete": annee_incomplete,
     "une-annee": une_annee,
@@ -374,6 +412,7 @@ FIXTURES: dict[str, Callable[[Fixture], None]] = {
     "valeurs-nulles": valeurs_nulles,
     "sans-prix": sans_prix,
     "compte-charge": compte_charge,
+    "trous-reels": trous_reels,
 }
 
 

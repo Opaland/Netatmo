@@ -57,6 +57,28 @@ function input(o: { cold?: number; sp?: number; other?: number; offline?: boolea
 const step = (e: ReturnType<typeof explainMonth>, k: string) => e!.steps.find((s) => s.key === k)?.kwh ?? 0;
 const sumSteps = (e: ReturnType<typeof explainMonth>) => e!.steps.reduce((s, x) => s + x.kwh, 0);
 
+// #570: the water heater without any reading in the reference month (a real account: Sept. 2023 to
+// Jan. 2025): its whole consumption read as « Eau chaude +93 kWh » and « Autres usages −93 kWh »
+describe('a device without any reading in one of the two months (#570)', () => {
+  const base = input();
+  const gone = [rec('2024-12-31', 'a', 10), rec('2024-12-31', 'ce', 3), ...base.records.filter((r) => !(r.room === 'ce' && r.day < '2025-02-01'))];
+  const runs = offlineRuns(gone, ROOMS, '2026-01-31');
+  const i = { ...base, records: gone, runs, estimate: estimateOffline(gone, runs, base.linky, base.weather) };
+  it('with the meter: no « Eau chaude » part, the water heater counted in « autres usages » on both sides', () => {
+    const e = explainMonth(i)!;
+    expect(e.steps.find((s) => s.key === 'eau')).toBeUndefined();
+    expect(step(e, 'autres')).toBeCloseTo(0, 6);
+    expect(sumSteps(e)).toBeCloseTo(e.delta, 6);
+    expect(stepNote(e, e.steps.find((s) => s.key === 'autres')!)).toBe('compteur − chauffage − eau chaude, dont Chauffe-eau (sans relevé sur l’un des deux mois)');
+  });
+  it('a run is listed when it touches one of the two months, said with its own end', () => {
+    const late = gone.filter((r) => !(r.room === 'b' && r.day >= '2025-12-10' && r.day <= '2025-12-20'));
+    const runs2 = offlineRuns(late, ROOMS, '2026-01-31');
+    const e = explainMonth({ ...i, records: late, runs: runs2 })!;
+    expect(e.offline.map((o) => [o.name, o.until, o.unmeasured])).toEqual([['Chauffe-eau', '2025-01-31', true]]);
+  });
+});
+
 describe('explain a month', () => {
   it('#394: a day of cut is left out of both months, with its day a year earlier', () => {
     const i = input();

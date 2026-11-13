@@ -45,6 +45,14 @@ export function bucketRange(key: string, g: Granularity): [string, string] {
 /** « 18 jours estimés ou manquants ». */
 export const uncertainText = (n: number) => `${plural(n, 'jour')} estimé${n > 1 ? 's' : ''} ou manquant${n > 1 ? 's' : ''}`;
 
+/**
+ * #570: the mark of a total that holds days without any reading (lost at Intuis, a device out of
+ * reach): « incomplet », wherever the total is written, with the days in a note (« 366 jours
+ * manquants »). An estimated day (spread from the month's total) is no missing day: the total holds it.
+ */
+export const INCOMPLETE = 'incomplet';
+export const missingText = (n: number) => `${plural(n, 'jour')} manquant${n > 1 ? 's' : ''}`;
+
 export interface BucketMark {
   /** Days of the bucket inside the period shown and the data (0: none). */
   covered: number;
