@@ -347,6 +347,20 @@ def test_the_collection_runs_the_catch_up_only_when_the_case_is_ticked(tmp_path,
     assert set(doc["at"]) == {"heating", "water"}
 
 
+def test_the_case_the_app_names_is_the_one_github_shows():
+    """Revue v2.4: GitHub shows a workflow_dispatch input by its `description`, not by its id. The
+    app (État des données, « Récupérable ? ») and the docs tell the owner to tick « rattrapage »: the
+    case he sees must begin with that word, or he looks for a box that is not there."""
+    root = Path(__file__).parent.parent
+    wf = (root / ".github" / "workflows" / "collect.yml").read_text()
+    shown = re.search(r"\n      rattrapage:\n        description: \"([^\"]+)\"", wf).group(1)
+    app = (root / "web" / "src" / "data-quality.ts").read_text()
+    named = set(re.findall(r"cocher « ([^»]+?) »", app))
+    assert named == {"rattrapage"}, named
+    for word in named:
+        assert shown.lower().startswith(word), f"case affichée « {shown} », l'appli dit de cocher « {word} »"
+
+
 def test_meta_keeps_older_months_and_replaces_the_months_asked_again():
     first = Tally()
     for d in ("2023-09-01", "2023-09-02", "2024-03-05"):

@@ -15,7 +15,7 @@ on:
         type: boolean
         default: false
       rattrapage:
-        description: "Rattraper les jours manquants que les sources gardent encore (ajoute seulement, ne réécrit jamais un jour présent, #569)"
+        description: "Rattrapage des jours manquants que les sources gardent encore (ajoute seulement, ne réécrit jamais un jour présent, #569)"
         type: boolean
         default: false
 

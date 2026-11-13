@@ -66,6 +66,12 @@ Chaque point est tenu par un test qui échoue s'il est cassé :
   les sources échouent — `tests/test_fuites.py` ; le plan de la maison n'est jamais cité, même
   invalide (le plan précédent est gardé) — `tests/test_plan_maison.py`. Un nom saisi dans le plan
   reste du texte partout où il est écrit (éditeur, dessin, Pièces → Plan) — `web/e2e/plan-edition.mjs`.
+  **Une exception connue** (revue v2.4, § 6) : les réglages du foyer gardés en **variables**
+  d'Actions (`STOPPED_ROOMS_JSON`, `WOOD_JSON`) au lieu de secrets sont recopiés en clair par GitHub
+  dans l'en-tête de l'étape qui les reçoit (Collecte quotidienne, Diagnostic) : un identifiant de
+  pièce, des dates, des quantités de bois. Le journal le signale (« Variable en clair … : à migrer en
+  secret depuis ⚙ Paramètres ») ; la migration et l'effacement des anciens journaux sont des gestes
+  du propriétaire.
 - **Audit des données** (#532) : le journal public n'en montre que des nombres par contrôle et par
   mois (ni valeur, ni nom, ni jour ; un fichier illisible est nommé avec l'année masquée) —
   `tests/test_audit.py` (`test_public_log_has_counts_only`) ; le détail est chiffré avec la clé des
