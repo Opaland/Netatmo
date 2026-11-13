@@ -446,6 +446,22 @@ try {
   {
     await go(page, 'accueil');
     await checkHeight(page, 'accueil', 'iphone');
+    // #554: the margin found under the 3 screens without removing anything, in the CI's wide font
+    // (DejaVu Sans, A6): « Comparer les offres » ends the sentence of the tariff alert's amount
+    // (its actions hold on one line), the link to the Historique holds on one line, and the AI
+    // summary ends with a link like the other cards instead of a button
+    const dejavu = await page.addStyleTag({ content: 'html, body, button, input, select, textarea { font-family: "DejaVu Sans", system-ui, sans-serif !important; }' });
+    const gained = await page.evaluate(() => {
+      const oneLine = (el) => !!el && el.getBoundingClientRect().height <= parseFloat(getComputedStyle(el).lineHeight) * 1.5;
+      return {
+        'tarif : « Comparer les offres » dans la phrase du montant': !!document.querySelector('#grid-card .alert p:not(.alert-actions) a[href="#outils-offres"]'),
+        'tarif : actions sur une ligne': oneLine(document.querySelector('#grid-card .alert-actions')),
+        'lien vers l’Historique sur une ligne': oneLine(document.querySelector('#consumption-card .card-foot a')),
+        'analyse du mois : un lien en pied de carte': !!document.querySelector('#insight-card .card-foot a[href="#outils-analyse"]') && !document.querySelector('#insight-card .btn'),
+      };
+    });
+    for (const [what, ok] of Object.entries(gained)) check(ok, `#554 : Accueil (iPhone 13, DejaVu Sans) : ${what}, non`);
+    await dejavu.evaluate((s) => s.remove());
     const tiles = await page.locator('.home-tiles').innerText();
     check(/vs nov\. \d{4} au \d+/.test(tiles) && /vs attendu à météo comparable/.test(tiles), `#302 : tuile du mois sans ses deux références nommées (« ${tiles.replace(/\s+/g, ' ').slice(0, 200)} »)`);
     const verdictText = await page.locator('.verdict').innerText();
