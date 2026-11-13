@@ -7,7 +7,7 @@ import { addDays, minusYears } from '../aggregate';
 import type { Hourly } from '../analysis';
 import { datasetDoc, ds, onDatasetLoaded } from '../app';
 import { areaChart, cssVar } from '../charts';
-import { type Curve, SLOTS, dayCurve, lastCurveDay, measuredWattsCached, peakHalfHour, talon, typicalDay, typicalHourlyCached } from '../curve';
+import { type Curve, SLOTS, curveVsDay, dayCurve, dayNote, lastCurveDay, measuredWattsCached, peakHalfHour, talon, typicalDay, typicalHourlyCached } from '../curve';
 import { loadCurve, loadHourly } from '../data';
 import { hourMin } from '../glossary';
 import { memo } from '../memo';
@@ -165,6 +165,7 @@ export function renderTypical(zone: HTMLElement, r: Range) {
       <label class="select"><span class="sr-only">Jour affiché</span><input type="date" id="curve-day" value="${pickedDay}" min="${first}" max="${last}"></label>
     </div>
     <div class="chart" id="curve-day-chart" role="img" aria-label="Courbe de charge du jour choisi"></div>
+    <p class="hint" id="curve-day-total"></p>
   </section>`;
   zone.querySelectorAll<HTMLButtonElement>('[data-curve-group]').forEach((b) =>
     b.addEventListener('click', () => {
@@ -272,8 +273,11 @@ function drawDay(zone: HTMLElement, v: Loaded) {
   });
   const vals = values.map((x, i) => [x, i] as const).filter(([x]) => x !== null) as [number, number][];
   const [maxW, maxI] = vals.length ? vals.reduce((a, b) => (b[0] > a[0] ? b : a)) : [0, 0];
+  const note = dayNote(curveVsDay(v.curve, tz(), pickedDay, ds!.linky.get(pickedDay)));
   el.setAttribute(
     'aria-label',
-    vals.length ? `Courbe de charge du ${longDate(pickedDay)} : maximum ${kw(maxW)} à ${labels[maxI]}.` : `Pas de courbe de charge le ${longDate(pickedDay)}.`,
+    (vals.length ? `Courbe de charge du ${longDate(pickedDay)} : maximum ${kw(maxW)} à ${labels[maxI]}.` : `Pas de courbe de charge le ${longDate(pickedDay)}.`) + (note ? ` ${note}` : ''),
   );
+  const total = zone.querySelector<HTMLElement>('#curve-day-total');
+  if (total) total.textContent = note;
 }

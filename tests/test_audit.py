@@ -406,6 +406,38 @@ def test_hours_twice_the_day(clean):
     assert set(f) == {"somme-jour"} and "deux fois le jour" in f["somme-jour"][0].text
 
 
+def test_public_log_says_which_series_does_not_make_its_day(clean):
+    """#568: 77 `somme-jour` on the first real report, without saying which series: the public log
+    now names the kind of series (fixed labels), per month, and whether the hours are above."""
+    curve = clean.doc("2024.linky30")["curve"]
+    for day in ("2024-03-12", "2024-03-13"):  # a second quantity added into each half hour: +20 %
+        for k in [k for k in curve if k.startswith(day)]:
+            clean.put("2024.linky30", "curve", k, None, round(curve[k] * 1.2, 1))
+    hours = clean.doc("2024.hourly")["hourly"][A]
+    for k in [k for k in hours if k.startswith("2024-04-02")]:
+        clean.put("2024.hourly", "hourly", A, k, 2 * hours[k])
+    lines = au.public_lines(au.audit(save(clean)))
+    text = "\n".join(lines)
+    assert "[somme-jour] : 3 (2024-03 2, 2024-04 1)" in text
+    assert "      dont courbe de charge à la demi-heure (Linky) : 2 (2024-03 2)" in lines
+    assert "      dont énergie par heure (Intuis) : 1 (2024-04 1)" in lines
+    assert "      heures au-dessus du jour : 3, dont deux fois le jour : 1 ; au-dessous : 0" in lines
+    for secret in (A, W, "Zorglub", "2024-03-12"):
+        assert secret not in text
+
+
+def test_the_day_gap_is_the_apps(clean):
+    """#568: one rule for the audit and the app (web/src/curve.ts dayGapExceeded), held by the
+    vector both test suites read."""
+    vector = json.loads(
+        (Path(__file__).resolve().parents[1] / "web/src/__fixtures__/somme-jour.json").read_text("utf-8")
+    )
+    assert au.THRESHOLDS["ecart_absolu"].value == vector["ecart_absolu_wh"]
+    assert au.THRESHOLDS["ecart_relatif"].value / 100 == vector["ecart_relatif"]
+    for fine, day, gap in vector["cases"]:
+        assert (abs(fine - day) > au.tolerance(day)) is gap, (fine, day)
+
+
 def test_rooms_above_the_meter(clean):
     clean.put("linky", "daily", "2024-03-12", None, 100)
     f = found(save(clean))

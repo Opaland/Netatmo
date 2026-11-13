@@ -354,22 +354,44 @@ def collect_index(
 
 
 # ---------------------------------------------------------------- load curve (S-1.11)
-def _points(obj: object) -> list[tuple[str, float, str | None]]:
-    """(timestamp, value, step) anywhere in the response, keeping the full timestamp."""
+def _points(obj: object, step: str | None = None) -> list[tuple[str, float, str | None]]:
+    """(timestamp, value, step) anywhere in the response, keeping the full timestamp. The step is
+    the point's own, else the nearest one above it: the 2026 format gives it once, at the top of
+    the answer (`pas`), its points carrying only `d` and `v` (#568)."""
     out: list[tuple[str, float, str | None]] = []
     if isinstance(obj, dict):
+        step = next((obj[k] for k in STEP_KEYS if isinstance(obj.get(k), str)), None) or step
         dk = next((k for k in DATE_KEYS if isinstance(obj.get(k), str)), None)
         vk = next((k for k in VALUE_KEYS if k in obj), None)
         if dk and vk is not None:
-            step = next((obj[k] for k in STEP_KEYS if isinstance(obj.get(k), str)), None)
             with contextlib.suppress(TypeError, ValueError):
                 out.append((obj[dk], float(obj[vk]), step))
         for v in obj.values():
-            out += _points(v)
+            out += _points(v, step)
     elif isinstance(obj, list):
         for v in obj:
-            out += _points(v)
+            out += _points(v, step)
     return out
+
+
+# Code of the active power among the quantities of a 2026 answer (`grandeurPhysique`), and the
+# factor of each power unit to W. Other quantities of the same answer are never added to it (#568).
+ACTIVE_POWER = "PA"
+WATT_UNITS = {"w": 1.0, "kw": 1000.0}
+
+
+def _curve_parts(body: object) -> list[tuple[object, str | None, float]]:
+    """(part, step, factor to W) of a load curve answer. In the 2026 format, one part per quantity
+    of `grandeur`: the active power only when it is named (or, unnamed, those in W), each with its
+    own unit; the former format is one part, in W."""
+    if not (isinstance(body, dict) and isinstance(body.get("grandeur"), list)):
+        return [(body, None, 1.0)]
+    top = next((body[k] for k in STEP_KEYS if isinstance(body.get(k), str)), None)
+    parts = [g for g in body["grandeur"] if isinstance(g, dict)]
+    active = [g for g in parts if str(g.get("grandeurPhysique") or "").upper() == ACTIVE_POWER]
+    watts = [g for g in parts if str(g.get("unite") or "").lower() in WATT_UNITS]
+    keep = active or watts or parts
+    return [(g, top, WATT_UNITS.get(str(g.get("unite") or "w").lower(), 1.0)) for g in keep]
 
 
 def _step_minutes(step: str | None, default: int = 30) -> int:
@@ -383,11 +405,13 @@ def parse_curve(body: object, tz: str) -> dict[str, float]:
     """Load curve → {"YYYY-MM-DDTHH:MM" local start of the half hour: Wh}.
 
     Enedis gives the average power (W) over each step, stamped at the END of the step
-    (as ha-linky reads it): Wh = W × minutes / 60. Finer steps (PT10M) are summed into
-    half hours; the two 02:00 of the autumn DST change are summed as well."""
+    (as ha-linky reads it): Wh = W × minutes / 60. Finer steps (PT10M, PT15M) are summed into
+    half hours; the two 02:00 of the autumn DST change are summed as well. The step and the
+    quantity are read as the 2026 format gives them (`_curve_parts`, #568)."""
     zone = ZoneInfo(tz)
     curve: dict[str, float] = {}
-    for stamp, watts, step in _points(body):
+    points = [(st, v * factor, sp) for part, top, factor in _curve_parts(body) for st, v, sp in _points(part, top)]
+    for stamp, watts, step in points:
         try:
             end = datetime.fromisoformat(stamp.replace("Z", "+00:00"))
         except ValueError:

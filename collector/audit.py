@@ -338,6 +338,7 @@ LINKY_MIN = int(THRESHOLDS["jours_linky_min"].value)
 SOURCES_MIN = int(THRESHOLDS["jours_sources_min"].value)
 # Cap of the detail kept per check (the counts stay complete): the report fits the device's storage.
 MAX_SHOWN = 200
+TWICE_TEXT = "la somme des heures vaut deux fois le jour : deux familles de mesure additionnées ?"
 
 
 def tolerance(wh: float) -> float:
@@ -1119,9 +1120,7 @@ class Audit:
                     at=day,
                     value=round(total, 1),
                     other=round(v, 1),
-                    text="la somme des heures vaut deux fois le jour : deux familles de mesure additionnées ?"
-                    if twice
-                    else "la somme des heures complètes du jour s'écarte du total du jour",
+                    text=TWICE_TEXT if twice else "la somme des heures complètes du jour s'écarte du total du jour",
                 )
 
     def above_linky(self) -> None:
@@ -1541,11 +1540,39 @@ def public_lines(a: Audit) -> list[str]:
         total = sum(months.values())
         detail = ", ".join(f"{'sans date' if m == '?' else m} {n}" for m, n in sorted(months.items()))
         out.append(f"  {c.title} [{code}] : {total}" + (f" ({detail})" if detail else ""))
+        out += _series_lines(a, code)
     for e in a.errors:
         out.append(f"  Non vérifié : {e}.")
     out.append("Seuils (hypothèse = à confirmer sur ce premier bilan) :")
     for name, t in THRESHOLDS.items():
         out.append(f"  {name} = {_fmt(t.value)} {t.unit}" + (" (hypothèse)" if t.hypothesis else ""))
+    return out
+
+
+KNOWN_LABELS = frozenset(SERIES_LABEL.values())
+
+
+def _series_lines(a: Audit, code: str) -> list[str]:
+    """#568: which kind of series carries the cases of a check, per month, and for `somme-jour`
+    whether the hours are above or below their day. Labels are the fixed ones of SERIES_LABEL (a
+    series known by its file only is « autre série »): never a room, a module or a value."""
+    found = [f for f in a.findings if f.code == code]
+    by: dict[str, dict[str, int]] = {}
+    for f in found:
+        label = f.series if f.series in KNOWN_LABELS else "autre série"
+        m = f.day[:7] if f.day else "?"
+        by.setdefault(label, {})[m] = by.setdefault(label, {}).get(m, 0) + 1
+    out: list[str] = []
+    for label, months in sorted(by.items()):
+        detail = ", ".join(f"{'sans date' if m == '?' else m} {n}" for m, n in sorted(months.items()))
+        out.append(f"      dont {label} : {sum(months.values())} ({detail})")
+    if code == "somme-jour" and found:
+        above = sum(1 for f in found if (f.value or 0) > (f.other or 0))
+        twice = sum(1 for f in found if f.text == TWICE_TEXT)
+        out.append(
+            f"      heures au-dessus du jour : {above}, dont deux fois le jour : {twice} ; "
+            f"au-dessous : {len(found) - above}"
+        )
     return out
 
 

@@ -228,6 +228,16 @@ fois seulement, une valeur décimale signale des kWh / kVA (Enedis donne des Wh 
 Wh / VA. Elle est conservée dans `linky.unit` et `linky.pmax_unit` : la taille des valeurs n'est
 jamais utilisée, si bien qu'une semaine de logement vide (300 Wh par jour) n'est plus lue en kWh.
 
+**Courbe de charge au format 2026 (#568).** La réponse donne le pas **une seule fois**, en tête
+(`pas`, par exemple `PT30M` ou `PT15M`), et des points `{d, v}` sans pas ; elle peut porter plusieurs
+grandeurs dans `grandeur[]` (`grandeurPhysique`, `unite`) — forme du client de référence
+`bokub/linky` 3.0.0 (`APIResponse`). Le collecteur lit le pas de la tête quand le point n'en porte pas,
+ne garde que la puissance active (`PA`, ou à défaut les grandeurs en W / kW) et convertit les kW
+(`enedis._curve_parts`). Avant, un pas de 15 min était compté 30 min et deux grandeurs étaient
+additionnées dans la même demi-heure. L'inventaire du compte réel (Diagnostic, 9/11/2026) a vu
+**672 points pour 7 jours**, soit 96 par jour pour 48 demi-heures : la case « Inventaire » dit
+désormais les grandeurs, unités et pas de la courbe (`diagnose.curve_shape`, codes seulement).
+
 Conséquences : Intuis en échec arrête la collecte (issue d'alerte, résumé « Collecte interrompue ») ;
 une source facultative en échec est notée dans `meta.sources.<source>.format` (point d'accès et champ)
 et dans la section « Format de réponse changé » du résumé de la collecte. Limite connue : `measures`

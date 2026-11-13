@@ -199,3 +199,14 @@ quand un outil la rend impossible à refaire.
 - **Conduite** : le fichier inclut la configuration du système (`/etc/fonts/fonts.conf`) et
   **écarte** les polices absentes du runner (`<rejectfont>`, ici Inter) ; une régénération qui
   change presque toutes les captures se compare à une référence avant d'être crue.
+
+### A21 · 13/11/2026 — Un lecteur testé sur la réponse qu'on imaginait, pas sur celle de l'API (#568)
+
+- **Ce qui s'est passé** : les tests de la courbe Linky donnaient à chaque point son pas (`"p"`) ;
+  le format 2026 le donne une seule fois, en tête (`pas`), et peut porter plusieurs grandeurs. Un
+  pas de 15 min était lu 30 min, deux grandeurs étaient additionnées : aucun test ne pouvait le
+  voir. Et le bilan public disait « 77 jours » sans dire quelle série : la cause ne pouvait pas être
+  établie sans la phrase de passe.
+- **Conduite** : un lecteur d'API se teste sur la forme d'un client de référence ou d'une réponse
+  réelle figée (noms et volumes seulement), jamais sur une forme inventée ; un contrôle public dit
+  au moins **quel genre de série** porte ses cas (étiquette fixe, sans nom ni valeur).
