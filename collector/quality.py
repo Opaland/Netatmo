@@ -270,7 +270,7 @@ class Report:
             if not _valid_meter(v):
                 continue
             intuis = self.real_wh.get(day)
-            if intuis is not None and intuis > CROSS_RATIO * float(v) + CROSS_MARGIN_WH:
+            if intuis is not None and above_meter(intuis, float(v)):
                 impossible[day[:7]] = impossible.get(day[:7], 0) + 1
             in_range = self.first is not None and self.last is not None and self.first <= day <= self.last
             if in_range and day not in self.intuis_days:
@@ -376,6 +376,11 @@ class Report:
             f"chauffage {'/'.join(map(str, heat))} pièces-jours ; Linky {lk_got}/{lk_exp - lk_got} jours ;"
             f" recoupement : {imp} jours Intuis > Linky, {only} jours Linky sans Intuis"
         )
+
+
+def above_meter(intuis_wh: float, meter_wh: float) -> bool:
+    """Intuis above the whole-home meter that measures it: impossible (also the data audit, #532)."""
+    return intuis_wh > CROSS_RATIO * meter_wh + CROSS_MARGIN_WH
 
 
 def _valid_meter(v: object) -> bool:

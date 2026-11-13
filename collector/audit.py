@@ -51,7 +51,7 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from .crypto import decrypt_bytes, encrypt_json
-from .quality import CROSS_MARGIN_WH, CROSS_RATIO
+from .quality import CROSS_MARGIN_WH, CROSS_RATIO, Report, above_meter
 from .storage import Store, own_year_first
 from .sync import HOURLY_DAYS_SYNC, MONTH_GAP_SHARE, MONTH_GAP_WH
 
@@ -431,6 +431,8 @@ class Audit:
     tz: ZoneInfo
     last: str | None
     kinds: dict[str, str] = field(default_factory=dict)  # room id -> category
+    # the quality report of the same archive: Intuis real Wh per day and Linky, read by its rules
+    real: Report | None = None
     findings: list[Finding] = field(default_factory=list)
 
     @classmethod
@@ -448,7 +450,11 @@ class Audit:
             for d in r
         ]
         last = max((d for d in days if isinstance(d, str) and form_of(d) == "day" and valid(d, "day")), default=None)
-        return cls(docs, tz, last, kinds)
+        try:
+            real: Report | None = Report(store, [])
+        except ValueError:  # an unreadable day key: the audit names it, the cross-checks are skipped
+            real = None
+        return cls(docs, tz, last, kinds, real)
 
     def add(self, code: str, s: Series | None, **kw: object) -> None:
         doc = s.doc if s else str(kw.pop("doc", ""))
@@ -863,28 +869,16 @@ class Audit:
             )
 
     def linky_lag(self) -> None:
-        linky = {
-            d: float(v)
-            for d, v in (self.docs.get("linky", {}).get("daily") or {}).items()
-            if _num(v) is not None and v >= 0
-        }
-        if not linky:
+        if self.real is None or not self.real.linky:
             return
-        daily = self._year_section("daily")
-        flags = self._year_section("estimated")
-        intuis: dict[str, float] = {}
-        for rid, days in daily.items():
-            if self.kinds.get(rid) == "ignore":
-                continue
-            for d, v in days.items():
-                if _num(v) is not None and d not in flags.get(rid, {}):
-                    intuis[d] = intuis.get(d, 0.0) + float(v)  # type: ignore[arg-type]
+        linky = {d: float(v) for d, v in self.real.linky.items() if _num(v) is not None and v >= 0}
+        intuis = self.real.real_wh
 
         def above(d: str, k: int) -> bool | None:
             other = (date.fromisoformat(d) + timedelta(days=k)).isoformat()
             if other not in linky:
                 return None
-            return intuis[d] > CROSS_RATIO * linky[other] + CROSS_MARGIN_WH
+            return above_meter(intuis[d], linky[other])
 
         months: dict[str, list[int]] = {}  # month -> [above at 0, at -1, at +1, days compared at ±1]
         for d in sorted(intuis):
