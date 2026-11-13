@@ -15,6 +15,7 @@ import {
   setToken,
   validate,
   invalidFields,
+  isOwnSite,
 } from './settings';
 
 afterEach(() => {
@@ -26,6 +27,14 @@ describe('settings', () => {
   it('derives owner/repo from the GitHub Pages address only', () => {
     expect(repoFromLocation({ hostname: 'opaland.github.io', pathname: '/Netatmo/' } as Location)).toBe('opaland/Netatmo');
     expect(repoFromLocation({ hostname: 'localhost', pathname: '/' } as Location)).toBeNull();
+  });
+
+  it('#533 : le site du dépôt se reconnaît sans tenir compte de la casse (l’hôte est en minuscules)', () => {
+    const site = { hostname: 'opaland.github.io', pathname: '/Netatmo/' } as Location;
+    expect(isOwnSite('Opaland/Netatmo', site)).toBe(true);
+    expect(isOwnSite('opaland/netatmo', site)).toBe(true);
+    expect(isOwnSite('Opaland/Autre', site)).toBe(false);
+    expect(isOwnSite('Opaland/Netatmo', { hostname: 'localhost', pathname: '/Netatmo/' } as Location)).toBe(false);
   });
 
   it('#233 : jeton et secrets marqués pour ne pas être proposés à l’enregistrement', () => {

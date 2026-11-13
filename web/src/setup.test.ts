@@ -29,7 +29,7 @@ describe('#40 assistant de premier lancement', () => {
     expect(step(s, 'intuis').text).toContain(INTUIS_SECRETS.join(', '));
     expect(step(s, 'pages')).toMatchObject({ status: 'a-verifier', link: { href: `https://github.com/${REPO}/settings/pages` } });
     expect(step(s, 'collecte')).toMatchObject({ status: 'a-faire', action: undefined });
-    expect(setupSummary(s)).toBe('2 étapes sur 6 faites');
+    expect(setupSummary(s)).toBe('2 étapes faites sur 6');
   });
 
   it('secrets en place, jamais lancée : la collecte se lance d’ici', () => {
@@ -74,6 +74,22 @@ describe('#40 assistant de premier lancement', () => {
   it('workflow arrêté (fork, 60 jours sans activité) : l’appli propose de l’activer', () => {
     for (const state of ['disabled_fork', 'disabled_inactivity', 'disabled_manually'])
       expect(step(setupSteps({ ...base, workflow: state }), 'actions')).toMatchObject({ status: 'a-faire', action: 'enable-collect', link: { href: links(REPO).actions } });
+  });
+
+  it('#533 : un état de workflow non lu (« unknown », supprimé) reste « à vérifier », sans proposer de le réactiver', () => {
+    for (const state of ['unknown', 'deleted', '']) {
+      const s = step(setupSteps({ ...base, workflow: state }), 'actions');
+      expect(s).toMatchObject({ status: 'a-verifier', link: { href: links(REPO).actions } });
+      expect(s.action).toBeUndefined();
+      expect(s.text).not.toContain('réactiver');
+    }
+  });
+
+  it('#533 : le résumé se lit comme une phrase (aucune, une, plusieurs étapes faites)', () => {
+    const steps = (done: number) => setupSteps(base).map((x, i) => ({ ...x, status: i < done ? ('fait' as const) : ('a-faire' as const) }));
+    expect(setupSummary(steps(0))).toBe('Aucune étape faite sur 6');
+    expect(setupSummary(steps(1))).toBe('1 étape faite sur 6');
+    expect(setupSummary(steps(5))).toBe('5 étapes faites sur 6');
   });
 
   it('sans jeton : tout reste « à vérifier », avec le geste à la main et son lien', () => {

@@ -4,7 +4,7 @@
 // at the right GitHub page for the rest (passphrase, GitHub Pages). The logic is in ../setup.ts.
 // The token is the one of ../settings.ts: in memory for the visit, never stored.
 import { alertHtml, formMsg } from '../components';
-import { GROUPS, collectWorkflowState, enableCollect, hasToken, invalidFields, lastCollect, listSecrets, noSaveAttrs, putSecret, repoFromLocation, runCollect, setToken } from '../settings';
+import { GROUPS, collectWorkflowState, enableCollect, hasToken, invalidFields, isOwnSite, lastCollect, listSecrets, noSaveAttrs, putSecret, runCollect, setToken } from '../settings';
 import { DEMO_FACTS, INTUIS_SECRETS, STATUS_LABEL, type SetupFacts, type Step, setupSteps, setupSummary, validRepo } from '../setup';
 import { html } from '../trusted';
 import { esc } from '../ui';
@@ -25,12 +25,15 @@ interface Ctx {
   facts: SetupFacts;
   msg: { ok: boolean; text: string } | null;
   busy: boolean;
+  /** The token to create is told by a card of the same page (⚙ Sources de données). */
+  adviceNearby: boolean;
 }
 
-/** Mount the assistant in `el` (a card, or a zone of the lock screen). */
-export function mountSetup(el: HTMLElement | null, demo: boolean) {
+/** Mount the assistant in `el` (a card, or a zone of the lock screen). `adviceNearby`: the page
+ *  already tells which token to create (⚙ Sources de données, card « 1. Autoriser… »). */
+export function mountSetup(el: HTMLElement | null, demo: boolean, adviceNearby = false) {
   if (!el) return;
-  const c: Ctx = { el, demo, facts: demo ? DEMO_FACTS : { repo: currentRepo(), token: hasToken(), onOwnSite: repoFromLocation() === currentRepo() }, msg: null, busy: false };
+  const c: Ctx = { el, demo, facts: demo ? DEMO_FACTS : { repo: currentRepo(), token: hasToken(), onOwnSite: isOwnSite(currentRepo()) }, msg: null, busy: false, adviceNearby };
   el.addEventListener('click', (e) => onClick(c, e));
   el.addEventListener('keydown', (e) => onKeydown(e));
   if (!demo && hasToken()) void check(c);
@@ -49,7 +52,10 @@ function draw(c: Ctx) {
         <label>Jeton GitHub<input name="token" ${noSaveAttrs(true)} placeholder="github_pat_…"></label>
         <button type="button" class="primary small" id="setup-check"${off}>Vérifier</button>
       </div>
-      <p class="hint muted">${tokenAdvice(f.repo)}</p>`
+      <p class="hint muted" id="setup-advice">${
+        // #533 (revue design v2.0): said once per page; the lock screen has no other card
+        c.adviceNearby ? 'Le jeton à créer (dépôt, permissions, expiration) est décrit juste en dessous, dans « 1. Autoriser l’application à écrire vos secrets ».' : tokenAdvice(f.repo)
+      }</p>`
       : `<p>Dépôt <strong>${esc(f.repo)}</strong> <button type="button" class="link" id="setup-recheck"${off}>Vérifier à nouveau</button>${
           // revue v2.0: a mistyped repository or a token without the right access is not a dead end
           // (on the lock screen there is no ⚙ Paramètres to change them)
@@ -80,8 +86,9 @@ function stepHtml(s: Step, off: string): string {
     <p class="hint">${esc(s.text)}</p>${link}${act}</li>`;
 }
 
-/** Read what the token may read; what fails stays « à vérifier », with the message of GitHub. */
-async function check(c: Ctx, done?: string) {
+/** Read what the token may read; what fails stays « à vérifier », with the message of GitHub.
+ *  `after`: the outcome of the action that came before, said first. */
+async function check(c: Ctx, after?: { ok: boolean; text: string }) {
   const repo = c.facts.repo;
   c.busy = true;
   c.msg = { ok: true, text: 'Vérification…' };
@@ -91,14 +98,15 @@ async function check(c: Ctx, done?: string) {
   c.facts = {
     repo,
     token: hasToken(),
-    onOwnSite: repoFromLocation() === repo,
+    onOwnSite: isOwnSite(repo),
     secrets: secrets.status === 'fulfilled' ? secrets.value : undefined,
     workflow: workflow.status === 'fulfilled' ? workflow.value : undefined,
     run: runs.status === 'fulfilled' ? runs.value.run : undefined,
     jobs: runs.status === 'fulfilled' ? runs.value.jobs : undefined,
   };
   c.busy = false;
-  c.msg = failed ? { ok: false, text: (failed.reason as Error).message } : done ? { ok: true, text: done } : null;
+  const readError = failed ? (failed.reason as Error).message : '';
+  c.msg = after && !after.ok ? { ok: false, text: [after.text, readError].filter(Boolean).join(' ') } : failed ? { ok: false, text: readError } : (after ?? null);
   draw(c);
 }
 
@@ -106,15 +114,14 @@ async function act(c: Ctx, fn: () => Promise<string>) {
   c.busy = true;
   c.msg = { ok: true, text: 'En cours…' };
   draw(c);
-  let text: string;
+  let after: { ok: boolean; text: string };
   try {
-    text = await fn();
+    after = { ok: true, text: await fn() };
   } catch (err) {
-    c.busy = false;
-    c.msg = { ok: false, text: (err as Error).message };
-    return draw(c);
+    // #533: GitHub is read again after a failure too: the first of three secrets may be saved
+    after = { ok: false, text: (err as Error).message };
   }
-  await check(c, text);
+  await check(c, after);
 }
 
 /** #233: the values of a group, the inputs emptied right away (no <form>, nothing to save). */
@@ -132,23 +139,34 @@ function say(c: Ctx, text: string) {
   if (m) m.textContent = text;
 }
 
+/** A field refused before anything is sent: marked, focused, the other fields kept. */
+function fault(c: Ctx, input: HTMLInputElement, text: string) {
+  for (const i of c.el.querySelectorAll('#setup-login input[aria-invalid]')) i.removeAttribute('aria-invalid');
+  input.setAttribute('aria-invalid', 'true');
+  input.focus();
+  say(c, text);
+}
+
 function onClick(c: Ctx, e: Event) {
   const btn = (e.target as HTMLElement).closest<HTMLButtonElement>('button');
   if (!btn || btn.disabled || c.demo) return;
   const repo = c.facts.repo;
   if (btn.id === 'setup-check') {
-    const v = take(c.el.querySelector('#setup-login')!);
-    const r = v.get('repo') ?? '';
-    if (!validRepo(r)) return say(c, 'Dépôt attendu sous la forme propriétaire/nom, par exemple vous/historique-energie.');
-    if (!v.get('token')) return say(c, 'Collez le jeton GitHub.');
+    const login = c.el.querySelector('#setup-login')!;
+    const field = (name: string) => login.querySelector<HTMLInputElement>(`input[name="${name}"]`)!;
+    // #533 (#259): nothing emptied on an error, the faulty field is pointed at
+    if (!validRepo(field('repo').value.trim())) return fault(c, field('repo'), 'Dépôt attendu sous la forme propriétaire/nom, par exemple vous/historique-energie.');
+    if (!field('token').value.trim()) return fault(c, field('token'), 'Collez le jeton GitHub.');
+    const v = take(login);
+    const r = v.get('repo')!;
     setCurrentRepo(r);
     setToken(v.get('token')!);
-    c.facts = { repo: r, token: true, onOwnSite: repoFromLocation() === r };
+    c.facts = { repo: r, token: true, onOwnSite: isOwnSite(r) };
     void check(c);
   } else if (btn.id === 'setup-recheck') void check(c);
   else if (btn.id === 'setup-change') {
     setToken(null); // typed again with the repository, like « Oublier le jeton » in Sources de données
-    c.facts = { repo, token: false, onOwnSite: repoFromLocation() === repo };
+    c.facts = { repo, token: false, onOwnSite: isOwnSite(repo) };
     c.msg = null;
     draw(c);
     c.el.querySelector<HTMLInputElement>('#setup-login input[name="repo"]')?.focus();
