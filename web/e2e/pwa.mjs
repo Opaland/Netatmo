@@ -1,4 +1,4 @@
-// #357: the app as an installed application (Chromium, with its real service worker).
+// #357: the app as an installed application (Chromium or WebKit, with its real service worker).
 // - A new version (a second build of sw.js, served by this script) waits: no reload by surprise,
 //   a banner (role=status, 44 px, axe, 360 px with the text at 200 %) offers « Recharger »;
 //   with two tabs open, « Recharger » in one activates it and reloads that one, the other is not
@@ -6,21 +6,26 @@
 //   both unlocked. The first visit shows no banner.
 // - « Recharger l'application » (Paramètres → À propos): the remembered key (IndexedDB), the
 //   notes (localStorage) and the encrypted data cache are the same before and after (read in
-//   the storage itself, not through setOffline: it does not apply to the service worker).
+//   the storage itself, not through setOffline: it does not apply to the service worker). #604:
+//   red in WebKit before the fix (17 → 0 entries: WebKit empties the origin's caches when the page
+//   reloads with no registration left).
 // - Installer: a button once `beforeinstallprompt` has arrived (even before the card exists),
 //   gone after the choice; the Safari gesture on iPhone; nothing when opened from the icon.
 // - Offline with nothing kept: a screen that says so.
 // Run after `npm run build`: node e2e/pwa.mjs (serves dist/ itself, data/ answered by the demo
-// files, passphrase « demo »; port: E2E_PORT). Captures in e2e/screenshots/pwa-*.png.
+// files, passphrase « demo »; port: E2E_PORT; E2E_BROWSER=webkit|chromium). Captures in e2e/screenshots/pwa-*.png.
 import { createServer } from 'node:http';
 import { readFileSync, existsSync, statSync } from 'node:fs';
 import { extname, join, normalize } from 'node:path';
 import AxeBuilder from '@axe-core/playwright';
-import { chromium } from 'playwright';
+import { chromium, webkit } from 'playwright';
 import { capturesOut } from './captures.mjs';
 
+const BROWSER = process.env.E2E_BROWSER === 'webkit' ? 'webkit' : 'chromium';
 const PORT = Number(process.env.E2E_PORT ?? 4191);
 const OUT = capturesOut(); // #583: e2e/screenshots/ only in the CI's font
+/** The references are Chromium's: WebKit's captures go beside them, under another name. */
+const SHOT = BROWSER === 'webkit' ? 'webkit-pwa' : 'pwa';
 const DIST = new URL('../dist/', import.meta.url).pathname;
 if (!existsSync(join(DIST, 'sw.js'))) {
   console.error('pwa : dist/sw.js absent, lancer `npm run build` avant.');
@@ -120,7 +125,7 @@ const kept = (page) =>
     return { ls, dbs, keys, dataEntries, marker };
   });
 
-const browser = await chromium.launch();
+const browser = await (BROWSER === 'webkit' ? webkit : chromium).launch();
 try {
   // ---------------------------------------------------------------- update and « Recharger l'application »
   {
@@ -198,10 +203,10 @@ try {
     await page2.evaluate(() => (window.__avant = 1));
     await audit(page, 'bandeau');
     await page.evaluate(() => window.scrollTo(0, 0));
-    await page.screenshot({ path: `${OUT}/pwa-bandeau.png` });
+    await page.screenshot({ path: `${OUT}/${SHOT}-bandeau.png` });
     await big(page, 'bandeau', '#update-banner button');
     await page.evaluate(() => window.scrollTo(0, 0));
-    await page.screenshot({ path: `${OUT}/pwa-bandeau-200.png` });
+    await page.screenshot({ path: `${OUT}/${SHOT}-bandeau-200.png` });
 
     progress('« Recharger » dans l’onglet 1');
     await Promise.all([page.waitForEvent('load', { timeout: 30000 }), page.click('#update-reload')]);
@@ -251,9 +256,9 @@ try {
     const btn = page.locator('#install-app');
     check((await btn.count()) === 1, 'installer : bouton absent après beforeinstallprompt');
     await audit(page, 'installer');
-    await page.screenshot({ path: `${OUT}/pwa-a-propos.png`, fullPage: true });
+    await page.screenshot({ path: `${OUT}/${SHOT}-a-propos.png`, fullPage: true });
     await big(page, 'à propos', '#app-card button');
-    await page.screenshot({ path: `${OUT}/pwa-a-propos-200.png`, fullPage: true });
+    await page.screenshot({ path: `${OUT}/${SHOT}-a-propos-200.png`, fullPage: true });
     await btn.click();
     await page.waitForFunction(() => !document.getElementById('install-app'), null, { timeout: 5000 }).catch(() => errors.push('installer : bouton encore là après l’installation'));
     check((await page.evaluate(() => window.__prompted)) === 1, 'installer : la fenêtre d’installation n’a pas été ouverte');
@@ -295,7 +300,7 @@ try {
     check((await page.locator('#pass').count()) === 0, 'hors ligne : formulaire de phrase de passe affiché pour rien');
     await audit(page, 'hors ligne');
     await big(page, 'hors ligne', '#offline-retry');
-    await page.screenshot({ path: `${OUT}/pwa-hors-ligne.png`, fullPage: true });
+    await page.screenshot({ path: `${OUT}/${SHOT}-hors-ligne.png`, fullPage: true });
     await ctx.close();
   }
 } catch (e) {
