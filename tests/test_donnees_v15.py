@@ -411,6 +411,41 @@ def test_linky_inventory_lists_index_series_names_and_pmax_tout(capsys):
         assert leak not in out
 
 
+def test_linky_inventory_says_what_the_load_curve_holds(capsys):
+    """#568: the real curve gave 672 points for 7 days (96 a day, for 48 half hours): the inventory
+    now names its quantities, units and step (codes only), so that the owner sees which."""
+    from collector.diagnose import inventory_linky
+
+    points = [
+        {"d": f"2026-11-0{1 + i // 96}T{(i % 96) // 4:02d}:{15 * (i % 4):02d}:00+01:00", "v": "4321"}
+        for i in range(672)
+    ]
+    curve = {
+        "pas": "PT30M",
+        "grandeur": [
+            {"grandeurPhysique": "PA", "unite": "W", "points": points[::2]},
+            {"grandeurPhysique": "PRI", "unite": "VAr", "points": points[1::2]},
+        ],
+    }
+    routes = {"courbe_de_charge_consommation": (200, curve)}
+    res = inventory_linky("tok", PRM, http=linky_client(routes), today=date(2026, 11, 9), min_interval=0)
+    out = capsys.readouterr().out
+    assert res["curve_shape"] == {
+        "grandeurs": ["PA", "PRI"],
+        "unites": ["VAr", "W"],
+        "pas": ["PT30M"],
+        "par_jour": 96,
+        "gardee": "PA",
+        "metiers": [],
+    }
+    assert (
+        "grandeurs : PA, PRI ; unités : VAr, W ; pas : PT30M ; points par jour : 96 ; gardée par la collecte : PA"
+        in out
+    )
+    for leak in (PRM, "4321", "2026-11-01", "tok"):
+        assert leak not in out
+
+
 # ---------------------------------------------------------------- Shelly clamp meters (#279)
 EM_GEN3 = {  # Shelly EM Gen3 (documentation example shape, no real id)
     "sys": {"unixtime": 0},

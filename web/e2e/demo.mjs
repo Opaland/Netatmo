@@ -265,6 +265,9 @@ try {
           await go(page, 'compteur-journee');
           await page.waitForSelector('#curve-day-chart canvas', { timeout: 15000 });
           if ((await page.locator('#curve-card canvas').count()) < 1) errors.push(`${name}/compteur: journée type incomplète`);
+          // #568: the meter's total of the day, which counts, said under the day's curve
+          const dayTotal = await page.locator('#curve-day-total').innerText();
+          if (!/^Total du jour \(compteur\) : [\d\s,]+\skWh/.test(dayTotal)) errors.push(`${name}/compteur: total du jour absent sous la courbe (${dayTotal})`);
           await go(page, 'compteur-veille');
           const talon = await page.locator('#curve-talon').innerText();
           if (!/\d\s?kWh par an/.test(talon)) errors.push(`${name}/compteur: veille absente (${talon})`);

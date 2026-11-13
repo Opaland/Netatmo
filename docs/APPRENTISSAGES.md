@@ -211,6 +211,20 @@ quand un outil la rend impossible à refaire.
   collecteur lui-même** (sa fonction de collecte, réponse fictive), pas posé à la main ; un champ
   se lit sur ce que dit sa définition (`collector/storage.py`), pas sur son nom.
 
+### A21 · 13/11/2026 — Un lecteur testé sur la réponse qu'on imaginait, pas sur celle de l'API (#568)
+
+- **Ce qui s'est passé** : les tests de la courbe Linky donnaient à chaque point son pas (`"p"`) et
+  une seule grandeur, une forme qu'aucune réponse réelle n'a jamais montrée. Le client de référence
+  (`bokub/linky` 3.0.0) décrit une autre forme : le pas une seule fois, en tête, et plusieurs
+  grandeurs possibles ; lue par notre collecteur, elle aurait compté 15 min pour 30 et additionné
+  les grandeurs, sans qu'aucun test puisse le voir. Que la réponse réelle ait cette forme reste
+  **à confirmer** par l'inventaire (672 points pour 7 jours). Et le bilan public disait « 77 jours »
+  sans dire quelle série : la cause ne pouvait pas être établie sans la phrase de passe.
+- **Conduite** : un lecteur d'API se teste sur la forme d'un client de référence ou d'une réponse
+  réelle figée (noms et volumes seulement), jamais sur une forme inventée, et une forme lue chez un
+  tiers s'écrit comme une hypothèse jusqu'à l'inventaire ; un contrôle public dit au moins **quel
+  genre de série** porte ses cas (étiquette fixe, sans nom ni valeur).
+
 ### A22 · 13/11/2026 — Les jeux de démo n'avaient que des trous courts ; le vrai compte en a d'une année (#570)
 
 - **Ce qui s'est passé** : la démo et les fixtures ne perdaient que quelques jours ou une pièce

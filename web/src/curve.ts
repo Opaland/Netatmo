@@ -72,6 +72,71 @@ export function halfHourCounts(tz: string, day: string): Map<string, number> | n
   return out;
 }
 
+// #568: the gap allowed between the half hours of a day and the day's total, the audit's
+// (collector/audit.py `tolerance`, THRESHOLDS ecart_absolu / ecart_relatif): both test suites
+// read __fixtures__/somme-jour.json, so that the two cannot drift apart.
+export const DAY_GAP_WH = 100;
+export const DAY_GAP_SHARE = 0.05;
+export const dayGapExceeded = (fineWh: number, dayWh: number): boolean => Math.abs(fineWh - dayWh) > Math.max(DAY_GAP_WH, DAY_GAP_SHARE * Math.abs(dayWh));
+
+/** Total (Wh) of the curve of a local day when every half hour of that day is there, else null. */
+export function curveDayWh(curve: Curve, tz: string, day: string): number | null {
+  let sum = 0;
+  for (const s of halfHourCounts(tz, day)?.keys() ?? SLOTS) {
+    const v = curve.get(`${day}T${s}`);
+    if (v === undefined) return null;
+    sum += v;
+  }
+  return sum;
+}
+
+export interface CurveVsDay {
+  day: string;
+  dayKwh: number; // the meter's total of the day: it is the one that counts
+  curveKwh: number | null; // the half hours added up, null when some are missing
+  halves: number; // half hours present
+  expected: number; // half hours of that local day (46 on the spring change)
+  ok: boolean; // the half hours make the day (within DAY_GAP_*)
+}
+
+/** #568: a day's curve against the meter's day total (null: no day total to compare with). */
+export function curveVsDay(curve: Curve, tz: string, day: string, dayKwh: number | undefined): CurveVsDay | null {
+  if (dayKwh === undefined || !Number.isFinite(dayKwh)) return null;
+  const wh = curveDayWh(curve, tz, day);
+  const halves = [...curve.keys()].filter((k) => k.startsWith(`${day}T`)).length;
+  return { day, dayKwh, curveKwh: wh === null ? null : wh / 1000, halves, expected: halfHourCounts(tz, day)?.size ?? 48, ok: wh !== null && !dayGapExceeded(wh, dayKwh * 1000) };
+}
+
+const kwh1 = new Intl.NumberFormat('fr-FR', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+const nf0 = new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 0 });
+/** An energy said so that a small one is not « 0,0 kWh »: in Wh under 1 kWh. */
+const energy = (kwh: number) => (Math.abs(kwh) < 1 ? `${nf0.format(kwh * 1000)}\u00a0Wh` : `${kwh1.format(kwh)}\u00a0kWh`);
+
+/**
+ * #568: the half hours of the curve were read before the reading of the 2026 format (a step given
+ * once at the top, one quantity among several); days stored before it keep the former reading
+ * until the owner has them fetched again.
+ */
+export const CURVE_READING_SINCE = '2026-11-13';
+
+/**
+ * #568: what the « Une journée » card says under a day's curve. The meter's total of the day is
+ * the one that counts; the curve is said incomplete when a half hour is missing, or not to make
+ * the day when its half hours add up to something else.
+ */
+export function dayNote(c: CurveVsDay | null): string {
+  if (!c) return '';
+  const head = `Total du jour (compteur) : ${energy(c.dayKwh)}`;
+  if (c.curveKwh === null) {
+    if (!c.halves) return `${head}. Pas de courbe ce jour-là : le total du jour fait foi.`;
+    const n = `${c.halves} demi-heure${c.halves > 1 ? 's' : ''} sur ${c.expected}`;
+    return `${head}. Courbe incomplète ce jour-là (${n}) : le total du jour fait foi.`;
+  }
+  if (c.ok) return `${head}, que la courbe retrouve.`;
+  const old = c.day < CURVE_READING_SINCE ? ' Ce jour a été rangé avec l’ancienne lecture de la courbe, pas encore reprise.' : '';
+  return `${head}. Les demi-heures de la courbe font ${energy(c.curveKwh)} : elles ne retrouvent pas le total du jour, qui fait foi ; la courbe de ce jour est à lire avec prudence.${old}`;
+}
+
 /** Average power in W over the half hour(s) behind one curve key. */
 export function watts(tz: string, key: string, wh: number): number {
   const n = halfHourCounts(tz, key.slice(0, 10))?.get(key.slice(11, 16)) ?? 1;

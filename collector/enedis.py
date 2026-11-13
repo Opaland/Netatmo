@@ -364,22 +364,76 @@ def collect_index(
 
 
 # ---------------------------------------------------------------- load curve (S-1.11)
-def _points(obj: object) -> list[tuple[str, float, str | None]]:
-    """(timestamp, value, step) anywhere in the response, keeping the full timestamp."""
+def _points(obj: object, step: str | None = None) -> list[tuple[str, float, str | None]]:
+    """(timestamp, value, step) anywhere in the response, keeping the full timestamp. The step is
+    the point's own, else the nearest one above it: the 2026 format would give it once, at the top
+    of the answer (`pas`), its points carrying only `d` and `v` (#568: the shape of the reference
+    client bokub/linky, to be confirmed on the real answer by the inventory)."""
     out: list[tuple[str, float, str | None]] = []
     if isinstance(obj, dict):
+        step = next((obj[k] for k in STEP_KEYS if isinstance(obj.get(k), str)), None) or step
         dk = next((k for k in DATE_KEYS if isinstance(obj.get(k), str)), None)
         vk = next((k for k in VALUE_KEYS if k in obj), None)
         if dk and vk is not None:
-            step = next((obj[k] for k in STEP_KEYS if isinstance(obj.get(k), str)), None)
             with contextlib.suppress(TypeError, ValueError):
                 out.append((obj[dk], float(obj[vk]), step))
         for v in obj.values():
-            out += _points(v)
+            out += _points(v, step)
     elif isinstance(obj, list):
         for v in obj:
-            out += _points(v)
+            out += _points(v, step)
     return out
+
+
+# #568: a 2026 answer may carry several quantities in `grandeur[]` (format of the reference client
+# bokub/linky 3.0.0; whether the real curve does is to be confirmed by the inventory). ONE is kept,
+# never added to another: the consumption (`grandeurMetier` CONS) when named, then the active power
+# (`grandeurPhysique` PA), then a power or energy unit, then the first. Factor of each unit: to W
+# for a power, to Wh for an energy given per step.
+ACTIVE_POWER = "PA"
+CONSUMPTION = "CONS"
+WATT_UNITS = {"w": 1.0, "kw": 1000.0}
+ENERGY_STEP_UNITS = {"wh": 1.0, "kwh": 1000.0}
+
+
+def _code(g: dict, key: str) -> str:
+    return str(g.get(key) or "").strip().upper()
+
+
+def curve_choice(body: object) -> tuple[dict | None, list[dict]]:
+    """(the quantity kept, those left out) of a 2026 load curve answer; (None, []) otherwise."""
+    if not (isinstance(body, dict) and isinstance(body.get("grandeur"), list)):
+        return None, []
+    parts = [g for g in body["grandeur"] if isinstance(g, dict)]
+    if not parts:
+        return None, []
+    pool = [g for g in parts if _code(g, "grandeurMetier") == CONSUMPTION] or parts
+    units = WATT_UNITS | ENERGY_STEP_UNITS
+    kept = next(
+        (g for g in pool if _code(g, "grandeurPhysique") == ACTIVE_POWER),
+        next((g for g in pool if str(g.get("unite") or "").strip().lower() in units), pool[0]),
+    )
+    return kept, [g for g in parts if g is not kept]
+
+
+def _curve_parts(body: object) -> list[tuple[object, str | None, float, bool]]:
+    """(part, step, factor, energy) of a load curve answer: the whole former answer (W), or the ONE
+    quantity `curve_choice` keeps, with the step given at the top and its unit (energy: Wh per step)."""
+    kept, left = curve_choice(body)
+    if kept is None:
+        return [(body, None, 1.0, False)]
+    if left:  # codes only (`safe_keys`): never a value
+        log.warning(
+            "Linky : courbe à %d grandeurs, gardée : %s, laissées : %s",
+            len(left) + 1,
+            ", ".join(safe_keys([_code(kept, "grandeurPhysique")])) or "?",
+            ", ".join(safe_keys(_code(g, "grandeurPhysique") for g in left)) or "?",
+        )
+    top = next((body[k] for k in STEP_KEYS if isinstance(body.get(k), str)), None)  # type: ignore[union-attr]
+    unit = str(kept.get("unite") or "w").strip().lower()
+    if unit in ENERGY_STEP_UNITS:
+        return [(kept, top, ENERGY_STEP_UNITS[unit], True)]
+    return [(kept, top, WATT_UNITS.get(unit, 1.0), False)]
 
 
 def _step_minutes(step: str | None, default: int = 30) -> int:
@@ -393,11 +447,17 @@ def parse_curve(body: object, tz: str) -> dict[str, float]:
     """Load curve → {"YYYY-MM-DDTHH:MM" local start of the half hour: Wh}.
 
     Enedis gives the average power (W) over each step, stamped at the END of the step
-    (as ha-linky reads it): Wh = W × minutes / 60. Finer steps (PT10M) are summed into
-    half hours; the two 02:00 of the autumn DST change are summed as well."""
+    (as ha-linky reads it): Wh = W × minutes / 60. Finer steps (PT10M, PT15M) are summed into
+    half hours; the two 02:00 of the autumn DST change are summed as well. The step given once at
+    the top and the quantity kept among several are read by `_curve_parts` (#568)."""
     zone = ZoneInfo(tz)
     curve: dict[str, float] = {}
-    for stamp, watts, step in _points(body):
+    points = [
+        (st, v * factor, sp, energy)
+        for part, top, factor, energy in _curve_parts(body)
+        for st, v, sp in _points(part, top)
+    ]
+    for stamp, value, step, energy in points:
         try:
             end = datetime.fromisoformat(stamp.replace("Z", "+00:00"))
         except ValueError:
@@ -409,7 +469,7 @@ def parse_curve(body: object, tz: str) -> dict[str, float]:
         start = (end.astimezone(UTC) - timedelta(minutes=minutes)).astimezone(zone)
         slot = start.replace(minute=start.minute - start.minute % 30, second=0, microsecond=0)
         key = slot.strftime("%Y-%m-%dT%H:%M")
-        curve[key] = curve.get(key, 0.0) + watts * minutes / 60
+        curve[key] = curve.get(key, 0.0) + (value if energy else value * minutes / 60)
     return {k: round(v, 1) for k, v in curve.items()}
 
 
