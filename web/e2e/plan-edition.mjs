@@ -142,6 +142,30 @@ try {
     await ctx.close();
   });
 
+  // revue v2.1 (persona 52): a name typed in the plan is text everywhere it is written (list,
+  // drawing, form, Pièces → Plan and its table), never markup
+  await part('nom saisi = texte', async () => {
+    const { ctx, page } = await newPage();
+    const HOSTILE = '<img id="xss" src="x">"&';
+    await openDemo(page, base, null, 'parametres-logement');
+    await card(page).locator('.plan-edit-svg').waitFor(SHORT);
+    await page.locator('#plan-add-room').click();
+    await card(page).locator('[data-plan-f="name"]').fill(HOSTILE);
+    await page.keyboard.press('Tab');
+    await frames(page);
+    const noMarkup = async (where) => check((await page.locator('#xss').count()) === 0, `${where} : le nom saisi est devenu du HTML`);
+    await noMarkup('éditeur');
+    check((await card(page).locator('[data-plan-select]').allInnerTexts()).includes(HOSTILE), 'éditeur : le nom saisi n’est pas dit tel quel dans la liste');
+    check((await card(page).locator('.plan-edit-svg text.plan-label').allTextContents()).some((t) => t.startsWith('<img')), 'éditeur : le nom saisi n’est pas écrit tel quel sur le dessin');
+    await goto(page, 'pieces');
+    await page.locator('[data-set="piecesShow"][data-value="plan"]').click();
+    await ready(page);
+    await page.locator('#plan-card details.table-details summary').click();
+    await noMarkup('Pièces → Plan');
+    check((await page.locator('#plan-card .card-table').innerText()).includes(HOSTILE), 'Pièces → Plan : le nom saisi n’est pas dit tel quel dans le tableau');
+    await ctx.close();
+  });
+
   await part('360 px, texte 200 %', async () => {
     const { ctx, page } = await newPage();
     await openDemo(page, base, null, 'parametres-logement');
@@ -149,8 +173,10 @@ try {
     await card(page).locator('.plan-edit-svg').waitFor(SHORT);
     await card(page).locator('[data-plan-select]').first().click();
     await frames(page);
-    // this card only: in WebKit at 200 %, the « Motif » list of « Radiateurs arrêtés », on the same
-    // page, already widens it (seen on main, reported apart)
+    // the whole page (#540: in WebKit, the « Motif » list of « Radiateurs arrêtés » followed its
+    // longest option and widened ⚙ Mon logement by 225 px), then this card element by element
+    const page_w = await page.evaluate(() => document.documentElement.scrollWidth);
+    check(page_w <= 360, `200 % : ⚙ Mon logement défile en largeur (${page_w} px pour 360)`);
     const out = await card(page).evaluate((c) =>
       [c, ...c.querySelectorAll('*')].filter((e) => e.getBoundingClientRect().right > 361 || e.scrollWidth > e.clientWidth + 1 && getComputedStyle(e).overflowX === 'visible' && !(e instanceof SVGElement)).map((e) => e.tagName + (e.id ? '#' + e.id : '')),
     );

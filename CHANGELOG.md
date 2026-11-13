@@ -1,5 +1,41 @@
 # Historique des versions
 
+## v2.1 — novembre 2026 : maison connectée (en cours)
+
+Plan de la maison ([feuille de route](docs/bmad/feuille-de-route.md)), plus les finitions de la revue
+de fin de v2.0 (#533). Livebox, NAS, CPL et TIC du Linky (#282 à #285) sont rangées au jalon
+« Matériel (attend le propriétaire) » : elles dépendent du pont (#25), qui attend le go de S-9.0.
+Revue de fin de version par les **72 personas**, revue design des écrans nouveaux ou changés et
+revue de code par agent : [`docs/bmad/revues/v2.1.md`](docs/bmad/revues/v2.1.md). Le CO₂ sur le plan
+et l'image de fond attendent les décisions du propriétaire (revue, § 10) ; elles ne bloquent pas
+l'enchaînement vers la v2.2.
+
+- **Plan de la maison** (#202)
+  - Modèle et confidentialité (#537) : pièces en rectangles sur une grille de 50 cm, un plan par
+    niveau (rez-de-chaussée et étage, cave facultative), appareils placés et dits (radiateur,
+    chauffe-eau, module de la station, prise mesurée, compteur, volet) ; un seul lecteur
+    (`parsePlan`, fuzz) ; secret `FLOOR_PLAN_JSON` scellé dans le navigateur, recopié par la collecte
+    dans la méta chiffrée, jamais cité dans un journal ; brouillon de l'appareil scellé ; aucune
+    adresse.
+  - Pièces → « Liste | Plan » (#537) : chaque pièce colorée sur la période par la consommation, la
+    température moyenne, les jours sous le seuil de confort ou les heures de fenêtre ouverte ; une
+    pièce se touche pour ouvrir sa page ; « Voir les valeurs » donne le plan en tableau ; en vue
+    foyer, une chambre dit « Chambres ».
+  - Éditeur dans ⚙ Mon logement (#539) : niveaux, pièces, appareils ; glisser au doigt par cases,
+    et chaque position et taille aussi dans un champ ; appliqué aussitôt sur l'appareil,
+    « Enregistrer pour le foyer » pour tous.
+- **Finitions de la revue v2.0** (#533, #536, #538)
+  - Assistant : le dépôt reconnu sans tenir compte de la casse, le jeton gardé quand le dépôt est mal
+    formé, GitHub relu après un échec, un état inconnu dit « à vérifier », « Aucune étape faite
+    sur 6 », le texte du jeton dit une fois.
+  - `scripts/depot_pret.py` : seul un 404 dit que Pages n'est pas activé ; une copie de l'appli
+    renvoie vers son propre guide (`source-repo.ts`) ; l'avertissement de trace d'un autre site en
+    une phrase de tous les jours.
+- **Revue de fin de version** : en WebKit à 200 %, ⚙ Mon logement ne défile plus en largeur (#540,
+  règle unique des listes) ; un nom saisi dans le plan reste du texte partout, tenu par un test ;
+  le plan ajouté à SECURITY.md et au modèle de données de l'architecture ; captures de référence
+  régénérées dans la police de la CI (DejaVu Sans) (revue, § 6).
+
 ## v2.0 — novembre 2026 : ouverture
 
 Dépôt modèle et guide, assistant de premier lancement, origine dédiée, branche `data` et copie sur

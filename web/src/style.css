@@ -47,6 +47,9 @@ select {
   max-width: 100%;
   min-height: var(--target-min);
   text-overflow: ellipsis;
+  /* #540: WebKit lets the text of the longest option overflow the box, and the page scrolls
+     sideways (⚙ Mon logement, 225 px at 360 px and text 200 %): the box clips it */
+  overflow: hidden;
   appearance: none;
   padding: 0 30px 0 var(--space-3);
   border: 1px solid var(--border-strong);
