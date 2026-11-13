@@ -34,6 +34,23 @@ const records = [
   ...days('ce', 'water_heater', '2024-01-01', '2025-02-28', () => 3),
 ];
 
+// #570: the water heater without any reading in January 2024 (a real account: Sept. 2023 – Jan. 2025)
+describe('a device without any reading a year earlier (#570)', () => {
+  const gone = records.filter((r) => !(r.room === 'ce' && r.day < '2024-02-01'));
+  it('« pourquoi » leaves it out of both months and says so, no rise made of it', () => {
+    const a = answer('why', '2025-01', base(gone));
+    expect(a.lines[0]).toBe('Hors Chauffe-eau : aucun relevé sur l’un des deux mois.');
+    expect(a.lines[1]).toMatch(/^Janvier 2025 : 558 kWh, contre 465 kWh en janvier 2024 \(\+20/);
+    expect(a.lines.join(' ')).not.toMatch(/Chauffe-eau \(\+/);
+  });
+  it('« normal » takes no reference year without it', () => {
+    const extra = [...days('salon', 'heating', '2023-01-01', '2023-12-31', () => 10), ...days('ch', 'heating', '2023-01-01', '2023-12-31', () => 5), ...days('ce', 'water_heater', '2023-01-01', '2023-12-31', () => 3)];
+    const a = answer('normal', '2025-01', base([...extra, ...gone]));
+    // January 2023 (with the water heater): 18 kWh a day expected, not the 15 of January 2024 mixed in
+    expect(a.lines[0]).toMatch(/pour 558 kWh attendus/);
+  });
+});
+
 describe('S-5.9 questions answered by code', () => {
   it('lists months and picks the last complete one', () => {
     const months = answerableMonths(records, '2025-02-14');
