@@ -33,7 +33,7 @@ import type { MeterPage, Route } from '../router';
 import { tenant, tenantNote } from '../tenant';
 import { html } from '../trusted';
 import { activeRooms, avgPrice, catColor, contracts, esc, fmtKwh, lastDay, longDate, nf0, tableToggle, tariffColor, tariffNames } from '../ui';
-import * as analyse from './analyse';
+import { analyseView } from './lazy-views';
 
 const hasCurve = () => !!((ds!.meta as { linky_curve_years?: number[] }).linky_curve_years ?? []).length;
 const hasTariffs = () => !!ds!.meta.has_tariffs;
@@ -222,7 +222,8 @@ function renderDetail(zone: HTMLElement, sub: MeterPage, r: HomeRange) {
       const curve = document.getElementById('curve-zone')!;
       if (hasCurve()) void lazyCard(() => import('./linky'), (m) => curve.isConnected && m.renderTypical(curve, range), { zone: curve, what: 'Journée type' });
       else curve.innerHTML = html('<p class="hint muted">Sans la courbe de charge du compteur (à activer dans ⚙ Sources de données), la journée type montre les radiateurs et le chauffe-eau seulement.</p>');
-      analyse.renderAnalyse(document.getElementById('hourly-part')!, ds!.records, 'compteur', null, [r.from, r.to]);
+      const hourly = document.getElementById('hourly-part')!;
+      analyseView.draw(hourly, (m) => m.renderAnalyse(hourly, ds!.records, 'compteur', null, [r.from, r.to]), 'Journée type');
       return;
     }
     case 'veille':

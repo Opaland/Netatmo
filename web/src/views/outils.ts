@@ -10,7 +10,7 @@ import { html } from '../trusted';
 import { dayShort, monthLong, monthShort } from '../glossary';
 import { loadNote } from '../local-store';
 import { validWorks, WORK_KINDS } from '../works';
-import { offersLine } from './compare';
+import { offersLine } from './offer-comparison';
 import type { Freshness } from '../freshness';
 import { firstSentence } from '../insight';
 

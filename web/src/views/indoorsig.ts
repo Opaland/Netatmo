@@ -12,7 +12,7 @@ import { judgedOut } from './quality';
 import { html } from '../trusted';
 import { dayLong, seasonLabel } from '../glossary';
 import { alertHtml } from '../components';
-import { countedHtml } from './compare';
+import { countedHtml } from './counted';
 
 
 export function renderIndoorSignature(card: HTMLElement, records: DayRecord[]) {

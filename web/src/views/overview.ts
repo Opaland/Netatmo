@@ -14,7 +14,7 @@ import { type Series, barChart } from '../charts';
 import { OTHER, activeRooms, avgPrice, catColor, esc, eurOf, firstDay, fmtKwh, lastDay, nf0, roomColor, roomGroup, roomName, seg, table, tableToggle } from '../ui';
 import { rangeLabel, usageLabel } from '../glossary';
 import { yearGranularityAllowed } from '../history';
-import { countedHtml } from './compare';
+import { countedHtml } from './counted';
 import { chartMarks, cutDays, cutDaysIn, uncertainDays } from './quality';
 import { cutText } from '../periods';
 import { html } from '../trusted';

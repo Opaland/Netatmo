@@ -26,7 +26,7 @@ import {
 import { html } from '../trusted';
 import { offlineText } from '../room-offline';
 import { offlineRun } from './offline-rooms';
-import { countedHtml } from './compare';
+import { countedHtml } from './counted';
 
 /**
  * #308: « list » (Pièces, under the list by cost of #313: this year against the last one, room
