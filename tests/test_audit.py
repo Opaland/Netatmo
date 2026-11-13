@@ -456,6 +456,53 @@ def test_frozen_reading(clean):
     assert (f["valeur-figee"][0].at, f["valeur-figee"][0].other) == ("2024-03-10…2024-03-15", 6.0)
 
 
+def test_the_values_carry_their_unit(clean):
+    """#550: the report says the unit of each value (the app writes « 1 234 Wh »)."""
+    clean.put("2025", "daily", A, "2024-03-05", 1234.0)  # deux-fichiers: energy in Wh
+    for i in range(6):  # valeur-figee on the weather: °C, the length in days
+        clean.put("weather", "outdoor", f"2024-03-{10 + i:02d}", None, 3.0)
+    f = found(save(clean))
+    two = f["deux-fichiers"][0]
+    assert (two.unit, two.other_unit) == ("Wh", None)
+    frozen = f["valeur-figee"][0]
+    assert (frozen.value, frozen.unit, frozen.other, frozen.other_unit) == (3.0, "°C", 6.0, "jours")
+    assert f["mauvais-fichier"][0].unit is None  # no value, no unit
+
+
+def _steady_room(clean, half_hours):
+    """Five days at 17.9 °C (setpoint 18), and their half hours (None: not collected)."""
+    for i in range(5):
+        day = f"2024-03-{10 + i:02d}"
+        clean.put("2024", "temps", A, day, [17.9, 18.0])
+        if half_hours is not None:
+            clean.put("2024.room30", "rooms", A, day, [None, None, room30.pack(half_hours(i)), None])
+    return {c for c in found(save(clean)) if c == "valeur-figee"}
+
+
+def test_a_stable_room_is_not_a_frozen_sensor(clean):
+    """#550 (revue v2.2): its half hours move within the day; a frozen sensor's do not."""
+    moving = lambda i: [round(17.5 + (h % 9) / 10, 1) for h in range(48)]  # noqa: E731
+    assert _steady_room(clean, moving) == set()
+
+
+def test_a_sensor_frozen_within_the_day_is(clean):
+    assert _steady_room(clean, lambda i: [17.9] * 48) == {"valeur-figee"}
+
+
+def test_without_half_hours_the_days_are_compared_as_before(clean):
+    assert _steady_room(clean, None) == {"valeur-figee"}
+
+
+def test_a_plug_in_standby_is_not_frozen(clean):
+    """#550: a few Wh a day, steady by nature, under the absolute gap (`ecart_absolu`)."""
+    for i in range(7):
+        clean.put("shelly", "daily", "p0", f"2024-03-{10 + i:02d}", 24.0)
+    assert "valeur-figee" not in found(save(clean))
+    for i in range(7):
+        clean.put("shelly", "daily", "p0", f"2024-03-{10 + i:02d}", 480.0)
+    assert "valeur-figee" in found(save(clean))
+
+
 def test_four_equal_days_are_not_frozen(clean):
     for i in range(4):
         clean.put("weather", "outdoor", f"2024-03-{10 + i:02d}", None, [1.0, 5.0, 3.0])
@@ -561,6 +608,22 @@ def test_an_audit_that_fails_leaves_the_quality_report(clean, monkeypatch, capsy
     out = run_cli(clean.dir, monkeypatch, capsys)
     assert "Bilan qualité des données" in out
     assert "Audit des données (#532) : impossible (RuntimeError)" in out and "7777" not in out
+
+
+def test_an_audit_that_fails_says_why_there_is_no_report(clean, monkeypatch, capsys):
+    """#550: with --rapport (the Diagnostic workflow), the step fails here and says the report is
+    missing because the audit failed, instead of a later upload error that says nothing."""
+
+    def boom(_store):
+        raise RuntimeError("valeur secrète 7777")
+
+    monkeypatch.setattr(au, "audit", boom)
+    with pytest.raises(SystemExit) as exc:
+        run_cli(clean.dir, monkeypatch, capsys, "--rapport", str(clean.dir / "rapport"))
+    why = str(exc.value.code)
+    assert "Audit des données : impossible (RuntimeError)" in why and au.REPORT_NAME in why
+    assert "7777" not in why
+    assert "Bilan qualité des données" in capsys.readouterr().out  # the quality report is printed first
 
 
 def test_a_plug_off_then_used_is_not_a_unit(clean):

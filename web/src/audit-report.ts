@@ -13,6 +13,8 @@ const VERSION = 1;
 const MAX_TEXT = 600;
 const MAX_FINDINGS = 10_000;
 const MAX_CHECKS = 100;
+const MAX_UNIT = 12;
+const nf = new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 2 }); // a correlation has two decimals
 
 export type AuditLevel = 'defaut' | 'a-verifier';
 
@@ -47,6 +49,10 @@ export interface AuditFinding {
   room?: string;
   value?: number;
   other?: number;
+  /** #550: unit of value and other (« Wh », « °C », « kVA », « W », « jours »), absent for a correlation. */
+  unit?: string;
+  /** Unit of other when it is not `unit` (valeur-figee: a number of days). */
+  otherUnit?: string;
   text: string;
 }
 
@@ -127,6 +133,10 @@ function finding(raw: unknown, codes: Set<string>): AuditFinding | null {
   if (value !== null) f.value = value;
   const other = num(own(o, 'other'));
   if (other !== null) f.other = other;
+  const unit = text(own(o, 'unit'), MAX_UNIT);
+  if (unit) f.unit = unit;
+  const otherUnit = text(own(o, 'other_unit'), MAX_UNIT);
+  if (otherUnit) f.otherUnit = otherUnit;
   return f;
 }
 
@@ -210,3 +220,12 @@ export function auditSummary(r: AuditReport): AuditSummary {
 /** The cases of one check, by day. */
 export const findingsOf = (r: AuditReport, code: string): AuditFinding[] =>
   r.findings.filter((f) => f.code === code).sort((a, b) => (a.day ?? '').localeCompare(b.day ?? '') || (a.at ?? '').localeCompare(b.at ?? ''));
+
+/** #550: the values of a case in words, with their unit: « Valeur lue : 1 234 Wh ; comparée à : 4 238,5 Wh. »
+ * (« Valeur lue : 3 °C ; 6 jours. » when the other number is of another unit). Text, to escape. */
+export function findingValues(f: AuditFinding): string {
+  if (f.value === undefined) return '';
+  const said = (v: number, unit?: string) => `${nf.format(v)}${unit ? ` ${unit}` : ''}`;
+  const other = f.other === undefined ? '' : f.otherUnit ? ` ; ${said(f.other, f.otherUnit)}` : ` ; comparée à : ${said(f.other, f.unit)}`;
+  return `Valeur lue : ${said(f.value, f.unit)}${other}.`;
+}

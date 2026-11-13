@@ -4,6 +4,7 @@
 // A day is [hp, hc, temp, setpoint]; each column is null (nothing that day), a number (the same
 // value for the 48 half hours) or 48 values (null where missing), indexed by the local start of the
 // half hour (2 × hour + minute / 30). Energy in Wh, temperatures in °C.
+import { mergeYear } from './aggregate';
 import type { Hourly } from './analysis';
 
 export type Cell = number | null | (number | null)[];
@@ -27,15 +28,9 @@ export function unpack(c: Cell | undefined): (number | null)[] {
 export const slotLabel = (i: number) => `${String(Math.floor(i / 2)).padStart(2, '0')}:${i % 2 ? '30' : '00'}`;
 
 /** Merge yearly documents into one map (raw rooms: the household view groups later, if at all). */
-export function mergeDocs(docs: (Room30Doc | null)[]): Room30 {
+export function mergeDocs(docs: (Room30Doc | null)[], years: (number | string)[]): Room30 {
   const out: Room30 = new Map();
-  for (const doc of docs) {
-    for (const [room, days] of Object.entries(doc?.rooms ?? {})) {
-      const m = out.get(room) ?? new Map<string, Day30>();
-      for (const [d, v] of Object.entries(days)) m.set(d, v);
-      out.set(room, m);
-    }
-  }
+  docs.forEach((doc, i) => mergeYear(doc?.rooms, years[i], out)); // #550: a day in two year files: its own year's
   return out;
 }
 

@@ -34,10 +34,10 @@ def compare_dirs(source: Path, copy: Path, passphrase: str) -> tuple[int, int]:
         expected = decrypt_json(json.loads((source / name).read_text()), passphrase)  # a wrong phrase stops here
         if decrypt_json(json.loads((copy / name).read_text()), passphrase) != expected:
             raise CompareError(f"{name} : contenu déchiffré différent")
-    before, after = Store(source, passphrase).totals(), Store(copy, passphrase).totals()
+    before, after = Store(source, passphrase).all_totals(), Store(copy, passphrase).all_totals()
     if before != after:
         raise CompareError("Totaux différents")
-    return len(names), len(before)
+    return len(names), len(before[1])
 
 
 def compare_before(before: Path, copy: Path, passphrase: str) -> int:
@@ -50,7 +50,7 @@ def compare_before(before: Path, copy: Path, passphrase: str) -> int:
     if lost:
         raise CompareError(f"La copie perdrait des fichiers de la destination : {lost}")
     try:
-        old = Store(before, passphrase).totals()
+        old = Store(before, passphrase).file_totals()
     except DecryptError as exc:
         # #529: the destination was rekeyed (or the source) between two copies. Prudent refusal,
         # said in words: nothing is sent, the owner decides (README, « Branche des données »).
@@ -58,5 +58,5 @@ def compare_before(before: Path, copy: Path, passphrase: str) -> int:
             "La destination d'avant ne s'ouvre pas avec la phrase de passe actuelle (phrase changée "
             "depuis la dernière copie ?) : rien n'est envoyé."
         ) from exc
-    new = Store(copy, passphrase).totals()
+    new = Store(copy, passphrase).file_totals()
     return sum(1 for y in set(old) | set(new) if old.get(y) != new.get(y))

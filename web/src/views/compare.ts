@@ -15,7 +15,7 @@ import {
 import { djuBetween, monthlyDju } from '../analysis';
 import { djuMethodText, yearCold } from '../dju';
 import { woodYear } from '../isolation';
-import { ds, setState, state } from '../app';
+import { type State, ds, setState, state } from '../app';
 import { type Series, barChart, chartCaption, cssVar, lineChart } from '../charts';
 import { SEASON_DEFINITION, dayLong, dayShort, monthLong, monthShort, plural, seasonLabel, signedPct } from '../glossary';
 import { yearLine, yearsLine } from '../history';
@@ -38,7 +38,6 @@ import {
   longDate,
   pct,
   seasonStyle,
-  seg,
   table,
   tableToggle,
   yearColor,
@@ -51,6 +50,19 @@ import { lazyCard } from '../lazy';
 import { tenant, tenantNote } from '../tenant';
 import { verdictWood, woodOver } from './wood-state';
 import { woodSpread } from '../wood';
+
+/**
+ * #553: what the « Hiver contre hiver » card compares. A select, like « Période » in the card next
+ * to it: as a segment, the three long choices took three lines (142 px) at 360 px with 100 % text,
+ * while the design system keeps the segment's line wrap for 200 % text; the select shows the same
+ * three choices on one line (44 px). Left aside (written in the PR): shorter labels (they say what
+ * is compared with what), each choice wrapped inside its button (three or four lines at 360 px).
+ */
+const COMPARE_MODES: [State['compareMode'], string][] = [
+  ['season', 'Hiver / hiver précédent'],
+  ['monthly', "Cette année / l'an dernier"],
+  ['cumul', 'Toutes les années'],
+];
 
 /**
  * #337: « Pourquoi ce mois ? » — each of the last 12 months that has the same month a year
@@ -133,7 +145,7 @@ export function renderCompare(view: HTMLElement, records: DayRecord[], part: 'hi
   view.innerHTML = html`
   <section class="card" id="cmp-card">
     <div class="card-head"><h2>${title} <small class="muted">${sub}</small></h2><span class="card-period">${esc(period)}</span></div>
-    ${seg('compareMode', mode, [['season', 'Hiver / hiver précédent'], ['monthly', "Cette année / l'an dernier"], ['cumul', 'Toutes les années']], 'Comparer')}
+    <label class="select"><span class="sr-only">Comparer</span><select data-set="compareMode">${COMPARE_MODES.map(([v, l]) => `<option value="${v}"${mode === v ? ' selected' : ''}>${esc(l)}</option>`).join('')}</select></label>
     ${
       climateOk && mode !== 'cumul'
         ? `<label class="switch"><span><b>À climat égal</b><br><small class="muted">corrige l'écart de froid entre les ${mode === 'season' ? 'hivers' : 'années'}</small></span><input type="checkbox" role="switch" data-toggle="climate" aria-label="À climat égal"${state.climate ? ' checked' : ''}></label>`
@@ -601,6 +613,11 @@ export function handleClick(btn: HTMLElement): boolean {
 
 /** Simulated power and climate toggle. Returns true when the change belonged to this view. */
 export function handleChange(t: HTMLInputElement | HTMLSelectElement): boolean {
+  if (t.dataset.set === 'compareMode') {
+    const mode = COMPARE_MODES.find(([v]) => v === t.value)?.[0];
+    if (mode) setState({ compareMode: mode });
+    return true;
+  }
   if (t.dataset.set === 'simKva') {
     setState({ simKva: t.value ? Number(t.value) : null });
     return true;

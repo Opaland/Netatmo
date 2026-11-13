@@ -115,6 +115,13 @@ def cmd_quality(s: Settings, rapport: str | None = None) -> None:
                 ]
             )
         )
+        if rapport:
+            # #550: the workflow then sends the report as an artifact; say here why there is none,
+            # and stop red at this step rather than at the upload, which would not say why.
+            raise SystemExit(
+                f"Audit des données : impossible ({type(err).__name__}), pas de rapport chiffré "
+                f"({REPORT_NAME}) à envoyer ; le bilan qualité ci-dessus reste valable."
+            ) from None
         return
     lines += public_lines(checked)
     if rapport:
@@ -981,8 +988,25 @@ def cmd_verify(s: Settings, args: argparse.Namespace) -> None:
     s.require("passphrase")
     store = Store(s.data_dir, s.passphrase)
     print(f"Maison : {store.meta.get('home', {}).get('name')}  — mise à jour {store.meta.get('updated')}")
-    for y, per_cat in store.totals().items():
-        print(f"  {y} : " + ", ".join(f"{c} {v / 1000:.0f} kWh" for c, v in sorted(per_cat.items())))
+    totals, per_file = store.totals(), store.file_totals()
+    for line in verify_lines(totals):
+        print(line)
+    if totals != {y: c for y, c in per_file.items() if c}:
+        # #550: some day is in two year files or in the file of another year (audit: deux-fichiers,
+        # mauvais-fichier). The lines above count it as the app does; these are what verify
+        # printed before, to compare with a figure noted then.
+        print("  Un jour dans deux fichiers d'année (ou dans le fichier d'une autre année) : compté une fois,")
+        print("  dans l'année du jour, comme l'appli. Totaux fichier par fichier (verify avant la v2.3) :")
+        for line in verify_lines(per_file):
+            print("  " + line)
+
+
+def verify_lines(totals: dict[int, dict[str, float]]) -> list[str]:
+    """One line per year: Wh per category, in kWh."""
+    lines = []
+    for y, cats in totals.items():
+        lines.append(f"  {y} : " + ", ".join(f"{c} {v / 1000:.0f} kWh" for c, v in sorted(cats.items())))
+    return lines
 
 
 def csv_text(value: str) -> str:
@@ -995,11 +1019,11 @@ def cmd_export(s: Settings, args: argparse.Namespace) -> None:
     store = Store(s.data_dir, s.passphrase)
     rooms = {r["id"]: r for r in store.meta.get("rooms", [])}
     rows = [["date", "piece", "categorie", "kwh"]]
-    for y in store.years():
-        for rid, days in sorted(store.year(y).items()):
-            room = rooms.get(rid, {"name": rid, "category": "?"})
-            for day, wh in sorted(days.items()):
-                rows.append([day, csv_text(room["name"]), room["category"], f"{wh / 1000:.3f}".replace(".", ",")])
+    # #550: a day in two year files is one line, the value of the file of its own year (as the app)
+    cells = sorted((day[:4], rid, day, wh) for rid, days in store.daily().items() for day, wh in days.items())
+    for _, rid, day, wh in cells:
+        room = rooms.get(rid, {"name": rid, "category": "?"})
+        rows.append([day, csv_text(room["name"]), room["category"], f"{wh / 1000:.3f}".replace(".", ",")])
     if args.output == "-":
         csv.writer(sys.stdout, delimiter=";").writerows(rows)
     else:

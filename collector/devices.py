@@ -437,10 +437,9 @@ def silent_rooms(
     switched off on purpose (`stopped`, STOPPED_ROOMS_JSON) is expected to be silent: no alert."""
     category = {str(r.get("id")): r.get("category") for r in rooms if isinstance(r, dict)}
     last: dict[str, str] = {}
-    for y in store.years():
-        for rid, days in store.year(y).items():
-            if category.get(rid) in ("heating", "water_heater") and days:
-                last[rid] = max(last.get(rid, ""), max(days))
+    for rid, days in store.daily().items():  # #550: the year files read as the app reads them
+        if category.get(rid) in ("heating", "water_heater") and days:
+            last[rid] = max(days)
     if len(last) < 2:
         return []
     ref = today or max(last.values())

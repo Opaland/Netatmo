@@ -50,20 +50,51 @@ export function deviceMark(x: number, y: number, mark: string, cls = '', attrs =
   return `<g class="plan-device${cls ? ` ${cls}` : ''}"${attrs ? ` ${attrs}` : ''} data-cell="${x} ${y}" data-font="${mark.length > 1 ? 0.42 : 0.55}"><rect rx="0.2"></rect><text text-anchor="middle">${esc(mark)}</text></g>`;
 }
 
-/** Cut a text again until what the browser draws fits its room (fitName estimates; DejaVu Sans bold is wider). */
-function cutToWidth(t: SVGTextElement, full: string, w: number, font: number) {
-  let width = w;
+/** Cut a text again until what the browser draws fits [start, end] (fitName estimates; DejaVu Sans bold is wider). */
+function cutToWidth(t: SVGTextElement, full: string, start: number, end: number, font: number) {
+  const room = end - start;
+  let width = room + PAD_X + 0.1; // the width of a room whose line starts at PAD_X: fitName keeps its margin
+  t.setAttribute('x', String(start));
   t.textContent = fitName(full, width, font);
-  const room = w - PAD_X - 0.1;
   for (let i = 0; i < 60 && t.textContent && t.getComputedTextLength() > room; i++) {
     width -= (font * CHAR_EM) / 2;
     t.textContent = fitName(full, width, font);
   }
 }
 
-/** Lay out the words of a drawing for its size on the screen (see above). */
+type Box = { x0: number; y0: number; x1: number; y1: number };
+/** The square of a laid-out mark (placeMark), in cells. */
+function markBox(g: SVGGElement): Box | null {
+  const r = g.querySelector('rect');
+  const [x, y, w, h] = ['x', 'y', 'width', 'height'].map((a) => Number(r?.getAttribute(a)));
+  return [x, y, w, h].every(Number.isFinite) ? { x0: x, y0: y, x1: x + w, y1: y + h } : null;
+}
+
+/**
+ * #550 (revue v2.2, plan at 200 %): the part of a line [start, end] that no mark covers. A mark at
+ * the start of the line pushes it right; a mark further on ends it before the mark. A line left
+ * too short is cut, or left out by fitName (the table under the plan says everything).
+ */
+export function freeSpan(start: number, end: number, top: number, bottom: number, marks: Box[], font: number): [number, number] {
+  const gap = 0.1;
+  for (const m of [...marks].sort((a, b) => a.x0 - b.x0)) {
+    if (m.y1 <= top || m.y0 >= bottom || m.x1 <= start || m.x0 >= end) continue;
+    if (m.x0 <= start + font) start = Math.max(start, m.x1 + gap);
+    else end = Math.min(end, m.x0 - gap);
+  }
+  return [start, Math.max(start, end)];
+}
+
+/** Lay out the words of a drawing for its size on the screen (see above): the marks first, then
+ * the lines of the rooms around them, so that no mark is painted over a word (#550). */
 export function fitPlanText(svg: SVGSVGElement) {
   const floor = floorCells(svg);
+  const marks: Box[] = [];
+  for (const g of svg.querySelectorAll<SVGGElement>('g.plan-device')) {
+    placeMark(g, floor);
+    const box = markBox(g);
+    if (box) marks.push(box);
+  }
   for (const g of svg.querySelectorAll<SVGGElement>('g.plan-text')) {
     const [x, y, w, h] = (g.dataset.box ?? '').split(' ').map(Number);
     const font = Math.max(Number(g.dataset.font), floor);
@@ -72,11 +103,14 @@ export function fitPlanText(svg: SVGSVGElement) {
       t.setAttribute('x', String(x + PAD_X));
       t.setAttribute('y', String(base));
       t.setAttribute('font-size', String(font));
-      if (base + font * 0.3 <= y + h) cutToWidth(t, t.dataset.full ?? '', w, font);
-      else t.textContent = '';
+      if (base + font * 0.3 > y + h) {
+        t.textContent = '';
+        return;
+      }
+      const [start, end] = freeSpan(x + PAD_X, x + w - 0.1, base - font * 0.85, base + font * 0.25, marks, font);
+      cutToWidth(t, t.dataset.full ?? '', start, end, font);
     });
   }
-  for (const g of svg.querySelectorAll<SVGGElement>('g.plan-device')) placeMark(g, floor);
 }
 
 /** A device's mark at its cell (data-cell), its letters at least `floor` cells high, or a dot; also called while it is dragged. */
@@ -102,12 +136,23 @@ export function placeMark(g: SVGGElement, floor: number) {
   text?.setAttribute('font-size', String(font));
 }
 
-const watched = new WeakSet<SVGSVGElement>();
-/** Lay out now, and again whenever the drawing changes width (a rotation, a resized window). */
+/** The drawings watched, with their observer (#550: each render replaces the drawing). */
+const watched = new Map<SVGSVGElement, ResizeObserver>();
+/** Lay out now, and again whenever the drawing changes width (a rotation, a resized window). A
+ * drawing that left the document stops being watched: when its observer is told (a removed
+ * element is reported at size 0), and at the latest when the next drawing is watched. */
 export function watchPlanText(svg: SVGSVGElement | null) {
+  for (const [old, obs] of watched) if (!old.isConnected) forget(old, obs);
   if (!svg) return;
   fitPlanText(svg);
   if (watched.has(svg) || typeof ResizeObserver === 'undefined') return;
-  watched.add(svg);
-  new ResizeObserver(() => svg.isConnected && fitPlanText(svg)).observe(svg);
+  const obs = new ResizeObserver(() => (svg.isConnected ? fitPlanText(svg) : forget(svg, obs)));
+  watched.set(svg, obs);
+  obs.observe(svg);
 }
+function forget(svg: SVGSVGElement, obs: ResizeObserver) {
+  obs.disconnect();
+  watched.delete(svg);
+}
+/** For the tests: how many drawings are watched. */
+export const watchedPlans = () => watched.size;

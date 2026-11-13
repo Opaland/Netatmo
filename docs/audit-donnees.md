@@ -312,7 +312,7 @@ appareils) : est une série tout objet dont les clés sont des dates.
 | `cle-invalide` | une clé qui n'est pas une date de la forme de sa série, ou une date impossible (30 février) | ignorée |
 | `doublon-horodatage` | deux écritures du même instant (« 2024-1-5 » et « 2024-01-05 »), ou la même clé deux fois dans un fichier | une seule valeur lue, l'autre perdue sans le dire |
 | `mauvais-fichier` | un jour rangé dans le fichier d'une autre année (borne de fin d'année) | lu, mais compté dans la couverture de la mauvaise année |
-| `deux-fichiers` | le même jour d'une même série dans deux fichiers d'année | **une seule valeur, celle du fichier de l'année du jour** (avant #532, l'appli additionnait les deux ; corrigé, `aggregate.ts` `toRecords`, et le bilan du § 7, `storage.py` `own_year_first`) |
+| `deux-fichiers` | le même jour d'une même série dans deux fichiers d'année | **une seule valeur, celle du fichier de l'année du jour** (avant #532, l'appli additionnait les deux ; corrigé, `aggregate.ts` `toRecords`, et le bilan du § 7, `storage.py` `own_year_first` ; depuis #550, aussi `verify`, l'export CSV, le rapport mensuel, l'alerte des pièces muettes, et dans l'appli les heures, les demi-heures, la station et la courbe Linky, `mergeYear`) |
 | `heure-inexistante` | une valeur sur l'heure que le passage à l'heure d'été saute (2 h–3 h, heure de Paris), dans une série horaire ou à la demi-heure | comptée dans le jour, à une heure qu'aucune horloge n'a affichée |
 | `decalage-heures` | des heures (demi-heures) dont la somme ne retrouve le total du jour qu'une fois décalées d'1 ou 2 h (UTC au lieu de l'heure de Paris) ou d'un jour (rangées sous le mauvais jour) ; Intuis heure et demi-heure contre le jour, courbe Linky contre le jour Linky | courbes heure par heure décalées d'autant |
 | `decalage-fuseau` | la courbe heure par heure des radiateurs suit celle du Linky avec 1 ou 2 h d'écart (corrélation) | idem, et partage heures pleines / creuses décalé |
@@ -336,7 +336,7 @@ consommation varie peu autour de minuit ; c'est pourquoi `decalage-fuseau` compa
 | `pieces-sur-linky` | les jours où Intuis dépasse le compteur de toute la maison (la règle du bilan § 7, `quality.py` `above_meter`) | compté tel quel, « Intuis > Linky » au bilan |
 | `valeur-impossible` | énergie négative, pas un nombre, ou une pièce au-delà de 80 kWh en un jour (les jours « suspects » du bilan) | compté, marqué suspect |
 | `unite` | une semaine (ou plus) de jours mille fois plus petits que les voisins, ou un jour mille fois plus grand : kWh rangés comme Wh, ou l'inverse (à vérifier : un appareil éteint donne le même rapport) | compté tel quel |
-| `valeur-figee` | la même lecture non nulle 5 jours de suite (énergie, température et consigne, Linky, station, météo, prises ; jours estimés exclus, égaux par construction) | compté tel quel |
+| `valeur-figee` | la même lecture non nulle 5 jours de suite (énergie, température et consigne, Linky, station, météo, prises ; jours estimés exclus, égaux par construction). Depuis #550 : une énergie du jour sous l'écart absolu (100 Wh, appareil en veille, la borne de `unite`) n'est pas comparée ; une température dont les demi-heures bougent dans l'un des jours non plus (une pièce stable, arrondie au dixième, donne des jours égaux par hasard ; un capteur figé l'est aussi dans la journée) ; sans demi-heures ces jours-là, comparée comme avant | compté tel quel |
 | `pic-impossible` | une heure ou une demi-heure qui demande plus de puissance que le maximum relevé par le Linky ce jour-là, ou que 36 kVA sans ce relevé | compté tel quel |
 | `compteur-recule` | un index Linky plus bas que celui de la veille | la consommation déduite des index devient négative |
 
@@ -385,7 +385,8 @@ des dates et des noms, que le journal public ne peut pas montrer. Chaque trou de
   la passerelle) ou d'Internet (journal des incidents) ; **collecte Intuis en échec** (toutes les nuits
   après le trou ont échoué, d'après le journal des appareils, jusqu'à ce que ses jours sortent des
   35 jours que chaque collecte redemande : une seule nuit réussie entre-temps les a redemandés, et le
-  trou est alors chez Intuis ; revue de fin de v2.2) ; **collecte arrêtée** (le
+  trou est alors chez Intuis ; revue de fin de v2.2 ; la même règle pour le Linky et la station, sur
+  les 10 jours qu'ils redemandent, #550) ; **collecte arrêtée** (le
   compteur Linky et la station manquent aussi ces jours-là) ; sinon, l'historique Intuis n'a rien
   renvoyé (ni les jours ni le total du mois). Une pièce **arrêtée volontairement** (⚙ Mon logement)
   n'a pas de trou : pas de données attendues ;

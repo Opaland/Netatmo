@@ -74,7 +74,7 @@ def rekey(data_dir: Path, old: str, new: str, kdf: Kdf | None = None, backup_dir
         raise RekeyError(f"La sauvegarde {backup_dir} existe déjà : déplacez-la ou choisissez --sauvegarde.")
     docs = sorted(p for p in data_dir.glob("*.enc.json"))
     plain = {p: decrypt_json(json.loads(p.read_text()), old) for p in docs}  # fails before writing anything
-    before = Store(data_dir, old).totals()
+    before = Store(data_dir, old).all_totals()
 
     staging = data_dir.with_name(f".{data_dir.name}.rekey")
     shutil.rmtree(staging, ignore_errors=True)
@@ -87,7 +87,7 @@ def rekey(data_dir: Path, old: str, new: str, kdf: Kdf | None = None, backup_dir
         for p, obj in plain.items():
             if decrypt_json(json.loads((staging / p.name).read_text()), new) != obj:
                 raise RekeyError(f"{p.name} : relu différent après rechiffrement, rien n'a été remplacé.")
-        if Store(staging, new).totals() != before:
+        if Store(staging, new).all_totals() != before:
             raise RekeyError("Totaux différents après rechiffrement, rien n'a été remplacé.")
 
         backup_dir.mkdir(parents=True, exist_ok=True)
@@ -103,7 +103,7 @@ def rekey(data_dir: Path, old: str, new: str, kdf: Kdf | None = None, backup_dir
                 os.replace(staging / p.name, p)
                 _after_replace(p)
             os.replace(staging / "keyinfo.json", data_dir / "keyinfo.json")
-            if Store(data_dir, new).totals() != before:  # the staged copy was checked: a failed write
+            if Store(data_dir, new).all_totals() != before:  # the staged copy was checked: a failed write
                 raise RekeyError("Totaux différents après remplacement.")
         except BaseException as exc:
             restore_backup(backup_dir, data_dir)
