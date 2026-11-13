@@ -335,7 +335,8 @@
    "room": "1234500100",
    "value": 1234.0,
    "other": 4238.5,
-   "text": "« 2024-03-05 » est dans 2024.enc.json et dans 2025.enc.json"
+   "text": "« 2024-03-05 » est dans 2024.enc.json et dans 2025.enc.json",
+   "unit": "Wh"
   },
   {
    "code": "deux-sources",
@@ -346,7 +347,8 @@
    "room": "1234500300",
    "value": 61.0,
    "other": 61.0,
-   "text": "la prise « Frigo Zorglub » donne 61 jours sur 61 la même énergie que cette pièce Intuis"
+   "text": "la prise « Frigo Zorglub » donne 61 jours sur 61 la même énergie que cette pièce Intuis",
+   "unit": "jours"
   },
   {
    "code": "doublon-horodatage",
@@ -357,7 +359,8 @@
    "room": "1234500100",
    "value": 999.0,
    "other": 3460.0,
-   "text": "« 2024-4-5 » et « 2024-04-05 » désignent le même instant : deux valeurs pour une"
+   "text": "« 2024-4-5 » et « 2024-04-05 » désignent le même instant : deux valeurs pour une",
+   "unit": "Wh"
   },
   {
    "code": "heure-inexistante",
@@ -367,7 +370,8 @@
    "at": "2024-03-31T02",
    "room": "1234500100",
    "value": 50.0,
-   "text": "« 2024-03-31T02 » n'existe pas à l'heure locale (Europe/Paris) : le passage à l'heure d'été la saute"
+   "text": "« 2024-03-31T02 » n'existe pas à l'heure locale (Europe/Paris) : le passage à l'heure d'été la saute",
+   "unit": "Wh"
   },
   {
    "code": "mauvais-fichier",

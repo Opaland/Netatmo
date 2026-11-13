@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { AUDIT_FILE, auditSummary, findingsOf, openAuditFile, parseAuditReport } from './audit-report';
+import { AUDIT_FILE, auditSummary, findingValues, findingsOf, openAuditFile, parseAuditReport } from './audit-report';
 // written by tests/test_audit.py (collector/audit.py on a synthetic archive): one contract
 import report from './__fixtures__/audit-report.json';
 
@@ -23,6 +23,14 @@ describe('#532 rapport d’audit écrit par le collecteur', () => {
     expect(r.thresholds.some((t) => t.hypothesis)).toBe(true);
     expect(r.errors).toEqual([]);
     expect(parseAuditReport({ ...report, errors: ['clés : TypeError', 5] }).errors).toEqual(['clés : TypeError']);
+  });
+
+  it('#550 : dit chaque valeur avec son unité', () => {
+    const two = findingsOf(parseAuditReport(report), 'deux-fichiers')[0];
+    expect(findingValues(two)).toBe('Valeur lue : 1\u202f234 Wh ; comparée à : 4\u202f238,5 Wh.');
+    expect(findingValues({ code: 'x', doc: '', series: '', text: '', value: 17.9, unit: '°C', other: 5, otherUnit: 'jours' })).toBe('Valeur lue : 17,9 °C ; 5 jours.');
+    expect(findingValues({ code: 'x', doc: '', series: '', text: '', value: 0.92, other: 0.41 })).toBe('Valeur lue : 0,92 ; comparée à : 0,41.');
+    expect(parseAuditReport({ ...report, findings: [{ code: 'deux-fichiers', text: 't', value: 1, unit: 'x'.repeat(40) }] }).findings[0].unit).toBeUndefined();
   });
 
   it('résume : impossibles d’abord, puis à vérifier, et ce qui n’a rien trouvé', () => {
