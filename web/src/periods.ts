@@ -47,8 +47,9 @@ export const uncertainText = (n: number) => `${plural(n, 'jour')} estimé${n > 1
 
 /**
  * #570: the mark of a total that holds days without any reading (lost at Intuis, a device out of
- * reach): « incomplet », wherever the total is written, with the days in a note (« 366 jours
- * manquants »). An estimated day (spread from the month's total) is no missing day: the total holds it.
+ * reach): « incomplet », wherever the total is written, with the days in a note (« 45 jours
+ * manquants » ; a usage with no reading at all is named, not counted day by day: incompleteParts,
+ * #580). An estimated day (spread from the month's total) is no missing day: the total holds it.
  */
 export const INCOMPLETE = 'incomplet';
 export const missingText = (n: number) => `${plural(n, 'jour')} manquant${n > 1 ? 's' : ''}`;

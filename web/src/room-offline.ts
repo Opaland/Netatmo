@@ -10,7 +10,8 @@
 //   - stopped rooms: a radiator switched off ON PURPOSE (a stove heats the room…), declared in
 //     ⚙ Mon logement: « arrêté depuis le … (poêle) », no alert, no estimate (a stove uses next to
 //     no electricity), and its fall is a change of heating, not « vos réglages ».
-import { type DayRecord, addDays, minusYears } from './aggregate';
+import { type Category, type DayRecord, addDays, minusYears } from './aggregate';
+import { uncertainDays } from './checks';
 import { type Weather, dju, linearFit, referenceWindows } from './analysis';
 import { andList, dayShort } from './glossary';
 import { WOOD_ROOM } from './wood';
@@ -229,6 +230,20 @@ export function notComparable(runs: OfflineRun[], from: string, to: string): Set
  * annual report, and unmeasuredRooms below, all ask this.
  */
 export const unmeasuredIn = (records: DayRecord[], from: string, to: string): boolean => records.length > 0 && !records.some((r) => r.day >= from && r.day <= to);
+
+/**
+ * #580: what makes a total of [from, to] « incomplet », counted once: the usages of `cats` without
+ * any reading there (unmeasuredIn: their cell already says « non mesuré »), and the days without
+ * any reading of the usages that were measured (uncertainDays, the estimated days left in: the
+ * total holds them). A usage not measured at all no longer makes every day of the window « missing »
+ * (366 for the water heater of 2024, next to « 45 jours » for what the change compares).
+ */
+export function incompleteParts(records: DayRecord[], from: string, to: string, cats: Category[]): { unmeasured: Category[]; days: number } {
+  records = records.filter((r) => r.room !== WOOD_ROOM); // the stove's wood is no device read
+  const unmeasured = cats.filter((c) => unmeasuredIn(records.filter((r) => r.cat === c), from, to));
+  const measured = records.filter((r) => !unmeasured.includes(r.cat));
+  return { unmeasured, days: uncertainDays(measured, new Set(), from, to).size };
+}
 
 /**
  * #570: the rooms (water heater included) measured on one side of a comparison of [from, to] with

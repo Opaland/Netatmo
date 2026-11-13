@@ -20,7 +20,8 @@ export { fmtKwh } from './charts';
 // ------------------------------------------------------------------ formatting
 export const nf0 = new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 0 });
 /** #570: a cell for a device or usage without any reading there (unmeasuredIn): one word, never 0 nor a bare « — ». */
-export const UNMEASURED_CELL = '<small class="muted">non mesuré</small>';
+export const UNMEASURED = 'non mesuré';
+export const UNMEASURED_CELL = `<small class="muted">${UNMEASURED}</small>`;
 /** Signed, rounded percentage without "-0" (glossary.ts, #315). */
 export const pct = signedPct;
 export const fmtEur = (v: number) => withUnit(nf0.format(v), '€');
