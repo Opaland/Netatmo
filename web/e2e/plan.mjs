@@ -169,6 +169,30 @@ try {
         return out;
       });
       check(!small.length, `200 % : texte du dessin au niveau ${lv} : ${small.join(' ; ')}`);
+      // #550 (revue v2.2): no device mark is painted over a word of a room: what is painted at the
+      // centre of each letter of a name or a value is the word, never a mark
+      const covered = await page.locator('#plan-card .plan-svg').evaluate((svg) => {
+        const out = [];
+        // the marks take no pointer (.plan-overlay): elementFromPoint would see through them, not the eye
+        const probe = Object.assign(document.createElement('style'), { textContent: '.plan-svg .plan-overlay, .plan-svg .plan-device { pointer-events: auto !important; }' });
+        document.head.append(probe);
+        for (const t of svg.querySelectorAll('g.plan-text text')) {
+          if (!t.textContent.trim() || getComputedStyle(t).visibility === 'hidden') continue;
+          t.scrollIntoView({ block: 'center' });
+          const m = t.getScreenCTM();
+          for (let i = 0; i < t.getNumberOfChars(); i++) {
+            const e = t.getExtentOfChar(i);
+            const p = new DOMPoint(e.x + e.width / 2, e.y + e.height / 2).matrixTransform(m);
+            if (document.elementFromPoint(p.x, p.y)?.closest('g.plan-device')) {
+              out.push(`« ${t.textContent} » (lettre ${i + 1})`);
+              break;
+            }
+          }
+        }
+        probe.remove();
+        return out;
+      });
+      check(!covered.length, `200 % : un appareil couvre un mot au niveau ${lv} : ${covered.join(' ; ')}`);
     }
     await page.locator('#plan-card').screenshot({ path: `${OUT}/plan-${BROWSER}-200.png` });
     await ctx.close();

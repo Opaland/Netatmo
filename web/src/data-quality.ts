@@ -192,19 +192,20 @@ function failedNights(input: QualityInput, source: string, from: string, to: str
   return Object.entries(f).filter(([d, list]) => d >= from && d <= end && list.includes(source)).length;
 }
 /**
- * #532 (revue de fin de v2.2): a gap of the radiators is the collection's only when no night asked
- * for it again. Each night asks Intuis for the last INTUIS_REFETCH_DAYS days (`sync --days 35`): one
- * night that worked after the gap asked for its days, and Intuis gave nothing. So every night after
- * the gap's last day, up to INTUIS_REFETCH_DAYS or the last day of the archive, must have failed.
- * Returns the failed nights (as failedNights), 0 when a night may have worked.
+ * #532 (revue de fin de v2.2), #550 for Linky and the station: a gap is the collection's only when
+ * no night asked for it again. Each night asks the source for the last `refetch` days (Intuis:
+ * INTUIS_REFETCH_DAYS, `sync --days 35`; Linky and the station: 10): one night that worked after the
+ * gap asked for its days, and the source gave nothing. So every night after the gap's last day, up
+ * to `refetch` days or the last day of the archive, must have failed. Returns the failed nights (as
+ * failedNights), 0 when a night may have worked. One rule for the three sources.
  */
-function intuisNotAskedAgain(input: QualityInput, from: string, to: string): number {
+function notAskedAgain(input: QualityInput, source: string, from: string, to: string, refetch = 10): number {
   const f = input.devices?.failures;
   if (!f) return 0;
-  const end = addDays(to, INTUIS_REFETCH_DAYS);
+  const end = addDays(to, refetch);
   const after = days(addDays(to, 1), end < input.last ? end : input.last);
-  const failed = (d: string) => Object.hasOwn(f, d) && Array.isArray(f[d]) && f[d].includes('intuis');
-  return after.length && after.every(failed) ? failedNights(input, 'intuis', from, to, INTUIS_REFETCH_DAYS) : 0;
+  const failed = (d: string) => Object.hasOwn(f, d) && Array.isArray(f[d]) && f[d].includes(source);
+  return after.length && after.every(failed) ? failedNights(input, source, from, to, refetch) : 0;
 }
 /** At least 80 % of [from, to] in `set`. */
 const mostlyIn = (set: Set<string> | null, from: string, to: string) => {
@@ -294,7 +295,7 @@ function intuis(input: QualityInput, kind: 'heating' | 'water'): SourceQuality |
     // #532: not lost at Intuis but never asked for: the collection failed, or did not run at all
     // (the water heater's own gaps keep their causes: a collection that did not run misses the radiators too)
     const asked = kind === 'heating' && !boot && !cut;
-    const failed = asked ? intuisNotAskedAgain(input, from, to) : 0;
+    const failed = asked ? notAskedAgain(input, 'intuis', from, to, INTUIS_REFETCH_DAYS) : 0;
     const stopped = asked && !failed && collectionStopped(input, from, to);
     if (failed) cause = `collecte Intuis en échec (${failed} nuit${failed > 1 ? 's' : ''}) : ces jours n’ont pas été redemandés à temps`;
     else if (stopped) cause = 'collecte arrêtée : le compteur Linky et la station manquent aussi ces jours-là';
@@ -404,7 +405,7 @@ function linky(input: QualityInput): SourceQuality | null {
       continue;
     }
     const old = to < limit;
-    const failed = failedNights(input, 'linky', from, to);
+    const failed = notAskedAgain(input, 'linky', from, to);
     gaps.push({
       from,
       to,
@@ -461,7 +462,7 @@ function station(input: QualityInput): SourceQuality | null {
       scattered += n;
       continue;
     }
-    const failed = failedNights(input, 'netatmo', from, to);
+    const failed = notAskedAgain(input, 'netatmo', from, to);
     const cause = failed
       ? `collecte de la station en échec (${failed} nuit${failed > 1 ? 's' : ''}) : connexion Netatmo à renouveler ?`
       : mostlyIn(absentWithin(input.linky ? new Set(input.linky.keys()) : null, from, to), from, to)
