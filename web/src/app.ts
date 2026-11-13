@@ -42,6 +42,8 @@ export interface State {
   meter: 'month' | 'season' | '12m' | 'year';
   /** #388: the one period of Pièces and of the page of a room (« maintenant » apart). */
   pieces: 'month' | 'season' | '12m' | 'year';
+  /** #202: Pièces as a list (by cost) or on the plan of the house (when one is drawn). */
+  piecesShow: 'list' | 'plan';
   gran: Granularity;
   split: 'category' | 'room';
   compareYears: number[];
@@ -93,6 +95,7 @@ export const DEFAULT: State = {
   home: 'month',
   meter: '12m',
   pieces: 'month',
+  piecesShow: 'list',
   gran: 'month',
   split: 'category',
   compareYears: [],

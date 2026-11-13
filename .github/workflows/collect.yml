@@ -123,6 +123,8 @@ jobs:
           COLD_ALERT_JSON_VARIABLE: ${{ vars.COLD_ALERT_JSON }}
           # #204: location and roofs typed in the app (secret: sealed, never printed)
           HOME_LOCATION_JSON: ${{ secrets.HOME_LOCATION_JSON }}
+          # #202: the plan of the house drawn in the app (secret: sealed, copied encrypted, never printed)
+          FLOOR_PLAN_JSON: ${{ secrets.FLOOR_PLAN_JSON }}
           # S-1.14: optional caps on API calls per collection (empty = default, see docs/api-notes.md).
           MAX_CALLS_INTUIS: ${{ vars.MAX_CALLS_INTUIS }}
           MAX_CALLS_INTUIS_30MIN: ${{ vars.MAX_CALLS_INTUIS_30MIN }}

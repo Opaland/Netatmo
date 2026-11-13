@@ -58,6 +58,10 @@ SECRETS = {
     "STOPPED_ROOMS_JSON": json.dumps(
         [{"room": "100", "from": "2025-07-01", "reason": "poele", "label": "Poêle Zorglub"}]
     ),
+    # #202: the plan of the house, sealed like the others: never a name of it in a log.
+    "FLOOR_PLAN_JSON": json.dumps(
+        {"levels": [{"id": "rdc", "rooms": [{"id": "p1", "name": "Véranda Zorglub", "x": 0, "y": 0, "w": 4, "h": 3}]}]}
+    ),
 }
 # #459: a plaintext repository variable left from before the migration (read after the secret):
 # the log names it, never its value.
