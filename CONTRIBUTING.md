@@ -59,10 +59,11 @@ le lance. Sur un poste, `npx playwright install webkit` une fois (Linux : `--wit
 `E2E_BROWSER=webkit npm run e2e:<script>`. Le **balayage** (`npm run e2e:sweep`, après les fixtures)
 garde dans WebKit les mêmes invariants que dans Chromium (#595, A18), dans la portée réduite de la
 CI (`SWEEP_SCOPE=webkit`, écrite dans `web/e2e/sweep.mjs` : la démo à 360 px et à 200 %, `trous-reels`
-à 360 px, sans l'explorateur) ; `SWEEP_EXPLORE=1` y ajoute l'explorateur de contrôles,
-`SWEEP_SCOPE=ci` la portée Chromium entière. Tout e2e qui lit `E2E_BROWSER` (ou le `BROWSER` de
-`web/e2e/captures.mjs`) est lancé par un job WebKit (`e2e-webkit`, ou `e2e-webkit-parcours` en parallèle pour que WebKit ne dure pas plus que le job `e2e`) : `web/src/e2e-webkit.test.ts` le refuse
-sinon (#596). Ce que le WebKit de Playwright ne permet pas est dit en tête du script avec sa raison
+à 360 px, et l'explorateur de contrôles sur la démo à 360 px, #599, #600) ; `SWEEP_EXPLORE=0` en
+retire l'explorateur, `SWEEP_SCOPE=ci` donne la portée Chromium entière. Tout e2e qui lit
+`E2E_BROWSER` (ou le `BROWSER` de `web/e2e/captures.mjs`) est lancé par un job WebKit (`e2e-webkit`,
+ou `e2e-webkit-parcours` en parallèle pour que WebKit ne dure pas plus que le job `e2e`) :
+`web/src/e2e-webkit.test.ts` le refuse sinon (#596). Ce que le WebKit de Playwright ne permet pas est dit en tête du script avec sa raison
 mesurée, et un échec propre à WebKit encore ouvert s'y compte comme **connu**, avec son issue
 (`knownFailures`, `web/e2e/lib.mjs`) : écrit, sans faire échouer, et signalé quand il disparaît. En
 WebKit, les captures s'écrivent `webkit-<nom>.png` ; `e2e:hauteurs` y mesure sans juger les limites.
