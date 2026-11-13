@@ -446,6 +446,8 @@ function renderSettingsPage(view: HTMLElement, route: Route) {
           (el.innerHTML = html(`<section class="card"><div class="card-head"><h2>Pièces</h2>${scopeTag('foyer')}</div>
           <p class="hint muted">Noms et catégories viennent d'Intuis (collecte). Liaison d'une pièce au module de la station : dans <a href="#confort">Air et confort</a>.</p>
           ${list(activeRooms().map((r) => ({ title: r.name, sub: CATEGORY_LABEL[r.category], color: roomColor(r.id), href: `#${routeKey({ page: 'piece', room: r.id })}` })))}</section>`)),
+        // #202: the plan of the house, drawn here, read in Pièces (secret FLOOR_PLAN_JSON), lazy
+        (el) => void lazyCard(() => import('./views/plan-edit'), (m) => m.mountPlanEditor(el, settings.currentRepo), { zone: el, what: 'Plan de la maison' }),
         // #346: a radiator switched off on purpose (a stove…) is not « hors ligne »
         (el) => mountStopped(el, settings.currentRepo),
         // #204: location and roofs (secret HOME_LOCATION_JSON), lazy

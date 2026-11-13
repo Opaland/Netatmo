@@ -143,9 +143,9 @@ export const FORBIDDEN = new Set(['DATA_PASSPHRASE']);
 
 /**
  * #204: secrets the app writes from a card of its own (not from « Sources de données »): the
- * home's location and roofs, sealed like the others, never readable back.
+ * home's location and roofs (#202: and the plan of the house), sealed like the others, never readable back.
  */
-export const APP_SECRETS = new Set(['HOME_LOCATION_JSON', 'STOPPED_ROOMS_JSON', 'WOOD_JSON', 'CONTRACT_JSON', 'COLD_ALERT_JSON']);
+export const APP_SECRETS = new Set(['HOME_LOCATION_JSON', 'STOPPED_ROOMS_JSON', 'WOOD_JSON', 'CONTRACT_JSON', 'COLD_ALERT_JSON', 'FLOOR_PLAN_JSON']);
 
 /**
  * #459: the household settings of ⚙ Mon logement (#497: and the shared contract, the cold alert),

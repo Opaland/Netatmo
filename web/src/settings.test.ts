@@ -147,6 +147,16 @@ describe('settings', () => {
       await expect(saveHouseholdSecret('o/r', 'INTUIS_ROOM_CATEGORIES', value)).rejects.toThrow(/ne peut pas/);
     });
 
+    it('#202: the plan of the house is sealed into the secret FLOOR_PLAN_JSON, never sent in clear', async () => {
+      const value = '{"levels":[{"id":"rdc","rooms":[{"id":"p1","name":"Nom-Secret-77","x":0,"y":0,"w":4,"h":3}],"devices":[]}]}';
+      const { calls, open } = await fakeGitHub({});
+      await putSecret('o/r', 'FLOOR_PLAN_JSON', value);
+      const put = calls.find((c) => c.method === 'PUT')!;
+      expect(put.url).toBe('https://api.github.com/repos/o/r/actions/secrets/FLOOR_PLAN_JSON');
+      expect(calls.some((c) => c.body.includes('Nom-Secret'))).toBe(false);
+      expect(open(put)).toBe(value);
+    });
+
     it('migrates a plaintext variable as it is, then deletes it; nothing to do without one', async () => {
       const old = '{"purchases":[{"day":"2025-10-01","steres":2,"species":"chene","moisture":20,"price":777}]}';
       const { calls, open } = await fakeGitHub({ WOOD_JSON: old });
