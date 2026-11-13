@@ -35,6 +35,7 @@ import { lockNotice } from './session';
 import { readShellyPrefs } from './shelly-prefs';
 import { MAX_ANSWERS, isCovered, parseAnswers, parseFires } from './stove-fires';
 import { addDays } from './aggregate';
+import { CATCH_UP_SERIES, askedInVain, catchUpOf } from './data-quality';
 import { INPUT_FIELDS, MAX_ROOFS, ROOF_FIELDS, parseLocation, parseLocationDraft, parsePvgisFile, parseSolarDoc, parseSolarInputs } from './solar';
 import { type VoletsDoc, evenings, loadNotes, recentFailures, shutterNames, summarize } from './shutters';
 import { readMark } from './storage';
@@ -506,6 +507,36 @@ describe('#359 fuzz : préférences relues de cet appareil', () => {
         assert(s.closedAt22 <= s.knownAt22 && s.knownAt22 <= s.days, 'décomptes');
       }
       assert(recentFailures(doc, '2026-01-03').every(([d, m]) => DAY.test(d) && isStr(m)), 'échecs');
+      notPolluted();
+    });
+  });
+
+  it('#569 méta du rattrapage relue : séries connues, jours et mois valides, comptes entiers, jamais d\'exception', () => {
+    fuzz('catch-up', (r) => {
+      const month = () => pick(r, ['2023-09', '2024-03', '__proto__', 'constructor', '2024-13', 'x', ...STRINGS]);
+      const raw =
+        r() < 0.4
+          ? anyValue(r)
+          : {
+              at: Object.fromEntries(Array.from({ length: 3 }, () => [pick(r, [...CATCH_UP_SERIES, '__proto__', 'x']), pick(r, ['2026-11-14', ...STRINGS])])),
+              months: Object.fromEntries(
+                Array.from({ length: 3 }, () => [
+                  pick(r, [...CATCH_UP_SERIES, '__proto__', 'toString']),
+                  r() < 0.3 ? anyValue(r) : Object.fromEntries(Array.from({ length: 3 }, () => [month(), [pick(r, NUMBERS), pick(r, NUMBERS)]])),
+                ]),
+              ),
+            };
+      const c = catchUpOf(raw);
+      if (c) {
+        assert(Object.keys(c.at).every((k) => (CATCH_UP_SERIES as readonly string[]).includes(k) && DAY.test(c.at[k])), 'séries et jours');
+        for (const cells of Object.values(c.months)) {
+          for (const [m, v] of Object.entries(cells)) assert(/^\d{4}-\d{2}$/.test(m) && v.every((n) => Number.isInteger(n) && n >= 0), 'mois et comptes');
+        }
+        for (const s of CATCH_UP_SERIES) {
+          const at = askedInVain(c, s, '2023-09-10', '2024-03-20');
+          assert(at === null || DAY.test(at), 'jour du rattrapage');
+        }
+      }
       notPolluted();
     });
   });

@@ -267,6 +267,9 @@ Plafonds par collecte, réglables par variable de dépôt (transmise par `collec
 Les nouvelles tentatives (429, 5xx) comptent. Plafond atteint : la source s'arrête proprement, ce qui
 a été récupéré est enregistré, et la collecte se termine sans erreur (avertissement dans le journal).
 Si c'était une récupération d'historique Intuis, `meta.backfill_pending` la relance la nuit suivante.
+Le rattrapage des jours manquants (case « rattrapage », #569, `docs/audit-donnees.md` § 10) passe après
+la collecte, dans les mêmes plafonds : il s'arrête seul au plafond, garde ce qu'il a ajouté, et se relance
+à la main.
 
 ## Pièces au pas de 30 minutes (S-1.26)
 
