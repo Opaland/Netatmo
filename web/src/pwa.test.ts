@@ -44,11 +44,20 @@ class FakeSw extends EventTarget implements SwContainer {
   async getRegistration() {
     return this.reg;
   }
-  /** The waiting worker takes over (SKIP_WAITING here or in another tab). */
+  /** The waiting worker takes over (SKIP_WAITING here or in another tab): « activating », then the controller changes. */
   activate() {
-    this.controller = this.reg.waiting;
+    const w = this.reg.waiting;
+    this.controller = w;
     this.reg.waiting = null;
+    if (w) (w.state = 'activating'), w.dispatchEvent(new Event('statechange'));
     this.dispatchEvent(new Event('controllerchange'));
+    return w;
+  }
+  /** …then its activate event is done: « activated ». */
+  activated(w: FakeWorker | null) {
+    if (!w) return;
+    w.state = 'activated';
+    w.dispatchEvent(new Event('statechange'));
   }
 }
 
@@ -104,7 +113,11 @@ describe('nouvelle version (#357)', () => {
     await u.apply();
     expect(w.messages).toEqual([{ type: 'SKIP_WAITING' }]);
     expect(reload).not.toHaveBeenCalled(); // not before the new worker is in charge
-    sw.activate();
+    const active = sw.activate();
+    // #606: not at the controller change either: the worker is still « activating » (WebKit then
+    // leaves the reloaded page with a worker that stays « activating »)
+    expect(reload).not.toHaveBeenCalled();
+    sw.activated(active);
     expect(reload).toHaveBeenCalledTimes(1);
   });
 
@@ -112,7 +125,7 @@ describe('nouvelle version (#357)', () => {
     const { reg, sw, reload, timers, u } = setup();
     reg.newVersion();
     await u.apply();
-    sw.activate();
+    sw.activated(sw.activate());
     timers.forEach((t) => t());
     expect(reload).toHaveBeenCalledTimes(1);
   });

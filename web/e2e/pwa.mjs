@@ -13,13 +13,12 @@
 // Run after `npm run build`: node e2e/pwa.mjs (serves dist/ itself, data/ answered by the demo
 // files, passphrase « demo »; port: E2E_PORT; E2E_BROWSER=webkit|chromium). Captures in
 // e2e/screenshots/pwa-*.png.
-// #596: in WebKit, everything runs. A check that fails there is counted as a KNOWN failure, with
-// its issue, printed and not failing the run (`known` below); when it no longer fails, the
-// script says so. #604 (« Recharger l'application » left the data cache empty: WebKit empties
-// every cache of the origin when the page reloads with no worker registration left) is fixed in
-// src/pwa.ts and checked again as any other check. Still known:
-// - #606, after « Recharger » in the update banner, the new worker stays « activating » (40 s
-//   measured; Chromium: « activated » at once).
+// #596: in WebKit, everything runs. A check that fails in one engine is counted as a KNOWN failure,
+// with its issue, printed and not failing the run (`known` below); none now. Fixed in src/pwa.ts
+// and checked as any other check: #604 (« Recharger l'application » left the data cache empty:
+// WebKit empties every cache of the origin when the page reloads with no worker registration
+// left) and #606 (reloaded at the controller change, mid-activation, the tab saw its new worker
+// « activating » for 40 s and more: « Recharger » now waits for « activated »).
 import { createServer } from 'node:http';
 import { readFileSync, existsSync, statSync } from 'node:fs';
 import { extname, join, normalize } from 'node:path';
@@ -63,9 +62,7 @@ const base = `http://localhost:${PORT}/`;
 const errors = [];
 const check = (ok, msg) => ok || errors.push(msg);
 /** #596: checks known to fail in one engine, until their issue is fixed (printed, not failing the run). */
-const known = knownFailures(BROWSER, [
-    { browser: 'webkit', issue: '#606', what: 'activation' },
-  ], (msg) => errors.push(msg));
+const known = knownFailures(BROWSER, [], (msg) => errors.push(msg));
 const t0 = Date.now();
 const progress = (s) => console.log(`[${Math.round((Date.now() - t0) / 1000)} s] ${s}`);
 const watch = (page, where) => {
