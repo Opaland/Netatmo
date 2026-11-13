@@ -525,6 +525,22 @@ describe('#359 fuzz : préférences relues de cet appareil', () => {
                   r() < 0.3 ? anyValue(r) : Object.fromEntries(Array.from({ length: 3 }, () => [month(), [pick(r, NUMBERS), pick(r, NUMBERS)]])),
                 ]),
               ),
+              // #581: the rooms asked, per series: any room id (« __proto__ » included), month -> day
+              ...(r() < 0.7
+                ? {
+                    rooms:
+                      r() < 0.2
+                        ? anyValue(r)
+                        : Object.fromEntries(
+                            Array.from({ length: 2 }, () => [
+                              pick(r, [...CATCH_UP_SERIES, '__proto__']),
+                              r() < 0.2
+                                ? anyValue(r)
+                                : Object.fromEntries(Array.from({ length: 2 }, () => [pick(r, ['100', '__proto__', 'constructor', ...STRINGS]), r() < 0.2 ? anyValue(r) : Object.fromEntries(Array.from({ length: 2 }, () => [month(), pick(r, ['2026-11-14', ...STRINGS])]))])),
+                            ]),
+                          ),
+                  }
+                : {}),
             };
       const c = catchUpOf(raw);
       if (c) {
@@ -532,9 +548,15 @@ describe('#359 fuzz : préférences relues de cet appareil', () => {
         for (const cells of Object.values(c.months)) {
           for (const [m, v] of Object.entries(cells)) assert(/^\d{4}-\d{2}$/.test(m) && v.every((n) => Number.isInteger(n) && n >= 0), 'mois et comptes');
         }
+        for (const [s, map] of Object.entries(c.rooms ?? {})) {
+          assert(Object.hasOwn(c.at, s) && map instanceof Map, 'pièces : série connue, dans une Map');
+          for (const ms of map!.values()) for (const [m, d] of Object.entries(ms)) assert(/^\d{4}-\d{2}$/.test(m) && DAY.test(d), 'pièces : mois et jours');
+        }
         for (const s of CATCH_UP_SERIES) {
-          const at = askedInVain(c, s, '2023-09-10', '2024-03-20');
-          assert(at === null || DAY.test(at), 'jour du rattrapage');
+          for (const room of [undefined, '100', '__proto__', 'constructor']) {
+            const at = askedInVain(c, s, '2023-09-10', '2024-03-20', room);
+            assert(at === null || DAY.test(at), 'jour du rattrapage');
+          }
         }
       }
       notPolluted();

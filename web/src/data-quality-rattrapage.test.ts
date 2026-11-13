@@ -4,6 +4,43 @@
 import { describe, expect, it } from 'vitest';
 import { type DayRecord, addDays } from './aggregate';
 import { type QualityInput, askedInVain, catchUpOf, curveParts, fineSource, qualityReport } from './data-quality';
+import roomsFixture from './__fixtures__/catch-up-rooms.json';
+
+// #581: the meta written by the collector's own catch-up (tests/test_rattrapage.py, A20): room 100
+// asked again in vain, room 999 (no longer listed by Intuis) never asked, the same month
+describe('#581 « redemandé » seulement pour la pièce redemandée', () => {
+  const { catch_up, holes, month } = roomsFixture as unknown as { catch_up: unknown; holes: Record<string, [string, string]>; month: [string, string] };
+  const days = (from: string, to: string) => {
+    const out: string[] = [];
+    for (let d = from; d <= to; d = addDays(d, 1)) out.push(d);
+    return out;
+  };
+  const roomsOf = [
+    { id: '100', name: 'Salon', category: 'heating' },
+    { id: '200', name: 'Chambre', category: 'heating' },
+    { id: '999', name: 'Retirée', category: 'heating' },
+  ];
+  const records: DayRecord[] = days(...month).flatMap((d) =>
+    roomsOf.filter((r) => !(holes[r.id] && d >= holes[r.id][0] && d <= holes[r.id][1])).map((r) => ({ day: d, room: r.id, cat: 'heating' as const, kwh: 1 })),
+  );
+  const of = (c: QualityInput['catchUp'], who: string) =>
+    qualityReport({ last: month[1], rooms: roomsOf, records, estimated: new Set(), catchUp: c })
+      .sources.find((s) => s.id === 'heating')!
+      .gaps.find((g) => g.who.endsWith(who))!.recover;
+  it('the room asked keeps « redemandé le … »; the room not asked does not inherit it', () => {
+    const c = catchUpOf(catch_up);
+    expect(of(c, 'Salon')).toMatch(/^Non : redemandé le 14 nov\. 2026 \(rattrapage\), Intuis n’a rien rendu/);
+    expect(of(c, 'Retirée')).not.toMatch(/redemandé/);
+    expect(of(c, 'Retirée')).toMatch(/^Non chez Intuis d’après la récupération/);
+  });
+  it('a meta from before #581 (no room detail) says « redemandé » of no single room, never an error', () => {
+    const { rooms: _rooms, ...older } = catch_up as Record<string, unknown>;
+    const c = catchUpOf(older);
+    expect(c?.rooms).toBeUndefined();
+    expect(of(c, 'Salon')).toMatch(/^Non chez Intuis d’après/);
+    expect(of(c, 'Retirée')).toMatch(/^Non chez Intuis d’après/);
+  });
+});
 
 const span = (from: string, to: string) => {
   const out: string[] = [];
