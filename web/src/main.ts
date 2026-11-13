@@ -33,6 +33,7 @@ import { html } from './trusted';
 import { listenInstall } from './install';
 import { startPwa } from './pwa';
 import { nothingKept, renderOfflineScreen } from './views/offline-screen';
+import { warmViews } from './views/lazy-views';
 import './style.css';
 import { alertHtml } from './components';
 
@@ -586,6 +587,8 @@ const idle = new IdleLock(() => void lockApp(state.lockAfter));
 // #255: once per decrypted dataset, not when the household view is toggled.
 onDatasetOpened(() => idle.start(state.lockAfter));
 onDatasetOpened(() => prefetchForOffline(ds!));
+// #555: Historique's views, out of the first screen, loaded once it is drawn (browser idle)
+onDatasetOpened(warmViews);
 // #308: an address opened directly (shared link, Back after a reload) wins over the last page.
 onDatasetOpened(() => {
   const r = parseRoute(location.hash);

@@ -14,8 +14,7 @@ import { esc, filtered, roomColor } from './ui';
 import { lazyCard } from './lazy';
 import { selectionLabel } from './history';
 import { CATEGORY_LABEL } from './aggregate';
-import * as analyse from './views/analyse';
-import * as compare from './views/compare';
+import { analyseView, compareView } from './views/lazy-views';
 import * as home from './views/home';
 import * as household from './views/household';
 import { renderMeter } from './views/meter';
@@ -70,6 +69,16 @@ function renderComfort(view: HTMLElement) {
 const comfortHandlers: Handlers = {
   click: (el) => comfort?.handleClick(el) ?? false,
   change: (t) => comfort?.handleChange(t as HTMLInputElement) ?? false,
+};
+
+// ------------------------------------------------------------------ analyse, compare (lazy, #555)
+type AnalysePart = Parameters<typeof import('./views/analyse').renderAnalyse>[2];
+const drawAnalyse = (el: HTMLElement, records: ReturnType<typeof filtered>, part: AnalysePart) =>
+  analyseView.draw(el, (m) => m.renderAnalyse(el, records, part), 'Analyse');
+const analyseHandlers: Handlers = { change: (t) => analyseView.get()?.handleChange(t as HTMLInputElement | HTMLSelectElement) ?? false };
+const compareHandlers: Handlers = {
+  click: (el) => compareView.get()?.handleClick(el) ?? false,
+  change: (t) => compareView.get()?.handleChange(t as HTMLInputElement | HTMLSelectElement) ?? false,
 };
 
 // ------------------------------------------------------------------ filters (#308)
@@ -159,7 +168,7 @@ const pieceHandlers: Handlers = { click: (el) => piece?.handleClick(el) ?? false
 function renderHistorique(view: HTMLElement) {
   const records = filtered();
   stack(view, `<h1 class="page-title" id="page-title" tabindex="-1">Historique</h1>${filterChip()}`, [
-    (el) => compare.renderCompare(el, records, 'history'),
+    (el) => compareView.draw(el, (m) => m.renderCompare(el, records, 'history'), 'Historique'),
     (el) => overview.renderOverview(el, records, 'explore'),
     (el) => (el.innerHTML = html(historyLinks())),
   ]);
@@ -194,17 +203,17 @@ function renderHistoryDetail(view: HTMLElement, route: Route) {
   const head = filterChip();
   switch (route.sub) {
     case 'annees':
-      return stack(view, head, [(el) => compare.renderCompare(el, records, 'years')]);
+      return stack(view, head, [(el) => compareView.draw(el, (m) => m.renderCompare(el, records, 'years'), 'Année par année')]);
     case 'changements':
       return stack(view, head, [(el) => rooms.renderRooms(el, records, 'changes')]);
     case 'froid':
-      return stack(view, head, [(el) => analyse.renderAnalyse(el, records, 'signature')]);
+      return stack(view, head, [(el) => drawAnalyse(el, records, 'signature')]);
     case 'jours':
-      return stack(view, head, [(el) => analyse.renderAnalyse(el, records, 'jours')]);
+      return stack(view, head, [(el) => drawAnalyse(el, records, 'jours')]);
     case 'calendrier':
-      return stack(view, head, [(el) => analyse.renderAnalyse(el, records, 'calendrier')]);
+      return stack(view, head, [(el) => drawAnalyse(el, records, 'calendrier')]);
     case 'station':
-      return stack(view, head, [(el) => analyse.renderAnalyse(el, records, 'station')]);
+      return stack(view, head, [(el) => drawAnalyse(el, records, 'station')]);
     case 'flambees':
       return stack(view, '', [renderFiresPart]);
   }
@@ -276,19 +285,24 @@ function renderTool(view: HTMLElement, route: Route) {
   if (route.page !== 'outil') return;
   if (route.tool === 'expliquer') return renderExplainTool(view, route.month);
   drawTool(view, route.tool);
-  if (SIMULATORS.has(route.tool)) {
-    view.classList.add('sim-page');
-    view.insertAdjacentHTML(
-      'afterbegin',
-      html(`<p class="sim-note"><span class="tag">Simulation</span> Une estimation « et si… » calculée sur vos données réelles, pas une mesure : les hypothèses sont rappelées dans chaque carte.</p>`),
-    );
-  }
+  simNote(view, route.tool);
+}
+
+/** The « Simulation » note of a simulator, once (#555: again when its lazy view has redrawn the page). */
+function simNote(view: HTMLElement, t: Tool) {
+  if (!SIMULATORS.has(t)) return;
+  view.classList.add('sim-page');
+  if (view.querySelector(':scope > .sim-note')) return;
+  view.insertAdjacentHTML(
+    'afterbegin',
+    html(`<p class="sim-note"><span class="tag">Simulation</span> Une estimation « et si… » calculée sur vos données réelles, pas une mesure : les hypothèses sont rappelées dans chaque carte.</p>`),
+  );
 }
 
 function drawTool(view: HTMLElement, t: Tool) {
   const records = filtered();
-  if (t === 'offres') return compare.renderCompare(view, records, 'offers');
-  if (t === 'voiture') return compare.renderCompare(view, records, 'ev');
+  if (t === 'offres') return compareView.draw(view, (m) => (m.renderCompare(view, records, 'offers'), simNote(view, t)), 'Quelle offre ?');
+  if (t === 'voiture') return compareView.draw(view, (m) => (m.renderCompare(view, records, 'ev'), simNote(view, t)), 'Une voiture électrique');
   if (t === 'facture') return overview.renderOverview(view, records, 'invoice');
   if (t === 'exports') return renderExports(view);
   if (t === 'solaire') {
@@ -316,7 +330,7 @@ function drawTool(view: HTMLElement, t: Tool) {
   }
   if (t === 'expliquer') return renderExplainTool(view);
   const part = ({ consigne: 'consigne', pac: 'pac', teletravail: 'teletravail', absences: 'absences', volets: 'volets', analyse: 'ia' } as const)[t];
-  analyse.renderAnalyse(view, records, part);
+  analyseView.draw(view, (m) => (m.renderAnalyse(view, records, part), simNote(view, t)), 'Outil');
 }
 
 // ------------------------------------------------------------------ État des données (#318, #336)
@@ -457,7 +471,7 @@ function renderSettingsPage(view: HTMLElement, route: Route) {
         },
         // #366: the wood bought for the stove, turned into heat and euros
         (el) => void lazyCard(() => import('./views/wood'), (m) => m.mountWood(el, settings.currentRepo), { zone: el, what: 'Poêle à bois' }),
-        (el) => analyse.renderAnalyse(el, records, 'travaux'),
+        (el) => drawAnalyse(el, records, 'travaux'),
         (el) =>
           (el.innerHTML = html(`<section class="card"><div class="card-head"><h2>Appareils saisis à la main</h2>${scopeTag('appareil')}</div>
           <p class="hint muted">${ds!.linky.size && !tenant().on ? 'Ils se saisissent sous leur décomposition, dans la carte « Autres usages en détail » du Compteur (une seule carte, pour voir aussitôt leur part).' : 'Disponible avec le compteur Linky.'}</p>
@@ -526,14 +540,14 @@ export const PAGES: Record<Route['page'], Page> = {
   pieces: { render: renderPieces, handlers: [h(undefined, rooms.handleChange)] },
   piece: { render: renderPiece, handlers: [pieceHandlers] },
   confort: { render: renderComfort, handlers: [comfortHandlers] },
-  'chauffe-eau': { render: (v) => analyse.renderAnalyse(v, filtered(), 'chauffe-eau'), needsData: true },
-  historique: { render: renderHistorique, handlers: [h(undefined, overview.handleChange), h(compare.handleClick, compare.handleChange)] },
-  'historique-detail': { render: renderHistoryDetail, handlers: [h(compare.handleClick, compare.handleChange), h(undefined, analyse.handleChange), h(undefined, rooms.handleChange)] },
+  'chauffe-eau': { render: (v) => drawAnalyse(v, filtered(), 'chauffe-eau'), needsData: true },
+  historique: { render: renderHistorique, handlers: [h(undefined, overview.handleChange), compareHandlers] },
+  'historique-detail': { render: renderHistoryDetail, handlers: [compareHandlers, analyseHandlers, h(undefined, rooms.handleChange)] },
   // #301: the meter tab and its detail pages (views/meter.ts), one period for all of them
   compteur: { render: renderMeter },
-  'compteur-detail': { render: renderMeter, handlers: [h(undefined, analyse.handleChange)] },
+  'compteur-detail': { render: renderMeter, handlers: [analyseHandlers] },
   outils: { render: renderOutils },
-  outil: { render: renderTool, handlers: [h(compare.handleClick, compare.handleChange), h(undefined, analyse.handleChange), h(undefined, (t) => explain?.handleChange(t) ?? false)], needsData: true },
+  outil: { render: renderTool, handlers: [compareHandlers, analyseHandlers, h(undefined, (t) => explain?.handleChange(t) ?? false)], needsData: true },
   etat: { render: renderEtat, handlers: [qualityHandlers] },
   rapport: { render: (v) => report.renderReport(v), handlers: [h(report.handleClick, report.handleChange)] },
   aide: { render: renderAide },

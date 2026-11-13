@@ -11,7 +11,7 @@ import { lazyCard } from '../lazy';
 import { unavailable } from '../offline';
 import { TEMP, dayLong, dayShort, periodLine, seasonLabel } from '../glossary';
 import { yearLine } from '../history';
-import { countedHtml } from './compare';
+import { countedHtml } from './counted';
 import { weeklyMeans } from '../chart-theme';
 import { activeRooms, catColor, esc, fmt1, isOutdoor, moduleColor, roomName, fmtKwh, lastDay, longDate, seasonStyle, seg, table, measureColor, referenceColor } from '../ui';
 import { hour } from '../glossary';

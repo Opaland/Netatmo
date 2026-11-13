@@ -66,7 +66,10 @@ Le **budget de taille** (`web/scripts/size-budget.mjs`, 281 kB gzip) compte le c
 tous les chunks que `index.html` précharge (`modulepreload`) ; il échoue au-delà de 80 % du budget
 (#227). ECharts est dans son propre chunk, chargé au premier graphique (`charts.ts` → `echarts-lib.ts`) :
 n'importez jamais `echarts` ailleurs. Un nouvel écran ou une nouvelle carte se charge à la demande
-(`import()` différé), comme `views/linky.ts` ou `legal.ts`.
+(`import()` différé), comme `views/linky.ts` ou `legal.ts`. Les vues de l'Historique, du Compteur et
+des outils (`views/analyse.ts`, `views/compare.ts`) passent par `views/lazy-views.ts` : chargées à la
+première page qui les montre, ou plus tôt quand le navigateur est inoccupé après le premier écran ; le
+script de taille échoue si l'une d'elles revient dans le premier écran (#555).
 
 Les données de démonstration se régénèrent avec `python -m collector demo` (phrase de passe « demo »).
 

@@ -83,3 +83,39 @@ export function lazyAction<M>(btn: HTMLElement, load: () => Promise<M>, run: (m:
     }, 4000);
   });
 }
+
+/**
+ * #555: the view module of pages that the first screen does not show (Historique, Compteur, the
+ * tools): imported by `lazyCard` the first time one of them is drawn, then drawn at once on every
+ * redraw (no « Chargement… » between two choices of a list).
+ */
+export function lazyView<M>(load: () => Promise<M>) {
+  let mod: M | null = null;
+  return {
+    /** The module once loaded: the page's event handlers have nothing to handle before. */
+    get: () => mod,
+    /**
+     * Load the module ahead of its page (views/lazy-views.ts, browser idle). A failure changes
+     * nothing: the page that needs the view loads it again with `lazyCard`, which reports it.
+     */
+    warm() {
+      if (!mod) void load().then((m) => (mod ??= m), () => undefined);
+    },
+    /** Draw `el` with the module: now when it is loaded, else after a « Chargement… » placeholder. */
+    draw(el: HTMLElement, fn: (m: M) => void, what: string) {
+      if (mod) return fn(mod);
+      const p = document.createElement('p');
+      p.className = 'empty';
+      p.textContent = 'Chargement…';
+      el.replaceChildren(p);
+      void lazyCard(
+        load,
+        (m) => {
+          mod = m;
+          if (el.isConnected) fn(m);
+        },
+        { zone: el, what },
+      );
+    },
+  };
+}

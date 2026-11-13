@@ -12,13 +12,13 @@ import {
   pctChange,
   total,
 } from '../aggregate';
-import { compareOffers, daySplits, djuBetween, monthlyDju, offPeakShares } from '../analysis';
+import { djuBetween, monthlyDju } from '../analysis';
 import { djuMethodText, yearCold } from '../dju';
 import { woodYear } from '../isolation';
-import { type State, activeRooms, ds, setState, state } from '../app';
+import { type State, ds, setState, state } from '../app';
 import { type Series, barChart, chartCaption, cssVar, lineChart } from '../charts';
 import { SEASON_DEFINITION, dayLong, dayShort, monthLong, monthShort, plural, seasonLabel, signedPct } from '../glossary';
-import { historyCounted, yearLine, yearsLine } from '../history';
+import { yearLine, yearsLine } from '../history';
 import { countedWhat } from '../home';
 import { term } from '../plain';
 import { routeKey } from '../router';
@@ -26,10 +26,8 @@ import { uncertainDays } from '../checks';
 import { cutDays } from './quality';
 import { WITH_SUBSCRIPTION } from '../synthese';
 import { bucketMarks, monthKeys, shortDate, yoyCaveat, yoyWindow } from '../periods';
-import { periodAt } from '../offers';
 import {
   avgPrice,
-  contracts,
   costAvailable,
   costOf,
   esc,
@@ -38,7 +36,6 @@ import {
   fmtKwh,
   lastDay,
   longDate,
-  offCol,
   pct,
   seasonStyle,
   table,
@@ -46,7 +43,9 @@ import {
   yearColor,
 } from '../ui';
 import { html } from '../trusted';
-import { alertHtml, countedNote, legend, tile } from '../components';
+import { alertHtml, legend, tile } from '../components';
+import { countedHtml } from './counted';
+import { comparison } from './offer-comparison';
 import { lazyCard } from '../lazy';
 import { tenant, tenantNote } from '../tenant';
 import { verdictWood, woodOver } from './wood-state';
@@ -82,13 +81,6 @@ export function explainLinks(records: DayRecord[], last: string): string {
   return `<details class="table-details" id="explain-fold"><summary>Pourquoi un mois a changé ?</summary><p class="hint explain-links" id="explain-links">${months
     .map((m) => `<a class="link" href="#${routeKey({ page: 'outil', tool: 'expliquer', month: m })}"><span class="sr-only">Expliquer </span>${esc(monthShort(m))}<span class="sr-only"> (${esc(monthLong(m))})</span></a>`)
     .join(' · ')}</p></details>`;
-}
-
-/** « Compté : … » of the cards of Historique (#301): the selection of the moment, named. */
-export function countedHtml(heatingOnly = false, more = ''): string {
-  const all = activeRooms().length;
-  const text = historyCounted({ cat: state.cat, rooms: state.rooms ? state.rooms.length : all, allRooms: all }, heatingOnly);
-  return countedNote(`${esc(text)}${more ? ` ; ${esc(more)}` : ''}.`);
 }
 
 /**
@@ -509,39 +501,7 @@ function seasonTiles(records: DayRecord[], picked: number[], current: number, cl
 }
 
 // ------------------------------------------------------------------ EDF offer comparator
-// #256: the comparator card and its chart both need it; the year chips do not change it.
-let lastComparison: { deps: unknown[]; value: ReturnType<typeof computeComparison> } | null = null;
-function comparison() {
-  const deps = [ds, state.simKva, contracts()];
-  if (!lastComparison || deps.some((d, i) => d !== lastComparison!.deps[i])) lastComparison = { deps, value: computeComparison() };
-  return lastComparison.value;
-}
-
-function computeComparison() {
-  const off = offCol();
-  const linky = ds!.linky.size ? ds!.linky : null;
-  const splits = daySplits(ds!.records, ds!.tariffs, off, offPeakShares(ds!.tariffs, off), linky);
-  const kvaAt = (d: string) => state.simKva ?? periodAt(contracts(), d)?.kva ?? 9;
-  const base = ds!.offers.get('edf-trv-base') ?? [];
-  const hphc = ds!.offers.get('edf-trv-hphc') ?? [];
-  const years = [...new Set(splits.map((s) => Number(s.day.slice(0, 4))))].sort();
-  const perYear = years.map((y) => ({
-    y,
-    r: compareOffers(splits.filter((s) => s.day.startsWith(String(y))), kvaAt, base, hphc, ds!.tempo.rows, ds!.tempo.days),
-  }));
-  const all = compareOffers(splits, kvaAt, base, hphc, ds!.tempo.rows, ds!.tempo.days);
-  return { perYear, all, scope: linky ? 'logement' : 'chauffage' };
-}
-
-/** #314: one-line summary of the comparator for its row in Outils (last full year, else the latest). */
-export function offersLine(): string {
-  if (tenant().on || !ds!.offers.size || !ds!.tempo.rows.length) return '';
-  const rows = comparison().perYear.filter((p) => p.r.hphc.days > 0);
-  const p = [...rows].reverse().find((x) => x.r.hphc.days >= 360) ?? rows[rows.length - 1];
-  if (!p) return '';
-  const eur = (k: 'base' | 'hphc' | 'tempo') => fmtEur(p.r[k].energy + p.r[k].subscription);
-  return `${p.y}${p.r.hphc.days < 360 ? ` (${p.r.hphc.days} j)` : ''} : Base ${eur('base')} · Heures creuses ${eur('hphc')} · Tempo ${eur('tempo')}`;
-}
+// #555: the comparison itself and its line in Outils are in offer-comparison.ts (first screen).
 
 function simWarning() {
   if (state.simKva === null || !ds!.pmax.size) return '';

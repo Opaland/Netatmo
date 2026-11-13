@@ -11,6 +11,10 @@ import { gzipSync } from 'node:zlib';
 const BUDGET_KB = 281;
 // #227: target, without changing the budget: the first screen stays under 80 % of it.
 const TARGET = 0.8;
+// #555: views that the first screen does not show, each in a chunk of its own loaded on demand
+// (src/views/lazy-views.ts). The chunk is named after its module; it must exist (a view merged
+// into a preloaded chunk has none of its own) and must not be preloaded.
+const DEFERRED_VIEWS = ['analyse', 'compare'];
 
 const dist = new URL('../dist/', import.meta.url).pathname;
 const html = readFileSync(join(dist, 'index.html'), 'utf8');
@@ -41,6 +45,15 @@ for (const s of sizes) {
 const missing = [...first].filter((f) => !sizes.some((s) => s.file === f));
 if (missing.length) {
   console.error(`size-budget : ${missing.join(', ')} absent(s) de dist/assets.`);
+  process.exit(1);
+}
+const deferredWrong = DEFERRED_VIEWS.flatMap((name) => {
+  const own = sizes.filter((s) => new RegExp(`^assets/${name}-[\\w-]{8}\\.js$`).test(s.file));
+  if (!own.length) return [`${name} : pas de morceau à part (fusionné dans un autre, importé en statique ?)`];
+  return own.filter((s) => first.has(s.file)).map((s) => `${name} : ${s.file} est préchargé par le premier écran`);
+});
+if (deferredWrong.length) {
+  console.error(`size-budget (#555) : une vue chargée à la demande est revenue dans le premier écran.\n  ${deferredWrong.join('\n  ')}\nLa charger par import() (src/views/lazy-views.ts).`);
   process.exit(1);
 }
 const used = sizes.filter((s) => first.has(s.file)).reduce((a, s) => a + s.gzip, 0) / 1000;
