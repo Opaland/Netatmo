@@ -49,7 +49,8 @@ Documents antérieurs, toujours valables : [README](../../README.md), [notes API
 | v2.1 : maison connectée (plan de la maison : lecture dans Pièces, éditeur dans ⚙ Mon logement ; finitions de l'assistant et de la trace d'un autre site) | Livré et clos ([revue de fin](revues/v2.1.md), 54 👍 / 17 ➖ / 1 👎 ; revue de code § 12, PR #542) ; restent CO₂ et image de fond du plan (décisions D48, D49, § 10) ; Livebox, NAS, CPL et TIC au jalon « Matériel » (attendent le pont) |
 | v2.2 : audit des données (dates, chevauchements, valeurs, trous et leur cause ; rapport chiffré lu dans État des données ; finitions du plan, préférence « tableaux ouverts ») | Livré et clos ([revue de fin](revues/v2.2.md), 55 👍 / 16 ➖ / 1 👎 ; revue de code § 12, PR #551) ; restent le premier rapport sur les vraies données et les seuils « hypothèse » (§ 9), les décisions (§ 10) |
 | v2.3 : fiabilité et suites des revues (marge de l'Historique et de l'Accueil, premier écran à 45 % du budget, hauteurs mesurées dans le dépôt, un jour dans deux fichiers lu une fois partout, unités et faux positifs de l'audit) | Livrée et close ([cadrage](revues/v2.3-cadrage.md), [revue de fin](revues/v2.3.md), 55 👍 / 16 ➖ / 1 👎 ; revue de code § 12, PR #565) ; restent les décisions (§ 10) et les preuves du propriétaire (§ 9) |
-| Après la v2.3, jalon « Matériel » | [Feuille de route](feuille-de-route.md) |
+| v2.4 : données manquantes ou mal affichées (pics impossibles du bilan réel, courbe Linky au format 2026, rattrapage sans écrasement, jamais 0 et « incomplet » face aux trous réels) | Revue de fin faite ([revue de fin](revues/v2.4.md), 55 👍 / 16 ➖ / 1 👎 ; revue de code § 12) ; **en cours** jusqu'à la clôture ; restent les gestes du propriétaire sur son compte (§ 9) et les décisions (§ 10) |
+| Après la v2.4, jalon « Matériel » | [Feuille de route](feuille-de-route.md) |
 
 ## Conventions
 

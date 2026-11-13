@@ -1,5 +1,41 @@
 # Historique des versions
 
+## v2.4 — novembre 2026 (en cours) : données manquantes ou mal affichées
+
+Demande du propriétaire du 13/11/2026 (« traiter le problème de data manquantes ou mal affichées,
+vérification complète »), sans document de cadrage : le contenu vient du **premier bilan réel**, le
+journal public du run Diagnostic `43418619021` (nombres par contrôle et par mois seulement ; aucune
+donnée réelle lue). Revue de fin de version par les **72 personas**, revue design des écrans changés et
+revue de code par agent : [`docs/bmad/revues/v2.4.md`](docs/bmad/revues/v2.4.md). Les gestes sur le
+compte réel sont au propriétaire, dans l'ordre de la revue (§ 9) ; les choix de données et de mise en
+page restent des propositions (§ 10).
+
+- **« Pics impossibles »** (#567, #571) : 59 648 cas au premier bilan, dus au contrôle, pas aux
+  données : le maximum Linky est rangé en kVA quelle que soit l'unité brute de la réponse (VA). Le
+  test part d'un jeu écrit par le collecteur lui-même. Rien n'est réécrit.
+- **Heures qui ne font pas le jour** (#568, #573) : la courbe Linky au format 2026 est lue avec le pas
+  donné une fois en tête et **une seule** grandeur (la puissance active), plus jamais la somme de
+  plusieurs ; le bilan public dit quel genre de série porte les cas ; Compteur → Journée type → « Une
+  journée » écrit le total du jour du compteur, qui fait foi, et dit quand la courbe ne le retrouve
+  pas. La cause des 77 jours reste à confirmer par le prochain bilan et l'inventaire ; la courbe déjà
+  rangée n'est pas reprise.
+- **Rattrapage sans écrasement** (#569, #572) : case « Rattrapage des jours manquants » de Collecte
+  quotidienne : Intuis, station et courbe Linky (24 mois chez Enedis) ; ajoute seulement, jamais un
+  jour présent, idempotent, sous les plafonds, jamais fatal ; journal par série et par mois, sans
+  valeur ni nom. État des données dit, trou par trou, si c'est récupérable et, après un rattrapage
+  resté vain, pourquoi.
+- **Trous réels à l'écran** (#570, #574) : un appareil sans relevé n'est jamais compté 0 (« non
+  mesuré ») ; un total qui contient des jours manquants porte « incomplet » ; une comparaison laisse
+  hors des deux côtés, en le nommant, un appareil sans relevé d'un côté ou ajouté depuis (Accueil, vue
+  Proche, Année par année, rapport, Hiver contre hiver, Expliquer un mois, Questions types) ; le bilan
+  sépare les trous des pièces chauffées et du chauffe-eau. La fixture `trous-reels` reproduit la forme
+  des trous du vrai compte (jours déplacés, aucune valeur) ; `npm run e2e:trous` dans la CI.
+- **e2e** (#575) : « carte hors ligne » ne dépend plus du préchargement des vues.
+- **Revue de fin de version** (revue, § 6 et § 12) : la case du rattrapage porte dans GitHub le nom que
+  l'appli dit de cocher (un test les tient d'accord) ; SECURITY.md dit que les réglages du foyer gardés
+  en variables d'Actions sont visibles dans les journaux publics, à migrer en secrets ; README à jour ;
+  captures de référence régénérées dans la police de la CI.
+
 ## v2.3 — novembre 2026 : fiabilité et suites des revues
 
 Les dettes mesurées par les revues de fin de v2.0 à v2.2 et les suites de la revue v2.2
