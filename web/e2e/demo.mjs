@@ -939,6 +939,40 @@ try {
     }
     await ctx.close();
   }
+  // #579: a view loaded on demand says it is coming to a screen reader (role="status" in a zone
+  // aria-busy), and the zone is no longer busy once drawn. The module of « Hiver contre hiver » is
+  // held back (warm-up included) until the wait has been read.
+  {
+    progress('attente annoncée');
+    const ctx = await browser.newContext({ viewport: { width: 360, height: 800 }, serviceWorkers: 'block' });
+    const page = await ctx.newPage();
+    page.on('pageerror', (e) => errors.push(`attente annoncée : ${e.message}`));
+    let release = () => {};
+    const held = new Promise((r) => (release = r));
+    await ctx.route(/\/assets\/compare-[\w-]+\.js$/, async (r) => {
+      await held;
+      await r.continue();
+    });
+    try {
+      await openDemo(page);
+      await page.waitForSelector('.kpi');
+      await page.evaluate(() => (location.hash = '#historique'));
+      const wait = page.locator('#view [aria-busy="true"] > [role="status"]');
+      await wait.first().waitFor({ timeout: 15000 });
+      const text = await wait.first().innerText();
+      check(/^Chargement/.test(text), `attente annoncée : texte inattendu « ${text} »`);
+      const zone = await wait.first().evaluate((el) => el.parentElement.id);
+      release();
+      await page.waitForSelector('#view[data-page="historique"][data-ready]', { state: 'attached', timeout: 30000 });
+      const busy = await page.evaluate((id) => document.getElementById(id)?.getAttribute('aria-busy') ?? 'absente', zone);
+      check(busy === 'absente', `attente annoncée : la zone #${zone} reste aria-busy="${busy}" une fois dessinée`);
+    } catch (err) {
+      errors.push(`attente annoncée : ${err}`);
+    } finally {
+      release();
+    }
+    await ctx.close();
+  }
   // #254: while a passphrase is being checked, the demo button cannot start a second unlock.
   {
     progress('déverrouillage unique');
