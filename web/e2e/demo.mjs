@@ -910,6 +910,10 @@ try {
       await openDemo(page);
       await go(page, 'accueil');
       await page.waitForSelector('.kpi');
+      // #555: Outils is itself a lazy view, warmed when the browser is idle. Load it first (online,
+      // without the shutters card), so that offline only the card's own module is missing: otherwise
+      // the whole page says « indisponible » or the card, depending on whether the warm-up ran.
+      await go(page, 'outils-pac');
       await ctx.setOffline(true);
       await page.evaluate(() => (location.hash = '#outils-volets'));
       const failed = page.locator('#shutters-zone .lazy-failed');
