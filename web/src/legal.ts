@@ -5,6 +5,7 @@
 
 import { alertHtml } from './components';
 import { localDay } from './glossary';
+import { repoDoc } from './source-repo';
 
 export type Risk = 'faible' | 'moyen' | 'élevé';
 
@@ -115,7 +116,7 @@ const fmt = (d: string) => new Date(`${d}T12:00:00Z`).toLocaleDateString('fr-FR'
 
 /** Content of the « Cadre juridique » card. */
 export function legalHtml(today = localDay()): string {
-  const docUrl = 'https://github.com/Opaland/Netatmo/blob/main/docs/juridique.md';
+  const docUrl = repoDoc('docs/juridique.md');
   return `${alertHtml('info', "<strong>Ceci n'est pas un avis juridique.</strong> Résumé de ce que le projet a lu des conditions des services qu'il appelle, à la date indiquée.")}
     <p class="hint">Cadre : un <strong>usage domestique</strong> de vos propres données (radiateurs, station, compteur), chiffrées, dans votre propre dépôt ; rien n'est vendu ni partagé.
       Le RGPD exempte en principe l'usage strictement personnel ou domestique (article 2.2.c, à vérifier si l'usage change). Pour les membres du foyer : vue foyer (chambres regroupées), verrouillage automatique. Station : la pression est gardée par jour ; le <strong>bruit</strong> du séjour, qui trahit l'occupation, n'est lu qu'avec l'accord du foyer (variable <code>STATION_NOISE</code>), et seulement en heures bruyantes par jour, jamais l'heure, jamais envoyé à l'IA.</p>

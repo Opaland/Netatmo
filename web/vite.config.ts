@@ -16,6 +16,8 @@ export default defineConfig({
   define: {
     'import.meta.env.VITE_DATA_CACHE': JSON.stringify(cacheName('energy-data')),
     'import.meta.env.VITE_TARIFF_CACHE': JSON.stringify(cacheName('energy-tariffs')),
+    // #533: the repository of this build (a copy links to its own guide), src/source-repo.ts
+    'import.meta.env.VITE_SOURCE_REPO': JSON.stringify(env.VITE_SOURCE_REPO ?? env.GITHUB_REPOSITORY ?? ''),
   },
   plugins: [
     VitePWA({

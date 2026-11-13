@@ -100,7 +100,9 @@ def fake_gh(secrets=dp.REQUIRED_SECRETS, pages="workflow", private="false"):
             return "\n".join(secrets) + "\n"
         if path.endswith("/pages"):
             if pages is None:
-                raise RuntimeError("HTTP 404: Not Found")
+                raise RuntimeError("gh: Not Found (HTTP 404)")
+            if isinstance(pages, RuntimeError):
+                raise pages
             return pages + "\n"
         return private + "\n"
 
@@ -125,6 +127,13 @@ def test_github_secret_manquant_nomme():
 def test_github_pages_absent_ou_mal_regle():
     assert dp.check_github("moi/d", fake_gh(pages=None))[1][0] == dp.TODO
     assert dp.check_github("moi/d", fake_gh(pages="legacy"))[1][0] == dp.TODO
+
+
+def test_github_pages_illisible_n_est_pas_a_faire():
+    # #533: a refusal or a missing `gh` says nothing of Pages (« À VÉRIFIER », like the secrets)
+    for err in ("gh: Resource not accessible by integration (HTTP 403)", "gh indisponible : FileNotFoundError"):
+        status, text = dp.check_github("moi/d", fake_gh(pages=RuntimeError(err)))[1]
+        assert status == dp.CHECK and err in text
 
 
 def test_github_prive_signale():

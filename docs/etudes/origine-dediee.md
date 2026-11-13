@@ -209,11 +209,15 @@ dépôt, pas celles de Pages) :
   à accès fin du NAS (*Only select repositories*) est à recréer sur le dépôt transféré
   (`docs/etudes/volets-wiser.md`) ;
 - les liens du README (`SITE=https://opaland.github.io/Netatmo`, `gh attestation verify -R …`),
-  `SECURITY.md`, `.github/ISSUE_TEMPLATE/config.yml`, `web/src/legal.ts`, le dépôt par défaut de
-  `web/src/views/settings.ts`, les `User-Agent` du collecteur (`collector/enedis.py`,
-  `collector/shelly.py`, `scripts/tempo_jours.py`), `scripts/revue_issues.py` ;
-- ajoutés par la v2.0 : le lien de l'écran de déverrouillage en HTTP (`web/src/crypto.ts`,
-  `INSECURE_DOC`), le dépôt d'origine de `scripts/depot_pret.py` (`MODEL`) et le dépôt copié par
+  `SECURITY.md`, `.github/ISSUE_TEMPLATE/config.yml`, les `User-Agent` du collecteur
+  (`collector/enedis.py`, `collector/shelly.py`, `scripts/tempo_jours.py`),
+  `scripts/revue_issues.py` ;
+- dans l'appli, une seule ligne : `ORIGIN_REPO` de `web/src/source-repo.ts` (#533). Les liens vers
+  la documentation (écran de déverrouillage en HTTP, Cadre juridique) et le dépôt proposé par
+  défaut dans ⚙ Sources de données suivent le dépôt de la construction (`GITHUB_REPOSITORY` dans
+  GitHub Actions, ou `VITE_SOURCE_REPO`) et ne retombent sur `ORIGIN_REPO` que sans lui (copie
+  locale sur le NAS sans la variable) ; un test le tient (`tests/test_origine_dediee.py`) ;
+- ajoutés par la v2.0 : le dépôt d'origine de `scripts/depot_pret.py` (`MODEL`) et le dépôt copié par
   défaut sur le NAS (`scripts/nas/copie-locale/copie-locale.sh`, `DEPOT_URL`) ; un test tient cette
   liste d'accord avec le code (`tests/test_origine_dediee.py`) ;
 - les tests qui citent l'adresse comme exemple peuvent rester (données fictives).
