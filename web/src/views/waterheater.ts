@@ -11,6 +11,7 @@ import { hour } from '../glossary';
 import { html } from '../trusted';
 import { lsKey } from '../scope';
 import { lazyCard } from '../lazy';
+import { statusLine, waiting } from '../components';
 
 const LS_THRESHOLD = lsKey('hc-threshold');
 function threshold(): number {
@@ -91,7 +92,7 @@ export function waterHeaterCard(): string {
     )}
     ${ds!.meta.has_roomstate ? '<p class="hint" id="contactor-line" hidden></p>' : ''}
     <h3>Heures de chauffe <small class="muted">kWh moyens par heure, mois par mois</small></h3>
-    <div id="wh-hours"><p class="hint muted">${(ds!.meta.hourly_years ?? []).length ? 'Chargement des données horaires…' : 'Les données horaires arriveront avec la prochaine collecte complète.'}</p></div>
+    <div id="wh-hours">${(ds!.meta.hourly_years ?? []).length ? waiting('des données horaires') : statusLine('Les données horaires arriveront avec la prochaine collecte complète.')}</div>
     <p class="hint muted">Les heures creuses sont la colonne tarifaire où le chauffe-eau consomme le plus (détection automatique). Un mois sous le seuil est signalé dans « Jours inhabituels ».
       <label>Seuil d'alerte <input type="number" id="wh-threshold" min="50" max="100" step="1" value="${Math.round(thr * 100)}" style="width:4.5em"> %</label></p>
   </section>`;

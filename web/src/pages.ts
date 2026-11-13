@@ -3,7 +3,7 @@
 // event handlers that apply while it is shown. main.ts draws the shell (header, tab bar, back
 // arrow) and dispatches the events to the entry of the page shown only.
 import { activeRooms, ds, householdStatus, state } from './app';
-import { alert, list, seg as segment, switchField } from './components';
+import { alert, list, seg as segment, switchField, waiting } from './components';
 import type { Handlers } from './events';
 import { dayShort, fmt1 } from './glossary';
 import { HISTORY_PAGES, type HistoryPage, type Route, SETTINGS, type SettingsPage, type Tool, routeKey } from './router';
@@ -11,7 +11,7 @@ import { LOCK_CHOICES } from './session';
 import { tenant } from './tenant';
 import { html } from './trusted';
 import { esc, filtered, roomColor } from './ui';
-import { lazyCard } from './lazy';
+import { lazyCard, lazyView } from './lazy';
 import { selectionLabel } from './history';
 import { CATEGORY_LABEL } from './aggregate';
 import { analyseView, compareView } from './views/lazy-views';
@@ -53,22 +53,19 @@ function stack(view: HTMLElement, head: string, parts: ((el: HTMLElement) => voi
 }
 
 // ------------------------------------------------------------------ comfort (lazy, S-7.10)
-let comfort: typeof import('./views/comfort') | null = null;
+const comfortView = lazyView(() => import('./views/comfort'));
 function renderComfort(view: HTMLElement) {
-  if (comfort) return comfort.renderComfort(view);
-  view.innerHTML = html('<p class="empty">Chargement…</p>');
-  void lazyCard(
-    () => import('./views/comfort'),
+  comfortView.draw(
+    view,
     (m) => {
-      comfort = m;
-      if (state.view === 'confort' && view.isConnected) m.renderComfort(view);
+      if (state.view === 'confort') m.renderComfort(view);
     },
-    { zone: view, what: 'Air et confort' },
+    'Air et confort',
   );
 }
 const comfortHandlers: Handlers = {
-  click: (el) => comfort?.handleClick(el) ?? false,
-  change: (t) => comfort?.handleChange(t as HTMLInputElement) ?? false,
+  click: (el) => comfortView.get()?.handleClick(el) ?? false,
+  change: (t) => comfortView.get()?.handleChange(t as HTMLInputElement) ?? false,
 };
 
 // ------------------------------------------------------------------ analyse, compare (lazy, #555)
@@ -121,18 +118,9 @@ function roomsPicker(): string {
 }
 
 // ------------------------------------------------------------------ Pièces, Pièce (#313, lazy)
-let piece: typeof import('./views/piece') | null = null;
+const pieceView = lazyView(() => import('./views/piece'));
 function withPiece(view: HTMLElement, draw: (m: typeof import('./views/piece')) => void) {
-  if (piece) return draw(piece);
-  view.innerHTML = html('<p class="empty">Chargement…</p>');
-  void lazyCard(
-    () => import('./views/piece'),
-    (m) => {
-      piece = m;
-      if (view.isConnected) draw(m);
-    },
-    { zone: view, what: 'Pièces' },
-  );
+  pieceView.draw(view, draw, 'Pièces');
 }
 
 function renderPieces(view: HTMLElement) {
@@ -157,7 +145,7 @@ function renderPiece(view: HTMLElement, route: Route) {
   }
   withPiece(view, (m) => m.renderPiece(view, room.id));
 }
-const pieceHandlers: Handlers = { click: (el) => piece?.handleClick(el) ?? false };
+const pieceHandlers: Handlers = { click: (el) => pieceView.get()?.handleClick(el) ?? false };
 
 // ------------------------------------------------------------------ Historique (#386)
 /**
@@ -220,18 +208,9 @@ function renderHistoryDetail(view: HTMLElement, route: Route) {
 }
 
 // #469: « Flambées du poêle », loaded on demand
-let fires: typeof import('./views/fires') | null = null;
+const firesView = lazyView(() => import('./views/fires'));
 function renderFiresPart(el: HTMLElement) {
-  if (fires) return fires.renderFires(el);
-  el.innerHTML = html('<p class="empty">Chargement…</p>');
-  void lazyCard(
-    () => import('./views/fires'),
-    (m) => {
-      fires = m;
-      if (el.isConnected) m.renderFires(el);
-    },
-    { zone: el, what: 'Flambées du poêle' },
-  );
+  firesView.draw(el, (m) => m.renderFires(el), 'Flambées du poêle');
 }
 
 
@@ -267,18 +246,9 @@ function renderExports(view: HTMLElement) {
 const SIMULATORS = new Set<Tool>(['offres', 'voiture', 'consigne', 'pac', 'teletravail', 'solaire', 'thermodynamique']);
 
 // #337: « Expliquer un mois », loaded on demand
-let explain: typeof import('./views/explain') | null = null;
+const explainView = lazyView(() => import('./views/explain'));
 function renderExplainTool(view: HTMLElement, month?: string) {
-  if (explain) return explain.renderExplain(view, month);
-  view.innerHTML = html('<p class="empty">Chargement…</p>');
-  void lazyCard(
-    () => import('./views/explain'),
-    (m) => {
-      explain = m;
-      if (view.isConnected) m.renderExplain(view, month);
-    },
-    { zone: view, what: 'Expliquer un mois' },
-  );
+  explainView.draw(view, (m) => m.renderExplain(view, month), 'Expliquer un mois');
 }
 
 function renderTool(view: HTMLElement, route: Route) {
@@ -307,19 +277,19 @@ function drawTool(view: HTMLElement, t: Tool) {
   if (t === 'exports') return renderExports(view);
   if (t === 'solaire') {
     // #356: lazy chunk, with the Linky curve and the solar profile it loads
-    view.innerHTML = html`<div id="solar-zone" aria-busy="true"><p class="hint muted" role="status">Chargement du simulateur…</p></div>`;
+    view.innerHTML = html`<div id="solar-zone" aria-busy="true">${waiting('du simulateur')}</div>`;
     void lazyCard(() => import('./views/solar'), (m) => m.mountSolar(document.getElementById('solar-zone')!), { zone: 'solar-zone', what: 'Panneaux solaires' });
     return;
   }
   if (t === 'thermodynamique') {
     // #453: lazy chunk, the water heater's year confronted with the options for its replacement
-    view.innerHTML = html`<div id="hw-zone" aria-busy="true"><p class="hint muted" role="status">Chargement du simulateur…</p></div>`;
+    view.innerHTML = html`<div id="hw-zone" aria-busy="true">${waiting('du simulateur')}</div>`;
     void lazyCard(() => import('./views/hotwater'), (m) => m.mountHotWater(document.getElementById('hw-zone')!), { zone: 'hw-zone', what: 'Chauffe-eau thermodynamique' });
     return;
   }
   if (t === 'plannings') {
     // #211: half hours of the rooms, loaded with the module (S-7.10)
-    view.innerHTML = html`<div id="plannings-zone" aria-busy="true"><p class="hint muted" role="status">Chargement des relevés à la demi-heure…</p></div>`;
+    view.innerHTML = html`<div id="plannings-zone" aria-busy="true">${waiting('des relevés à la demi-heure')}</div>`;
     void lazyCard(() => import('./views/plannings'), (m) => m.mountPlannings(document.getElementById('plannings-zone')), { zone: 'plannings-zone', what: 'Mes plannings' });
     return;
   }
@@ -466,7 +436,7 @@ function renderSettingsPage(view: HTMLElement, route: Route) {
         (el) => mountStopped(el, settings.currentRepo),
         // #204: location and roofs (secret HOME_LOCATION_JSON), lazy
         (el) => {
-          el.innerHTML = html`<section class="card" id="location-card" aria-busy="true"><p class="hint muted" role="status">Chargement…</p></section>`;
+          el.innerHTML = html`<section class="card" id="location-card" aria-busy="true">${waiting()}</section>`;
           void lazyCard(() => import('./views/location'), (m) => m.mountLocation(document.getElementById('location-card'), settings.currentRepo), { zone: 'location-card', what: 'Localisation et toits' });
         },
         // #366: the wood bought for the stove, turned into heat and euros
@@ -547,7 +517,7 @@ export const PAGES: Record<Route['page'], Page> = {
   compteur: { render: renderMeter },
   'compteur-detail': { render: renderMeter, handlers: [analyseHandlers] },
   outils: { render: renderOutils },
-  outil: { render: renderTool, handlers: [compareHandlers, analyseHandlers, h(undefined, (t) => explain?.handleChange(t) ?? false)], needsData: true },
+  outil: { render: renderTool, handlers: [compareHandlers, analyseHandlers, h(undefined, (t) => explainView.get()?.handleChange(t) ?? false)], needsData: true },
   etat: { render: renderEtat, handlers: [qualityHandlers] },
   rapport: { render: (v) => report.renderReport(v), handlers: [h(report.handleClick, report.handleChange)] },
   aide: { render: renderAide },

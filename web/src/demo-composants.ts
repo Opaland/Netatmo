@@ -14,6 +14,7 @@ import {
   periodBar,
   scheduleBand,
   seg,
+  loadingText,
   stateBlock,
   switchField,
   tile,
@@ -72,7 +73,7 @@ function render() {
     alert('good', 'Facture rapprochée', 'Écart de 2 € avec le calcul de l’application.'),
   ].join(''))}
   ${section('États', `<div class="kpis">${(['empty', 'loading', 'error', 'offline'] as const)
-    .map((k) => `<div class="card">${stateBlock(k, { empty: 'Aucune donnée sur cette période.', loading: 'Chargement…', error: 'Erreur d’affichage.', offline: 'Indisponible hors connexion.' }[k], k === 'loading' ? '' : '<button type="button" class="link">Réessayer</button>')}</div>`)
+    .map((k) => `<div class="card">${stateBlock(k, { empty: 'Aucune donnée sur cette période.', loading: loadingText(), error: 'Erreur d’affichage.', offline: 'Indisponible hors connexion.' }[k], k === 'loading' ? '' : '<button type="button" class="link">Réessayer</button>')}</div>`)
     .join('')}</div>`)}
   ${card({
     title: 'Salon',

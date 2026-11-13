@@ -8,7 +8,7 @@ import { INSTALL_HASH, installSteps } from '../invite';
 import { clearLockNotice } from '../session';
 import { hideUnreadableNotes, showUnreadableNotes } from '../sealed-notes';
 import { bindReveal, hideSecrets, revealButton } from '../reveal';
-import { alertHtml, formMsg, switchField } from '../components';
+import { alertHtml, formMsg, loadingText, switchField } from '../components';
 import { lazyAction } from '../lazy';
 
 /** `notice`: an information, not an error (S-7.9: key erased by the browser, data intact). */
@@ -139,7 +139,7 @@ export function renderError(err: unknown) {
 export function renderLoading() {
   disposeAll(app);
   app.innerHTML = html`<div class="skeleton" aria-busy="true" aria-live="polite">
-    <span class="sr-only">Chargement et déchiffrement des données…</span>
+    <span class="sr-only">${loadingText('et déchiffrement des données')}</span>
     <div class="sk sk-title"></div><div class="sk sk-card"></div>
     <div class="kpis"><div class="sk sk-kpi"></div><div class="sk sk-kpi"></div><div class="sk sk-kpi"></div></div>
     <div class="sk sk-chart"></div></div>`;

@@ -3,8 +3,10 @@
 // visible error state and a console.error (the e2e tests fail on it). Never a silent
 // `.catch(() => {})`, never a card that just disappears.
 import { ds } from './app';
+import { waiting } from './components';
 import { runLazy } from './loader';
 import { track } from './ready';
+import { html } from './trusted';
 
 type Zone = HTMLElement | string | null | undefined;
 
@@ -101,13 +103,14 @@ export function lazyView<M>(load: () => Promise<M>) {
     warm() {
       if (!mod) void load().then((m) => (mod ??= m), () => undefined);
     },
-    /** Draw `el` with the module: now when it is loaded, else after a « Chargement… » placeholder. */
+    /**
+     * Draw `el` with the module: now when it is loaded, else after a wait that a screen reader
+     * announces (#579: role="status", and `el` aria-busy until it is drawn or says its failure).
+     */
     draw(el: HTMLElement, fn: (m: M) => void, what: string) {
       if (mod) return fn(mod);
-      const p = document.createElement('p');
-      p.className = 'empty';
-      p.textContent = 'Chargement…';
-      el.replaceChildren(p);
+      el.setAttribute('aria-busy', 'true');
+      el.innerHTML = html(waiting('', 'empty'));
       void lazyCard(
         load,
         (m) => {
@@ -115,7 +118,7 @@ export function lazyView<M>(load: () => Promise<M>) {
           if (el.isConnected) fn(m);
         },
         { zone: el, what },
-      );
+      ).finally(() => el.removeAttribute('aria-busy'));
     },
   };
 }

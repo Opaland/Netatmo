@@ -34,7 +34,7 @@ import { html } from '../trusted';
 import * as windows from './windows';
 import * as ha from './ha';
 import { fmt1 as f1 } from '../glossary';
-import { alertHtml, howDetails } from '../components';
+import { alertHtml, howDetails, statusLine, waiting as waitingLine } from '../components';
 import { pressureCard } from './pressure';
 import { lazyCard } from '../lazy';
 import { linkRoom } from '../module-match';
@@ -366,7 +366,7 @@ function coldCard(st: Station | null, map: Map<string, string>) {
       <div class="controls"><label class="select"><span class="sr-only">Seuil</span><select data-comfort="threshold">${THRESHOLDS.map(
         (v) => `<option value="${v}" ${v === thr ? 'selected' : ''}>Sous ${f1(v)}\u00a0°C</option>`,
       ).join('')}</select></label></div></div>
-    ${waiting ? `<p class="hint muted">${hourlyFailed ? 'Relevés horaires indisponibles pour ce seuil.' : 'Chargement des relevés horaires pour ce seuil…'}</p>` : ''}
+    ${waiting ? (hourlyFailed ? statusLine('Relevés horaires indisponibles pour ce seuil.') : waitingLine('des relevés horaires pour ce seuil')) : ''}
     ${stationRooms.length ? `<div class="chart" id="cold-chart" role="img" aria-label="Heures sous ${t} par jour, 30 derniers jours"></div>` : ''}
     ${table(
       ['Pièce', 'Source', `Hiver ${s - 1}–${s}`, `Hiver ${s}–${s + 1}`],

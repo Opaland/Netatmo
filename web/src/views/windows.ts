@@ -27,7 +27,7 @@ import {
   totals,
 } from '../windows';
 import { fmt1 as f1 } from '../glossary';
-import { howDetails, switchField } from '../components';
+import { howDetails, statusLine, switchField, waiting } from '../components';
 
 const BEDROOMS = BEDROOMS_ID;
 const EXCLUDE_HOURS = 2;
@@ -91,7 +91,7 @@ export function windowsCard(showBedrooms: boolean): string {
     <p class="hint muted">Pas encore de relevé de l'état des pièces. L'API Intuis ne garde pas l'historique des fenêtres ouvertes ni du boost : un relevé horaire facultatif les note (une requête par heure, chiffrée, sans commit). Pour l'activer, ajoutez la variable de dépôt <code>ROOM_STATE_HOURLY</code> = <code>true</code> (voir le README).</p></section>`;
   ensure();
   if (!doc)
-    return `<section class="card" id="windows-card">${head}<p class="hint muted">${failed ? 'Relevés de l\'état des pièces indisponibles.' : 'Chargement des relevés de l\'état des pièces…'}</p></section>`;
+    return `<section class="card" id="windows-card">${head}${failed ? statusLine('Relevés de l’état des pièces indisponibles.') : waiting('des relevés de l’état des pièces')}</section>`;
   const rs = doc;
   const last = lastStateDay(rs);
   if (!last) return `<section class="card" id="windows-card">${head}<p class="hint muted">Aucun jour complet relevé pour l'instant : la première journée apparaît le lendemain.</p></section>`;

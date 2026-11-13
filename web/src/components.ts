@@ -188,6 +188,22 @@ export function alertHtml(kind: keyof typeof ICON, body: string, a: Attrs = {}, 
     title ? `<p><b>${esc(title)}</b></p>` : ''
   }${content}</div></div>`;
 }
+/**
+ * #579: the one wording of a wait, « Chargement… » or « Chargement de la courbe de charge… ».
+ * Written nowhere else (components.test.ts): a wait is said through `waiting()`, or inside a
+ * zone that is already announced (`aria-live`), the only places allowed to call this.
+ */
+export const loadingText = (what = '') => `Chargement${what ? ` ${what}` : ''}…`;
+/**
+ * #579: a short line that a screen reader announces when it appears (role="status"): a wait, or
+ * the failure that replaces it. Same look as the lines it replaces (`hint muted`; `empty` for a
+ * whole page); the zone that waits carries aria-busy where it is ours (lazy.ts `lazyView`).
+ */
+export function statusLine(text: string, cls = 'hint muted', tag: 'p' | 'span' = 'p'): string {
+  return `<${tag} class="${esc(cls)}" role="status">${esc(text)}</${tag}>`;
+}
+/** #579: `statusLine(loadingText(what))`, the wait of a card or a page. */
+export const waiting = (what = '', cls?: string, tag?: 'p' | 'span') => statusLine(loadingText(what), cls, tag);
 const STATE_ICON = { empty: '○', loading: '…', error: '!', offline: '⌁' } as const;
 /** Empty, loading, error or offline state of a card (same classes as the lazy cards, lazy.ts). */
 export function stateBlock(kind: keyof typeof STATE_ICON, text: string, action = ''): string {
