@@ -1,4 +1,4 @@
-// v1.6 #312 (premier lancement) and #316 (vue Proche), on Chromium:
+// v1.6 #312 (premier lancement) and #316 (vue Proche), in Chromium and in WebKit (E2E_BROWSER=webkit, #596):
 // - first unlock on a fresh device (the demo files answer as real data, passphrase « demo »):
 //   the four screens open by themselves, focus on each title, « Étape n sur 4 », skippable;
 //   « Un proche » ends on the simple view; seen once (not again after a reload); the tip
@@ -9,8 +9,8 @@
 // Run after `npm run build`: node e2e/proche.mjs   (port E2E_PORT, default 4184)
 import { spawn } from 'node:child_process';
 import AxeBuilder from '@axe-core/playwright';
-import { chromium } from 'playwright';
-import { capturesOut } from './captures.mjs';
+import { chromium, webkit } from 'playwright';
+import { BROWSER, SHOT, capturesOut } from './captures.mjs';
 
 const PORT = Number(process.env.E2E_PORT ?? 4184);
 const OUT = capturesOut(); // #583: e2e/screenshots/ only in the CI's font
@@ -95,14 +95,14 @@ async function screens(p, where) {
   await p.emulateMedia({ colorScheme: 'dark' });
   await frame(p);
   await audit(p, `${where} sombre`);
-  await p.screenshot({ path: `${OUT}/proche-${where}-sombre.png`, fullPage: true });
+  await p.screenshot({ path: `${OUT}/${SHOT}proche-${where}-sombre.png`, fullPage: true });
   await p.emulateMedia({ colorScheme: 'light' });
   await p.setViewportSize({ width: 360, height: 800 });
   // worst case: system text at 200 % and a wide font (DejaVu Sans, the default of the CI runner)
   const style = await p.addStyleTag({ content: "html { font-size: 200% !important; } * { font-family: 'DejaVu Sans', sans-serif !important; }" });
   await frame(p);
   await layout(p, `${where} 360 px 200 %`);
-  await p.screenshot({ path: `${OUT}/proche-${where}-200.png`, fullPage: true });
+  await p.screenshot({ path: `${OUT}/${SHOT}proche-${where}-200.png`, fullPage: true });
   await style.evaluate((el) => el.remove());
   await p.setViewportSize({ width: 390, height: 844 });
   await frame(p);
@@ -119,7 +119,7 @@ try {
     } catch {}
     await new Promise((r) => setTimeout(r, 200));
   }
-  const browser = await chromium.launch();
+  const browser = await (BROWSER === 'webkit' ? webkit : chromium).launch();
   const phone = { viewport: { width: 390, height: 844 }, serviceWorkers: 'block' };
 
   // ---------------------------------------------------------------- first launch: « Un proche »

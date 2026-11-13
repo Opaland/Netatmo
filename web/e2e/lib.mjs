@@ -86,3 +86,20 @@ export async function seriousAxe(page) {
     .filter((v) => v.impact === 'serious' || v.impact === 'critical')
     .map((v) => ({ id: v.id, targets: v.nodes.slice(0, 3).map((n) => n.target.join(' ')) }));
 }
+
+/**
+ * #596: checks known to fail in one engine until their issue is fixed ([{ browser, issue, what }]).
+ * `check(what, ok, msg)` passes any other check to `fail(msg)`; a known one is reported, not
+ * failed, and said when it no longer fails (to be removed). `report()` prints them all.
+ */
+export function knownFailures(browser, known, fail) {
+  const lines = [];
+  return {
+    check(what, ok, msg) {
+      const k = known.find((x) => x.browser === browser && x.what === what);
+      if (!k) return ok || fail(msg);
+      lines.push(ok ? `${k.issue} n'arrive plus dans ${browser} (à retirer de la liste des échecs connus) : ${what}` : `échec connu ${k.issue} (${browser}) : ${msg}`);
+    },
+    report: () => lines.forEach((l) => console.log(l)),
+  };
+}

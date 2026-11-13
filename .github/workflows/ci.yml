@@ -93,7 +93,8 @@ jobs:
           retention-days: 7
 
   # S-7.9: Safari iOS. WebKit (moteur de Safari) en iPhone 13 : les cinq vues de la démo,
-  # la clé effacée par iOS, les écrans v1.4, et le balayage en portée réduite (#595).
+  # la clé effacée par iOS, les écrans v1.4, tous les parcours qui savent y tourner (#596) et le
+  # balayage en portée réduite (#595).
   e2e-webkit:
     runs-on: ubuntu-latest
     defaults:
@@ -136,6 +137,36 @@ jobs:
       - run: npm run e2e:plan-edition
         env:
           E2E_BROWSER: webkit
+      # #596 : les parcours qui savent tourner dans WebKit y tournent tous (un test refuse un script qui
+      # lit E2E_BROWSER sans être ici : src/e2e-webkit.test.ts) ; ce que le WebKit de Playwright ne permet
+      # pas est dit en tête du script, avec sa raison mesurée.
+      - run: npm run e2e # démo : tout sauf le hors-ligne par le service worker (en-tête de demo.mjs) ; un échec connu, #605
+        env:
+          E2E_BROWSER: webkit
+      - run: npm run e2e:hauteurs # mesure et écrit les hauteurs en WebKit, sans juger les limites (mesurées en Chromium)
+        env:
+          E2E_BROWSER: webkit
+      - run: npm run e2e:composants
+        env:
+          E2E_BROWSER: webkit
+      - run: npm run e2e:compteur
+        env:
+          E2E_BROWSER: webkit
+      - run: npm run e2e:proche
+        env:
+          E2E_BROWSER: webkit
+      - run: npm run e2e:expliquer
+        env:
+          E2E_BROWSER: webkit
+      - run: npm run e2e:retours
+        env:
+          E2E_BROWSER: webkit
+      - run: npm run e2e:plannings
+        env:
+          E2E_BROWSER: webkit
+      - run: npm run e2e:pwa # un échec connu en WebKit, #604
+        env:
+          E2E_BROWSER: webkit
       # #595 : le balayage dans WebKit (A18 : un débordement propre à WebKit), portée réduite écrite
       # dans e2e/sweep.mjs (WEBKIT_SCOPE_RUNS × WEBKIT_SCOPE_DISPLAYS : la démo à 360 px et 200 %,
       # trous-reels à 360 px), mêmes invariants et même auto-contrôle. Fixtures fictives dans dist/.
@@ -145,6 +176,9 @@ jobs:
       - run: pip install --require-hashes -r ../requirements-lock.txt
       - run: python -m collector fixtures -o web/dist/demo-fixtures
         working-directory: .
+      - run: npm run e2e:trous # #596 : trous d'un vrai compte (forme seule), comme dans le job e2e
+        env:
+          E2E_BROWSER: webkit
       - run: npm run e2e:sweep
         env:
           E2E_BROWSER: webkit
