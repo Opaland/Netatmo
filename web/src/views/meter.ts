@@ -9,7 +9,7 @@ import { type DayRecord, bucketLabel } from '../aggregate';
 import { tariffSplit } from '../analysis';
 import { ds, state } from '../app';
 import { barChart, cssVar } from '../charts';
-import { type LegendItem, alert, countedNote, gauge, legend, list, seg } from '../components';
+import { type LegendItem, alert, countedNote, gauge, legend, list, seg, waiting } from '../components';
 import { HOME_PERIODS, type HomeRange, homeRange, scopeTitle } from '../home';
 import { lazyCard } from '../lazy';
 import {
@@ -234,7 +234,7 @@ function renderDetail(zone: HTMLElement, sub: MeterPage, r: HomeRange) {
       void lazyCard(() => import('./linky'), (m) => zone.isConnected && m.renderStandby(zone, range), { zone, what: 'Veille' });
       return;
     case 'autres': {
-      zone.innerHTML = html('<section class="card" id="breakdown-card" aria-busy="true"><p class="hint muted">Chargement…</p></section>');
+      zone.innerHTML = html(`<section class="card" id="breakdown-card" aria-busy="true">${waiting()}</section>`);
       const card = document.getElementById('breakdown-card')!;
       void lazyCard(
         () => import('./breakdown'),

@@ -8,7 +8,7 @@ import { type DayRecord, addDays, bucketKeys, bucketLabel, minusYears, pctChange
 import { activeRooms, datasetDoc, ds, onDatasetLoaded, rerender, setState, state } from '../app';
 import { barChart, chartOf, cssVar, lineChart } from '../charts';
 import { effectiveMapping, indoorModules, isBedroom, lastNightDay, lastNights, nightVerdict, offsetStats, signed, summarizeNights } from '../comfort';
-import { alert, alertHtml, comparison, countedNote, gauge, howDetails, legend, listRow, periodBar, scheduleBand, seg, tile } from '../components';
+import { alert, alertHtml, comparison, countedNote, gauge, howDetails, legend, listRow, periodBar, scheduleBand, seg, tile, waiting } from '../components';
 import { type Dataset, loadRoom30, loadRoomState } from '../data';
 import type { DatasetDoc } from '../loader';
 import { BEDROOMS_ID } from '../household';
@@ -495,7 +495,7 @@ function nowCard(
   if (sd && (sd[3] !== null || sd[4] !== null) && (!isBedroom(name) || airShown)) {
     facts.push(['Humidité · CO₂', `${sd[3] !== null ? `${nf0.format(sd[3])} %` : '—'} · ${sd[4] !== null ? `${nf0.format(sd[4])} ppm` : '—'} (moyenne du jour)`]);
   }
-  const loading = r30 === undefined ? '<p class="hint muted" role="status">Chargement des relevés de la demi-heure…</p>' : '';
+  const loading = r30 === undefined ? waiting('des relevés de la demi-heure') : '';
   return `<section class="card" id="piece-now" aria-labelledby="piece-now-title">
     <div class="card-head"><h2 id="piece-now-title">Maintenant</h2></div>
     <p class="card-sub">${esc(when ? `Dernier ${when}` : 'Pas de relevé récent')}</p>
@@ -622,7 +622,7 @@ function coldCard(
   const n = rows.filter((r) => r.temp !== null && r.temp < thr).length;
   const sub = n ? `${plural(n, 'jour')} sous ${fmtTemp(thr)}` : `aucun jour sous ${fmtTemp(thr)}`;
   if (!n) return `<section class="card" id="froid">${head(sub)}<p>La pièce n’a pas eu de journée froide : sa température moyenne est restée au-dessus de ${esc(fmt1(thr))}\u00a0°C chaque jour relevé.</p></section>`;
-  if (rs === undefined || r30 === undefined) return `<section class="card" id="froid" aria-busy="true">${head(sub)}<p class="hint muted" role="status">Chargement de l’état des radiateurs…</p></section>`;
+  if (rs === undefined || r30 === undefined) return `<section class="card" id="froid" aria-busy="true">${head(sub)}${waiting('de l’état des radiateurs')}</section>`;
   const drops = r30 ? tempDrops(new Map(ids.filter((i) => r30.has(i)).map((i) => [i, r30.get(i)!])), r.from, r.to) : null;
   const dropOf = (d: string) => {
     for (const i of ids) {
@@ -739,7 +739,7 @@ function radiatorCard(id: string, ids: string[], rs: RoomState | null | undefine
     if (open !== null) rows.push(listRow({ title: 'Fenêtre ouverte', value: h1(open) }));
     const shed = sumState(rs, ids, r.from, r.to, (c) => c.offload_h);
     if (shed !== null) rows.push(listRow({ title: 'Délestage (radiateur coupé)', value: h1(shed) }));
-  } else if (rs === undefined) rows.push('<li><div class="row"><span></span><span class="s" role="status">Chargement de l’état des radiateurs…</span><span></span><span></span></div></li>');
+  } else if (rs === undefined) rows.push(`<li><div class="row"><span></span>${waiting('de l’état des radiateurs', 's', 'span')}<span></span><span></span></div></li>`);
   const k = stationKey(id);
   const st = ds!.station;
   if (k && st) {

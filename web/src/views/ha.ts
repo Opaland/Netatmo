@@ -12,7 +12,7 @@ import { esc, longDate, nf0, table } from '../ui';
 import { type RoomState, bedroomGrouping } from '../windows';
 import { NS } from '../scope';
 import { fmt1 as f1 } from '../glossary';
-import { howDetails } from '../components';
+import { howDetails, statusLine, waiting } from '../components';
 
 // #247: loaded for the dataset shown; `doc` / `rs` / `failed` are refreshed from it at each render.
 const haDoc = datasetDoc((d) =>
@@ -53,7 +53,7 @@ function heated() {
 export function haCard(showBedrooms: boolean): string {
   if (!ds!.meta.has_ha) return '';
   ensure();
-  if (!doc) return `<section class="card" id="ha-card">${head}<p class="hint muted">${failed ? 'Import Home Assistant indisponible.' : 'Chargement de l\'import Home Assistant…'}</p></section>`;
+  if (!doc) return `<section class="card" id="ha-card">${head}${failed ? statusLine('Import Home Assistant indisponible.') : waiting('de l’import Home Assistant')}</section>`;
   const last = lastHaDay(doc);
   if (!last) return '';
   const from = addDays(last, -29);
