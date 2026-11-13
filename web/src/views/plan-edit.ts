@@ -38,7 +38,7 @@ import {
 } from '../floorplan';
 import { fmt1 } from '../glossary';
 import { hasToken, putSecret, secretTooBig } from '../settings';
-import { deviceMark, floorCells, placeMark, roomLabel, watchPlanText } from '../plan-text';
+import { deviceMark, fitPlanText, roomLabel, watchPlanText } from '../plan-text';
 import { html } from '../trusted';
 import { esc } from '../ui';
 import { secretWhere, tokenHint } from './household-secret';
@@ -107,7 +107,7 @@ function drawingSvg(l: PlanLevel): string {
     )
     .join('');
   const names = l.rooms
-    .map((r) => (r.name ? roomLabel(r, [r.name], 0.9) : ''))
+    .map((r) => (r.name ? roomLabel(r, [r.name], 0.9, `data-plan-label="${esc(r.id)}"`) : ''))
     .join('');
   const devices = l.devices.map((d) => deviceMark(d.x, d.y, DEVICE_KINDS[d.kind].mark, `plan-edit-item${d.id === selected ? ' is-selected' : ''}`, `data-plan-item="${esc(d.id)}"`)).join('');
   return `<svg class="plan-svg plan-edit-svg" viewBox="0 0 ${w} ${h}" role="img" aria-label="${esc(
@@ -322,6 +322,9 @@ function bindList(card: HTMLElement, repo: () => string) {
  * Drag on the drawing: a press on a room or a device, then a move by whole cells (pointer events:
  * finger, pen and mouse alike). A press without a move selects it. The drawing takes the touch
  * (`touch-action: none`, plan.css), and is kept under half a screen so that the page still scrolls.
+ * #597: while the gesture lasts, the words are laid out by the same rule as the drawing laid down
+ * (fitPlanText: the marks first, then the names around them), at most once per image: a dragged
+ * mark never covers a name, and a dragged room carries its name.
  */
 function bindDrawing(card: HTMLElement, repo: () => string) {
   const svg = card.querySelector<SVGSVGElement>('.plan-edit-svg');
@@ -341,8 +344,13 @@ function bindDrawing(card: HTMLElement, repo: () => string) {
       const x = itemOf(levelOf(p), id);
       if (!x) return;
       const origin = { x: x.x, y: x.y };
-      const floor = floorCells(svg);
+      const name = [...svg.querySelectorAll<SVGGElement>('g.plan-text')].find((g) => g.dataset.planLabel === id);
       let moved = false;
+      let frame = 0;
+      const layout = () => {
+        frame = 0;
+        fitPlanText(svg);
+      };
       shape.setPointerCapture(e.pointerId);
       e.preventDefault();
       const move = (ev: PointerEvent) => {
@@ -354,15 +362,15 @@ function bindDrawing(card: HTMLElement, repo: () => string) {
         x.x = origin.x + dx;
         x.y = origin.y + dy;
         clamp(x);
-        if (shape instanceof SVGRectElement) {
+        if (shape instanceof SVGRectElement && isRoom(x)) {
           shape.setAttribute('x', String(x.x));
           shape.setAttribute('y', String(x.y));
-        } else if (shape instanceof SVGGElement) {
-          shape.dataset.cell = `${x.x} ${x.y}`;
-          placeMark(shape, floor);
-        }
+          if (name) name.dataset.box = `${x.x} ${x.y} ${x.w} ${x.h}`;
+        } else if (shape instanceof SVGGElement) shape.dataset.cell = `${x.x} ${x.y}`;
+        if (!frame) frame = requestAnimationFrame(layout);
       };
       const end = () => {
+        cancelAnimationFrame(frame);
         shape.removeEventListener('pointermove', move);
         shape.removeEventListener('pointerup', end);
         shape.removeEventListener('pointercancel', end);
