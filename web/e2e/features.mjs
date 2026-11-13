@@ -527,6 +527,14 @@ try {
     await p.addStyleTag({ content: 'html, body, button, input, select, textarea { font-family: "DejaVu Sans", system-ui, sans-serif !important; }' });
     await go(p, 'historique');
     await checkHeight(p, 'historique', '360');
+    // #553: the margin won back: « Comparer » (what the winter card compares) holds on one line of
+    // one touch target at 360 px, 100 % text; as a segment its three choices took three lines (142 px)
+    const [cmpH, cmpChoices] = await p.evaluate(() => {
+      const ctl = document.querySelector('#cmp-card > .card-head')?.nextElementSibling;
+      return [ctl?.getBoundingClientRect().height ?? 0, ctl?.querySelectorAll('option, button').length ?? 0];
+    });
+    check(cmpH > 0 && cmpH <= 56, `#553 : « Comparer » de « Hiver contre hiver » fait ${Math.round(cmpH)} px de haut à 360 px (une ligne : 56 px au plus)`);
+    check(cmpChoices === 3, `#553 : « Comparer » propose ${cmpChoices} choix au lieu de 3`);
     await p.screenshot({ path: `${OUT}/${BROWSER}-360-historique.png`, fullPage: true });
     // #498: Air et confort, the longest page (12,8 screens before its explanations were folded):
     // a limit measured like the Historique's, to be lowered with the layout proposed in the PR
@@ -544,11 +552,11 @@ try {
     check(/\*[\s\S]*Évolution de \d{4} : \d{4} compte \d+ jours? estimés? ou manquants?/.test(totals), '#297 : évolution annuelle sans mention des jours perdus');
     await go(page, 'historique');
     await page.waitForSelector('#cmp-chart canvas');
-    await page.click('[data-set=compareMode][data-value=cumul]');
+    await page.selectOption('select[data-set=compareMode]', 'cumul');
     await ready(page);
     const cumul = (await label()) ?? '';
     check(!/total/.test(cumul) && / kWh au \d+ /.test(cumul), `#295 : résumé du cumul faux (« ${cumul.slice(0, 160)} »)`);
-    await page.click('[data-set=compareMode][data-value=season]');
+    await page.selectOption('select[data-set=compareMode]', 'season');
     await ready(page);
     check((await page.locator('[data-season]', { hasText: 'en cours' }).count()) === 1, '#298 : pas de puce pour la saison en cours');
     check(/\(en cours\) : total [\d\s  ]+\skWh/.test((await label()) ?? ''), '#298 : saison en cours absente du graphique');
@@ -556,7 +564,7 @@ try {
     check((await page.locator('#cmp-card .season-tiles .kpi').count()) === 2, 'Historique : les deux hivers complets ne sont pas chiffrés');
     check(/à climat égal/.test(await page.locator('#cmp-card').innerText()), 'Historique : pas de comparaison « à climat égal »');
     check((await page.locator('#cmp-legend .legend i.line').count()) === 1, 'Historique : hiver en cours non signalé (pointillé)');
-    await page.click('[data-set=compareMode][data-value=monthly]');
+    await page.selectOption('select[data-set=compareMode]', 'monthly');
     await ready(page);
     // #303 : un seul tableau de signature, saison courte « provisoire »
     await go(page, 'historique-froid');
