@@ -2,7 +2,7 @@
 // through `waiting()` / `statusLine()` (role="status"), or inside a zone that is already announced
 // (`aria-live`): guarded on the real files, like design-usage.test.ts (AGENTS.md § 5).
 import { describe, expect, it } from 'vitest';
-import { loadingText, statusLine, waiting } from './components';
+import { loadingText, pendingText, statusLine, waiting } from './components';
 
 const fsName = 'node:fs';
 const { readFileSync, readdirSync } = (await import(/* @vite-ignore */ fsName)) as {
@@ -32,9 +32,23 @@ const ANNOUNCED_ZONE: Record<string, string> = {
 };
 
 describe('#579 : toute attente est annoncée', () => {
-  it('« Chargement » n’est écrit que dans components.ts', () => {
-    const elsewhere = TS.filter((f) => f !== 'components.ts' && /Chargement/.test(code(f)));
+  // #593: with or without a capital, and « calcul… » too (three waits written by hand escaped
+  // the first guard, one of them not announced); « Rechargement » (a button's label) and
+  // « téléchargement » are other words.
+  const WAIT_WORD = /(?<!\p{L})(?:[Cc]hargement|calcul…)/u;
+  it('une attente (« Chargement », « chargement… », « calcul… ») n’est écrite que dans components.ts', () => {
+    const elsewhere = TS.filter((f) => f !== 'components.ts' && WAIT_WORD.test(code(f)));
     expect(elsewhere).toEqual([]);
+  });
+
+  it('pendingText() n’est dit que par statusLine() (role="status")', () => {
+    const bare = TS.filter((f) => f !== 'components.ts' && (code(f).match(/\bpendingText\(/g) ?? []).length !== (code(f).match(/\bstatusLine\(pendingText\(/g) ?? []).length);
+    expect(bare).toEqual([]);
+  });
+
+  it('le motif de la garde voit les attentes et pas les autres mots', () => {
+    for (const w of ['Chargement…', 'Relevés : chargement…', '<span>chargement…</span>', 'Bilan : calcul…']) expect(WAIT_WORD.test(w), w).toBe(true);
+    for (const w of ['Rechargement…', 'téléchargement', 'calcul du coût', 'calculé']) expect(WAIT_WORD.test(w), w).toBe(false);
   });
 
   it('loadingText() ne sert hors de waiting() que dans une zone déjà annoncée', () => {
@@ -50,5 +64,9 @@ describe('#579 : toute attente est annoncée', () => {
     expect(waiting('', 'empty')).toBe('<p class="empty" role="status">Chargement…</p>');
     expect(waiting('de l’état des radiateurs', 's', 'span')).toBe('<span class="s" role="status">Chargement de l’état des radiateurs…</span>');
     expect(statusLine('Import <b>indisponible</b>.')).toBe('<p class="hint muted" role="status">Import &lt;b&gt;indisponible&lt;/b&gt;.</p>');
+    // #593: a wait after its name, or alone in a folded summary
+    expect(pendingText('Bilan des données', 'calcul')).toBe('Bilan des données : calcul…');
+    expect(pendingText('Relevés à la demi-heure et à l’heure')).toBe('Relevés à la demi-heure et à l’heure : chargement…');
+    expect(statusLine(pendingText(), 'fold-sub', 'span')).toBe('<span class="fold-sub" role="status">chargement…</span>');
   });
 });

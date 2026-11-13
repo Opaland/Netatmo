@@ -195,6 +195,11 @@ export function alertHtml(kind: keyof typeof ICON, body: string, a: Attrs = {}, 
  */
 export const loadingText = (what = '') => `Chargement${what ? ` ${what}` : ''}…`;
 /**
+ * #593: a wait after the name of what is waited for, « Bilan des données : calcul… », or alone
+ * in a folded summary, « chargement… ». Same rule as `loadingText`: said through `statusLine()`.
+ */
+export const pendingText = (label = '', verb: 'chargement' | 'calcul' = 'chargement') => `${label ? `${label} : ` : ''}${verb}…`;
+/**
  * #579: a short line that a screen reader announces when it appears (role="status"): a wait, or
  * the failure that replaces it. Same look as the lines it replaces (`hint muted`; `empty` for a
  * whole page); the zone that waits carries aria-busy where it is ours (lazy.ts `lazyView`).
