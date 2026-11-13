@@ -174,6 +174,8 @@ class Report:
         self.real_wh: dict[str, float] = {}  # day -> Intuis real Wh (cross-check, never printed)
         self.intuis_days: set[str] = set()  # days with at least one Intuis value
         self.room_missing: set[str] = set()  # days where at least one room is missing (not stopped)
+        # #569: the missing days of each room (same rule as `room_days`), what `rattrapage` asks for
+        self.missing: dict[str, set[str]] = {}
         for rid, days in values.items():
             months = {d[:7] for d in days}
             for m in months:
@@ -185,13 +187,14 @@ class Report:
                 if day not in est and _valid(v):
                     self.real_wh[day] = self.real_wh.get(day, 0.0) + float(v)
             if self.last:
-                self.room_missing |= {
+                self.missing[rid] = {
                     d.isoformat()
                     for d in _days(_day(min(days)), _day(self.last))
                     if d.isoformat() not in days
                     and d.isoformat() not in est
                     and not stopped_on(self.stopped, rid, d.isoformat())
                 }
+                self.room_missing |= self.missing[rid]
 
         linky = store.doc("linky").get("daily", {}) or {}
         self.linky = {d: v for d, v in linky.items() if isinstance(d, str) and len(d) == 10}

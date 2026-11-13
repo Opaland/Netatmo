@@ -655,7 +655,8 @@ python -m collector discover
 |---|---|
 | `python -m collector discover` | Connexion et inventaire : pièces, modules, catégorie retenue |
 | `python -m collector sync` | Récupère les 35 derniers jours (ou tout l'historique au premier lancement) |
-| `python -m collector backfill` | Force la récupération de tout l'historique |
+| `python -m collector backfill` | Force la récupération de tout l'historique (réécrit les jours présents et reconstruit le chauffe-eau : pour la première collecte) |
+| `RATTRAPAGE=true python -m collector sync` | Après la collecte, **rattrapage** des jours manquants que les sources gardent encore (Intuis, station, courbe Linky sur 24 mois) : ajoute seulement, ne réécrit jamais un jour présent (#569). Workflow **Collecte quotidienne**, case « rattrapage » ; journal : jours ajoutés / demandés par série et par mois ; mode d'emploi : [`docs/audit-donnees.md`](docs/audit-donnees.md) § 10 |
 | `python -m collector verify` | Déchiffre les données locales et affiche les totaux par année, comptés comme l'appli (voir « Ce que compte `verify` ») |
 | `python -m collector comparer SOURCE COPIE` | Vérifie que deux dossiers chiffrés ont les mêmes fichiers, le même contenu déchiffré et les mêmes totaux, sans afficher de valeur (#23) |
 | `python -m collector export-csv -o conso.csv` | Export CSV (séparateur `;`, décimales `,`, pour Excel) |
