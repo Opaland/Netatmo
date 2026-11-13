@@ -38,16 +38,21 @@ log = logging.getLogger(__name__)
 
 @dataclass
 class Tally:
-    """{series: {"YYYY-MM": [asked, added]}} and one note per series (refusal, cap, error)."""
+    """{series: {"YYYY-MM": [asked, added]}} and one note per series (refusal, cap, error).
+    #581: `rooms` adds which room was asked which month ({series: {room id: {"YYYY-MM"}}}): the
+    encrypted meta only (meta_doc), never the public log (public_lines)."""
 
     months: dict[str, dict[str, list[int]]] = field(default_factory=dict)
     notes: dict[str, str] = field(default_factory=dict)
+    rooms: dict[str, dict[str, set[str]]] = field(default_factory=dict)
 
     def _cell(self, serie: str, day: str) -> list[int]:
         return self.months.setdefault(serie, {}).setdefault(day[:7], [0, 0])
 
-    def asked(self, serie: str, day: str) -> None:
+    def asked(self, serie: str, day: str, room: str | None = None) -> None:
         self._cell(serie, day)[0] += 1
+        if room is not None:
+            self.rooms.setdefault(serie, {}).setdefault(room, set()).add(day[:7])
 
     def added(self, serie: str, day: str) -> None:
         self._cell(serie, day)[1] += 1
@@ -85,10 +90,21 @@ def meta_doc(previous: object, tally: Tally, day: str) -> dict:
     catch-up}, "months": {series: {"YYYY-MM": [asked, added]}}}. A month asked again replaces its
     counts (the days still missing then were asked that day, and the source gave nothing); the
     other months are kept. A series stopped on the way (cap, error, refusal: it has a note) is left
-    as it was. Counts and months only, like the log."""
+    as it was. Counts and months only, like the log.
+
+    #581: and "rooms": {series: {room id: {"YYYY-MM": day it was asked}}}, the rooms the catch-up
+    really asked (Intuis: only those it still lists), so that a room NOT asked never inherits the
+    « redemandé » of another room of the same month. Room ids stay in this encrypted meta; the key
+    is left out while no room was ever asked (a meta written before #581 has none: the app then
+    says « redemandé » of no single room)."""
     prev = previous if isinstance(previous, dict) else {}
     at = {k: v for k, v in (prev.get("at") or {}).items() if k in LABELS and isinstance(v, str)}
     months = {k: dict(v) for k, v in (prev.get("months") or {}).items() if k in LABELS and isinstance(v, dict)}
+    rooms = {
+        k: {rid: dict(ms) for rid, ms in v.items() if isinstance(rid, str) and isinstance(ms, dict)}
+        for k, v in (prev.get("rooms") or {}).items()
+        if k in LABELS and isinstance(v, dict)
+    }
     for serie, cells in tally.months.items():
         if serie in tally.notes:  # #569 B1: an interrupted series writes neither its months nor its day
             continue
@@ -96,7 +112,12 @@ def meta_doc(previous: object, tally: Tally, day: str) -> dict:
         if asked:
             months.setdefault(serie, {}).update(asked)
             at[serie] = day
-    return {"at": at, "months": months}
+        for rid, ms in tally.rooms.get(serie, {}).items():
+            rooms.setdefault(serie, {}).setdefault(rid, {}).update({m: day for m in ms})
+    doc = {"at": at, "months": months}
+    if rooms:
+        doc["rooms"] = rooms
+    return doc
 
 
 ERRORS = (SourceError, httpx.HTTPError, FormatError)

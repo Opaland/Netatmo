@@ -496,3 +496,7 @@ s'arrête (code HTTP, plafond) ; jamais une valeur, un nom, un identifiant ni un
 6. Ce qui reste à 0 ajouté est perdu chez la source : la collecte garde dans les métadonnées chiffrées ce
    que le rattrapage a demandé et obtenu, par série et par mois (`meta.catch_up`), et État des données le
    dit alors une fois, sous chaque trou (« Récupérable ? Non : redemandé le …, Intuis n'a rien rendu »).
+   Depuis #581, la méta chiffrée dit aussi quelles pièces ont été redemandées (`rooms`) : le trou d'une
+   pièce qu'Intuis ne liste plus n'hérite pas du « redemandé » d'une autre. Une méta écrite avant #581
+   n'a pas ce détail : le trou d'une pièce n'y est dit « redemandé » qu'après le prochain rattrapage. Le
+   journal public reste par série et par mois, sans pièce.
