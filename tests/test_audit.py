@@ -569,3 +569,27 @@ def test_a_plug_off_then_used_is_not_a_unit(clean):
         clean.put("shelly", "daily", "p0", f"2024-03-{i:02d}", 2.0 + (i % 3) * 0.1)
     clean.put("shelly", "daily", "p0", "2024-03-15", 900.0)  # used once
     assert "unite" not in found(save(clean))
+
+
+# Revue de fin de v2.2: the demo's generator drew the hours and the days independently (97
+# `somme-jour`) and wrote the hour skipped by the spring change (10 `heure-inexistante`). The demo
+# shows the audit to anyone who tries the app: it must be clean, but for one frozen reading drawn by
+# chance (a bedroom at 17.9 °C five days in a row: the kind of case `valeur-figee` is there to show).
+DEMO_TODAY = date(2026, 11, 9)  # the day the published demo was generated (--today)
+DEMO_EXPECTED = {"valeur-figee": 1}
+
+
+@pytest.mark.parametrize("where", ["generated", "published"])
+def test_the_demo_audits_clean(tmp_path, where):
+    if where == "generated":
+        from collector import demo
+
+        demo.generate(tmp_path, today=DEMO_TODAY)
+        store = Store(tmp_path, "demo")
+    else:
+        store = Store(Path(__file__).resolve().parents[1] / "web" / "public" / "demo", "demo")
+    hours = store.doc("2026.hourly")["hourly"]["r-salon"]
+    assert "2026-03-29T01" in hours and "2026-03-29T03" in hours  # the spring day was compared
+    assert sum(1 for k in hours if k >= "2026-10-01") > 500  # and the fire evenings of October
+    counts = {code: sum(by.values()) for code, by in au.audit(store).counts().items()}
+    assert {code: n for code, n in counts.items() if n} == DEMO_EXPECTED

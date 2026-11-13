@@ -72,6 +72,11 @@ par nuit sans nouveauté. Le journal des Actions est **public** : rien de person
 Règles : toutes les valeurs d'énergie en **Wh** (conversion en kWh dans l'appli) ; jours en **heure
 locale** de la maison ; un document optionnel absent (`404`) n'est jamais une erreur (`optional()` dans
 `web/src/data.ts`) ; un producteur n'écrit **que ses propres fichiers**, seul le collecteur écrit `meta`.
+Un jour rangé dans **deux fichiers d'année** est lu une fois, la valeur du fichier de son année
+(`own_year_first` côté collecteur, `keepFromYear` / `mergeYear` côté appli, #532 ; `verify` et l'export CSV
+ne suivent pas encore cette règle, voir la [revue v2.2](revues/v2.2.md) § 12). Le **rapport d'audit**
+`audit-donnees.enc.json` (#532) n'est pas dans `data/` : artefact du workflow Diagnostic (7 jours), même
+enveloppe et même clé, lu par `parseAuditReport` seul et gardé scellé sur l'appareil.
 Aucun identifiant d'appareil (adresse MAC, id dérivé) n'est stocké, même chiffré : seulement des clés
 opaques (`m0`, `i0`, `p0`) et des empreintes salées pour les retrouver. Formats détaillés :
 [`docs/api-notes.md`](../api-notes.md).

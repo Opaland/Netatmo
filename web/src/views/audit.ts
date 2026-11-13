@@ -39,7 +39,7 @@ export async function mountAudit(el: HTMLElement | null): Promise<void> {
 
 /** The summary line of the fold (État des données holds in 4 screens with every card folded, #387). */
 function foldSub(r: AuditReport | null): string {
-  if (!r) return 'bonnes dates, chevauchements : rapport à ouvrir';
+  if (!r) return 'bonnes dates, bonnes valeurs : rapport à ouvrir';
   const s = auditSummary(r);
   return s.found.length ? `${plural(s.defects, 'cas', 'cas')} impossible${s.defects > 1 ? 's' : ''}, ${plural(s.toCheck, 'cas', 'cas')} à vérifier` : 'aucun défaut trouvé';
 }
@@ -83,7 +83,7 @@ function draw(el: HTMLElement, r: AuditReport | null) {
 }
 
 function intro(): string {
-  return `<p class="card-sub">Le bilan ci-dessus compte les jours. L’audit va plus loin : bonnes dates (fuseau, changements d’heure, fin de mois et d’année), chevauchements (un jour rangé deux fois, deux sources pour la même énergie, un jour estimé posé sur un jour réel), avec le jour exact et les valeurs.</p>
+  return `<p class="card-sub">Le bilan ci-dessus compte les jours. L’audit va plus loin : bonnes dates (fuseau, changements d’heure, fin de mois et d’année), bonnes valeurs (des heures qui font le jour, des radiateurs jamais au-dessus du compteur, ni valeur impossible, figée ou mille fois trop petite), chevauchements (un jour rangé deux fois, deux sources pour la même énergie, un jour estimé posé sur un jour réel), avec le jour exact et les valeurs.</p>
     <p class="hint">Il se lance sur GitHub : onglet <strong>Actions</strong>, workflow <strong>Diagnostic</strong>, « Run workflow », case <strong>Bilan qualité</strong>. Le journal ne montre que des nombres par mois ; le détail est l’artefact <strong>${esc(AUDIT_ARTIFACT)}</strong>, chiffré avec la clé de vos données. Téléchargez-le, décompressez-le, puis ouvrez ici le fichier <strong>${esc(AUDIT_FILE)}</strong> : il est déchiffré sur cet appareil, rien n’est envoyé.</p>`;
 }
 

@@ -341,6 +341,9 @@ try {
       await page.waitForSelector('#audit-card #audit-file', { state: 'attached', timeout: 15000 });
       await page.click('#audit-fold > summary'); // folded: État des données holds in 4 screens (#387)
       check(/workflow Diagnostic/.test(await auditCard.innerText()), `${name} : carte « Audit détaillé » sans le mode d'emploi`);
+      // revue v2.2: the audit checks the values too (#547), and says so before a report is opened
+      const intro = (await auditCard.innerText()).replace(/\s+/g, ' ');
+      check(/bonnes valeurs \(/.test(intro) && /bonnes valeurs : rapport à ouvrir/.test(intro), `${name} : l'audit détaillé ne dit pas qu'il vérifie les valeurs (« ${intro.slice(0, 200)} »)`);
       await page.setInputFiles('#audit-card #audit-file', { name: 'audit-donnees.enc.json', mimeType: 'application/json', buffer: AUDIT });
       await page.waitForSelector('#audit-card [data-audit="heure-inexistante"]', { timeout: 15000 });
       await page.click('#audit-card [data-audit="heure-inexistante"] > summary');
