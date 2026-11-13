@@ -1,7 +1,7 @@
 import sodium from 'libsodium-wrappers';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ghCall, ghErrorText } from './gh-call';
-import { listSecrets, plainVariable, putSecret, runCollect, setToken } from './settings';
+import { SECRET_MAX_BYTES, listSecrets, plainVariable, putSecret, runCollect, sealedLength, setToken } from './settings';
 
 describe('#463 erreur du jeton : l’appel et la permission en cause', () => {
   afterEach(() => {
@@ -46,5 +46,39 @@ describe('#463 erreur du jeton : l’appel et la permission en cause', () => {
     const c = ghCall('/repos/o/r/actions/secrets');
     expect(ghErrorText(401, c)).toBe('GitHub : jeton invalide ou expiré (refusé pour la lecture de la liste des secrets, HTTP 401).');
     expect(ghErrorText(502, c)).toBe('GitHub : échec pour la lecture de la liste des secrets (HTTP 502).');
+  });
+});
+
+describe('#541 taille d’un secret : ce qui est envoyé, compté avant l’envoi', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    setToken(null);
+  });
+
+  it('sealedLength is the length of the base64 that putSecret sends', async () => {
+    await sodium.ready;
+    const { publicKey } = sodium.crypto_box_keypair();
+    for (const v of ['', 'a', 'é😀', 'x'.repeat(36816), '😀'.repeat(1000)])
+      expect(sealedLength(v)).toBe(sodium.to_base64(sodium.crypto_box_seal(sodium.from_string(v), publicKey), sodium.base64_variants.ORIGINAL).length);
+  });
+
+  it('a value too big once sealed is refused before any call, with its size in words; the largest that fits goes', async () => {
+    await sodium.ready;
+    const key = sodium.to_base64(sodium.crypto_box_keypair().publicKey, sodium.base64_variants.ORIGINAL);
+    const calls: string[] = [];
+    vi.stubGlobal('fetch', async (url: string, init?: RequestInit) => {
+      calls.push(`${init?.method ?? 'GET'} ${url}`);
+      if (url.endsWith('/public-key')) return Response.json({ key, key_id: 'k' });
+      return new Response(null, { status: 201 });
+    });
+    setToken('github_pat_secret_du_test');
+    const fits = 'x'.repeat(36816);
+    expect(sealedLength(fits)).toBeLessThanOrEqual(SECRET_MAX_BYTES);
+    expect(sealedLength(`${fits}x`)).toBeGreaterThan(SECRET_MAX_BYTES);
+    const err = await putSecret('proprio-fictif/depot-fictif', 'FLOOR_PLAN_JSON', `${fits}x`).then(() => null, (e: Error) => e.message);
+    expect(err).toBe('Trop grand pour être enregistré : 49 ko une fois chiffré, pour 48 ko au plus dans un secret GitHub.');
+    expect(calls.filter((c) => c.startsWith('PUT'))).toEqual([]);
+    await putSecret('proprio-fictif/depot-fictif', 'FLOOR_PLAN_JSON', fits);
+    expect(calls.filter((c) => c.startsWith('PUT'))).toHaveLength(1);
   });
 });

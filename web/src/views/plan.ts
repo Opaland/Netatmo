@@ -4,11 +4,11 @@
 // of the room. The table under the plan says the same in text (the alternative to the drawing:
 // screen readers, text at 200 %), with the devices of each room. Household view: a bedroom of the
 // plan shows « Chambres » and the group's figures, never its own (S-12.2). Loaded on demand.
-import { activeRooms, ds, state } from '../app';
+import { activeRooms, ds, householdStatus, state } from '../app';
 import { cardTable, esc, fmtKwh, tableToggle } from '../ui';
 import { countedNote, legend, seg } from '../components';
 import { fmt1, fmtTemp, plural } from '../glossary';
-import { BEDROOMS_ID, BEDROOMS_NAME, displayId } from '../household';
+import { BEDROOMS_ID, BEDROOMS_NAME, displayId, isBedroom } from '../household';
 import {
   DEVICE_KINDS,
   type FloorPlan,
@@ -22,6 +22,7 @@ import {
   heatClasses,
   roomAt,
 } from '../floorplan';
+import { deviceMark, roomLabel, watchPlanText } from '../plan-text';
 import { html } from '../trusted';
 import type { RoomFigures } from './piece';
 import '../plan.css';
@@ -81,14 +82,7 @@ interface Cell {
   value: number | null;
 }
 
-/** About the width of a character, in font sizes (to cut a name that would leave its room). */
-const CHAR_EM = 0.58;
 const FONT = 0.9; // cells
-function fit(text: string, width: number, font: number): string {
-  const max = Math.floor((width - 0.5) / (font * CHAR_EM));
-  if (max < 2) return '';
-  return text.length <= max ? text : `${text.slice(0, max - 1)}…`;
-}
 
 /** The shape of a room: a link to its page when it is linked to a room shown (its name is said by aria-label). */
 function roomSvg(c: Cell, cls: number | null): string {
@@ -103,31 +97,21 @@ const valueText = (c: Cell) => (c.value === null ? '—' : METRICS[metric].fmt(c
 /**
  * The words written on a room (name, value), in a layer of their own above the shapes: hidden from
  * the accessibility tree (the link and the table say them) and letting a touch through to the room.
+ * Laid out for the screen by fitPlanText (at least --font-xs, cut by fitName, #541).
  */
-function labelSvg(c: Cell): string {
-  const { room: r } = c;
-  const name = fit(c.name, r.w, FONT);
-  const val = r.h >= 2.6 ? fit(valueText(c), r.w, FONT) : '';
-  return `${name ? `<text class="plan-label" x="${r.x + 0.3}" y="${r.y + 1.1}" font-size="${FONT}">${esc(name)}</text>` : ''}${
-    val ? `<text class="plan-label plan-value" x="${r.x + 0.3}" y="${r.y + 2.2}" font-size="${FONT}">${esc(val)}</text>` : ''
-  }`;
-}
-
-function deviceSvg(d: PlanDevice): string {
-  const mark = DEVICE_KINDS[d.kind].mark;
-  return `<g class="plan-device"><rect x="${d.x + 0.1}" y="${d.y + 0.1}" width="0.8" height="0.8" rx="0.2"></rect><text x="${d.x + 0.5}" y="${d.y + 0.68}" font-size="${
-    mark.length > 1 ? 0.42 : 0.55
-  }" text-anchor="middle">${esc(mark)}</text></g>`;
-}
+const labelSvg = (c: Cell) => roomLabel(c.room, [c.name, valueText(c)], FONT);
+const deviceSvg = (d: PlanDevice) => deviceMark(d.x, d.y, DEVICE_KINDS[d.kind].mark);
 
 /** Draws the card; a level or a value chosen redraws it (main.ts puts the focus back on the control, #353). */
 export function mountPlanReading(el: HTMLElement, o: ReadingOpts) {
   const levels = o.plan.levels;
   if (!level || !levels.some((l) => l.id === level)) level = (levels.find((l) => l.id === 'rdc') ?? levels[0]).id;
+  // household view: a room of the plan named as a bedroom says « Chambres », linked or not (#541)
+  const household = householdStatus().active;
   const cells: Cell[] = levels.flatMap((l) =>
     l.rooms.map((room) => {
       const shown = shownRoom(room.room);
-      const name = shown?.id === BEDROOMS_ID ? BEDROOMS_NAME : room.name || shown?.name || 'Pièce sans nom';
+      const name = shown?.id === BEDROOMS_ID || (household && isBedroom(room.name)) ? BEDROOMS_NAME : room.name || shown?.name || 'Pièce sans nom';
       return { level: l, room, shown, name, value: shown ? o.figures(shown.id, o.from, o.to)[metric] : null };
     }),
   );
@@ -142,6 +126,15 @@ export function mountPlanReading(el: HTMLElement, o: ReadingOpts) {
         .join('')}<g class="plan-overlay" aria-hidden="true">${drawn.map((x) => labelSvg(x.c)).join('')}${lv.devices.map(deviceSvg).join('')}</g></svg>`
     : `<p class="hint">Rien n’est dessiné à ce niveau.</p>`;
   const m = METRICS[metric];
+  // #541: a room of the plan linked to no room has no value, and the drawing alone does not say why
+  const loose = drawn.filter((x) => !x.c.shown).length;
+  const looseNote = loose
+    ? `<p class="hint">${
+        loose === drawn.length
+          ? 'Aucune pièce de ce niveau n’est liée à une pièce Intuis'
+          : `${plural(loose, 'pièce')} sur ${drawn.length} de ce niveau ${loose > 1 ? 'ne sont liées' : 'n’est liée'} à aucune pièce Intuis`
+      } : le lien se fait dans <a class="link" href="#parametres-logement">⚙ Mon logement</a>, Plan de la maison.</p>`
+    : '';
   const keys = bounds.length
     ? legend([
         ...bounds.map((b) => ({ label: b.lo === b.hi ? m.fmt(b.lo) : `${m.fmt(b.lo)} à ${m.fmt(b.hi)}`, color: `--seq-${b.cls}` })),
@@ -178,14 +171,16 @@ export function mountPlanReading(el: HTMLElement, o: ReadingOpts) {
         .join('')}</select></label>
     </div>
     <div class="plan-frame">${svg}</div>
+    ${looseNote}
     ${keys}
     <p class="hint muted">Plus la couleur est foncée, plus la valeur est haute (${HEAT_CLASSES} paliers égaux, une échelle pour tous les niveaux). Touchez une pièce pour ouvrir sa page. Lettres : ${Object.values(
       DEVICE_KINDS,
     )
       .map((k) => `${k.mark} ${k.label.toLowerCase()}`)
-      .join(', ')}.${metric === 'cold' ? ` Seuil : ${esc(fmtTemp(state.comfortThreshold))}.` : ''}</p>
+      .join(', ')} ; un point quand la lettre ne tient pas sur le dessin (le tableau dit lequel).${metric === 'cold' ? ` Seuil : ${esc(fmtTemp(state.comfortThreshold))}.` : ''}</p>
     ${tableToggle(cardTable(['Pièce du plan', 'Niveau', m.label, 'Pièce liée', 'Appareils'], rows, 'Le plan en tableau : pièces et appareils'))}
   </section>`);
+  watchPlanText(el.querySelector<SVGSVGElement>('.plan-svg'));
   el.querySelectorAll<HTMLButtonElement>('[data-plan-level]').forEach((b) =>
     b.addEventListener('click', () => {
       level = b.dataset.planLevel as LevelId;
