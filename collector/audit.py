@@ -39,6 +39,21 @@ shutters; devices). The dates and overlap checks:
   added) or below it (impossible: the day keeps the largest family, collector/sync.py);
 - `deux-sources`: a plug (Shelly) or a Home Assistant energy sensor that measures the same energy
   as an Intuis room, day after day: the app counts it in « autres usages » on top of the room.
+
+The values checks:
+- `somme-jour`: the complete hours (half hours) of a day that do not add up to the day total
+  (Intuis hours and 30 min against the Intuis day, Linky curve against the Linky day), outside the
+  months already found shifted;
+- `pieces-sur-linky`: a day where the Intuis rooms exceed the whole-home meter (the rule of the
+  quality report, quality.py `above_meter`);
+- `valeur-impossible`: an energy that cannot be (negative, not a number, a room above SUSPECT_WH a
+  day: the « suspect » days of the quality report);
+- `unite`: a run of days a thousand times smaller than their neighbours (kWh stored as Wh), or a
+  day a thousand times larger;
+- `valeur-figee`: the same non-zero reading several days in a row (frozen sensor or reading);
+- `pic-impossible`: an hour or a half hour whose energy needs more power than the meter's maximum
+  that day (Linky pmax), or than the largest residential connection (36 kVA) without it;
+- `compteur-recule`: a Linky index lower than the day before.
 """
 
 from __future__ import annotations
@@ -53,10 +68,12 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from .crypto import decrypt_bytes, encrypt_json
-from .quality import CROSS_MARGIN_WH, CROSS_RATIO, Report, above_meter
+from .quality import CROSS_MARGIN_WH, CROSS_RATIO, SUSPECT_WH, Report, above_meter
 from .storage import Store, own_year_first
 from .sync import HOURLY_DAYS_SYNC, MONTH_GAP_SHARE, MONTH_GAP_WH
 
+# A factor 1 000 (Wh / kWh) less a factor 3 of ordinary day-to-day variation (THRESHOLDS facteur_unite).
+UNIT_RATIO = 300
 REPORT_NAME = "audit-donnees.enc.json"
 REPORT_KIND = "audit-donnees"
 REPORT_VERSION = 1
@@ -156,6 +173,52 @@ CHECKS: dict[str, Check] = {
         "« Autres usages » la retire une seconde fois du Linky : elle y est comptée deux fois",
         "a-verifier",
     ),
+    "somme-jour": Check(
+        "valeurs",
+        "Heures qui ne font pas le jour",
+        "les heures (ou demi-heures) complètes du jour ne retrouvent pas le total du jour, au-delà de la tolérance",
+        "le total du jour fait foi ; la courbe heure par heure de ce jour ne le retrouve pas",
+    ),
+    "pieces-sur-linky": Check(
+        "valeurs",
+        "Radiateurs au-dessus du compteur",
+        "les relevés Intuis du jour dépassent ce que le compteur Linky a compté pour toute la maison",
+        "le jour est compté tel quel ; le bilan le compte « Intuis > Linky »",
+    ),
+    "valeur-impossible": Check(
+        "valeurs",
+        "Énergie impossible",
+        "une énergie négative, qui n'est pas un nombre, ou une pièce au-delà de ce qu'elle peut consommer en un jour",
+        "le jour est compté et marqué « suspect » dans le bilan",
+    ),
+    "unite": Check(
+        "valeurs",
+        "Énergie mille fois trop petite ou trop grande",
+        "des jours mille fois plus petits ou plus grands que les jours voisins : kWh rangés comme des Wh, ou l'inverse "
+        "(ou un appareil éteint une semaine et plus)",
+        "la valeur est comptée telle quelle : elle fausse le total",
+        "a-verifier",
+    ),
+    "valeur-figee": Check(
+        "valeurs",
+        "Valeur figée",
+        "la même valeur non nulle revient plusieurs jours de suite : capteur ou relevé figé ?",
+        "les jours sont comptés tels quels",
+        "a-verifier",
+    ),
+    "pic-impossible": Check(
+        "valeurs",
+        "Pic impossible pour la puissance",
+        "l'énergie d'une heure ou d'une demi-heure demande plus de puissance que le maximum du compteur ce jour-là "
+        "(ou que le plus gros abonnement d'une maison, sans relevé du maximum)",
+        "la valeur est comptée telle quelle",
+    ),
+    "compteur-recule": Check(
+        "valeurs",
+        "Index du compteur qui recule",
+        "l'index du compteur Linky d'un jour est plus bas que celui de la veille",
+        "la consommation déduite des index devient négative ce jour-là",
+    ),
 }
 
 
@@ -222,6 +285,40 @@ THRESHOLDS: dict[str, Threshold] = {
         "mesurent la même chose",
         True,
     ),
+    "facteur_unite": Threshold(
+        UNIT_RATIO,
+        "×",
+        "écart aux jours voisins (médiane de 15 jours de part et d'autre) qui dit une erreur d'unité : un facteur "
+        "1 000 (Wh / kWh) moins la variation ordinaire d'un jour à l'autre",
+        True,
+    ),
+    "jours_unite": Threshold(
+        7,
+        "jours",
+        "jours de suite mille fois trop petits avant de parler d'unité : un appareil éteint quelques jours "
+        "(veille de 1 à 3 Wh) donne le même rapport ; une erreur d'unité dure",
+        True,
+    ),
+    "jours_figes": Threshold(
+        5,
+        "jours",
+        "jours de suite à la même valeur non nulle avant de parler de valeur figée",
+        True,
+    ),
+    "puissance_max": Threshold(
+        36,
+        "kVA",
+        "le plus gros raccordement d'une maison au tarif bleu ; plafond quand le Linky ne donne pas le maximum du jour "
+        "(une moyenne sur une heure ne peut pas dépasser le maximum atteint)",
+        False,
+    ),
+    "suspect_jour": Threshold(
+        SUSPECT_WH / 1000,
+        "kWh",
+        "énergie d'une pièce en un jour au-delà de laquelle elle est impossible (3,3 kW pendant 24 h ; "
+        "bilan qualité, quality.py)",
+        True,
+    ),
     "depassement_linky": Threshold(
         round((CROSS_RATIO - 1) * 100),
         "%",
@@ -231,6 +328,9 @@ THRESHOLDS: dict[str, Threshold] = {
     ),
 }
 MIN_DAYS = int(THRESHOLDS["jours_min_mois"].value)
+UNIT_RUN = int(THRESHOLDS["jours_unite"].value)
+FROZEN_DAYS = int(THRESHOLDS["jours_figes"].value)
+MAX_KVA = THRESHOLDS["puissance_max"].value
 SHIFT_SHARE = THRESHOLDS["part_decalee"].value / 100
 CORR_GAIN = THRESHOLDS["gain_correlation"].value
 LINKY_MIN = int(THRESHOLDS["jours_linky_min"].value)
@@ -449,6 +549,7 @@ class Audit:
     findings: list[Finding] = field(default_factory=list)
     # checks or files that could not be read: their name and the type of error, never a value
     errors: list[str] = field(default_factory=list)
+    _fine_cache: list | None = field(default=None, repr=False)
 
     @classmethod
     def of(cls, store: Store, docs: dict[str, dict]) -> Audit:
@@ -500,6 +601,13 @@ class Audit:
             ("fuseau", self.hours_vs_linky),
             ("jour Linky", self.linky_lag),
             ("deux sources", self.two_sources),
+            ("heures et jour", self.day_sums),
+            ("Intuis et Linky", self.above_linky),
+            ("énergies impossibles", self.impossible),
+            ("unités", self.units),
+            ("valeurs figées", self.frozen),
+            ("pics", self.peaks),
+            ("index", self.index_back),
         ]
         for what, step in steps:
             try:
@@ -676,25 +784,17 @@ class Audit:
                     )
 
     def _measured_hours(self, rid: str) -> dict[str, float]:
-        """Day -> Wh of the measured hours (Intuis hourly, else 30 min) of a room, when any is non-zero."""
+        """Day -> Wh of the measured hours (Intuis hourly, else 30 min) of a room, when not zero."""
         out: dict[str, float] = {}
-        for name, doc in self.docs.items():
-            m = YEAR_DOC.match(name)
-            if m and m.group(2) == ".hourly":
-                hours = (doc.get("hourly") or {}).get(rid)
-                for k, v in hours.items() if isinstance(hours, dict) else []:
-                    if isinstance(k, str) and _num(v):
-                        out[k[:10]] = out.get(k[:10], 0.0) + float(v)  # type: ignore[arg-type]
-        for name, doc in self.docs.items():
-            m = YEAR_DOC.match(name)
-            if m and m.group(2) == ".room30":
-                days = (doc.get("rooms") or {}).get(rid)
-                for day, cols in days.items() if isinstance(days, dict) else []:
-                    if day in out or not isinstance(cols, list):
-                        continue
-                    total = sum((_slot(c, i) or 0.0) for c in cols[:2] for i in range(48))
-                    if total:
-                        out[day] = total
+        for base, _label, room, fine, _minutes, _daily in self._fine():
+            if room != rid or base not in (".hourly", ".room30"):
+                continue
+            per_day: dict[str, float] = {}
+            for k, v in fine.items():
+                per_day[k[:10]] = per_day.get(k[:10], 0.0) + v
+            for d, total in per_day.items():
+                if total and d not in out:
+                    out[d] = total
         return out
 
     def tariffs(self) -> None:
@@ -736,50 +836,8 @@ class Audit:
         return (date.fromisoformat(self.last) - timedelta(days=HOURLY_DAYS_SYNC - 1)).isoformat()
 
     def shifts(self) -> None:
-        daily = self._year_section("daily")
-        flags = self._year_section("estimated")
-        hourly: dict[str, dict[str, float]] = {}
-        r30: dict[str, dict[str, float]] = {}
-        for name, doc in self.docs.items():
-            m = YEAR_DOC.match(name)
-            if m and m.group(2) == ".hourly":
-                for rid, hours in (doc.get("hourly") or {}).items():
-                    hourly.setdefault(rid, {}).update({k: float(v) for k, v in hours.items() if _num(v) is not None})
-            if m and m.group(2) == ".room30":
-                for rid, days in (doc.get("rooms") or {}).items():
-                    for day, cols in (days or {}).items():
-                        if isinstance(cols, list) and valid(day, "day"):
-                            for i in range(48):
-                                hp, hc = (
-                                    _slot(cols[0] if cols else None, i),
-                                    _slot(cols[1] if len(cols) > 1 else None, i),
-                                )
-                                if hp is not None or hc is not None:
-                                    r30.setdefault(rid, {})[f"{day}T{i // 2:02d}:{30 * (i % 2):02d}"] = (hp or 0) + (
-                                        hc or 0
-                                    )
-        for rid, fine in hourly.items():
-            day_values = {
-                d: float(v)
-                for d, v in daily.get(rid, {}).items()
-                if _num(v) is not None and d not in flags.get(rid, {})
-            }
-            self._shift_fit(fine, day_values, 60, ".hourly", SERIES_LABEL[(".hourly", "hourly")], rid)
-        for rid, fine in r30.items():
-            day_values = {
-                d: float(v)
-                for d, v in daily.get(rid, {}).items()
-                if _num(v) is not None and d not in flags.get(rid, {})
-            }
-            self._shift_fit(fine, day_values, 30, ".room30", SERIES_LABEL[(".room30", "rooms")], rid)
-        curve: dict[str, float] = {}
-        for name, doc in self.docs.items():
-            m = YEAR_DOC.match(name)
-            if m and m.group(2) == ".linky30":
-                curve.update({k: float(v) for k, v in (doc.get("curve") or {}).items() if _num(v) is not None})
-        linky = {d: float(v) for d, v in (self.docs.get("linky", {}).get("daily") or {}).items() if _num(v) is not None}
-        if curve and linky:
-            self._shift_fit(curve, linky, 30, ".linky30", SERIES_LABEL[(".linky30", "curve")], None)
+        for base, label, room, fine, minutes, daily in self._fine():
+            self._shift_fit(fine, daily, minutes, base, label, room)
 
     def _shift_fit(
         self, fine: dict[str, float], daily: dict[str, float], minutes: int, base: str, label: str, room: str | None
@@ -999,6 +1057,313 @@ class Audit:
                     text=f"{name} donne {same} jours sur {len(both)} la même énergie que cette pièce Intuis",
                 )
 
+    # ------------------------------------------------------- values
+    def day_sums(self) -> None:
+        """Complete days whose hours (half hours) do not add up to the day, outside shifted months."""
+        shifted = {(f.doc[4:], f.room, f.at) for f in self.findings if f.code == "decalage-heures"}
+        recent = self._recent()
+        for base, label, room, fine, minutes, daily in self._fine():
+            per_day: dict[str, float] = {}
+            for day in sorted({k[:10] for k in fine if valid(k[:10], "day")}):
+                slots = day_slots(day, minutes, self.tz)
+                if all(k in fine for k in slots):
+                    per_day[day] = sum(fine[k] for k in slots)
+            for day, total in per_day.items():
+                v = daily.get(day)
+                if v is None or day >= recent or (base, room, day[:7]) in shifted:
+                    continue
+                if abs(total - v) <= tolerance(v):
+                    continue
+                twice = v > MONTH_GAP_WH and abs(total - 2 * v) <= tolerance(2 * v)
+                self.add(
+                    "somme-jour",
+                    None,
+                    doc=f"{day[:4]}{base}",
+                    series=label,
+                    room=room,
+                    day=day,
+                    at=day,
+                    value=round(total, 1),
+                    other=round(v, 1),
+                    text="la somme des heures vaut deux fois le jour : deux familles de mesure additionnées ?"
+                    if twice
+                    else "la somme des heures complètes du jour s'écarte du total du jour",
+                )
+
+    def above_linky(self) -> None:
+        """Days where Intuis exceeds the whole-home meter (quality.py above_meter, the same rule)."""
+        if self.real is None:
+            return
+        for day, v in sorted(self.real.linky.items()):
+            intuis = self.real.real_wh.get(day)
+            if intuis is None or _num(v) is None or v < 0 or not above_meter(intuis, float(v)):
+                continue
+            self.add(
+                "pieces-sur-linky",
+                None,
+                doc="linky",
+                series=SERIES_LABEL[("linky", "daily")],
+                day=day,
+                at=day,
+                value=round(intuis, 1),
+                other=float(v),
+                text="les radiateurs et le chauffe-eau (Intuis) dépassent le compteur de toute la maison",
+            )
+
+    def impossible(self) -> None:
+        """Energies that cannot be: negative, not a number, a room above SUSPECT_WH in a day."""
+        for name, doc in sorted(self.docs.items()):
+            m = YEAR_DOC.match(name)
+            sections: list[tuple[str, float | None]] = []
+            if m and not m.group(2):
+                sections = [("daily", SUSPECT_WH)]
+            elif m and m.group(2) in (".hourly", ".linky30"):
+                sections = [("hourly" if m.group(2) == ".hourly" else "curve", None)]
+            elif name in ("linky", "shelly"):
+                sections = [("daily", None)]
+            for section, cap in sections:
+                for s in series_of(name, {section: doc.get(section) or {}}):
+                    for k, v in s.data.items():
+                        if not isinstance(k, str) or not valid(k[:10], "day"):
+                            continue
+                        x = _num(v) if not isinstance(v, str) else None
+                        if x is not None and x >= 0 and (cap is None or x <= cap):
+                            continue
+                        if v is None:
+                            continue
+                        why = (
+                            "pas un nombre"
+                            if x is None
+                            else "énergie négative"
+                            if x < 0
+                            else f"plus de {_fmt(cap / 1000)} kWh en un jour pour une pièce"  # type: ignore[operator]
+                        )
+                        self.add("valeur-impossible", s, day=k[:10], at=k, value=x, text=why)
+
+    def units(self) -> None:
+        """Runs of days a thousand times below their neighbours, or a day a thousand times above."""
+        for label, room, values, doc in self._energy_days():
+            days = sorted(d for d in values if valid(d, "day"))
+            small: list[str] = []
+            med: dict[str, float] = {}
+
+            def close(run: list[str], doc=doc, label=label, room=room, values=values, med=med) -> None:
+                if len(run) >= UNIT_RUN:
+                    for d in run:
+                        self.add(
+                            "unite",
+                            None,
+                            doc=doc(d),
+                            series=label,
+                            room=room,
+                            day=d,
+                            at=d,
+                            value=values[d],
+                            other=round(med[d], 1),
+                            text="mille fois plus petit que les jours voisins : kWh rangés comme des Wh, "
+                            "ou appareil éteint ?",
+                        )
+
+            for i, d in enumerate(days):
+                near = [values[x] for x in days[max(0, i - 15) : i + 16] if x != d and values[x] > 0]
+                m = _median(near)
+                med[d] = m or 0.0
+                v = values[d]
+                if m and m >= MONTH_GAP_WH and 0 < v < m / UNIT_RATIO:
+                    if small and (date.fromisoformat(d) - date.fromisoformat(small[-1])).days == 1:
+                        small.append(d)
+                    else:
+                        close(small)
+                        small = [d]
+                    continue
+                if m and m >= MONTH_GAP_WH and v > m * UNIT_RATIO:  # a plug nearly off, then used: not a unit
+                    self.add(
+                        "unite",
+                        None,
+                        doc=doc(d),
+                        series=label,
+                        room=room,
+                        day=d,
+                        at=d,
+                        value=v,
+                        other=round(m, 1),
+                        text="mille fois plus grand que les jours voisins : Wh comptés comme des kWh ?",
+                    )
+            close(small)
+
+    def frozen(self) -> None:
+        """The same non-zero reading FROZEN_DAYS days in a row (estimated days excluded: equal by design)."""
+        flags = self._year_section("estimated")
+        plug_flags = self.docs.get("shelly", {}).get("estimated") or {}
+        candidates: list[tuple[str, str | None, dict[str, object], set[str], Callable[[str], str]]] = []
+        for rid, days in self._year_section("daily").items():
+            candidates.append((SERIES_LABEL[("", "daily")], rid, days, set(flags.get(rid, {})), lambda d: d[:4]))
+        for rid, days in self._year_section("temps").items():
+            candidates.append((SERIES_LABEL[("", "temps")], rid, days, set(), lambda d: d[:4]))
+        linky = self.docs.get("linky", {})
+        for section in ("daily", "pmax"):
+            candidates.append(
+                (SERIES_LABEL[("linky", section)], None, linky.get(section) or {}, set(), lambda _d: "linky")
+            )
+        for key, days in (self.docs.get("station", {}).get("daily") or {}).items():
+            candidates.append((SERIES_LABEL[("station", "daily")], key, days, set(), lambda _d: "station"))
+        weather = self.docs.get("weather", {})
+        candidates.append(
+            (SERIES_LABEL[("weather", "outdoor")], None, weather.get("outdoor") or {}, set(), lambda _d: "weather")
+        )
+        for key, days in (self.docs.get("shelly", {}).get("daily") or {}).items():
+            candidates.append(
+                (SERIES_LABEL[("shelly", "daily")], key, days, set(plug_flags.get(key, {})), lambda _d: "shelly")
+            )
+        for label, room, values, skip, doc in candidates:
+            run: list[str] = []
+
+            def close(run: list[str], doc=doc, label=label, room=room, values=values) -> None:
+                if len(run) >= FROZEN_DAYS:
+                    self.add(
+                        "valeur-figee",
+                        None,
+                        doc=doc(run[0]),
+                        series=label,
+                        room=room,
+                        day=run[0],
+                        at=f"{run[0]}…{run[-1]}",
+                        value=_num(values[run[0]]),
+                        other=float(len(run)),
+                        text=f"la même valeur {len(run)} jours de suite, du {run[0]} au {run[-1]}",
+                    )
+
+            for d in sorted(k for k in values if isinstance(k, str) and valid(k, "day")):
+                v = values[d]
+                live = d not in skip and v is not None and _nonzero(v)
+                if (
+                    live
+                    and run
+                    and values[run[-1]] == v
+                    and (date.fromisoformat(d) - date.fromisoformat(run[-1])).days == 1
+                ):
+                    run.append(d)
+                    continue
+                close(run)
+                run = [d] if live else []
+            close(run)
+
+    def peaks(self) -> None:
+        """An hour (half hour) whose energy needs more power than the day's maximum (Linky pmax),
+        or than the largest home connection (MAX_KVA) when the maximum is unknown."""
+        pmax = {d: float(v) for d, v in (self.docs.get("linky", {}).get("pmax") or {}).items() if _num(v)}
+        unit = str(self.docs.get("linky", {}).get("pmax_unit") or "kVA")
+        scale = 1.0 if unit == "VA" else 1000.0
+        for base, label, room, fine, minutes, _daily in self._fine():
+            per_hour = 60 / minutes
+            for k, wh in fine.items():
+                day = k[:10]
+                watts = wh * per_hour
+                limit = pmax[day] * scale if day in pmax else MAX_KVA * 1000
+                # 1 %: the curve is rounded to 0.1 Wh, the maximum to the VA
+                if watts <= limit * 1.01:
+                    continue
+                self.add(
+                    "pic-impossible",
+                    None,
+                    doc=f"{day[:4]}{base}",
+                    series=label,
+                    room=room,
+                    day=day,
+                    at=k,
+                    value=round(watts),
+                    other=round(limit),
+                    text=f"{round(watts)} W en moyenne sur {minutes} min, au-delà du maximum "
+                    + ("relevé par le Linky ce jour-là" if day in pmax else f"d'une maison ({_fmt(MAX_KVA)} kVA)"),
+                )
+
+    def index_back(self) -> None:
+        for series, days in (self.docs.get("linky", {}).get("index") or {}).items():
+            if not isinstance(days, dict):
+                continue
+            prev: tuple[str, float] | None = None
+            for d in sorted(k for k in days if isinstance(k, str) and valid(k, "day")):
+                v = _num(days[d])
+                if v is None:
+                    continue
+                if prev and v < prev[1] - 1:
+                    self.add(
+                        "compteur-recule",
+                        None,
+                        doc="linky",
+                        series=SERIES_LABEL[("linky", "index")],
+                        room=series,
+                        day=d,
+                        at=d,
+                        value=v,
+                        other=prev[1],
+                        text=f"index plus bas que celui du {prev[0]}",
+                    )
+                prev = (d, v)
+
+    # ------------------------------------------------------- series shared by the checks
+    def _fine(self) -> list[tuple[str, str, str | None, dict[str, float], int, dict[str, float]]]:
+        """(base, label, room, fine values by local key, minutes, real day values) for each fine
+        series compared with its day: Intuis hours and 30 min per room, the Linky curve. Built once."""
+        if self._fine_cache is None:
+            self._fine_cache = self._build_fine()
+        return self._fine_cache
+
+    def _build_fine(self) -> list[tuple[str, str, str | None, dict[str, float], int, dict[str, float]]]:
+        daily = self._year_section("daily")
+        flags = self._year_section("estimated")
+
+        def real(rid: str) -> dict[str, float]:
+            return {
+                d: float(v)
+                for d, v in daily.get(rid, {}).items()
+                if _num(v) is not None and d not in flags.get(rid, {})
+            }
+
+        hourly: dict[str, dict[str, float]] = {}
+        r30: dict[str, dict[str, float]] = {}
+        curve: dict[str, float] = {}
+        for name, doc in self.docs.items():
+            m = YEAR_DOC.match(name)
+            kind = m.group(2) if m else None
+            if kind == ".hourly":
+                for rid, hours in (doc.get("hourly") or {}).items():
+                    hourly.setdefault(rid, {}).update({k: float(v) for k, v in hours.items() if _num(v) is not None})
+            elif kind == ".room30":
+                for rid, days in (doc.get("rooms") or {}).items():
+                    for day, cols in (days or {}).items():
+                        if not isinstance(cols, list) or not valid(day, "day"):
+                            continue
+                        for i in range(48):
+                            hp = _slot(cols[0] if cols else None, i)
+                            hc = _slot(cols[1] if len(cols) > 1 else None, i)
+                            if hp is not None or hc is not None:
+                                r30.setdefault(rid, {})[f"{day}T{i // 2:02d}:{30 * (i % 2):02d}"] = (hp or 0) + (
+                                    hc or 0
+                                )
+            elif kind == ".linky30":
+                curve.update({k: float(v) for k, v in (doc.get("curve") or {}).items() if _num(v) is not None})
+        out = [(".hourly", SERIES_LABEL[(".hourly", "hourly")], rid, f, 60, real(rid)) for rid, f in hourly.items()]
+        out += [(".room30", SERIES_LABEL[(".room30", "rooms")], rid, f, 30, real(rid)) for rid, f in r30.items()]
+        linky = {d: float(v) for d, v in (self.docs.get("linky", {}).get("daily") or {}).items() if _num(v) is not None}
+        if curve:
+            out.append((".linky30", SERIES_LABEL[(".linky30", "curve")], None, curve, 30, linky))
+        return out
+
+    def _energy_days(self) -> list[tuple[str, str | None, dict[str, float], Callable[[str], str]]]:
+        """Daily energy series (Wh): Intuis rooms (real days), Linky, plugs."""
+        flags = self._year_section("estimated")
+        out: list[tuple[str, str | None, dict[str, float], Callable[[str], str]]] = []
+        for rid, days in self._year_section("daily").items():
+            vals = {d: float(v) for d, v in days.items() if _num(v) is not None and d not in flags.get(rid, {})}
+            out.append((SERIES_LABEL[("", "daily")], rid, vals, lambda d: d[:4]))
+        linky = {d: float(v) for d, v in (self.docs.get("linky", {}).get("daily") or {}).items() if _num(v) is not None}
+        out.append((SERIES_LABEL[("linky", "daily")], None, linky, lambda _d: "linky"))
+        for key, days in (self.docs.get("shelly", {}).get("daily") or {}).items():
+            vals = {d: float(v) for d, v in days.items() if _num(v) is not None}
+            out.append((SERIES_LABEL[("shelly", "daily")], key, vals, lambda _d: "shelly"))
+        return out
+
     # ------------------------------------------------------- outputs
     def counts(self) -> dict[str, dict[str, int]]:
         """{code: {"YYYY-MM" | "?": findings}} — the only thing the public log shows."""
@@ -1016,6 +1381,21 @@ def _num(v: object) -> float | None:
     if isinstance(v, bool) or not isinstance(v, int | float) or not math.isfinite(v):
         return None
     return float(v)
+
+
+def _median(v: list[float]) -> float | None:
+    if not v:
+        return None
+    s = sorted(v)
+    m = len(s) // 2
+    return s[m] if len(s) % 2 else (s[m - 1] + s[m]) / 2
+
+
+def _nonzero(v: object) -> bool:
+    """A reading worth comparing: a non-zero number, or a list with a non-zero number."""
+    if isinstance(v, list):
+        return any(_num(x) for x in v)
+    return bool(_num(v))
 
 
 def _pearson(pairs: list[tuple[float, float]]) -> float:

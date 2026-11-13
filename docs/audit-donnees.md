@@ -278,7 +278,7 @@ Passage du : _(date)_ — version : _(commit)_
 - *Pièce arrêtée volontairement* — _(ses jours sont comptés « a », pas « m » : vérifier qu'aucune
   pièce ne reste en manquants chaque mois sans raison)_
 
-## 8. Audit des données : dates et chevauchements (#532)
+## 8. Audit des données : dates, chevauchements et valeurs (#532)
 
 Demande du propriétaire (12/11/2026) : « reprendre toutes les données, existantes et récupérées :
 bonne date, bonne valeur ; pour les trous, vérifier qu'on n'a pas de chevauchement ou d'autre
@@ -328,6 +328,18 @@ Limite connue : un décalage d'une heure se voit mal dans les **totaux** d'un jo
 consommation varie peu autour de minuit ; c'est pourquoi `decalage-fuseau` compare aussi les
 **profils** horaires d'Intuis et du Linky. Sans courbe Linky, seul le décalage d'un jour est sûr.
 
+### Les contrôles des valeurs
+
+| Contrôle | Ce qu'il cherche | Ce que fait l'appli d'un tel jour |
+|---|---|---|
+| `somme-jour` | les heures (demi-heures) complètes d'un jour qui ne retrouvent pas le total du jour (Intuis heure et 30 min contre le jour Intuis, courbe Linky contre le jour Linky), hors des mois déjà signalés décalés ; « deux fois le jour » est nommé (deux familles de mesure additionnées) | le total du jour fait foi ; la courbe de ce jour ne le retrouve pas |
+| `pieces-sur-linky` | les jours où Intuis dépasse le compteur de toute la maison (la règle du bilan § 7, `quality.py` `above_meter`) | compté tel quel, « Intuis > Linky » au bilan |
+| `valeur-impossible` | énergie négative, pas un nombre, ou une pièce au-delà de 80 kWh en un jour (les jours « suspects » du bilan) | compté, marqué suspect |
+| `unite` | une semaine (ou plus) de jours mille fois plus petits que les voisins, ou un jour mille fois plus grand : kWh rangés comme Wh, ou l'inverse (à vérifier : un appareil éteint donne le même rapport) | compté tel quel |
+| `valeur-figee` | la même lecture non nulle 5 jours de suite (énergie, température et consigne, Linky, station, météo, prises ; jours estimés exclus, égaux par construction) | compté tel quel |
+| `pic-impossible` | une heure ou une demi-heure qui demande plus de puissance que le maximum relevé par le Linky ce jour-là, ou que 36 kVA sans ce relevé | compté tel quel |
+| `compteur-recule` | un index Linky plus bas que celui de la veille | la consommation déduite des index devient négative |
+
 ### Les seuils
 
 Chaque seuil qui change ce qui est signalé est nommé une fois (`THRESHOLDS`, `collector/audit.py`),
@@ -344,6 +356,11 @@ rapport réel.
 | `gain_correlation` | 0,1 | gain de corrélation Intuis / Linky d'un décalage avant de le signaler | hypothèse |
 | `jours_linky_min` | 3 jours | jours où Intuis dépasse le Linky avant de chercher un décalage d'un jour | hypothèse |
 | `jours_sources_min` | 14 jours | jours communs avant de dire que deux sources mesurent la même chose | hypothèse |
+| `facteur_unite` | 300 × | un facteur 1 000 (Wh / kWh) moins la variation ordinaire d'un jour à l'autre (facteur 3) ; médiane de 15 jours de part et d'autre, au moins 100 Wh | hypothèse |
+| `jours_unite` | 7 jours | un appareil éteint quelques jours donne le même rapport ; une erreur d'unité dure | hypothèse |
+| `jours_figes` | 5 jours | lecture identique avant de parler de valeur figée | hypothèse |
+| `puissance_max` | 36 kVA | plus gros raccordement d'une maison au tarif bleu ; une moyenne sur une heure ne dépasse pas le maximum atteint (1 % d'arrondi) | justifié |
+| `suspect_jour` | 80 kWh | une pièce à 3,3 kW pendant 24 h (bilan § 7) | hypothèse |
 | `depassement_linky` | 10 % et 500 Wh | Intuis ne peut pas dépasser le compteur qui le mesure (bilan § 7, `quality.py`) | justifié |
 
 ### Ce que le propriétaire regarde
