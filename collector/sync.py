@@ -386,7 +386,7 @@ class Syncer:
             # error before that leaves the range uncounted, never « the source gave nothing »)
             for rid in rooms:
                 for d in sorted(x for x in missing[rid] if lo <= x < hi):
-                    tally.asked(kinds[rid], d)
+                    tally.asked(kinds[rid], d, rid)  # #581: which room, for the encrypted meta
             best: dict[tuple[str, str], float] = {}
             tariffs: dict[tuple[str, str], tuple[int, Columns]] = {}
             for family, cols in answers:
