@@ -93,7 +93,7 @@ jobs:
           retention-days: 7
 
   # S-7.9: Safari iOS. WebKit (moteur de Safari) en iPhone 13 : les cinq vues de la démo,
-  # la clé effacée par iOS, et les écrans v1.4.
+  # la clé effacée par iOS, les écrans v1.4, et le balayage en portée réduite (#595).
   e2e-webkit:
     runs-on: ubuntu-latest
     defaults:
@@ -134,6 +134,18 @@ jobs:
         env:
           E2E_BROWSER: webkit
       - run: npm run e2e:plan-edition
+        env:
+          E2E_BROWSER: webkit
+      # #595 : le balayage dans WebKit (A18 : un débordement propre à WebKit), portée réduite écrite
+      # dans e2e/sweep.mjs (WEBKIT_SCOPE_RUNS × WEBKIT_SCOPE_DISPLAYS : la démo à 360 px et 200 %,
+      # trous-reels à 360 px), mêmes invariants et même auto-contrôle. Fixtures fictives dans dist/.
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - run: pip install --require-hashes -r ../requirements-lock.txt
+      - run: python -m collector fixtures -o web/dist/demo-fixtures
+        working-directory: .
+      - run: npm run e2e:sweep
         env:
           E2E_BROWSER: webkit
       - uses: actions/upload-artifact@v4

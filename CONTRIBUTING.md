@@ -54,6 +54,14 @@ e2e écrivent leurs captures dans `web/e2e/screenshots-poste/` (jamais commité)
 configuration du système et écarte Inter ; y écarter aussi la police que préfère le poste. `E2E_OUT`
 choisit un autre dossier.
 
+**WebKit** (moteur de Safari, l'iPhone) n'est pas dans la porte locale : le job `e2e-webkit` de la CI
+le lance. Sur un poste, `npx playwright install webkit` une fois (Linux : `--with-deps`), puis
+`E2E_BROWSER=webkit npm run e2e:<script>`. Le **balayage** (`npm run e2e:sweep`, après les fixtures)
+garde dans WebKit les mêmes invariants que dans Chromium (#595, A18), dans la portée réduite de la
+CI (`SWEEP_SCOPE=webkit`, écrite dans `web/e2e/sweep.mjs` : la démo à 360 px et à 200 %, `trous-reels`
+à 360 px, sans l'explorateur) ; `SWEEP_EXPLORE=1` y ajoute l'explorateur de contrôles,
+`SWEEP_SCOPE=ci` la portée Chromium entière.
+
 `npm run e2e:trous` (après `python -m collector fixtures -o web/dist/demo-fixtures`, dans la porte)
 ouvre la démo sur `trous-reels`, la forme des trous d'un vrai compte (#570) : jamais 0 pour un trou,
 « incomplet », comparaisons sans l'appareil non mesuré.
