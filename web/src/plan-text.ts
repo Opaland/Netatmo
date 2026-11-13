@@ -39,10 +39,10 @@ export function floorCells(svg: SVGSVGElement): number {
   return scale > 0 ? floorPx() / scale : 0;
 }
 
-/** A room's label, to be laid out by fitPlanText: one <text data-full> per line. */
-export function roomLabel(box: { x: number; y: number; w: number; h: number }, lines: string[], font: number): string {
+/** A room's label, to be laid out by fitPlanText: one <text data-full> per line; `attrs` (already escaped) for the editor. */
+export function roomLabel(box: { x: number; y: number; w: number; h: number }, lines: string[], font: number, attrs = ''): string {
   const texts = lines.map((l, i) => `<text class="plan-label${i ? ' plan-value' : ''}" data-full="${esc(l)}"></text>`).join('');
-  return `<g class="plan-text" data-box="${box.x} ${box.y} ${box.w} ${box.h}" data-font="${font}">${texts}</g>`;
+  return `<g class="plan-text"${attrs ? ` ${attrs}` : ''} data-box="${box.x} ${box.y} ${box.w} ${box.h}" data-font="${font}">${texts}</g>`;
 }
 
 /** A device's mark, to be laid out by fitPlanText around the centre of its cell; `cls` and `attrs` (already escaped) for the editor. */
@@ -113,7 +113,7 @@ export function fitPlanText(svg: SVGSVGElement) {
   }
 }
 
-/** A device's mark at its cell (data-cell), its letters at least `floor` cells high, or a dot; also called while it is dragged. */
+/** A device's mark at its cell (data-cell), its letters at least `floor` cells high, or a dot (by fitPlanText, also while it is dragged, #597). */
 export function placeMark(g: SVGGElement, floor: number) {
   const [x, y] = (g.dataset.cell ?? '').split(' ').map(Number);
   const text = g.querySelector('text');
