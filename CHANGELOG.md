@@ -1,6 +1,6 @@
 # Historique des versions
 
-## v2.5 — novembre 2026 : ce que l'appli dit, exactement (en cours)
+## v2.5 — novembre 2026 : ce que l'appli dit, exactement
 
 Lancée par le propriétaire le 13/11/2026 (« Lance une 2.4 2.5 2.6 2.7 2.8 2.9 3.0 »), cadrée sur les
 constats mesurés encore ouverts des revues v2.3 et v2.4 ([cadrage](docs/bmad/revues/v2.5-cadrage.md)) :
