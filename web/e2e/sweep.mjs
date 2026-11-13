@@ -23,7 +23,9 @@
 // « the focus stays on the control » (a segment of Historique sent the page to the top).
 //
 // Run after `npm run build`: node e2e/sweep.mjs   (starts `vite preview` itself)
-//   SWEEP_SCOPE=ci (default: every route on the plain demo in the four displays and in the
+//   E2E_BROWSER=webkit: the same sweep in WebKit (#595), by default in its reduced scope
+//     SWEEP_SCOPE=webkit (WEBKIT_SCOPE_RUNS × WEBKIT_SCOPE_DISPLAYS, no explorer)
+//   SWEEP_SCOPE=ci (default in Chromium: every route on the plain demo in the four displays and in the
 //     explorer, the other fixtures at 360 px, the vue Proche at 360 px and text 200 %, #451) | full (every fixture × every display, axe and
 //     explorer everywhere: manual or nightly run)
 //   SWEEP_FIXTURES=demo,sans-prix…  SWEEP_DISPLAYS=360,sombre…  SWEEP_ROUTES=<regex>
@@ -38,7 +40,7 @@ import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { cpus } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { chromium } from 'playwright';
+import { chromium, webkit } from 'playwright';
 import { frames, goto, openData, openDemo, ready, seriousAxe, startPreview } from './lib.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -47,7 +49,15 @@ const env = process.env;
 const SOURCE = env.SWEEP_SOURCE === 'data' ? 'data' : 'demo';
 const QUIET = SOURCE === 'data'; // real data: never a value nor a text in the logs
 const FULL = env.SWEEP_SCOPE === 'full';
-const EXPLORE = env.SWEEP_EXPLORE !== '0';
+// #595: the same invariants in WebKit (Safari's engine, the iPhone PWA): E2E_BROWSER=webkit. Nothing
+// in the sweep depends on a tool of Chromium alone (no CDP session: the invariants are measured in
+// the page, axe runs in any engine). The CI's e2e-webkit job runs it with SWEEP_SCOPE=webkit, the
+// default in WebKit: see WEBKIT_SCOPE below.
+const BROWSER = env.E2E_BROWSER === 'webkit' ? 'webkit' : 'chromium';
+const ENGINE = BROWSER === 'webkit' ? webkit : chromium;
+const SCOPE = env.SWEEP_SCOPE ?? (BROWSER === 'webkit' ? 'webkit' : 'ci');
+const WEBKIT_SCOPE = SCOPE === 'webkit';
+const EXPLORE = env.SWEEP_EXPLORE !== undefined ? env.SWEEP_EXPLORE !== '0' : !WEBKIT_SCOPE;
 const WORKERS = Math.max(1, Number(env.SWEEP_WORKERS ?? Math.min(4, cpus().length)));
 const ROUTE_FILTER = env.SWEEP_ROUTES ? new RegExp(env.SWEEP_ROUTES) : null;
 const list = (v) => (v ? v.split(',').map((s) => s.trim()).filter(Boolean) : null);
@@ -116,6 +126,21 @@ const DISPLAYS = {
   'texte-200': { viewport: { width: 360, height: 800 }, big: true },
   sombre: { viewport: { width: 390, height: 900 }, colorScheme: 'dark' },
 };
+
+/**
+ * #595: the reduced scope of the CI's e2e-webkit job (SWEEP_SCOPE=webkit, the default in WebKit).
+ * What a defect of WebKit alone showed (A18: ⚙ Mon logement scrolled sideways at 360 px, text
+ * 200 %, in WebKit only) is swept: every route of the plain demo at 360 px and at text 200 %, axe
+ * included, and the gaps of a real account (trous-reels, #570) at 360 px. Left to the Chromium
+ * sweep, on purpose: 1280 px and dark (a wide screen and the colours do not depend on the engine's
+ * layout of a phone), the other fixtures, and the control explorer: SWEEP_EXPLORE=1 runs it in
+ * WebKit too (194 s instead of 52 s on a 4-core machine, 13/11/2026), and there it finds two
+ * defects of WebKit alone, #599 (a select of ⚙ Objectifs sends the page up) and #600 (11 px of
+ * horizontal scroll left by an old position of a chart tooltip): it joins this scope once they are
+ * fixed. Not a hole in the page invariants: every one runs, on fewer cases.
+ */
+const WEBKIT_SCOPE_RUNS = ['demo', 'trous-reels'];
+const WEBKIT_SCOPE_DISPLAYS = ['360', 'texte-200'];
 
 function dataFixtures() {
   const dir = join(WEB, 'dist/demo-fixtures');
@@ -977,9 +1002,9 @@ try {
     SOURCE === 'data'
       ? [{ name: 'donnees-reelles', data: null }]
       : [{ name: 'demo', data: null }, ...fixtures.map((f) => ({ name: f, data: f, asData: AS_DATA.has(f), ...(RICH.has(f) ? { storage: RICH_STORAGE } : {}) })), ...Object.entries(MODES).map(([name, m]) => ({ name, ...m }))];
-  const wanted = list(env.SWEEP_FIXTURES);
+  const wanted = list(env.SWEEP_FIXTURES) ?? (WEBKIT_SCOPE ? WEBKIT_SCOPE_RUNS : null);
   const runs = wanted ? runsAll.filter((r) => wanted.includes(r.name)) : runsAll;
-  const displays = list(env.SWEEP_DISPLAYS) ?? Object.keys(DISPLAYS);
+  const displays = list(env.SWEEP_DISPLAYS) ?? (WEBKIT_SCOPE ? WEBKIT_SCOPE_DISPLAYS : Object.keys(DISPLAYS));
   const main = (r) => r.name === 'demo' || r.name === 'donnees-reelles' || RICH.has(r.name);
 
   const jobs = [];
@@ -1002,10 +1027,10 @@ try {
     }
   }
   console.log(
-    `Balayage ${SOURCE === 'data' ? 'des vraies données' : remote ? `de ${base}` : 'de la démo'} : ${runs.length} jeu(x), ${displays.join(', ')}, ${ROUTES.length} routes + pièces, ${jobs.length} tâches sur ${WORKERS} navigateur(s)${FULL ? ' (complet)' : ''}.`,
+    `Balayage ${BROWSER === 'webkit' ? 'WebKit ' : ''}${SOURCE === 'data' ? 'des vraies données' : remote ? `de ${base}` : 'de la démo'} : ${runs.length} jeu(x), ${displays.join(', ')}, ${ROUTES.length} routes + pièces, ${jobs.length} tâches sur ${WORKERS} navigateur(s)${FULL ? ' (complet)' : ''}.`,
   );
   {
-    const browser = await chromium.launch();
+    const browser = await ENGINE.launch();
     try {
       await selfTest(browser, runs[0], displays[0]);
       console.log('Auto-contrôle : les invariants voient un « NaN », une carte vide, un débordement, deux textes l’un sur l’autre, un texte coupé par sa carte, un mot coupé en son milieu ou par un trait de césure, un axe aux étiquettes en double, des noms d’axe l’un sur l’autre, une légende coupée, un mot trop petit dans un dessin et une zone restée « occupée » (aria-busy) ; le diagnostic discret ne cite aucun contenu.');
@@ -1016,7 +1041,7 @@ try {
   const queue = [...jobs];
   await Promise.all(
     Array.from({ length: WORKERS }, async () => {
-      const browser = await chromium.launch();
+      const browser = await ENGINE.launch();
       try {
         for (let job = queue.shift(); job; job = queue.shift()) {
           const t = Date.now();
