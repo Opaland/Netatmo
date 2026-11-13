@@ -195,13 +195,6 @@ export interface Verdict {
 }
 
 /**
- * This period vs the same calendar period of previous years. With weather, the
- * heating part is compared at equal climate (kWh per DJU of previous years × DJU now).
- * A reference period is used only when the data covers it entirely (#240): on the first
- * anniversary of a collection started mid-month, the half month measured would make the
- * « expected » far too low.
- */
-/**
  * The reference windows of verdict(): the same dates of up to four previous years, as long as the
  * data covers them from their first day (#240; older references start even earlier).
  */
@@ -215,21 +208,26 @@ export function referenceWindows(from: string, to: string, firstDay: string): { 
   return out;
 }
 
+/**
+ * This period vs the same calendar period of previous years. With weather, the
+ * heating part is compared at equal climate (kWh per DJU of previous years × DJU now).
+ * A reference period is used only when the data covers it entirely (#240): on the first
+ * anniversary of a collection started mid-month, the half month measured would make the
+ * « expected » far too low. #570: the records are those measured on both sides (callers leave
+ * out referenceUnmeasured, room-offline.ts).
+ */
 export function verdict(
   records: DayRecord[],
   from: string,
   to: string,
   weather: Weather | null,
   firstDay = firstDayOf(records),
-  /** #570: a reference left out (a room measured now has no reading then: the water heater missing all year). */
-  skip: (f: string, t: string) => boolean = () => false,
 ): Verdict | null {
   const sum = (f: string, t: string, cat?: string) =>
     records.reduce((s, r) => s + (r.day >= f && r.day <= t && (!cat || r.cat === cat) ? r.kwh : 0), 0);
   const actual = sum(from, to);
   const refs: { total: number; heat: number; dju: number }[] = [];
   for (const { f, t } of referenceWindows(from, to, firstDay)) {
-    if (skip(f, t)) continue;
     const total = sum(f, t);
     if (total <= 0) continue;
     refs.push({ total, heat: sum(f, t, 'heating'), dju: weather ? djuBetween(weather, f, t).dju : 0 });

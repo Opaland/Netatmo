@@ -16,7 +16,7 @@ import { ADEME_PER_DEGREE } from './checks';
 import { MONTHS_LONG, monthLong, signedPct } from './glossary';
 import type { CutKind } from './incidents';
 import { woodIn } from './wood';
-import { type OfflineEstimate, type OfflineRun, type StoppedRoom, offlineDaysIn, offlineText, unmeasuredRooms } from './room-offline';
+import { type OfflineEstimate, type OfflineRun, type StoppedRoom, offlineDaysIn, offlineText, unmeasuredPhrase, unmeasuredReasons } from './room-offline';
 
 export type StepKey = 'meteo' | 'consignes' | 'mode' | 'pieces' | 'horsligne' | 'eau' | 'autres';
 export const STEP_LABEL: Record<StepKey, string> = {
@@ -76,8 +76,8 @@ export interface Explanation {
   water: { now: number; ref: number };
   /** #570: `until` the run's last day; `unmeasured`: no reading in one of the two months, counted in « autres usages ». */
   offline: { id: string; name: string; since: string; until: string; ongoing: boolean; estimated: number | null; unmeasured: boolean }[];
-  /** #570: rooms without any reading in one of the two months: counted in « autres usages » with the meter, else left out. */
-  unmeasured: string[];
+  /** #570: the rooms without readings on one side (unmeasuredPhrase, « hors … »): counted in « autres usages » with the meter, else left out. */
+  unmeasured: string;
   /** Rooms switched off on purpose over the month or a year earlier. */
   stopped: { id: string; name: string; text: string; stop: StoppedRoom }[];
   /** #394: days of the month left out with their day a year earlier (a cut on either), and the cause. */
@@ -96,6 +96,8 @@ export interface ExplainInput {
   estimate: OfflineEstimate;
   /** #394: days touched by a power or Internet cut (incidents.ts). */
   cuts?: Map<string, CutKind>;
+  /** #570: the rooms switched off on purpose (stoppedShown): they stay in the comparison. */
+  stopped?: Set<string>;
 }
 
 const monthEnd = (ym: string) => addDays(`${nextMonth(ym)}-01`, -1);
@@ -193,10 +195,8 @@ export function explainMonth(i: ExplainInput): Explanation | null {
   // a heated room offline keeps its estimate from the meter (#346): only the water heater and a
   // radiator added since (no run: it was not there yet) are taken out
   const waterIds = new Set(i.rooms.filter((r) => r.category === 'water_heater').map((r) => r.id));
-  const unmeasured = new Set(
-    [...unmeasuredRooms(i.records, from, to, refFrom, refTo, new Set(i.runs.filter((x) => x.stopped).map((x) => x.room)))].filter(
-      (id) => waterIds.has(id) || !i.runs.some((x) => !x.stopped && x.room === id && touches(x)),
-    ),
+  const unmeasured = new Map(
+    [...unmeasuredReasons(i.records, from, to, refFrom, refTo, i.stopped)].filter(([id]) => waterIds.has(id) || !i.runs.some((x) => !x.stopped && x.room === id && touches(x))),
   );
   const followed = i.rooms.filter((r) => r.category !== 'ignore' && !unmeasured.has(r.id));
   const heat = followed.filter((r) => r.category === 'heating');
@@ -270,7 +270,8 @@ export function explainMonth(i: ExplainInput): Explanation | null {
       const out = unmeasured.has(r.id);
       return [{ id: r.id, name: r.name, since: run.from, until: run.to, ongoing: run.ongoing, estimated: out ? null : estimatedIn(i.estimate, r.id, from, to), unmeasured: out }];
     });
-  const unmeasuredNames = i.rooms.filter((r) => unmeasured.has(r.id)).map((r) => r.name);
+  const name = new Map(i.rooms.map((r) => [r.id, r.name]));
+  const unmeasuredText = unmeasuredPhrase(unmeasured, (id) => name.get(id) ?? id);
   return {
     month: i.month,
     from,
@@ -290,7 +291,7 @@ export function explainMonth(i: ExplainInput): Explanation | null {
     other,
     water,
     offline,
-    unmeasured: unmeasuredNames,
+    unmeasured: unmeasuredText,
     stopped: changed.map((r) => ({ id: r.id, name: r.name, stop: r.stopped!, text: offlineText({ from: r.stopped!.from, to, ongoing: true, stopped: r.stopped }) })),
     cuts,
   };
@@ -331,7 +332,7 @@ export function stepNote(e: Explanation, s: Step): string {
       return 'chauffe-eau';
     default:
       // #570: a device without any reading in one of the two months is in this part, on both sides
-      return `compteur − chauffage − eau chaude${e.unmeasured.length ? `, dont ${and(e.unmeasured)} (sans relevé sur l’un des deux mois)` : ''}`;
+      return `compteur − chauffage − eau chaude${e.unmeasured ? `, ${e.unmeasured.replace(/^hors /, 'dont ')}` : ''}`;
   }
 }
 

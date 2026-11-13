@@ -25,7 +25,6 @@ import {
   scopeTitle,
   WOOD_WORDS,
   heatVerdict,
-  skippedText,
   verdictHeadline,
   verdictWords,
 } from './home';
@@ -238,29 +237,26 @@ describe('verdict over electricity + wood (#433)', () => {
   let ds: Dataset;
   let daily: Map<string, [number, number]>;
   let records: DayRecord[];
-  let keep: Set<string>; // #570: the rooms switched off on purpose stay in the references
   const r = homeRange('month', LAST);
   beforeAll(async () => {
     ds = await demoDataset();
     daily = woodDaily(parseWood((ds.meta as { wood?: unknown }).wood), ds.weather, LAST);
-    const stopped = parseStopped((ds.meta as { stopped_rooms?: unknown }).stopped_rooms);
-    keep = new Set(stopped.map((s) => s.room));
-    const runs = applyStopped(offlineRuns(ds.records, ds.meta.rooms, LAST), stopped);
+    const runs = applyStopped(offlineRuns(ds.records, ds.meta.rooms, LAST), parseStopped((ds.meta as { stopped_rooms?: unknown }).stopped_rooms));
     const left = notComparable(runs, r.from, r.to);
     records = ds.records.filter((x) => x.cat !== 'ignore' && !left.has(x.room));
   });
   const cost = () => records.reduce((s, x) => s + (x.day >= r.from && x.day <= r.to ? x.kwh : 0), 0) * PRICE;
 
   it('without wood: the verdict of the electricity alone, unchanged', () => {
-    const h = heatVerdict(records, r.from, r.to, ds.weather, cost(), null, keep);
+    const h = heatVerdict(records, r.from, r.to, ds.weather, cost(), null);
     expect(h.v).toEqual(verdict(records, r.from, r.to, ds.weather));
     expect(h.m).toEqual(moneyVerdict(h.v!, cost()));
     expect(h.wood).toBeNull();
     expect(h.records).toBe(records);
   });
   it('the demo month: spent = electricity + wood, the wood of the reference years in the expected', () => {
-    const elec = heatVerdict(records, r.from, r.to, ds.weather, cost(), null, keep);
-    const h = heatVerdict(records, r.from, r.to, ds.weather, cost(), daily, keep);
+    const elec = heatVerdict(records, r.from, r.to, ds.weather, cost(), null);
+    const h = heatVerdict(records, r.from, r.to, ds.weather, cost(), daily);
     const wood = woodIn(daily, r.from, r.to);
     expect(wood.kwh).toBeGreaterThan(1);
     expect(h.wood).toEqual(wood);
@@ -279,41 +275,12 @@ describe('verdict over electricity + wood (#433)', () => {
     expect(w.every((x) => x.cat === 'heating' && x.day >= first)).toBe(true);
   });
   it('the sentence says « électricité + bois », the electricity alone keeps its words', () => {
-    const h = heatVerdict(records, r.from, r.to, ds.weather, cost(), daily, keep);
+    const h = heatVerdict(records, r.from, r.to, ds.weather, cost(), daily);
     const w = verdictWords(h.m!, [], 'en novembre (au 8)', 'à météo comparable', true);
     expect(WOOD_WORDS).toBe('d’électricité + bois');
     expect(w.spentRest).toMatch(/^d’électricité \+ bois \(\d+\skWh\) en novembre \(au 8\)$/);
     expect(verdictWords(h.m!, [], 'en novembre (au 8)', 'à météo comparable').spentRest).toMatch(/^\(\d+\skWh\) dépensés en novembre/);
     const kwhOnly = verdictWords(moneyVerdict(h.v!, null), [], 'en novembre (au 8)', 'à météo comparable', true);
     expect(kwhOnly.spentVerb).toBe(WOOD_WORDS);
-  });
-});
-
-// #570: the water heater of a real account had no reading from Sept. 2023 to Jan. 2025: the
-// Novembers of 2023 and 2024 made « more than usual » of a gap (+28 % on the fixture « trous-reels »)
-describe('verdict references without a device measured now (#570)', () => {
-  const nov = (y: number) => Array.from({ length: 30 }, (_, i) => `${y}-11-${String(i + 1).padStart(2, '0')}`);
-  const recs: DayRecord[] = [2023, 2024, 2025, 2026].flatMap((y) =>
-    nov(y).flatMap((day) => [
-      { day, room: 'a', cat: 'heating' as const, kwh: 10 },
-      ...(y === 2025 || y === 2026 ? [{ day, room: 'ce', cat: 'water_heater' as const, kwh: 5 }] : []),
-    ]),
-  );
-  it('a year without the water heater is no reference: the expected is the year that had it', () => {
-    const h = heatVerdict(recs, '2026-11-01', '2026-11-30', null, null, null);
-    expect(h.skipped).toEqual([2024, 2023]);
-    expect(h.v!.expected).toBeCloseTo(450, 6);
-    expect(h.v!.level).toBe('normal');
-    // without the rule, the two Novembers without the water heater pull the expected down
-    expect(verdict(recs, '2026-11-01', '2026-11-30', null)!.expected).toBeCloseTo((450 + 300 + 300) / 3, 6);
-  });
-  it('no comparable year left: no verdict, and the sentence says why', () => {
-    const h = heatVerdict(recs.filter((r) => r.day < '2025-01-01' || r.day >= '2026-01-01'), '2026-11-01', '2026-11-30', null, null, null);
-    expect(h.v).toBeNull();
-    expect(h.skipped).toEqual([2025, 2024, 2023]);
-    expect(skippedText(h.skipped, true)).toBe(
-      "Pas d'année précédente comparable sur ces dates : en 2023, 2024 et 2025, un appareil compté aujourd'hui n'avait aucun relevé (chauffe-eau absent, radiateur ajouté depuis).",
-    );
-    expect(skippedText([2024], false)).toBe("2024 écartée : un appareil compté aujourd'hui n'y avait aucun relevé");
   });
 });

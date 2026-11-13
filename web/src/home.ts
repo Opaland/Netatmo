@@ -4,9 +4,8 @@
 // period, the rooms that counted and the monthly series of the chart (with the outdoor
 // temperature). The view (views/home.ts) only lays them out.
 import { type DayRecord, addDays, bucketKeys, minusYears, pctChange } from './aggregate';
-import { type Verdict, type Weather, referenceWindows, verdict } from './analysis';
-import { unmeasuredRooms } from './room-offline';
-import { MONTHS_LONG, MONTHS_SHORT, PERIOD, dayShort, seasonLabel, signedPct, withUnit } from './glossary';
+import { type Verdict, type Weather, verdict } from './analysis';
+import { MONTHS_LONG, MONTHS_SHORT, PERIOD, andList, dayShort, seasonLabel, signedPct, withUnit } from './glossary';
 import { daysBetween } from './periods';
 import { woodIn } from './wood';
 import { withWood } from './isolation';
@@ -149,8 +148,6 @@ export interface HeatVerdict {
   wood: { kwh: number; eur: number } | null;
   /** The records the verdict counted: the electricity, and the wood as day records. */
   records: DayRecord[];
-  /** #570: the previous years left out of the reference (a room measured now has no reading then). */
-  skipped: number[];
 }
 
 /**
@@ -169,21 +166,13 @@ export function heatVerdict(
   weather: Weather | null,
   cost: number | null,
   daily: Map<string, [number, number]> | null,
-  keep: Set<string> = new Set(),
 ): HeatVerdict {
   const first = records.reduce((a, r) => (!a || r.day < a ? r.day : a), '');
   const wood = daily ? woodIn(daily, from, to) : null;
   const counted = withWood(records, daily); // #460: the one rule of the wood as day records
-  // #570: a previous year where a room measured now has no reading (the water heater missing all
-  // year, a radiator added since) is no reference: it would make « more than usual » of a gap.
-  // `keep`: the rooms switched off on purpose, whose fall is a change of heating (#346).
-  const skip = (f: string, t: string) => unmeasuredRooms(records, from, to, f, t, keep).size > 0;
-  const skipped = referenceWindows(from, to, first)
-    .filter((w) => skip(w.f, w.t))
-    .map((w) => Number(w.f.slice(0, 4)));
-  const v = verdict(counted, from, to, weather, first, skip);
+  const v = verdict(counted, from, to, weather, first);
   const m = v ? moneyVerdict(v, cost === null ? null : cost + (wood?.eur ?? 0)) : null;
-  return { v, m, wood, records: counted, skipped };
+  return { v, m, wood, records: counted };
 }
 
 const nf0 = new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 0 });
@@ -202,19 +191,9 @@ export function verdictHeadline(m: MoneyVerdict): string {
   return `${amount(gap, m.unit)} de ${gap < 0 ? 'moins' : 'plus'} que d'habitude`;
 }
 
-/** « Chambre enfant », « Chambre enfant et Bureau », « A, B et C ». */
-export const andList = (a: string[]) => (a.length < 2 ? (a[0] ?? '') : `${a.slice(0, -1).join(', ')} et ${a.at(-1)}`);
 
 /** #383: the scope of the verdict when rooms are left out: « hors Chambre enfant, hors ligne ». */
 export const leftOut = (left: string[]) => (left.length ? `hors ${andList(left)}, hors ligne` : '');
-
-/** #570: the previous years left out of the verdict's reference, said in the sentence (`none`: all of them). */
-export function skippedText(years: number[], none: boolean): string {
-  const list = andList([...years].sort((a, b) => a - b).map(String));
-  return none
-    ? `Pas d'année précédente comparable sur ces dates : en ${list}, un appareil compté aujourd'hui n'avait aucun relevé (chauffe-eau absent, radiateur ajouté depuis).`
-    : `${list} ${years.length > 1 ? 'écartées' : 'écartée'} : un appareil compté aujourd'hui n'y avait aucun relevé`;
-}
 
 /** #433: what the verdict counts when the stove's wood is in it, after the amount (« 26 € d’électricité + bois »). */
 export const WOOD_WORDS = 'd’électricité + bois';

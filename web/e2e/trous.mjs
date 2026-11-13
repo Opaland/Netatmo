@@ -46,7 +46,7 @@ try {
   const y25 = await row(2025);
   check(!/\+4\d\s?%/.test(y25.at(-1)), `Année par année : évolution 2025 « ${y25.at(-1)} » (la hausse d'un chauffe-eau non mesuré)`);
   const years = await text('#years-card');
-  check(/Évolution de 2025 : hors Bureau et Chauffe-eau, sans relevé sur l’une des deux périodes/.test(years), 'Année par année : 2025 ne nomme pas ce qui est laissé hors de l’évolution');
+  check(/Évolution de 2025 : hors Bureau \(ajouté le 20 oct\. 2025\) et Chauffe-eau \(sans relevé sur l’une des périodes comparées\)/.test(years), 'Année par année : 2025 ne nomme pas ce qui est laissé hors de l’évolution (ajouté, sans relevé)');
   check(/Total de 2024 incomplet : 366 jours manquants/.test(years), 'Année par année : le total 2024 ne dit pas ses jours manquants');
 
   // Rapport annuel 2025 and 2024
@@ -61,10 +61,26 @@ try {
   check(/chauffe-eau non mesuré en 2024/.test(r24), 'Rapport 2024 : « 100 % / 0 % » au lieu de « chauffe-eau non mesuré »');
   check(!/−100\s?%/.test(r24), 'Rapport 2024 : −100 % pour le chauffe-eau non mesuré');
 
-  // Accueil: the Novembers without the water heater are no reference of the verdict
+  // Accueil, every period: the water heater (no reading in 2024) and the radiator added in 2025 are
+  // left out of both sides of the verdict and named; the reference years stay, so the verdict does
   await goto(page, 'accueil');
-  const home = await page.evaluate(() => document.querySelector('.verdict')?.textContent ?? '');
-  check(/écartée/.test(home), 'Accueil : le verdict ne dit pas les années écartées (sans chauffe-eau ni Bureau)');
+  for (const [period, label] of [
+    ['month', 'Mois'],
+    ['12m', '12 mois'],
+    ['year', 'Année'],
+  ]) {
+    await page.locator(`[data-set="home"][data-value="${period}"]`).click();
+    await frames(page);
+    await ready(page);
+    const home = await page.evaluate(() => document.querySelector('.verdict')?.textContent ?? '');
+    check(/que d'habitude|Comme d'habitude/.test(home), `Accueil (${label}) : plus de verdict (« ${home.slice(0, 120)} »)`);
+    // the water heater is named either way: « sans relevé » here, or « hors ligne » when its gap
+    // touches the year before (#346, comparableRecords)
+    check(/hors Bureau \(ajouté le 20 oct\. 2025\)/.test(home) && /Chauffe-eau/.test(home), `Accueil (${label}) : le verdict ne nomme pas le Bureau ajouté et le chauffe-eau (« ${home.replace(/\s+/g, ' ').slice(0, 300)} »)`);
+  }
+  await page.locator('[data-set="home"][data-value="month"]').click();
+  await frames(page);
+  await ready(page);
 
   // Historique, every month: no 0 for the water heater of 2024, « incomplet » by a month with gaps
   await goto(page, 'historique');
@@ -72,7 +88,7 @@ try {
   await openValues();
   const table = await text('#main-table');
   const line = (label) => table.split('\n').find((l) => l.startsWith(label)) ?? '';
-  check(/^juin 2024\t[\d\s]+\t—\t/.test(line('juin 2024')), `Historique : eau chaude de juin 2024 « ${line('juin 2024')} », attendu « — »`);
+  check(/^juin 2024\t[\d\s]+\tnon mesuré\t/.test(line('juin 2024')), `Historique : eau chaude de juin 2024 « ${line('juin 2024')} », attendu « non mesuré »`);
   check(/incomplet/.test(line('sept. 2023')), `Historique : septembre 2023 (28 jours perdus) sans « incomplet » : ${line('sept. 2023')}`);
   check(!/incomplet/.test(line('juin 2023')), `Historique : juin 2023 (complet) marqué « incomplet »`);
 
@@ -85,8 +101,33 @@ try {
   await pick('select[data-explain-month]', '2025-01');
   const ex = await text();
   check(!/^Eau chaude\t/m.test(ex), 'Expliquer janvier 2025 : une part « Eau chaude » pour un chauffe-eau sans relevé en janvier 2024');
-  check(/Chauffe-eau : hors ligne du 14 oct\. 2023 au 4 janv\. 2025/.test(ex), 'Expliquer janvier 2025 : le chauffe-eau n’est pas dit avec la fin de son trou');
+  check(/Chauffe-eau : hors ligne du 4 oct\. 2023 au 11 janv\. 2025/.test(ex), 'Expliquer janvier 2025 : le chauffe-eau n’est pas dit avec la fin de son trou');
   check(!/Salon : hors ligne/.test(ex), 'Expliquer janvier 2025 : un trou de novembre 2024 (entre les deux mois) est cité');
+
+  // Historique by room: the kitchen switched off on purpose (June 2025) uses 0, it is no missing measure
+  await goto(page, 'historique');
+  await pick('select[data-set="period"]', '2025');
+  await page.locator('[data-set="split"][data-value="room"]').click();
+  await frames(page);
+  await ready(page);
+  await openValues();
+  const head = (await text('#main-table thead')).split('\t').map((s) => s.trim());
+  const dec = (await text('#main-table')).split('\n').find((l) => l.startsWith('déc. 2025'))?.split('\t') ?? [];
+  const kitchen = dec[head.indexOf('Cuisine')]?.trim();
+  check(kitchen === '0', `Historique par pièce : Cuisine (arrêtée) en décembre 2025 « ${kitchen} », attendu 0`);
+  await page.locator('[data-set="split"][data-value="category"]').click();
+  await frames(page);
+  await ready(page);
+
+  // Questions types, « Ce mois est-il normal ? » for March 2026: the reference years exist
+  await goto(page, 'outils-questions');
+  await pick('#question-month', '2026-03');
+  await page.locator('[data-question="normal"]').click();
+  await frames(page);
+  await ready(page);
+  const q = await text();
+  check(!/ni le même mois une année précédente/.test(q), 'Questions : « ni le même mois une année précédente » alors que mars 2025 existe');
+  check(/Hors Bureau \(ajouté le 20 oct\. 2025\)/.test(q), 'Questions : le Bureau ajouté n’est pas nommé');
 
   // Pièce Chauffe-eau, sur l'année: the days missing a year earlier are said by the amounts
   await goto(page, 'piece-r-ce');

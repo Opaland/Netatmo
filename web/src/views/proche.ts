@@ -64,7 +64,7 @@ function verdictCard(from: string, to: string): string {
   return `<section class="card proche-verdict verdict-${v.level}">
     <span class="mark" aria-hidden="true">${mark}</span>
     <div><p class="proche-strong">${esc(verdictTitle(v.level))}</p>
-    <p>${shown.map((s) => esc(s).replace('{kwh}', term('kwh'))).join(' ')}</p>${leftNote(sc.left)}</div>
+    <p>${shown.map((s) => esc(s).replace('{kwh}', term('kwh'))).join(' ')}</p>${leftNote(sc.left)}${sc.unmeasured.phrase ? `<p>${esc(sc.unmeasured.phrase.replace(/^h/, 'H'))}.</p>` : ''}</div>
   </section>`;
 }
 

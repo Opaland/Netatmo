@@ -63,13 +63,14 @@ def test_chaque_fixture_se_construit_et_garde_ses_cas_limites(tmp_path):
     # room 41 days in 2023 while Linky started later, a room stopped since July 2025, one added
     s = store("trous-reels")
     assert not s.doc("2024")["daily"].get("r-ce")
-    assert s.doc("2025")["daily"]["r-ce"].get("2025-01-05") is not None
+    assert s.doc("2025")["daily"]["r-ce"].get("2025-01-11") is None
+    assert s.doc("2025")["daily"]["r-ce"].get("2025-01-12") is not None
     assert not any("2023-10-01" in days for days in s.doc("2023")["daily"].values())
-    assert min(s.doc("linky")["daily"]) == "2023-11-10"
-    assert "2024-03-20" in s.doc("linky")["daily"]
-    assert not any("2024-03-20" in days for days in s.doc("2024")["daily"].values())
-    assert max(s.doc("2025")["daily"]["r-cuisine"]) == "2025-06-30"
-    assert min(s.doc("2025")["daily"]["r-bureau"]) == "2025-10-09"
+    assert min(s.doc("linky")["daily"]) == "2023-11-20"
+    assert "2024-03-13" in s.doc("linky")["daily"]
+    assert not any("2024-03-13" in days for days in s.doc("2024")["daily"].values())
+    assert max(s.doc("2025")["daily"]["r-cuisine"]) == "2025-06-15"
+    assert min(s.doc("2025")["daily"]["r-bureau"]) == "2025-10-20"
     assert meta["trous-reels"]["stopped_rooms"] == [
-        {"room": "r-cuisine", "from": "2025-07-01", "reason": "retires", "label": ""}
+        {"room": "r-cuisine", "from": "2025-06-16", "reason": "retires", "label": ""}
     ]

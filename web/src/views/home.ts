@@ -31,7 +31,6 @@ import {
   WOOD_WORDS,
   verdictWords,
   writtenGap,
-  skippedText,
 } from '../home';
 import { lazyCard } from '../lazy';
 import { routeKey } from '../router';
@@ -118,11 +117,11 @@ function verdictBlock(r: HomeRange, sc: Scope): string {
     const amount = spent.unit === '€' ? fmtEur(spent.value) : fmtKwh(spent.kwh);
     const what = `<b class="num">${esc(amount)}</b>${
       sc.wood ? ` ${WOOD_WORDS}${spent.unit === '€' ? ` (${esc(fmtKwh(spent.kwh))})` : ''}` : `${spent.unit === '€' ? ` (${esc(fmtKwh(spent.kwh))})` : ''} ${spent.unit === '€' ? 'dépensés' : 'consommés'}`
-    }${left.length ? ` ${scopeHtml(left)},` : ''} ${esc(periodPhrase(r))}`;
+    }${left.length ? ` ${scopeHtml(left)},` : ''}${sc.unmeasured.phrase ? ` ${esc(sc.unmeasured.phrase)},` : ''} ${esc(periodPhrase(r))}`;
     return `<section class="verdict" aria-labelledby="verdict-title">
     <span class="verdict-icon" aria-hidden="true">·</span>
     <div><h2 class="verdict-title" id="verdict-title">${esc(amount)} ${esc(periodPhrase(r))}</h2>
-    <p class="verdict-sub">${what}. ${sc.skipped.length ? esc(skippedText(sc.skipped, true)) : "Pas encore d'année précédente sur ces dates : la comparaison viendra avec un an de données."}${offlineNote(left)}</p></div>
+    <p class="verdict-sub">${what}. Pas encore d'année précédente sur ces dates : la comparaison viendra avec un an de données.${offlineNote(left)}</p></div>
   </section>`;
   }
   const m = sc.m;
@@ -148,11 +147,11 @@ function verdictBlock(r: HomeRange, sc: Scope): string {
     <span class="verdict-icon" aria-hidden="true">${icon}</span>
     <div>
       <h2 class="verdict-title" id="verdict-title">${esc(w.headline)}</h2>
-      <p class="verdict-sub"><b class="num">${esc(w.spent)}</b> ${esc(w.spentVerb)}${left.length ? ` ${scopeHtml(left)},` : ''} ${esc(periodPhrase(r))}, pour ${esc(w.expected)}.${offlineNote(left)}${explainLink(r)}</p>
+      <p class="verdict-sub"><b class="num">${esc(w.spent)}</b> ${esc(w.spentVerb)}${left.length ? ` ${scopeHtml(left)},` : ''}${sc.unmeasured.phrase ? ` ${esc(sc.unmeasured.phrase)},` : ''} ${esc(periodPhrase(r))}, pour ${esc(w.expected)}.${offlineNote(left)}${explainLink(r)}</p>
       ${g}
       ${howDetails(
         'Comment c’est calculé',
-        `<p class="hint">Attendu = consommation des mêmes dates des années passées (jusqu'à quatre)${sc.skipped.length ? ` ; ${esc(skippedText(sc.skipped, false))}` : ''}${
+        `<p class="hint">Attendu = consommation des mêmes dates des années passées (jusqu'à quatre)${
           v.climate ? ', le chauffage corrigé des degrés-jours (le froid réellement constaté)' : ''
         }, ${m.unit === '€' ? 'au prix payé sur la période' : 'en kWh (prix non renseignés)'}. ${
           sc.wood ? `Avec le poêle, le bois de vos achats (⚙ Mon logement), ${woodSpread()}, s’ajoute à l’électricité, cette année comme les années passées. ` : ''
@@ -175,7 +174,7 @@ function tiles(records: DayRecord[], last: string, wood: Map<string, [number, nu
   const mo = ms.elec;
   const yr = money(records, yearFrom, last);
   const mv = ms.v;
-  const mOut = leftOut(ms.left);
+  const mOut = leftOut([...ms.left, ...ms.unmeasured.names]); // #570: the rooms out of the verdict, named
   const versus = (from: string, to: string) => {
     const p = yoy(records, from, to);
     return p === null ? `<span class="delta neutral">${NO_REFERENCE}</span>` : comparison(p, vsLabel(from, to)) + yoyGapNote(records, from, to);

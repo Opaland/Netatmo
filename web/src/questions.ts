@@ -4,7 +4,7 @@
 import { type DayRecord, MONTHS_LONG, minusYears, pctChange } from './aggregate';
 import { type Weather, djuBetween, roomDeltas, verdict } from './analysis';
 import { type Drops, type RoomState, coldReasons, coverage } from './windows';
-import { unmeasuredRooms } from './room-offline';
+import { referenceUnmeasured, unmeasuredPhrase, unmeasuredReasons } from './room-offline';
 
 export type QuestionId = 'why' | 'normal' | 'room' | 'priciest' | 'cold';
 
@@ -112,7 +112,7 @@ function why(month: string, first: string, end: string, input: QuestionInput): A
   // #570: a device without any reading in one of the two months (the water heater missing all
   // year) is left out of both and named; the euros then cover what is compared only, so kWh
   const any = (f: string, t: string) => sum(input.records, f, t) > 0; // no year of history: said below
-  const out = any(first, end) && any(pf, pe) ? unmeasuredRooms(input.records, first, end, pf, pe, input.stopped) : new Set<string>();
+  const out = any(first, end) && any(pf, pe) ? unmeasuredReasons(input.records, first, end, pf, pe, input.stopped) : new Map<string, string | null>();
   const records = out.size ? input.records.filter((r) => !out.has(r.room)) : input.records;
   const cost = out.size ? null : input.cost;
   const now = sum(records, first, end);
@@ -120,7 +120,7 @@ function why(month: string, first: string, end: string, input: QuestionInput): A
   if (now <= 0) return cannot(`aucune consommation relevée en ${monthLabel(month)}`);
   if (before <= 0) return cannot(`pas de données pour ${prevLabel}, il faut un an d’historique pour comparer`);
   const lines: string[] = [];
-  if (out.size) lines.push(`Hors ${[...out].map(roomName).join(', ')} : aucun relevé sur l’un des deux mois.`);
+  if (out.size) lines.push(`${capital(unmeasuredPhrase(out, roomName))}.`);
   const c = cost?.(first, end) ?? null;
   const cb = cost?.(pf, pe) ?? null;
   const p = pctChange(now, before)!;
@@ -157,11 +157,15 @@ function why(month: string, first: string, end: string, input: QuestionInput): A
   return { ok: true, lines };
 }
 
-function normal(month: string, first: string, end: string, { records, weather, stopped }: QuestionInput): Answer {
-  // #570: a previous year where a device measured now has no reading is no reference
-  const v = verdict(records, first, end, weather, undefined, (f, t) => unmeasuredRooms(records, first, end, f, t, stopped).size > 0);
+function normal(month: string, first: string, end: string, input: QuestionInput): Answer {
+  // #570: a room not measured on both sides of a reference year (the water heater missing all
+  // year, a radiator added since) is left out of both sides and named, as on the Accueil
+  const out = referenceUnmeasured(input.records, first, end, input.stopped);
+  const records = out.size ? input.records.filter((r) => !out.has(r.room)) : input.records;
+  const v = verdict(records, first, end, input.weather);
   if (!v) return cannot(`il n’y a ni consommation en ${monthLabel(month)}, ni le même mois une année précédente pour comparer`);
   const lines = [
+    ...(out.size ? [`${capital(unmeasuredPhrase(out, input.roomName))}.`] : []),
     `${capital(monthLabel(month))} : ${kwh(v.actual)}, pour ${kwh(v.expected)} attendus ${v.climate ? 'à climat égal (degrés-jours des années précédentes)' : 'd’après les années précédentes (sans correction météo)'}, soit ${pct(v.pct)}.`,
     v.level === 'normal'
       ? 'C’est normal : moins de 10 % d’écart.'

@@ -10,7 +10,7 @@ import { offlineText } from '../room-offline';
 import { routeKey } from '../router';
 import { html } from '../trusted';
 import { avgPrice, costAvailable, esc, fmtKwh, lastDay, table, tableToggle } from '../ui';
-import { offlineInfo } from './offline-rooms';
+import { offlineInfo, stoppedShown } from './offline-rooms';
 import { stoveName, woodDays, woodSettings } from './wood-state';
 import { woodSpread } from '../wood';
 import { cutDays } from './quality';
@@ -44,6 +44,7 @@ export function renderExplain(view: HTMLElement, asked?: string) {
     runs: off.runs,
     estimate: off.estimate,
     cuts: cutDays(),
+    stopped: stoppedShown(),
   });
   const select = `<label class="select"><span>Mois expliqué</span> <select data-explain-month>${months
     .map((m) => `<option value="${m}"${m === month ? ' selected' : ''}>${esc(cap(monthLong(m)))}</option>`)

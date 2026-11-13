@@ -6,7 +6,8 @@ import { ds, setState, state } from '../app';
 import { barChart } from '../charts';
 import { uncertainDays } from '../checks';
 import { cutDays } from './quality';
-import { measuredOnBoth, unmeasuredText } from './offline-rooms';
+import { measuredOnBoth } from './offline-rooms';
+import { unmeasuredIn } from '../room-offline';
 import { WITH_SUBSCRIPTION } from '../synthese';
 import { bucketMarks, monthKeys, monthsCovered, shortDate, windowSuffix, yoyCaveat, yoyWindow } from '../periods';
 import { CO2_DEFAULT, CO2_SOURCE, co2Factor, fmtCo2, fmtFactor } from '../money';
@@ -23,6 +24,7 @@ import {
   lastDay,
   longDate,
   nf0,
+  UNMEASURED_CELL,
   pct,
   table,
   yearColor,
@@ -54,16 +56,12 @@ export function renderReport(view: HTMLElement) {
   // the estimated or missing days of what is compared (the rooms left out are said apart)
   const caveat = yoyCaveat(win, both?.names.length ? uncertainDays(both.records, ds!.estimated, first, last) : uncertain, { toDate: false, cuts: cutDays() });
   const comparable = both?.records ?? all;
-  const unmeasured = unmeasuredText(both?.names ?? []);
+  const unmeasured = both?.phrase ?? '';
   const unmeasuredHtml = unmeasured ? `<br><small class="muted">${esc(unmeasured)}</small>` : '';
   const yr = all.filter((r) => r.day >= from && r.day <= end);
   const cmp = comparable.filter((r) => r.day >= cmpFrom && r.day <= cmpTo);
   const prev = win ? comparable.filter((r) => r.day >= win.prevFrom && r.day <= win.prevTo) : [];
-  const has = (rs: DayRecord[], room: string) => rs.some((r) => r.room === room);
-  const allPrev = win ? all.filter((r) => r.day >= win.prevFrom && r.day <= win.prevTo) : [];
-  const allCmp = all.filter((r) => r.day >= cmpFrom && r.day <= cmpTo);
-  const waterKnown = all.some((r) => r.cat === 'water_heater');
-  const waterNone = waterKnown && !yr.some((r) => r.cat === 'water_heater');
+  const waterNone = unmeasuredIn(all.filter((r) => r.cat === 'water_heater'), from, end);
   const sum = (rs: DayRecord[], cat?: Category) => rs.reduce((s, r) => s + (!cat || r.cat === cat ? r.kwh : 0), 0);
   const tot = sum(yr);
   // the subscription is counted on the covered days only (not before the collection started)
@@ -137,8 +135,9 @@ export function renderReport(view: HTMLElement) {
         const d = deltas.get(r.id)!;
         const off = both?.ids.has(r.id) ?? false;
         const pc = off ? null : pctChange(d.now, d.before);
-        const cell = (rs: DayRecord[], v: number) => (off && !has(rs, r.id) ? '<small class="muted">non mesuré</small>' : v);
-        return [esc(r.name), cell(allCmp, d.now), cell(allPrev, d.before), pc === null ? '—' : pct(pc)];
+        const mine = all.filter((x) => x.room === r.id);
+        const cell = (f: string, t: string, v: number) => (off && unmeasuredIn(mine, f, t) ? UNMEASURED_CELL : v);
+        return [esc(r.name), cell(cmpFrom, cmpTo, d.now), win ? cell(win.prevFrom, win.prevTo, d.before) : d.before, pc === null ? '—' : pct(pc)];
       }),
     )}
     <div id="report-extras"></div>

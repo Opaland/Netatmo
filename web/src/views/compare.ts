@@ -27,7 +27,8 @@ import { uncertainDays } from '../checks';
 import { cutDays } from './quality';
 import { WITH_SUBSCRIPTION } from '../synthese';
 import { INCOMPLETE, bucketMarks, countIn, missingText, monthKeys, shortDate, uncertainText, yoyCaveat, yoyWindow } from '../periods';
-import { measuredOnBoth, unmeasuredText } from './offline-rooms';
+import { measuredOnBoth } from './offline-rooms';
+import { unmeasuredIn } from '../room-offline';
 import {
   avgPrice,
   costAvailable,
@@ -39,6 +40,7 @@ import {
   lastDay,
   longDate,
   nf0,
+  UNMEASURED_CELL,
   pct,
   seasonStyle,
   table,
@@ -320,7 +322,6 @@ function yearsCard(records: DayRecord[], first: string, last: string, uncertain:
   // #570: the days without any reading (estimated days are in the totals), and the usages measured
   // somewhere in the archive: a year without one of them writes « non mesuré », never 0
   const missing = uncertainDays(records, new Set(), first, last);
-  const hasCat = (c: Category, from = first, to = last) => records.some((r) => r.cat === c && r.day >= from && r.day <= to);
   // Year-over-year: the same window in both years (to date, and from the first data day
   // when the previous year started late), with its caveats (#297).
   const rows = years
@@ -341,13 +342,13 @@ function yearsCard(records: DayRecord[], first: string, last: string, uncertain:
       const d = win && both ? pctChange(total(both.records, win.from, win.to), total(both.records, win.prevFrom, win.prevTo)) : null;
       // « à date » is said once under the table; what is left weakens the change of this year
       const parts = yoyCaveat(win, both?.names.length ? uncertainDays(both.records, ds!.estimated, first, last) : uncertain, { cuts: cutDays() }).split(' · ').filter((c) => c && c !== 'à date');
-      if (both?.names.length) parts.unshift(unmeasuredText(both.names));
+      if (both?.phrase) parts.unshift(both.phrase);
       const caveat = parts.length > 0;
       if (caveat && d !== null) caveats.push(`Évolution de ${y} : ${parts.map((c) => c.replace(/^(\d{4}) : /, '$1 compte ')).join(', ')}`);
       const end = isCurrent ? last : `${y}-12-31`;
       const lost = countIn(missing, `${y}-01-01`, end);
       if (lost) caveats.push(`Total de ${y} ${INCOMPLETE} : ${missingText(lost)}`);
-      const usage = (c: Category, kwh: number) => (hasCat(c) && !hasCat(c, `${y}-01-01`, end) ? '<small class="muted">non mesuré</small>' : kwh);
+      const usage = (c: Category, kwh: number) => (unmeasuredIn(records.filter((r) => r.cat === c), `${y}-01-01`, end) ? UNMEASURED_CELL : kwh);
       const since = y === firstYear && first > `${y}-01-01` ? ` <small class="muted">depuis le ${shortDate(first)}</small>` : '';
       const cost = costOf(records, `${y}-01-01`, end, true);
       // #464: the cold of the year from the first day of data, « au moins » when days are missing
@@ -476,7 +477,7 @@ function seasonTiles(records: DayRecord[], picked: number[], current: number, cl
   records = both.records;
   const doubt = uncertainDays(records, ds!.estimated, span(b)[0], span(a)[1]);
   const notes = [
-    unmeasuredText(both.names),
+    both.phrase,
     ...[a, b].map((y) => countIn(doubt, ...span(y))).flatMap((n, i) => (n ? [`${seasonLabel(i ? b : a)} : ${uncertainText(n)}`] : [])),
   ].filter(Boolean);
   const note = notes.length ? ` <small class="muted">${esc(notes.join(' · '))}</small>` : '';
