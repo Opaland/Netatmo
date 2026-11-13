@@ -1,13 +1,14 @@
 # Historique des versions
 
-## v2.0 — novembre 2026 : ouverture (en cours)
+## v2.0 — novembre 2026 : ouverture
 
 Dépôt modèle et guide, assistant de premier lancement, origine dédiée, branche `data` et copie sur
 le NAS ([feuille de route](docs/bmad/feuille-de-route.md)), plus les issues ouvertes par la revue de
 fin de v1.9. Revue de fin de version par les **72 personas**, revue design des écrans nouveaux ou
 changés et revue de code par agent : [`docs/bmad/revues/v2.0.md`](docs/bmad/revues/v2.0.md). Le pont
 (#25) attend le go de S-9.0 et la clé IA (#14) la condition de l'ADR-5 ; les gestes et décisions du
-propriétaire (revue, § 9 et § 10) ne bloquent pas l'enchaînement vers la v2.1.
+propriétaire (revue, § 9 et § 10) ne bloquent pas l'enchaînement vers la v2.1. Close
+après sa revue (PR #534, défauts bloquants corrigés).
 
 - **Installer chez un nouveau foyer**
   - Guide pas à pas `docs/INSTALLER.md` (partie de #29, #522) : créer sa copie, vider `data/` du

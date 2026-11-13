@@ -13,6 +13,7 @@ et [`feuille-de-route.md`](../feuille-de-route.md) (revue à 6 personas, novembr
 | **v1.9** | Sécurité et méthode | Argon2id (#139) ; paliers de taille (#138) ; ensoleillement (#117) ; repère kWh/m² (#127) ; objectif à climat égal (#152) ; rapport anonyme (#144) |
 | **v2.0** | Ouverture | Dépôt modèle (#29) ; assistant (#40) ; origine dédiée et transfert vers l'organisation (#229) ; branche `data` (#23) ; copie sur le NAS (#143) ; pont (#25) ; clé IA (#14) |
 | **v2.1** | Maison connectée | Plan de la maison (#202) ; Livebox (#282) ; NAS (#283) ; CPL (#284) ; TIC du Linky (#285) |
+| **v2.2** | Audit des données | Toutes les données reprises et vérifiées : bonnes dates, bonnes valeurs, trous et chevauchements (#532, demande du propriétaire du 12/11/2026) |
 | **Matériel (attend le propriétaire)** | Jalon sans date | #200, #24, #26, #281, #349, #350 : ils demandent un matériel ou un relevé que seul le propriétaire peut poser |
 
 ## Règle de passage d'une version à la suivante
