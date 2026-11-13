@@ -61,7 +61,7 @@ garde dans WebKit les mêmes invariants que dans Chromium (#595, A18), dans la p
 CI (`SWEEP_SCOPE=webkit`, écrite dans `web/e2e/sweep.mjs` : la démo à 360 px et à 200 %, `trous-reels`
 à 360 px, sans l'explorateur) ; `SWEEP_EXPLORE=1` y ajoute l'explorateur de contrôles,
 `SWEEP_SCOPE=ci` la portée Chromium entière. Tout e2e qui lit `E2E_BROWSER` (ou le `BROWSER` de
-`web/e2e/captures.mjs`) est lancé par le job `e2e-webkit` : `web/src/e2e-webkit.test.ts` le refuse
+`web/e2e/captures.mjs`) est lancé par un job WebKit (`e2e-webkit`, ou `e2e-webkit-parcours` en parallèle pour que WebKit ne dure pas plus que le job `e2e`) : `web/src/e2e-webkit.test.ts` le refuse
 sinon (#596). Ce que le WebKit de Playwright ne permet pas est dit en tête du script avec sa raison
 mesurée, et un échec propre à WebKit encore ouvert s'y compte comme **connu**, avec son issue
 (`knownFailures`, `web/e2e/lib.mjs`) : écrit, sans faire échouer, et signalé quand il disparaît. En

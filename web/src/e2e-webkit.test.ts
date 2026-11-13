@@ -1,5 +1,6 @@
 // #596: an e2e script that can run in WebKit (it reads E2E_BROWSER, or the BROWSER of
-// e2e/captures.mjs) is run by the CI's e2e-webkit job, in WebKit. The list of what runs in WebKit
+// e2e/captures.mjs) is run by a WebKit job of the CI (e2e-webkit, e2e-webkit-parcours: two jobs in
+// parallel, so that WebKit does not outlast the job e2e), in WebKit. The list of what runs in WebKit
 // is written once, in ci.yml (AGENTS.md §5), read here with the gate's own parser.
 import { describe, expect, it } from 'vitest';
 
@@ -24,8 +25,10 @@ function webkitReady(): string[] {
     .map(([name]) => name);
 }
 
-/** The npm scripts run by the e2e-webkit job of `yaml`. */
-const inWebkitJob = (yaml: string) => new Set(ciSteps(yaml, ['e2e-webkit']).map((s) => /^npm run (\S+)$/.exec(s.cmd)?.[1]).filter(Boolean));
+/** The WebKit jobs of `yaml` (their name starts with e2e-webkit). */
+const webkitJobs = (yaml: string) => [...yaml.matchAll(/^ {2}(e2e-webkit[\w-]*):\s*$/gm)].map((m) => m[1]);
+/** The npm scripts run by the WebKit jobs of `yaml`. */
+const inWebkitJob = (yaml: string) => new Set(ciSteps(yaml, webkitJobs(yaml)).map((s) => /^npm run (\S+)$/.exec(s.cmd)?.[1]).filter(Boolean));
 /** What can run in WebKit but the e2e-webkit job of `yaml` does not run. */
 const missing = (yaml: string) => webkitReady().filter((name) => !inWebkitJob(yaml).has(name));
 
@@ -40,7 +43,8 @@ const BEFORE = `jobs:
 ${['features', 'piece', 'reglages', 'logement', 'jeton', 'assistant', 'http', 'plan', 'plan-edition'].map((s) => `      - run: npm run e2e:${s}\n        env:\n          E2E_BROWSER: webkit\n`).join('')}`;
 
 describe('e2e en WebKit (#596)', () => {
-  it('le job e2e-webkit lance chaque script qui sait tourner dans WebKit', () => {
+  it('les jobs WebKit lancent chaque script qui sait tourner dans WebKit', () => {
+    expect(webkitJobs(ci)).toEqual(['e2e-webkit', 'e2e-webkit-parcours']);
     expect(webkitReady().length).toBeGreaterThanOrEqual(19);
     expect(missing(ci)).toEqual([]);
   });
@@ -49,8 +53,9 @@ describe('e2e en WebKit (#596)', () => {
     expect(missing(BEFORE)).toEqual(expect.arrayContaining(['e2e:trous', 'e2e:composants', 'e2e:expliquer', 'e2e:retours']));
   });
 
-  it('chaque e2e du job e2e-webkit tourne vraiment dans WebKit (E2E_BROWSER: webkit)', () => {
+  it('chaque e2e des jobs WebKit tourne vraiment dans WebKit (E2E_BROWSER: webkit)', () => {
     const job = ci.slice(ci.indexOf('\n  e2e-webkit:'));
+    expect(job).toContain('\n  e2e-webkit-parcours:'); // both jobs are in the slice (the last ones of ci.yml)
     const runs = [...job.matchAll(/^ {6}- run: (npm run e2e\S*)[^\n]*\n((?: {8}.*\n)*)/gm)];
     expect(runs.length).toBeGreaterThan(0);
     for (const [, cmd, rest] of runs) expect(rest, cmd).toMatch(/^ {8}env:\n {10}E2E_BROWSER: webkit$/m);
