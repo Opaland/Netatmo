@@ -1,32 +1,34 @@
-// #357: the app as an installed application (Chromium or WebKit, with its real service worker).
+// #357: the app as an installed application (Chromium, with its real service worker).
 // - A new version (a second build of sw.js, served by this script) waits: no reload by surprise,
 //   a banner (role=status, 44 px, axe, 360 px with the text at 200 %) offers « Recharger »;
 //   with two tabs open, « Recharger » in one activates it and reloads that one, the other is not
 //   reloaded behind the reader's back and its own button reloads it. The remembered key keeps
-//   both unlocked. The first visit shows no banner. #606: red in WebKit before the fix (the
-//   reloaded tab saw its new worker « activating » for 40 s and more: it was reloaded mid-activation).
+//   both unlocked. The first visit shows no banner.
 // - « Recharger l'application » (Paramètres → À propos): the remembered key (IndexedDB), the
 //   notes (localStorage) and the encrypted data cache are the same before and after (read in
-//   the storage itself, not through setOffline: it does not apply to the service worker). #604:
-//   red in WebKit before the fix (17 → 0 entries: WebKit empties the origin's caches when the page
-//   reloads with no registration left).
+//   the storage itself, not through setOffline: it does not apply to the service worker).
 // - Installer: a button once `beforeinstallprompt` has arrived (even before the card exists),
 //   gone after the choice; the Safari gesture on iPhone; nothing when opened from the icon.
 // - Offline with nothing kept: a screen that says so.
 // Run after `npm run build`: node e2e/pwa.mjs (serves dist/ itself, data/ answered by the demo
-// files, passphrase « demo »; port: E2E_PORT; E2E_BROWSER=webkit|chromium). Captures in e2e/screenshots/pwa-*.png.
+// files, passphrase « demo »; port: E2E_PORT; E2E_BROWSER=webkit|chromium). Captures in
+// e2e/screenshots/pwa-*.png.
+// #596: in WebKit, everything runs. A check that fails in one engine is counted as a KNOWN failure,
+// with its issue, printed and not failing the run (`known` below); none now. Fixed in src/pwa.ts
+// and checked as any other check: #604 (« Recharger l'application » left the data cache empty:
+// WebKit empties every cache of the origin when the page reloads with no worker registration
+// left) and #606 (reloaded at the controller change, mid-activation, the tab saw its new worker
+// « activating » for 40 s and more: « Recharger » now waits for « activated »).
 import { createServer } from 'node:http';
 import { readFileSync, existsSync, statSync } from 'node:fs';
 import { extname, join, normalize } from 'node:path';
 import AxeBuilder from '@axe-core/playwright';
 import { chromium, webkit } from 'playwright';
-import { capturesOut } from './captures.mjs';
+import { BROWSER, SHOT, capturesOut } from './captures.mjs';
+import { knownFailures } from './lib.mjs';
 
-const BROWSER = process.env.E2E_BROWSER === 'webkit' ? 'webkit' : 'chromium';
 const PORT = Number(process.env.E2E_PORT ?? 4191);
 const OUT = capturesOut(); // #583: e2e/screenshots/ only in the CI's font
-/** The references are Chromium's: WebKit's captures go beside them, under another name. */
-const SHOT = BROWSER === 'webkit' ? 'webkit-pwa' : 'pwa';
 const DIST = new URL('../dist/', import.meta.url).pathname;
 if (!existsSync(join(DIST, 'sw.js'))) {
   console.error('pwa : dist/sw.js absent, lancer `npm run build` avant.');
@@ -59,6 +61,8 @@ const base = `http://localhost:${PORT}/`;
 
 const errors = [];
 const check = (ok, msg) => ok || errors.push(msg);
+/** #596: checks known to fail in one engine, until their issue is fixed (printed, not failing the run). */
+const known = knownFailures(BROWSER, [], (msg) => errors.push(msg));
 const t0 = Date.now();
 const progress = (s) => console.log(`[${Math.round((Date.now() - t0) / 1000)} s] ${s}`);
 const watch = (page, where) => {
@@ -123,7 +127,7 @@ const kept = (page) =>
     const dataEntries = data ? (await (await caches.open(data)).keys()).length : 0;
     // an entry the app never fetches again by itself: a deleted cache cannot be refilled with it
     const marker = data ? !!(await (await caches.open(data)).match(new URL('data/e2e-marqueur.json', location.href).href)) : false;
-    return { ls, dbs, keys, dataEntries, marker };
+    return { ls, dbs, keys, dataEntries, marker, names };
   });
 
 const browser = await (BROWSER === 'webkit' ? webkit : chromium).launch();
@@ -169,7 +173,7 @@ try {
     const after = await kept(page);
     check(JSON.stringify(after.ls) === JSON.stringify(before.ls), `Recharger l’application : localStorage changé\n  avant ${JSON.stringify(before.ls)}\n  après ${JSON.stringify(after.ls)}`);
     check(JSON.stringify(after.keys) === JSON.stringify(before.keys), 'Recharger l’application : clé mémorisée changée');
-    check(after.marker && after.dataEntries >= before.dataEntries, `Recharger l’application : cache des données ${before.dataEntries} → ${after.dataEntries} entrées`);
+    known.check('cache-donnees', after.marker && after.dataEntries >= before.dataEntries, `Recharger l’application : cache des données ${before.dataEntries} → ${after.dataEntries} entrées, marqueur ${after.marker ? 'gardé' : 'perdu'} (caches ${JSON.stringify(before.names)} → ${JSON.stringify(after.names)})`);
     const precache = await page.evaluate(async () => (await caches.keys()).filter((n) => n.startsWith('workbox-precache')).length);
     check(precache === 1, `Recharger l’application : ${precache} précache(s) après`);
 
@@ -204,10 +208,10 @@ try {
     await page2.evaluate(() => (window.__avant = 1));
     await audit(page, 'bandeau');
     await page.evaluate(() => window.scrollTo(0, 0));
-    await page.screenshot({ path: `${OUT}/${SHOT}-bandeau.png` });
+    await page.screenshot({ path: `${OUT}/${SHOT}pwa-bandeau.png` });
     await big(page, 'bandeau', '#update-banner button');
     await page.evaluate(() => window.scrollTo(0, 0));
-    await page.screenshot({ path: `${OUT}/${SHOT}-bandeau-200.png` });
+    await page.screenshot({ path: `${OUT}/${SHOT}pwa-bandeau-200.png` });
 
     progress('« Recharger » dans l’onglet 1');
     await Promise.all([page.waitForEvent('load', { timeout: 30000 }), page.click('#update-reload')]);
@@ -215,11 +219,18 @@ try {
     check(!(await page.evaluate(() => window.__avant)), 'onglet 1 : pas rechargé après « Recharger »');
     check((await page.locator('#pass').count()) === 0, 'onglet 1 : verrouillé après la mise à jour');
     check((await page.locator('#update-banner').count()) === 0, 'onglet 1 : bandeau encore là après la mise à jour');
+    // the new worker may still be « activating » when the page has reloaded (WebKit): read again, 10 s at most
     const sw = await page.evaluate(async () => {
-      const r = await navigator.serviceWorker.getRegistration();
-      return { waiting: !!r.waiting, active: r.active?.state };
+      const t0 = Date.now();
+      for (;;) {
+        const r = await navigator.serviceWorker.getRegistration();
+        const now = { waiting: !!r.waiting, active: r.active?.state, ms: Date.now() - t0 };
+        if (now.active !== 'activating' || now.ms > 10000) return now;
+        await new Promise((ok) => setTimeout(ok, 250));
+      }
     });
-    check(!sw.waiting && sw.active === 'activated', `onglet 1 : nouvelle version non activée (${JSON.stringify(sw)})`);
+    check(!sw.waiting, `onglet 1 : nouvelle version encore en attente (${JSON.stringify(sw)})`);
+    known.check('activation', sw.active === 'activated', `onglet 1 : nouvelle version non activée (${JSON.stringify(sw)})`);
     await page2.waitForFunction(() => /autre onglet/.test(document.getElementById('update-banner')?.textContent ?? ''), null, { timeout: 15000 }).catch(() => errors.push('onglet 2 : le bandeau ne dit pas que l’autre onglet a activé la version'));
     check(await page2.evaluate(() => window.__avant === 1), 'onglet 2 : rechargé sans qu’on le demande');
     await Promise.all([page2.waitForEvent('load', { timeout: 30000 }), page2.click('#update-reload')]);
@@ -257,9 +268,9 @@ try {
     const btn = page.locator('#install-app');
     check((await btn.count()) === 1, 'installer : bouton absent après beforeinstallprompt');
     await audit(page, 'installer');
-    await page.screenshot({ path: `${OUT}/${SHOT}-a-propos.png`, fullPage: true });
+    await page.screenshot({ path: `${OUT}/${SHOT}pwa-a-propos.png`, fullPage: true });
     await big(page, 'à propos', '#app-card button');
-    await page.screenshot({ path: `${OUT}/${SHOT}-a-propos-200.png`, fullPage: true });
+    await page.screenshot({ path: `${OUT}/${SHOT}pwa-a-propos-200.png`, fullPage: true });
     await btn.click();
     await page.waitForFunction(() => !document.getElementById('install-app'), null, { timeout: 5000 }).catch(() => errors.push('installer : bouton encore là après l’installation'));
     check((await page.evaluate(() => window.__prompted)) === 1, 'installer : la fenêtre d’installation n’a pas été ouverte');
@@ -301,7 +312,7 @@ try {
     check((await page.locator('#pass').count()) === 0, 'hors ligne : formulaire de phrase de passe affiché pour rien');
     await audit(page, 'hors ligne');
     await big(page, 'hors ligne', '#offline-retry');
-    await page.screenshot({ path: `${OUT}/${SHOT}-hors-ligne.png`, fullPage: true });
+    await page.screenshot({ path: `${OUT}/${SHOT}pwa-hors-ligne.png`, fullPage: true });
     await ctx.close();
   }
 } catch (e) {
@@ -310,6 +321,7 @@ try {
   await browser.close();
   server.close();
 }
+known.report();
 if (errors.length) {
   console.error(errors.join('\n'));
   process.exit(1);

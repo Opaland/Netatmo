@@ -60,11 +60,24 @@ le lance. Sur un poste, `npx playwright install webkit` une fois (Linux : `--wit
 garde dans WebKit les mêmes invariants que dans Chromium (#595, A18), dans la portée réduite de la
 CI (`SWEEP_SCOPE=webkit`, écrite dans `web/e2e/sweep.mjs` : la démo à 360 px et à 200 %, `trous-reels`
 à 360 px, sans l'explorateur) ; `SWEEP_EXPLORE=1` y ajoute l'explorateur de contrôles,
-`SWEEP_SCOPE=ci` la portée Chromium entière.
+`SWEEP_SCOPE=ci` la portée Chromium entière. Tout e2e qui lit `E2E_BROWSER` (ou le `BROWSER` de
+`web/e2e/captures.mjs`) est lancé par un job WebKit (`e2e-webkit`, ou `e2e-webkit-parcours` en parallèle pour que WebKit ne dure pas plus que le job `e2e`) : `web/src/e2e-webkit.test.ts` le refuse
+sinon (#596). Ce que le WebKit de Playwright ne permet pas est dit en tête du script avec sa raison
+mesurée, et un échec propre à WebKit encore ouvert s'y compte comme **connu**, avec son issue
+(`knownFailures`, `web/e2e/lib.mjs`) : écrit, sans faire échouer, et signalé quand il disparaît. En
+WebKit, les captures s'écrivent `webkit-<nom>.png` ; `e2e:hauteurs` y mesure sans juger les limites.
 
 `npm run e2e:trous` (après `python -m collector fixtures -o web/dist/demo-fixtures`, dans la porte)
 ouvre la démo sur `trous-reels`, la forme des trous d'un vrai compte (#570) : jamais 0 pour un trou,
 « incomplet », comparaisons sans l'appareil non mesuré.
+
+`npm run e2e:clavier` (#594, lancé à la suite du balayage par `npm run e2e:sweep`, donc dans la porte)
+parcourt **au clavier seul** chaque route du registre et chaque pièce, à 360 × 800, sur la démo et
+sur `compte-charge` (replis ouverts) : à chaque arrêt de Tab, un anneau de focus (WCAG 2.4.7) et
+l'élément **peint** (`document.elementFromPoint` au centre d'une de ses lignes, WCAG 2.4.11) ; dans
+un tableau qui défile, le champ entier à droite de la colonne collante. Un auto-contrôle (élément
+glissé sous un autre, sans anneau, à moitié sous une colonne collante) le fait échouer d'abord.
+`E2E_BROWSER=webkit` le lance dans WebKit ; `CLAVIER_ROUTES=<regex>` en restreint les routes.
 
 Les **limites de hauteur** des pages (l'Accueil en 3 écrans d'iPhone 13, l'Historique en 4…) sont
 écrites une fois, dans `web/e2e/hauteurs-limites.mjs`, que lisent la garde (`e2e/features.mjs`) et

@@ -65,3 +65,11 @@ export function capturesOut() {
   mkdirSync(dir, { recursive: true });
   return dir;
 }
+
+/**
+ * #596: the engine a script runs in (E2E_BROWSER=webkit, else Chromium), and the prefix of its
+ * captures: a script ported to WebKit writes « webkit-<name>.png », never over the Chromium
+ * references of the same name.
+ */
+export const BROWSER = process.env.E2E_BROWSER === "webkit" ? "webkit" : "chromium";
+export const SHOT = BROWSER === "webkit" ? "webkit-" : "";
