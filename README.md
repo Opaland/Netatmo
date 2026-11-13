@@ -384,6 +384,16 @@ stock restant, que le stock noté ; une saison avant le premier achat) n'est pas
 Enregistré pour le foyer dans le **secret** du dépôt `WOOD_JSON`, scellé dans
 le navigateur comme la localisation, recopié chiffré par la collecte ; le journal public n'en dit rien.
 
+**Plan de la maison** (#202). Dans *⚙ Mon logement → Plan de la maison*, dessinez les pièces en
+rectangles sur une grille de 50 cm, niveau par niveau (rez-de-chaussée et étage ; la cave s'ajoute),
+liez chacune à sa pièce Intuis et à son module de la station, et placez les appareils (radiateurs,
+chauffe-eau, modules, prises mesurées, compteur, volets) : en les faisant glisser au doigt, ou par
+leurs champs (clavier). *Pièces → Plan* montre alors le plan coloré par la consommation, la température
+moyenne, les jours sous le seuil de confort ou les heures de fenêtre ouverte, sur la période de
+Pièces ; « Voir les valeurs » le dit en tableau. Appliqué aussitôt sur cet appareil (brouillon
+chiffré), enregistré pour le foyer dans le **secret** `FLOOR_PLAN_JSON`, scellé dans le navigateur et
+recopié chiffré par la collecte ; aucune adresse, rien dans le journal public.
+
 **Flambées du poêle.** Chaque nuit, la collecte cherche les soirs où le poêle a chauffé dans les
 relevés à la demi-heure : après le coucher du soleil, au moins deux pièces voisines se réchauffent alors
 que leur radiateur ne consomme rien, sans redoux dehors (`collector/stove.py`). Les seuils sont réglés

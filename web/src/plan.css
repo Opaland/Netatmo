@@ -46,3 +46,29 @@
 .plan-device text { fill: var(--text); font-weight: 700; }
 .plan-controls { align-items: end; }
 .plan-overlay { pointer-events: none; }
+/* the editor (views/plan-edit.ts): a light grid. The drawing takes the finger (touch-action is not
+   honoured on the SVG shapes themselves: Chromium cancelled the drag after 15 px to scroll), so it
+   is kept under half a screen: the page still scrolls from above and below it. */
+.plan-edit-svg {
+  touch-action: none;
+  max-height: 50vh;
+}
+.plan-grid-line {
+  fill: none;
+  stroke: var(--grid);
+  stroke-width: 0.04;
+}
+.plan-edit-item { cursor: grab; }
+.plan-edit-item.is-selected,
+.plan-edit-item.is-selected rect {
+  stroke: var(--focus);
+  stroke-width: 0.25;
+}
+.plan-items {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 4px 0 12px;
+  padding: 0;
+  list-style: none;
+}

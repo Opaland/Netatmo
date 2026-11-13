@@ -206,9 +206,8 @@ export function roomFigures(id: string, from: string, to: string): RoomFigures {
   };
 }
 
-/** #202: « Liste | Plan » of Pièces, offered once a plan exists (drawn in ⚙ Mon logement). */
+/** #202: « Liste | Plan » of Pièces (the plan is drawn in ⚙ Mon logement). */
 function planSwitch(): string {
-  if (!currentPlan()) return '';
   return seg('piecesShow', state.piecesShow === 'plan' ? 'plan' : 'list', [['list', 'Liste'], ['plan', 'Plan']], 'Affichage des pièces');
 }
 
@@ -217,7 +216,7 @@ export function renderPieces(view: HTMLElement, o: PiecesOpts) {
   const r = piecesRange(last);
   const { from, to } = r;
   const thr = state.comfortThreshold;
-  if (state.piecesShow === 'plan' && currentPlan()) return renderPiecesPlan(view, o, r);
+  if (state.piecesShow === 'plan') return renderPiecesPlan(view, o, r);
   const rows = activeRooms().map((room) => {
     const mine = ds!.records.filter((x) => x.room === room.id);
     // #346: a room offline counts with its share estimated from the meter (« ≈ »), never 0 kWh
@@ -272,9 +271,15 @@ function renderPiecesPlan(view: HTMLElement, o: PiecesOpts, r: HomeRange) {
   ${o.picker}
   <div class="part" id="pieces-compare"></div>`);
   const zone = document.getElementById('pieces-plan')!;
+  const plan = currentPlan();
+  if (!plan) {
+    zone.innerHTML = html(`<section class="card" id="plan-card"><div class="card-head"><h2>Plan de la maison</h2></div>
+      <p class="hint">Pas encore de plan. Dessinez les pièces et placez les appareils dans <a href="#parametres-logement">⚙ Mon logement</a> : elles s’affichent ici, colorées par la consommation, la température ou le confort.</p></section>`);
+    return o.compare(document.getElementById('pieces-compare')!);
+  }
   void lazyCard(
     () => import('./plan'),
-    (m) => zone.isConnected && m.mountPlanReading(zone, { plan: currentPlan()!, from: r.from, to: r.to, scope: scopeTitle(r), figures: roomFigures }),
+    (m) => zone.isConnected && m.mountPlanReading(zone, { plan, from: r.from, to: r.to, scope: scopeTitle(r), figures: roomFigures }),
     { zone, what: 'Plan de la maison' },
   );
   o.compare(document.getElementById('pieces-compare')!);
