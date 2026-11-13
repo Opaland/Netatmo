@@ -22,7 +22,7 @@ import { type SwipeDir, onSwipe, step } from './swipe';
 import { HOME_PERIODS, type HomePeriod, homePeriod } from './home';
 import { historyPeriods } from './views/overview';
 import { tenant } from './tenant';
-import { downloadBlob, esc, filtered, lastDay, roomName, valuesFold } from './ui';
+import { downloadBlob, esc, filtered, keepFocusClear, lastDay, roomName, valuesFold } from './ui';
 import { renderLoading, renderLock, showApp } from './views/lock';
 import { toggleTerm } from './plain';
 import { dismissTip, finishOnboarding, needsOnboarding, readFlags, tipPending } from './onboarding';
@@ -494,6 +494,15 @@ app.addEventListener('toggle', (e) => {
   const t = e.target as HTMLElement;
   if (valuesFold(t)) state.showTables = t.open;
 }, true);
+
+// #594 (WCAG 2.4.11): a focused element is never left under its pinned column nor the tab bar; and the
+// « Pièces affichées » panel, drawn over the chart, closes when the focus leaves it (by Tab: the
+// chart under it got the focus hidden). A re-render (no element gaining the focus) keeps it open.
+document.addEventListener('focusin', keepFocusClear);
+app.addEventListener('focusout', (e) => {
+  const picker = (e.target as HTMLElement).closest<HTMLDetailsElement>('details.rooms-picker[open]');
+  if (picker && e.relatedTarget instanceof Node && !picker.contains(e.relatedTarget)) picker.open = false;
+});
 
 // Redraw charts with the right colours (and patterns) when the OS theme or contrast flips.
 for (const q of ['(prefers-color-scheme: dark)', '(prefers-contrast: more)', '(forced-colors: active)']) {
