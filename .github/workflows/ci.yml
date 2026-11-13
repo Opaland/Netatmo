@@ -179,7 +179,7 @@ jobs:
       # Un test refuse un script qui lit E2E_BROWSER sans être lancé par un job e2e-webkit*
       # (src/e2e-webkit.test.ts) ; ce que le WebKit de Playwright ne permet pas est dit en tête du
       # script, avec sa raison mesurée.
-      - run: npm run e2e # démo : tout sauf le hors-ligne par le service worker (en-tête de demo.mjs) ; un échec connu, #605
+      - run: npm run e2e # démo : tout sauf le hors-ligne par le service worker (en-tête de demo.mjs) (#605 corrigé)
         env:
           E2E_BROWSER: webkit
       - run: npm run e2e:hauteurs # mesure et écrit les hauteurs en WebKit, sans juger les limites (mesurées en Chromium)
