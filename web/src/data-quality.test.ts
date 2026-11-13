@@ -373,15 +373,24 @@ describe('#336: the known cause of each gap', () => {
     const linky = new Map(all.filter((d) => !hole(d)).map((d) => [d, 20]));
     const cause = (extra: Partial<QualityInput>) => qualityReport(base(recs('2024-01-01', '2024-06-30'), { last: '2024-06-30', linky, ...extra })).sources.find((s) => s.id === 'linky')!.gaps[0].cause;
     expect(cause({})).toBe('Enedis n’a pas transmis ces jours');
+    // #550: every night of the 10 after the gap failed: the days were not asked again in time
+    const failing = Object.fromEntries(span('2024-03-05', '2024-03-30').map((d) => [d, ['linky']]));
+    expect(cause({ devices: { failures: failing } })).toBe('collecte Linky en échec (26 nuits) : ces jours n’ont pas été redemandés à temps');
+    // one night failed, then the 22nd worked and asked Enedis for its 10 days: the gap is Enedis's
     expect(cause({ devices: { failures: { '2024-03-05': ['linky'], '2024-03-28': ['linky', 'netatmo'], '2024-04-15': ['linky'] } } })).toBe(
-      'collecte Linky en échec (2 nuits) : ces jours n’ont pas été redemandés à temps',
+      'Enedis n’a pas transmis ces jours',
     );
     const station = { modules: { m0: { name: 'Intérieur' } }, daily: { m0: daily(all.filter((d) => !hole(d))) } };
     expect(cause({ station })).toBe('collecte arrêtée : la station manque aussi ces jours-là');
     const s = qualityReport(base(recs('2024-01-01', '2024-06-30'), { last: '2024-06-30', linky, station })).sources.find((x) => x.id === 'station')!;
     expect(s.gaps[0].cause).toBe('collecte arrêtée : le compteur Linky manque aussi ces jours-là');
-    const failed = qualityReport(base(recs('2024-01-01', '2024-06-30'), { last: '2024-06-30', station, devices: { failures: { '2024-03-02': ['netatmo'] } } }));
-    expect(failed.sources.find((x) => x.id === 'station')!.gaps[0].cause).toMatch(/^collecte de la station en échec \(1 nuit\)/);
+    const stationCause = (failures: Record<string, string[]>) =>
+      qualityReport(base(recs('2024-01-01', '2024-06-30'), { last: '2024-06-30', station, devices: { failures } })).sources.find((x) => x.id === 'station')!.gaps[0].cause;
+    const nights = Object.fromEntries(span('2024-03-21', '2024-03-30').map((d) => [d, ['netatmo']]));
+    expect(stationCause(nights)).toMatch(/^collecte de la station en échec \(10 nuits\)/);
+    // #550: one failed night, the next ones worked: not the collection's
+    expect(stationCause({ '2024-03-02': ['netatmo'] })).not.toMatch(/en échec/);
+    expect(stationCause({ ...nights, '2024-03-25': ['linky'] })).not.toMatch(/en échec/);
   });
   it('the hourly snapshot: a cut made the home unreachable', () => {
     const seen = Object.fromEntries(span('2026-01-01', '2026-01-20').filter((d) => d < '2026-01-08' || d > '2026-01-11').map((d) => [d, 0xffffff]));
