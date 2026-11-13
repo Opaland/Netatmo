@@ -1,5 +1,40 @@
 # Historique des versions
 
+## v2.3 — novembre 2026 : fiabilité et suites des revues (en cours)
+
+Les dettes mesurées par les revues de fin de v2.0 à v2.2 et les suites de la revue v2.2
+([cadrage](docs/bmad/revues/v2.3-cadrage.md), version lancée par le propriétaire le 13/11/2026) :
+de la marge sous les limites de hauteur de l'Historique et de l'Accueil sans retirer d'information,
+le premier écran sous la moitié du budget de taille, la mesure des hauteurs dans le dépôt, et un jour
+rangé dans deux fichiers d'année lu une fois partout. Revue de fin de version par les **72 personas**,
+revue design des écrans changés et revue de code par agent :
+[`docs/bmad/revues/v2.3.md`](docs/bmad/revues/v2.3.md). Les choix de mise en page des PR restent des
+propositions que le propriétaire peut refuser (revue, § 10).
+
+- **Historique** (#553, #559) : le choix « Comparer » de « Hiver contre hiver » devient une liste,
+  comme « Période » à côté (trois lignes, 142 px, sur une seule) : 3 181 → 3 083 px à 360 × 800, la
+  marge sous les 4 écrans passe de 19 à 117 px.
+- **Accueil** (#554, #563) : « Comparer les offres » finit la phrase du nouveau tarif ; le lien vers
+  l'Historique tient sur une ligne ; « Lire l'analyse complète » devient un lien de pied de carte :
+  2 507 → 2 432 px sur iPhone 13, marge de 25 à 100 px. Mêmes montants, mêmes liens.
+- **Premier écran** (#555, #562) : les vues de l'Historique, du Compteur et des outils (`analyse`,
+  `compare`) se chargent à la demande, puis en arrière-plan une fois le premier écran affiché (pas sur
+  un réseau lent ou mesuré) : 151,3 → 126,0 kB gzip, **45 %** du budget (54 % avant) ; le script de
+  taille échoue si l'une revient dans le premier écran.
+- **Hauteurs des écrans** (#556) : les cinq limites écrites une fois (`web/e2e/hauteurs-limites.mjs`),
+  lues par la garde et par `npm run e2e:hauteurs`, qui imprime le tableau des revues et chaque marge
+  (dans la CI).
+- **Suites de la revue v2.2** (#550, #558, #560) : un jour rangé dans deux fichiers d'année est lu une
+  fois partout (`verify`, l'export CSV, les alertes, le rapport mensuel ; dans l'appli les heures, les
+  demi-heures, la courbe et la station), avec un vecteur de test partagé par Python et TypeScript ;
+  `verify` écrit les totaux comme l'appli, et ceux d'avant quand un tel jour existe ; le rapport
+  d'audit dit l'unité de chaque valeur ; `valeur-figee` ne signale plus une prise en veille ni une
+  pièce dont la température bouge dans la journée ; Linky et station : « collecte en échec » avec la
+  règle d'Intuis ; un audit en échec arrête Diagnostic en disant pourquoi ; à 200 %, aucune marque
+  d'appareil n'est peinte sur un mot du plan.
+- **Revue de fin de version** (revue, § 6 et § 12) : `verify` ne dit plus « un jour dans deux fichiers »
+  sur une archive qui n'en a pas (les dixièmes de Wh additionnés dans un autre ordre) ; l'architecture et PROJET.md à jour ; captures de référence régénérées dans la police de la CI.
+
 ## v2.2 — novembre 2026 : audit des données
 
 Toutes les données reprises et vérifiées : bonnes dates, bonnes valeurs, trous et chevauchements

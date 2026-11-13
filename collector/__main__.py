@@ -988,16 +988,19 @@ def cmd_verify(s: Settings, args: argparse.Namespace) -> None:
     s.require("passphrase")
     store = Store(s.data_dir, s.passphrase)
     print(f"Maison : {store.meta.get('home', {}).get('name')}  — mise à jour {store.meta.get('updated')}")
-    totals, per_file = store.totals(), store.file_totals()
-    for line in verify_lines(totals):
+    lines = verify_lines(store.totals())
+    old = verify_lines({y: c for y, c in store.file_totals().items() if c})
+    for line in lines:
         print(line)
-    if totals != {y: c for y, c in per_file.items() if c}:
+    # Compared as printed (kWh): the two totals add the same tenths of Wh in another order, and
+    # floats differ in their last bits even without such a day (revue de fin de v2.3).
+    if lines != old:
         # #550: some day is in two year files or in the file of another year (audit: deux-fichiers,
         # mauvais-fichier). The lines above count it as the app does; these are what verify
         # printed before, to compare with a figure noted then.
         print("  Un jour dans deux fichiers d'année (ou dans le fichier d'une autre année) : compté une fois,")
         print("  dans l'année du jour, comme l'appli. Totaux fichier par fichier (verify avant la v2.3) :")
-        for line in verify_lines(per_file):
+        for line in old:
             print("  " + line)
 
 

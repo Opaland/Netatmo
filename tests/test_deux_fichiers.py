@@ -8,6 +8,7 @@ import argparse
 import csv
 import io
 import json
+from datetime import date, timedelta
 from pathlib import Path
 
 import pytest
@@ -84,6 +85,23 @@ def test_verify_says_nothing_more_without_such_a_day(tmp_path, capsys):
     cli.cmd_verify(_S(tmp_path), argparse.Namespace())
     out = capsys.readouterr().out
     assert out.splitlines()[1:] == ["  2024 : heating 2 kWh", "  2025 : heating 3 kWh"]  # as before #550
+
+
+def test_verify_says_nothing_more_with_tenths_of_wh(tmp_path, capsys):
+    """Revue v2.3: the collector stores Wh to the tenth; the totals by day and by file add the same
+    values in another order, and floats then differ in their last bits. Without a day in two
+    files, verify must not say there is one (it did on the demo)."""
+    s = Store(tmp_path, PASS)
+    rooms = [*ROOMS, {"id": "r3", "name": "Pièce C", "category": "heating"}]
+    for k, rid in enumerate(("r1", "r2", "r3")):
+        for n in range(365):
+            day = (date(2024, 1, 1) + timedelta(days=n)).isoformat()
+            s.merge(rid, day, round(((n * 7919 + k * 104729) % 20000) / 3 + 0.1, 1))
+    s.save({"id": "h", "name": "Maison fictive"}, rooms)
+    cli.cmd_verify(_S(tmp_path), argparse.Namespace())
+    out = capsys.readouterr().out
+    assert "Totaux fichier par fichier" not in out
+    assert len(out.splitlines()) == 2
 
 
 def test_export_writes_one_line_per_day_with_the_own_year_value(store, tmp_path):
