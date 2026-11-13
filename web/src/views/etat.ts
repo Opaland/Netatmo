@@ -3,7 +3,7 @@
 // year by year, then source by source (% of days covered, gaps with their probable cause and
 // what can be recovered). Computed here from the decrypted documents (data-quality.ts).
 import { ds, rawDataset } from '../app';
-import { list, tile } from '../components';
+import { list, pendingText, statusLine, tile } from '../components';
 import { loadCurve, loadRoom30, loadRoomState } from '../data';
 import {
   type FineInput,
@@ -106,7 +106,7 @@ export function mountEtat(el: HTMLElement | null) {
       <div class="card-head"><h2 id="qs-title">Source par source</h2></div>
       <p class="card-sub">Part des jours couverts depuis le premier relevé de chaque source${r.sources[0]?.first ? ` (le ${esc(dayShort(r.sources[0].first, true))} pour les radiateurs)` : ''}. Touchez une source pour le détail par année et ses trous.</p>
       ${r.sources.map(sourceBlock).join('')}
-      <div id="quality-fine"><p class="hint muted" role="status">Relevés à la demi-heure et à l’heure : chargement…</p></div>
+      <div id="quality-fine">${statusLine(pendingText('Relevés à la demi-heure et à l’heure'))}</div>
     </section>
     <details class="card fold" id="quality-years">
       <summary><h2>Année par année</h2> <span class="fold-sub">${esc(`${plural(verdicts.length, 'année')}${toCheck.length ? ` · ${toCheck.join(', ')}` : ', toutes de bonne qualité'}`)}</span></summary>
@@ -117,7 +117,7 @@ export function mountEtat(el: HTMLElement | null) {
         <p>${esc(v.headline)}.</p>${v.counts ? `<p class="hint muted">${esc(v.counts)}</p>` : ''}${v.reasons.length ? `<ul>${v.reasons.map((x) => `<li>${esc(x)}</li>`).join('')}</ul>` : ''}${v.answer ? `<p class="hint${v.reasons.length ? '' : ' muted'}">${esc(v.answer)}</p>` : ''}</div>`,
         )
         .join('')}
-      <div id="audit-card"><details class="fold"><summary><h3>Audit détaillé des données</h3> <span class="fold-sub">chargement…</span></summary></details></div>
+      <div id="audit-card"><details class="fold"><summary><h3>Audit détaillé des données</h3> ${statusLine(pendingText(), 'fold-sub', 'span')}</summary></details></div>
     </details>
     ${incidentsCard(rawDataset() ?? ds!, stoppedRooms(), SOURCE_NAME)}`;
   el.removeAttribute('aria-busy'); // #579: the report (pages.ts #etat-bilan) is drawn; its late parts say their own wait
@@ -183,7 +183,7 @@ async function fine(i: QualityInput) {
   const ok = results.flatMap((x) => (x.status === 'fulfilled' && x.value ? [x.value] : []));
   const failed = results.some((x) => x.status === 'rejected');
   zone.innerHTML = html(
-    `${ok.map(sourceBlock).join('')}${failed ? '<p class="hint muted" role="status">Une partie des relevés fins n’a pas pu être chargée (hors connexion ?).</p>' : ''}${
+    `${ok.map(sourceBlock).join('')}${failed ? statusLine('Une partie des relevés fins n’a pas pu être chargée (hors connexion ?).') : ''}${
       !ok.length && !failed ? '<p class="hint muted">Pas de relevé à la demi-heure ni à l’heure pour l’instant.</p>' : ''
     }`,
   );

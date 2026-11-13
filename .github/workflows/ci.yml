@@ -164,7 +164,7 @@ jobs:
       - run: npm run e2e:plannings
         env:
           E2E_BROWSER: webkit
-      - run: npm run e2e:pwa # un échec connu en WebKit, #604
+      - run: npm run e2e:pwa # deux échecs connus en WebKit, #604 et #606
         env:
           E2E_BROWSER: webkit
       # #595 : le balayage dans WebKit (A18 : un débordement propre à WebKit), portée réduite écrite

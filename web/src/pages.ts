@@ -3,7 +3,7 @@
 // event handlers that apply while it is shown. main.ts draws the shell (header, tab bar, back
 // arrow) and dispatches the events to the entry of the page shown only.
 import { activeRooms, ds, householdStatus, state } from './app';
-import { alert, list, seg as segment, switchField, waiting } from './components';
+import { alert, list, pendingText, seg as segment, statusLine, switchField, waiting } from './components';
 import type { Handlers } from './events';
 import { dayShort, fmt1 } from './glossary';
 import { HISTORY_PAGES, type HistoryPage, type Route, SETTINGS, type SettingsPage, type Tool, routeKey } from './router';
@@ -315,7 +315,7 @@ function renderEtat(view: HTMLElement) {
         ? alert('warn', `Données du ${dayShort(last, true)} : ${s.text}`, failing || 'Intuis a gardé le total du mois mais pas le détail de ces jours : la collecte les a estimés.')
         : alert('good', `Données à jour : jusqu'au ${dayShort(last, true)}`, ds!.source === 'demo' ? 'Démo : données d’exemple.' : 'La collecte passe chaque nuit.')
     : '';
-  stack(view, `${head}<div id="etat-bilan" aria-busy="true"><p class="hint muted" role="status">Bilan des données : calcul…</p></div>`, [
+  stack(view, `${head}<div id="etat-bilan" aria-busy="true">${statusLine(pendingText('Bilan des données', 'calcul'))}</div>`, [
     (el) => settings.renderSettings(el, 'etat'),
     (el) => (el.innerHTML = html(qualityCard(false))),
   ]);
