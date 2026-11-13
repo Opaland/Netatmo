@@ -93,7 +93,8 @@ jobs:
           retention-days: 7
 
   # S-7.9: Safari iOS. WebKit (moteur de Safari) en iPhone 13 : les cinq vues de la démo,
-  # la clé effacée par iOS, les écrans v1.4, et le balayage en portée réduite (#595).
+  # la clé effacée par iOS, les écrans v1.4, les trous d'un vrai compte (#596) et le balayage en
+  # portée réduite (#595) ; les autres parcours WebKit sont dans e2e-webkit-parcours (#596).
   e2e-webkit:
     runs-on: ubuntu-latest
     defaults:
@@ -145,6 +146,9 @@ jobs:
       - run: pip install --require-hashes -r ../requirements-lock.txt
       - run: python -m collector fixtures -o web/dist/demo-fixtures
         working-directory: .
+      - run: npm run e2e:trous # #596 : trous d'un vrai compte (forme seule), comme dans le job e2e
+        env:
+          E2E_BROWSER: webkit
       - run: npm run e2e:sweep
         env:
           E2E_BROWSER: webkit
@@ -152,5 +156,59 @@ jobs:
         if: always()
         with:
           name: captures-webkit
+          path: web/e2e/screenshots
+          retention-days: 7
+
+  # #596 : les parcours qui savent tourner dans WebKit, dans un second job en parallèle du premier :
+  # à la suite, le job e2e-webkit durait 16 min 28 s, plus que le job e2e (12 min 02 s, CI de 68d20e8).
+  e2e-webkit-parcours:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+      - run: npx playwright install --with-deps webkit
+      - run: npm run build
+      # Un test refuse un script qui lit E2E_BROWSER sans être lancé par un job e2e-webkit*
+      # (src/e2e-webkit.test.ts) ; ce que le WebKit de Playwright ne permet pas est dit en tête du
+      # script, avec sa raison mesurée.
+      - run: npm run e2e # démo : tout sauf le hors-ligne par le service worker (en-tête de demo.mjs) (#605 corrigé)
+        env:
+          E2E_BROWSER: webkit
+      - run: npm run e2e:hauteurs # mesure et écrit les hauteurs en WebKit, sans juger les limites (mesurées en Chromium)
+        env:
+          E2E_BROWSER: webkit
+      - run: npm run e2e:composants
+        env:
+          E2E_BROWSER: webkit
+      - run: npm run e2e:compteur
+        env:
+          E2E_BROWSER: webkit
+      - run: npm run e2e:proche
+        env:
+          E2E_BROWSER: webkit
+      - run: npm run e2e:expliquer
+        env:
+          E2E_BROWSER: webkit
+      - run: npm run e2e:retours
+        env:
+          E2E_BROWSER: webkit
+      - run: npm run e2e:plannings
+        env:
+          E2E_BROWSER: webkit
+      - run: npm run e2e:pwa # deux échecs connus en WebKit, #604 et #606
+        env:
+          E2E_BROWSER: webkit
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: captures-webkit-parcours
           path: web/e2e/screenshots
           retention-days: 7

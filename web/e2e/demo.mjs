@@ -3,12 +3,29 @@
 // S-7.6: axe-core audit of every view (fails on "serious" or "critical"), keyboard route.
 // S-7.7: high contrast (7:1 checked by axe), forced colours, system text at 200 % in simple mode.
 // S-7.8, S-7.11, S-7.12: pinned room, swipe, offline.
-// Run after `npm run build`: node e2e/demo.mjs  (starts `vite preview` itself; port: E2E_PORT).
+// Run after `npm run build`: node e2e/demo.mjs  (starts `vite preview` itself; port: E2E_PORT;
+// E2E_BROWSER=webkit|chromium).
+// #596: in WebKit (Playwright's, on Linux) everything runs, except two things measured as the
+// tool's, not the app's (13/11/2026):
+// - S-7.12 « the demo opens offline through its service worker »: WebKit's setOffline(true) also
+//   blocks what the worker would answer (a fetch of a precached file: « Load failed »; the
+//   navigation: « WebKit encountered an internal error »), while with the server stopped and the
+//   network on, the same worker serves the page (200, fromServiceWorker). Chromium's setOffline
+//   leaves the worker alone. The step is skipped in WebKit and says so; the lazy card offline
+//   (no worker) runs.
+// - forced colours: axe's « color-contrast » is left out in WebKit only. It measures the engine's
+//   own system pair (Highlight #3484e4 under HighlightText white, 3.77:1), not a colour of the app;
+//   forced colours is a Windows setting that Safari does not offer. The rest of that run (layout,
+//   other axe rules, captures) runs.
+// A check that fails in one engine is counted as a KNOWN failure with its issue (`known` below,
+// printed, not failing the run). None now: #605 (a lazy card opened offline did not come back
+// after « Réessayer » in WebKit) is fixed in src/lazy.ts.
 import { spawn } from 'node:child_process';
 import { readFileSync, readdirSync } from 'node:fs';
 import AxeBuilder from '@axe-core/playwright';
-import { chromium, devices } from 'playwright';
-import { capturesOut } from './captures.mjs';
+import { chromium, devices, webkit } from 'playwright';
+import { BROWSER, SHOT, capturesOut } from './captures.mjs';
+import { knownFailures } from './lib.mjs';
 
 const PORT = Number(process.env.E2E_PORT ?? 4179);
 const OUT = capturesOut(); // #583: e2e/screenshots/ only in the CI's font
@@ -41,6 +58,8 @@ async function waitForServer() {
 
 const errors = [];
 const check = (ok, msg) => ok || errors.push(msg);
+/** #596: checks known to fail in one engine, until their issue is fixed (printed, not failing the run). */
+const known = knownFailures(BROWSER, [], (msg) => errors.push(msg));
 
 /** axe-core on the current page: WCAG A/AA (and AAA contrast when asked), serious and critical only. */
 const t0 = Date.now();
@@ -55,11 +74,12 @@ const ready = (page, timeout = 30000) => page.waitForSelector('#view[data-ready]
 /** The next frame has been laid out (after a style change). */
 const nextFrame = (page) => page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(() => r()))));
 
-async function audit(page, where, { enhanced = false } = {}) {
+async function audit(page, where, { enhanced = false, without = [] } = {}) {
   progress(`axe ${where}`);
   const tags = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', ...(enhanced ? ['wcag2aaa'] : [])];
   const builder = new AxeBuilder({ page }).withTags(tags);
   if (enhanced) builder.withRules(['color-contrast-enhanced']);
+  if (without.length) builder.disableRules(without);
   const { violations } = await builder.analyze();
   for (const v of violations.filter((v) => v.impact === 'serious' || v.impact === 'critical')) {
     const nodes = v.nodes.slice(0, 3).map((n) => `${n.target.join(' ')}${n.failureSummary ? ` (${n.failureSummary.split('\n').slice(1).join(' ').trim()})` : ''}`);
@@ -231,7 +251,7 @@ const checkViolations = async (page, where) => {
 };
 try {
   await waitForServer();
-  const browser = await chromium.launch();
+  const browser = await (BROWSER === 'webkit' ? webkit : chromium).launch();
   for (const [name, opts] of [
     ['mobile-clair', { ...devices['iPhone 13'] }],
     ['mobile-sombre', { ...devices['Pixel 7'], colorScheme: 'dark' }],
@@ -336,7 +356,7 @@ try {
       const cut = await tileAmounts(page);
       check(!cut.length, `${name}/${view} : montant de tuile coupé → ${cut.join(', ')}`);
       await checkViolations(page, `${name}/${view}`);
-      await page.screenshot({ path: `${OUT}/${name}-${view}.png`, fullPage: true });
+      await page.screenshot({ path: `${OUT}/${SHOT}${name}-${view}.png`, fullPage: true });
       await audit(page, `${name}/${view}`);
     }
     if (name !== 'mobile-360') {
@@ -403,7 +423,7 @@ try {
         errors.push(`${name}/etat: reconstitution non rendue (${err})`);
       }
       await ready(page);
-      await page.screenshot({ path: `${OUT}/${name}-etat.png`, fullPage: true });
+      await page.screenshot({ path: `${OUT}/${SHOT}${name}-etat.png`, fullPage: true });
       await audit(page, `${name}/etat`);
     }
     if (name === 'bureau') {
@@ -431,12 +451,12 @@ try {
         await ready(page);
         await page.uncheck('[data-toggle=household]');
         if (!(await picker()).includes('Chambre parentale')) errors.push('vue foyer : désactivation sans effet');
-        await page.screenshot({ path: `${OUT}/${name}-pieces.png`, fullPage: true });
+        await page.screenshot({ path: `${OUT}/${SHOT}${name}-pieces.png`, fullPage: true });
         // S-8.14: « Cadre juridique » from ⚙ À propos (lazy module)
         await go(page, 'parametres-apropos');
         await page.click('#legal-open');
         await page.waitForSelector('#legal-card .legal-list', { timeout: 10000 });
-        await page.screenshot({ path: `${OUT}/${name}-juridique.png`, fullPage: true });
+        await page.screenshot({ path: `${OUT}/${SHOT}${name}-juridique.png`, fullPage: true });
       } catch (err) {
         errors.push(`${name}: vue foyer / volets / cadre juridique (${err})`);
       }
@@ -481,7 +501,7 @@ try {
       return t ? t.scrollWidth > t.clientWidth + 1 : false;
     });
     if (overflow) errors.push(`${name}: barre d'onglets plus large que l'écran`);
-    await page.screenshot({ path: `${OUT}/${name}-confort.png`, fullPage: true });
+    await page.screenshot({ path: `${OUT}/${SHOT}${name}-confort.png`, fullPage: true });
     await page.selectOption('select[data-comfort=threshold]', '19');
     await ready(page);
     // #308: the back arrow of a sub-page returns to its tab
@@ -498,7 +518,7 @@ try {
     } catch (err) {
       errors.push(`${name}/rapport: comparateur ou pic de puissance absent (${err})`);
     }
-    await page.screenshot({ path: `${OUT}/${name}-report.png`, fullPage: true });
+    await page.screenshot({ path: `${OUT}/${SHOT}${name}-report.png`, fullPage: true });
     // S-5.9: a canned question answered by code (Outils → Questions types)
     await go(page, 'outils-questions');
     await page.click('[data-question=normal]');
@@ -512,7 +532,7 @@ try {
     }
     await page.click('[data-question=normal]');
     await page.waitForSelector('.question-answer li', { timeout: 5000 });
-    await page.screenshot({ path: `${OUT}/${name}-questions.png`, fullPage: true });
+    await page.screenshot({ path: `${OUT}/${SHOT}${name}-questions.png`, fullPage: true });
     await go(page, 'rapport');
     // S-6.4: anonymised report, without any room or home name of the demo
     const roomNames = await page.locator('#report-waterfall ~ .table-wrap').first().locator('tbody td:first-child').allInnerTexts();
@@ -525,7 +545,7 @@ try {
       if (anon.includes(secret)) errors.push(`${name}/anonymisé: « ${secret} » apparaît`);
     }
     if (!/Pièce A/.test(anon) || !/Période/.test(anon)) errors.push(`${name}/anonymisé: pseudonymes ou période absents`);
-    await page.screenshot({ path: `${OUT}/${name}-report-anonymise.png`, fullPage: true });
+    await page.screenshot({ path: `${OUT}/${SHOT}${name}-report-anonymise.png`, fullPage: true });
     await audit(page, `${name}/rapport`);
     // S-9.7: long export, generated in the page (Outils → Exporter mes données)
     if (name === 'bureau') {
@@ -540,7 +560,7 @@ try {
     for (const p of ['contrat', 'logement', 'sources', 'objectifs', 'affichage', 'foyer', 'securite', 'apropos']) {
       await go(page, `parametres-${p}`);
       await audit(page, `${name}/parametres-${p}`);
-      if (name === 'bureau' || p === 'contrat') await page.screenshot({ path: `${OUT}/${name}-parametres-${p}.png`, fullPage: true });
+      if (name === 'bureau' || p === 'contrat') await page.screenshot({ path: `${OUT}/${SHOT}${name}-parametres-${p}.png`, fullPage: true });
     }
     // S-12.6 tenant mode (⚙ Foyer), S-12.5 prolonged cold alert (⚙ Objectifs) (lazy cards)
     try {
@@ -563,7 +583,7 @@ try {
     } catch (err) {
       errors.push(`${name}/sources: carte « État des appareils » non rendue (${err})`);
     }
-    await page.screenshot({ path: `${OUT}/${name}-settings.png`, fullPage: true }); // S-7.14: inventaire
+    await page.screenshot({ path: `${OUT}/${SHOT}${name}-settings.png`, fullPage: true }); // S-7.14: inventaire
     // S-12.3: invite a member of the household: a QR code of the address, never the passphrase
     try {
       await go(page, 'parametres-foyer');
@@ -574,7 +594,7 @@ try {
       if (/phrase de passe\s*:\s*\S|demo\b/.test(invite.replace(base, ''))) errors.push(`${name}/invitation: la phrase de passe semble affichée`);
       if (name === 'bureau') {
         await audit(page, `${name}/invitation`);
-        await page.screenshot({ path: `${OUT}/${name}-invitation.png`, fullPage: true });
+        await page.screenshot({ path: `${OUT}/${SHOT}${name}-invitation.png`, fullPage: true });
       }
     } catch (err) {
       errors.push(`${name}/invitation: QR code non rendu (${err})`);
@@ -608,7 +628,7 @@ try {
       await page.waitForSelector('.anon-report #anon-chart canvas', { timeout: 15000 });
       const lease = await page.locator('.anon-report').innerText();
       if (!/période du bail/i.test(lease) || !/1er juillet 2024/.test(lease)) errors.push('locataire : le rapport anonymisé ne couvre pas le bail');
-      await page.screenshot({ path: `${OUT}/${name}-locataire-rapport.png`, fullPage: true });
+      await page.screenshot({ path: `${OUT}/${SHOT}${name}-locataire-rapport.png`, fullPage: true });
       await audit(page, 'locataire/rapport');
       await go(page, 'parametres-foyer');
       await page.waitForSelector('#tenant-on');
@@ -683,7 +703,7 @@ try {
         return out;
       });
       check(!cut.length, `${name}/texte 200 % : texte tronqué ou débordant → ${cut.slice(0, 5).join(', ')}`);
-      await page.screenshot({ path: `${OUT}/${name}-simple-200.png`, fullPage: true });
+      await page.screenshot({ path: `${OUT}/${SHOT}${name}-simple-200.png`, fullPage: true });
       // « Ma pièce » opens the pinned room; « Voir plus de détails » leaves the simple view after a confirmation
       await page.click('.tabs a:nth-child(2)');
       await page.waitForSelector(`#view[data-page="piece-${room}"][data-ready]`, { state: 'attached' }).catch(() => errors.push(`${name}/vue simple : « Ma pièce » n'ouvre pas la pièce épinglée`));
@@ -772,7 +792,7 @@ try {
       check(!bad, `360 px, texte 200 %/${view} : en-tête ${bad}`);
       // #348: « hiver contre hiver » uses the shared tiles (amount on one line, checked just above)
       if (view === 'historique') check((await page.locator('#cmp-card .kpis.season-tiles .kpi .kpi-value').count()) === 2, '360 px, texte 200 %/historique : tuiles « hiver contre hiver » absentes');
-      await page.screenshot({ path: `${OUT}/mobile360-texte200-${view}.png`, fullPage: true });
+      await page.screenshot({ path: `${OUT}/${SHOT}mobile360-texte200-${view}.png`, fullPage: true });
       if (['accueil', 'historique', 'outils', 'parametres-contrat'].includes(view)) await audit(page, `360 px, texte 200 %/${view}`);
     }
     await ctx.close();
@@ -797,26 +817,30 @@ try {
     await ready(page);
     await go(page, 'accueil');
     await page.waitForSelector('#view .proche-room');
-    await audit(page, `${name}/vue-simple`, { enhanced: name !== 'couleurs-forcees' });
+    // #596: in WebKit, forced colours paint the engine's system pair (3.77:1): see the header
+    const axeOpts = { enhanced: name !== 'couleurs-forcees', without: name === 'couleurs-forcees' && BROWSER === 'webkit' ? ['color-contrast'] : [] };
+    await audit(page, `${name}/vue-simple`, axeOpts);
     await go(page, 'parametres-affichage');
     await page.uncheck('[data-toggle=simple]');
     await ready(page);
     await checkViolations(page, `${name}/épingle`);
     for (const view of ['accueil', 'historique', 'outils', 'parametres', 'parametres-contrat']) {
       await go(page, view);
-      await page.screenshot({ path: `${OUT}/${name}-${view}.png`, fullPage: true });
-      await audit(page, `${name}/${view}`, { enhanced: name !== 'couleurs-forcees' });
+      await page.screenshot({ path: `${OUT}/${SHOT}${name}-${view}.png`, fullPage: true });
+      await audit(page, `${name}/${view}`, axeOpts);
     }
     // S-7.14: captures of the other pages for the design inventory (7:1 audited on the pages above).
     for (const view of ['pieces', 'compteur', 'confort']) {
       await go(page, view);
-      await page.screenshot({ path: `${OUT}/${name}-${view}.png`, fullPage: true });
+      await page.screenshot({ path: `${OUT}/${SHOT}${name}-${view}.png`, fullPage: true });
     }
     await ctx.close();
   }
 
   // S-7.12: once visited, the demo opens offline, with a banner instead of errors.
-  {
+  // #596: not in WebKit, whose setOffline blocks the service worker too (see the header).
+  if (BROWSER === 'webkit') progress('hors ligne par le service worker : non lancé dans WebKit (setOffline y bloque aussi le service worker, en-tête du script)');
+  else {
     const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 } });
     const page = await ctx.newPage();
     page.on('pageerror', (e) => errors.push(`hors-ligne: ${e.message}`));
@@ -844,7 +868,7 @@ try {
     check(/Hors ligne/.test(banner) && /profil horaire compris/.test(banner), `hors-ligne : bandeau inattendu « ${banner} »`);
     await go(page, 'compteur-journee');
     await page.waitForSelector('#hour-grid canvas', { timeout: 20000 }).catch(() => errors.push('hors-ligne : profil horaire absent'));
-    await page.screenshot({ path: `${OUT}/hors-ligne-compteur.png`, fullPage: true });
+    await page.screenshot({ path: `${OUT}/${SHOT}hors-ligne-compteur.png`, fullPage: true });
     await ctx.close();
   }
   // v1.5 life cycle (#247, #255, #232): household view toggled while the Synthèse cards load,
@@ -902,7 +926,58 @@ try {
     }
     await ctx.close();
   }
-  // #249 (carte différée hors ligne): e2e/features.mjs, in Chromium and WebKit (#605).
+  // #249: a lazy card that cannot load offline says so and offers to try again (never vanishes).
+  {
+    progress('carte différée hors ligne');
+    const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 }, serviceWorkers: 'block' });
+    await ctx.addInitScript(recordViolations);
+    const page = await ctx.newPage();
+    page.on('pageerror', (e) => errors.push(`carte hors ligne: ${e.message}`));
+    try {
+      await openDemo(page);
+      await go(page, 'accueil');
+      await page.waitForSelector('.kpi');
+      // #555: Outils is itself a lazy view, warmed when the browser is idle. Load it first (online,
+      // without the shutters card), so that offline only the card's own module is missing: otherwise
+      // the whole page says « indisponible » or the card, depending on whether the warm-up ran.
+      await go(page, 'outils-pac');
+      await ctx.setOffline(true);
+      await page.evaluate(() => (location.hash = '#outils-volets'));
+      const failed = page.locator('#shutters-zone .lazy-failed');
+      await failed.waitFor({ timeout: 15000 });
+      const text = await failed.innerText();
+      check(/indisponible hors connexion/.test(text) && /Réessayer/.test(text), `carte hors ligne : message inattendu « ${text} »`);
+      await audit(page, 'carte-hors-ligne');
+      await checkViolations(page, 'carte hors ligne');
+      // back online: the browser keeps the failed module until a reload, the card says so
+      await ctx.setOffline(false);
+      // (#308: Outils → Volets loads no document that would redraw the page when the network comes back:
+      // the « Réessayer » button itself sees that the module failed offline and reloads the page)
+      await page.waitForSelector('#shutters-zone [data-lazy-retry]', { timeout: 15000 });
+      // WebKit applies setOffline(false) a moment later: the household clicks once the network is back
+      const online = await page.evaluate(async () => {
+        for (const t0 = Date.now(); Date.now() - t0 < 10000; await new Promise((r) => setTimeout(r, 200)))
+          if (await fetch('manifest.webmanifest', { cache: 'no-store' }).then((r) => r.ok, () => false)) return true;
+        return false;
+      });
+      check(online, 'carte hors ligne : le serveur reste injoignable 10 s après le retour en ligne');
+      // #605: WebKit keeps the failed module through a reload and even a new navigation (only an
+      // import made in the page once online fetches it again): « Réessayer » tries in place first,
+      // and reloads only when that fails again (Chromium keeps the failure until a reload, and the
+      // demo is then opened again from the lock screen). Seen red in WebKit before the fix.
+      await page.click('#shutters-zone [data-lazy-retry]');
+      await page.waitForSelector('#shutters-card, #demo', { timeout: 15000 }).catch(() => {});
+      if (await page.locator('#demo').count()) {
+        await openDemo(page);
+        await go(page, 'outils-volets');
+      }
+      const back = await page.waitForSelector('#shutters-card', { timeout: 15000 }).then(() => true, () => false);
+      known.check('carte-revient', back, `carte hors ligne : la carte ne revient pas par « Réessayer » (${(await page.locator('#shutters-zone').innerText().catch(() => '?')).slice(0, 120)})`);
+    } catch (err) {
+      errors.push(`carte hors ligne : ${err}`);
+    }
+    await ctx.close();
+  }
   // #579: a view loaded on demand says it is coming to a screen reader (role="status" in a zone
   // aria-busy), and the zone is no longer busy once drawn. The module of « Hiver contre hiver » is
   // held back (warm-up included) until the wait has been read.
@@ -1006,6 +1081,7 @@ try {
 } finally {
   server.kill();
 }
+known.report();
 if (errors.length) {
   failed = true;
   console.error(errors.join('\n'));
