@@ -178,6 +178,8 @@ class Report:
         # own: a long water-heater gap is not a gap « of a room »
         self.room_missing: set[str] = set()
         self.water_missing: set[str] = set()
+        # #569: the missing days of each room (same rule as `room_days`), what `rattrapage` asks for
+        self.missing: dict[str, set[str]] = {}
         for rid, days in values.items():
             months = {d[:7] for d in days}
             for m in months:
@@ -191,14 +193,15 @@ class Report:
                 if day not in est and _valid(v):
                     self.real_wh[day] = self.real_wh.get(day, 0.0) + float(v)
             if self.last:
-                missing = self.room_missing if self.kind[rid] == "heating" else self.water_missing
-                missing |= {
+                self.missing[rid] = {
                     d.isoformat()
                     for d in _days(_day(min(days)), _day(self.last))
                     if d.isoformat() not in days
                     and d.isoformat() not in est
                     and not stopped_on(self.stopped, rid, d.isoformat())
                 }
+                # #570: a heated room's gap, or the water heater's own (not « a room »)
+                (self.room_missing if self.kind[rid] == "heating" else self.water_missing).update(self.missing[rid])
 
         linky = store.doc("linky").get("daily", {}) or {}
         self.linky = {d: v for d, v in linky.items() if isinstance(d, str) and len(d) == 10}

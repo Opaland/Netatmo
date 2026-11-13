@@ -638,6 +638,7 @@ def cmd_sync(s: Settings, args: argparse.Namespace, backfill: bool = False) -> N
         _linky(s, store, home.timezone, sources)
     if s.shelly_auth_key and s.shelly_server:
         _shelly(s, store, home.timezone, sources)
+    catch_up, catch_up_doc = _catch_up(s, store, syncer, kept) if _flag("RATTRAPAGE") else ([], None)
     _solar(store, sources)
     rs_rows = _room_states(s, store, syncer, sources)
     dev_rows, dev_alerts = _devices(store, syncer, sources)
@@ -676,6 +677,8 @@ def cmd_sync(s: Settings, args: argparse.Namespace, backfill: bool = False) -> N
     _note_failures(store, sources, home.timezone)
     if pending:
         extra["backfill_pending"] = True
+    if catch_up_doc or store.meta.get("catch_up"):
+        extra["catch_up"] = catch_up_doc or store.meta["catch_up"]  # #569: kept from night to night
     contract = shared_contract(store.meta.get("contract"))
     if contract:
         extra["contract"] = contract
@@ -707,9 +710,33 @@ def cmd_sync(s: Settings, args: argparse.Namespace, backfill: bool = False) -> N
     for line in _call_lines():
         print(line)
     print(_cold_label(cold, cold_counts))
+    for line in catch_up:
+        print(line)
     _job_summary(store, syncer, changed, rs_rows)
     if _flag("STATION_INVENTORY"):
         _station_inventory(kept.get("station"))
+
+
+def _catch_up(s: Settings, store: Store, syncer: Syncer, kept: dict) -> tuple[list[str], dict | None]:
+    """#569: case « rattrapage » of the collection: add the missing days each source still keeps,
+    never a present one (collector/rattrapage.py). Returns the public lines (counts only) and the
+    new meta["catch_up"] (what was asked and given back, per series and month)."""
+    from .quality import stopped_of
+    from .rattrapage import meta_doc, public_lines, run
+
+    if syncer.last_home is None:
+        return [], None
+    linky = (s.enedis_token, s.enedis_prm) if s.enedis_token and s.enedis_prm else None
+    today = datetime.now(ZoneInfo(syncer.last_home.timezone)).date().isoformat()
+    try:
+        # #346: a room switched off on purpose has no missing day (the secret, else the archive)
+        stopped = stopped_of(store, household_setting("STOPPED_ROOMS_JSON", warn=False))
+        tally = run(store, syncer, syncer.last_home, stopped, kept.get("station"), linky, today)
+    except Exception as err:  # noqa: BLE001 - #569 C1: never lose the night's data because of the catch-up
+        # the type only (S-1.16), as for the AI step; what was added before stays, the meta is unchanged
+        _warn(f"Rattrapage interrompu ({type(err).__name__})")
+        return [f"Rattrapage des jours manquants (#569) : interrompu ({type(err).__name__}), rien n'est compté."], None
+    return public_lines(tally), meta_doc(store.meta.get("catch_up"), tally, today)
 
 
 def _stove_fires(store: Store, home, stopped: list[dict]) -> dict | None:
@@ -895,7 +922,15 @@ def _job_summary(store: Store, syncer: Syncer, changed: list[str], extra_rows: l
 
 
 # Meta keys that a command other than sync keeps as they are.
-KEPT_META = ("weather_source", "sources", "contract", "cold_alert", "backfill_pending", "intuis_contract")
+KEPT_META = (
+    "weather_source",
+    "sources",
+    "contract",
+    "cold_alert",
+    "backfill_pending",
+    "intuis_contract",
+    "catch_up",
+)
 
 
 def cmd_insights(s: Settings, args: argparse.Namespace) -> None:

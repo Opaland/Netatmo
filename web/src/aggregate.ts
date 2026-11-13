@@ -28,6 +28,7 @@ export interface Meta {
   has_ha?: boolean; // S-1.18: ha.enc.json (Home Assistant import, daily aggregates per sensor)
   weather_source?: string | null;
   contract?: unknown; // S-12.1: shared contract periods, validated in contract.ts
+  catch_up?: unknown; // #569: what the catch-up asked and got back, read by data-quality.ts catchUpOf
 }
 
 export interface DayRecord {

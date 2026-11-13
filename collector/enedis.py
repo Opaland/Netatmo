@@ -19,6 +19,7 @@ import logging
 import math
 import re
 from datetime import UTC, date, datetime, timedelta
+from typing import TYPE_CHECKING
 from zoneinfo import ZoneInfo
 
 import httpx
@@ -27,6 +28,9 @@ from .errors import SourceError, endpoint_of, raise_for_status
 from .http import Paced
 from .schema import FormatError, dated_records, safe_keys
 from .storage import Store
+
+if TYPE_CHECKING:
+    from .rattrapage import Tally
 
 log = logging.getLogger(__name__)
 
@@ -69,6 +73,12 @@ CURVE_CHUNK_DAYS = 7
 CURVE_BACKFILL_DAYS = 365  # first run: the last 12 months at most
 CURVE_REFRESH_DAYS = 3  # every night: the last days again (Enedis publishes them late)
 CURVE_MIN_SLOTS = 46  # a complete day has 48 half hours (46 on the spring DST day)
+# #569: Enedis keeps the load curve 24 months (Enedis Data Connect documentation, « courbe de charge » :
+# 24 mois et 15 jours ; à confirmer par le premier rattrapage, un refus est journalisé avec son code).
+CURVE_KEEP_DAYS = 730
+# #569: holes at most this many days apart are asked in one request (Intuis, station: 1 024 points
+# per call); chosen by judgement, it only changes the number of calls, never what is added.
+CATCH_UP_GAP = 14
 # Conso API: 5 requests/s and 10 000/h shared by every user → keep at least 0.3 s apart.
 MIN_INTERVAL = 0.3
 
@@ -416,11 +426,13 @@ def _curve_days(store: Store, years: range) -> dict[str, int]:
     return count
 
 
-def _chunks(days: list[date], size: int) -> list[tuple[date, date]]:
-    """Consecutive days grouped into [start, end) ranges of at most `size` days."""
+def day_ranges(days: list[date], size: int, gap: int = 0) -> list[tuple[date, date]]:
+    """Consecutive days grouped into [start, end) ranges of at most `size` days. With `gap`, two
+    runs at most `gap` days apart share a range (one request instead of two; #569: the days in
+    between are present and ignored by the caller)."""
     out: list[tuple[date, date]] = []
     for d in sorted(days):
-        if out and out[-1][1] == d and (d - out[-1][0]).days < size:
+        if out and (d - out[-1][1]).days <= gap and (d - out[-1][0]).days < size:
             out[-1] = (out[-1][0], d + timedelta(days=1))
         else:
             out.append((d, d + timedelta(days=1)))
@@ -453,7 +465,7 @@ def collect_curve(
     days = [window + timedelta(days=i) for i in range((today - window).days)]
     wanted = [d for d in days if d >= refresh_from or (d >= begin and have.get(d.isoformat(), 0) < CURVE_MIN_SLOTS)]
     received = 0
-    for start, end in _chunks(wanted, CURVE_CHUNK_DAYS):
+    for start, end in day_ranges(wanted, CURVE_CHUNK_DAYS):
         resp = api.get(API_CURVE, {"pointId": prm, "dateDebut": start.isoformat(), "dateFin": end.isoformat()})
         if resp.status_code != 200:
             raise LinkyError(
@@ -470,6 +482,62 @@ def collect_curve(
             store.set_top("linky", "curve_scan", last)
     log.info("Linky : courbe de charge, %d demi-heures pour %d jours demandés", received, len(wanted))
     return received
+
+
+def catch_up_curve(
+    store: Store,
+    token: str,
+    prm: str,
+    first_day: str,
+    tz: str,
+    tally: Tally,
+    http: httpx.Client | None = None,
+    min_interval: float | None = None,
+    today: date | None = None,
+) -> None:
+    """#569: ask Enedis again the days of the last CURVE_KEEP_DAYS that hold NO half hour (before the
+    first night of the curve, or never sent), in CURVE_CHUNK_DAYS ranges from the newest to the
+    oldest, and add the half hours of those days only: a day with at least one half hour is never
+    asked nor rewritten. The nightly collection keeps the recent days (CURVE_REFRESH_DAYS) for
+    itself. The first refusal (any answer but 200: curve not kept that far, no consent, too many
+    requests) stops the catch-up and is noted with its HTTP code only; the days of a range count as
+    asked only once Enedis has answered it.
+
+    Hypothesis (M4, not testable without the real API): `dateFin` is excluded, as in collect_curve,
+    and the half hour ending at midnight of `dateFin` belongs to the last day asked (parse_curve
+    keys it by its start); a point of another day is ignored (`wanted`)."""
+    api = _Paced(http or _client(), token, min_interval)
+    today = today or datetime.now(ZoneInfo(tz)).date()
+    start = max(date.fromisoformat(first_day), today - timedelta(days=CURVE_KEEP_DAYS))
+    stop = today - timedelta(days=CURVE_REFRESH_DAYS)
+    have = _curve_days(store, range(start.year, today.year + 1))
+    absent = [
+        start + timedelta(days=i)
+        for i in range((stop - start).days)
+        if not have.get((start + timedelta(days=i)).isoformat())
+    ]
+    wanted = {d.isoformat() for d in absent}
+    for begin, end in reversed(day_ranges(absent, CURVE_CHUNK_DAYS)):
+        resp = api.get(API_CURVE, {"pointId": prm, "dateDebut": begin.isoformat(), "dateFin": end.isoformat()})
+        if resp.status_code != 200:
+            tally.note(CURVE_SERIE, f"refus d'Enedis avant {end.isoformat()[:7]} (HTTP {resp.status_code}), arrêt")
+            return
+        body = _json(resp, "courbe_de_charge_consommation")
+        _check_found(body, len(_points(body)), "courbe_de_charge_consommation")
+        for i in range((end - begin).days):
+            tally.asked(CURVE_SERIE, (begin + timedelta(days=i)).isoformat())
+        added: set[str] = set()
+        for key, wh in parse_curve(body, tz).items():
+            curve = store.doc(curve_doc(key[:4])).get("curve", {})
+            if key[:10] in wanted and key not in curve:
+                store.put(curve_doc(key[:4]), "curve", key, None, wh)
+                added.add(key[:10])
+        for day in sorted(added):
+            tally.added(CURVE_SERIE, day)
+            wanted.discard(day)
+
+
+CURVE_SERIE = "linky30"  # key of the catch-up tally (collector/rattrapage.py LABELS)
 
 
 # ---------------------------------------------------------------- token dates (S-1.12)

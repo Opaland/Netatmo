@@ -12,6 +12,7 @@ import {
   type QualityInput,
   type QualityReport,
   type SourceQuality,
+  catchUpOf,
   covered,
   coverLevel,
   curveParts,
@@ -62,6 +63,7 @@ function input(): QualityInput {
       failures: doc?.failures, // nights a collection failed: « collecte en échec »
     },
     suspects,
+    catchUp: catchUpOf(d.meta.catch_up), // #569: what the catch-up asked in vain is said lost
     // #346: radiators switched off on purpose (⚙ Mon logement): no data expected, not missing
     stopped: stoppedRooms().map((x) => ({
       room: x.room,
@@ -172,7 +174,7 @@ async function fine(i: QualityInput) {
       }),
     );
   }
-  tasks.push(loadCurve(raw).then((c) => (c.size ? fineSource('linky30', curveParts(c), null) : null)));
+  tasks.push(loadCurve(raw).then((c) => (c.size ? fineSource('linky30', curveParts(c), null, [], undefined, i.catchUp) : null)));
   if (raw.meta.has_roomstate) tasks.push(loadRoomState(raw).then((rs) => (rs?.seen ? fineSource('roomstate', seenParts(rs.seen), null, [], i.devices?.cuts) : null)));
   const results = await Promise.allSettled(tasks);
   const zone = document.getElementById('quality-fine');
