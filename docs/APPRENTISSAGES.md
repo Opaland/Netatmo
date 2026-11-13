@@ -211,7 +211,7 @@ quand un outil la rend impossible à refaire.
   collecteur lui-même** (sa fonction de collecte, réponse fictive), pas posé à la main ; un champ
   se lit sur ce que dit sa définition (`collector/storage.py`), pas sur son nom.
 
-### A21 · 13/11/2026 — Les jeux de démo n'avaient que des trous courts ; le vrai compte en a d'une année (#570)
+### A22 · 13/11/2026 — Les jeux de démo n'avaient que des trous courts ; le vrai compte en a d'une année (#570)
 
 - **Ce qui s'est passé** : la démo et les fixtures ne perdaient que quelques jours ou une pièce
   quelques semaines ; le premier bilan réel (journal du Diagnostic) a montré un chauffe-eau sans
