@@ -1,6 +1,6 @@
 # Historique des versions
 
-## v2.1 — novembre 2026 : maison connectée (en cours)
+## v2.1 — novembre 2026 : maison connectée
 
 Plan de la maison ([feuille de route](docs/bmad/feuille-de-route.md)), plus les finitions de la revue
 de fin de v2.0 (#533). Livebox, NAS, CPL et TIC du Linky (#282 à #285) sont rangées au jalon
