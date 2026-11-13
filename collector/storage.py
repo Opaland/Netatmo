@@ -14,8 +14,9 @@ data/
   linky.enc.json          {"daily": {"YYYY-MM-DD": Wh}, "pmax": {"YYYY-MM-DD": kVA},
                            "pmax_at": {"YYYY-MM-DD": "HH:MM"}, "index": {series: {"YYYY-MM-DD": Wh}},
                            "curve_scan": "YYYY-MM-DD" (last day asked for the load curve),
-                           "unit": "Wh" | "kWh", "pmax_unit": "VA" | "kVA" (unit of the raw API
-                           values, decided once and kept: enedis.py)}
+                           "unit": "Wh" | "kWh", "pmax_unit": "VA" | "kVA" (unit of the RAW API
+                           values, decided once and kept: enedis.py; daily and pmax are stored
+                           converted, in Wh and kVA, whatever these say: #567)}
   2025.linky30.enc.json   {"curve":   {"YYYY-MM-DDTHH:MM": Wh}}  Linky load curve, local start of
                            each half hour (optional, loaded on demand)
   station.enc.json        Netatmo weather station: modules, daily [min, max, mean, hum, co2],

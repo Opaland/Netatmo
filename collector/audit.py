@@ -603,9 +603,10 @@ class Audit:
         self.findings.append(Finding(code, doc, label, room=room, **kw))  # type: ignore[arg-type]
 
     def unit_of(self, label: str) -> str | None:
-        """Unit of the values of a series, by its label (the Linky maximum may be stored in VA)."""
-        if label == SERIES_LABEL[("linky", "pmax")]:
-            return str(self.docs.get("linky", {}).get("pmax_unit") or "kVA")
+        """Unit of the values of a series, by its label. The Linky maximum is always stored in kVA:
+        `linky.pmax_unit` is the unit of the RAW answer (VA or kVA), the collector converts it
+        (enedis._collect_pmax, POWER_UNITS); read as the unit of the values it made the audit take
+        kVA for VA (#567)."""
         return UNIT_OF_LABEL.get(label)
 
     def series(self) -> list[Series]:
@@ -1350,9 +1351,9 @@ class Audit:
     def peaks(self) -> None:
         """An hour (half hour) whose energy needs more power than the day's maximum (Linky pmax),
         or than the largest home connection (MAX_KVA) when the maximum is unknown."""
+        # stored in kVA whatever `pmax_unit` says (the raw unit of the answer, #567: see unit_of)
         pmax = {d: float(v) for d, v in (self.docs.get("linky", {}).get("pmax") or {}).items() if _num(v)}
-        unit = str(self.docs.get("linky", {}).get("pmax_unit") or "kVA")
-        scale = 1.0 if unit == "VA" else 1000.0
+        scale = 1000.0
         for base, label, room, fine, minutes, _daily in self._fine():
             per_hour = 60 / minutes
             for k, wh in fine.items():
