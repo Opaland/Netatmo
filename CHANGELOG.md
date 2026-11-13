@@ -1,6 +1,6 @@
 # Historique des versions
 
-## v2.4 — novembre 2026 (en cours) : données manquantes ou mal affichées
+## v2.4 — novembre 2026 : données manquantes ou mal affichées
 
 Demande du propriétaire du 13/11/2026 (« traiter le problème de data manquantes ou mal affichées,
 vérification complète »), sans document de cadrage : le contenu vient du **premier bilan réel**, le
