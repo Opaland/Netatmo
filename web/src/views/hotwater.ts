@@ -5,7 +5,7 @@
 // typed COP. Every assumption is typed by the owner (hotwater.ts) and recalled under the result.
 import { addDays, minusYears } from '../aggregate';
 import { activeRooms, ds } from '../app';
-import { alertHtml, list } from '../components';
+import { alertHtml, list, waiting } from '../components';
 import { HW_FIELDS, type HotWaterDay, type HotWaterInputs, type HwRow, type HwSim, OFFERED_COP, parseHotWaterInputs, simulateHotWater, zeroAssumption, zeroText } from '../hotwater';
 import { type OffPeak, offPeakSentence, shareOn } from '../offpeak';
 import { lsKey } from '../scope';
@@ -98,7 +98,7 @@ function draw(view: HTMLElement, d: NonNullable<typeof ds>) {
   // #428, #441: the shared off-peak hours, those in force each day
   const hc = offPeakNow(() => view.isConnected && draw(view, d));
   if (!hc) {
-    zone.innerHTML = html('<p class="hint muted" role="status">Chargement des heures creuses…</p>');
+    zone.innerHTML = html(waiting('des heures creuses'));
     return;
   }
   const i = store.load();

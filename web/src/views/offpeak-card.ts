@@ -3,7 +3,7 @@
 // owner type the ranges of the contract, to the minute (several ranges: night and afternoon).
 // Kept on this device, encrypted with the data key; the half hours read win over them.
 import { ds } from '../app';
-import { alertHtml } from '../components';
+import { alertHtml, waiting } from '../components';
 import { MAX_RANGES, type TypedRange, offPeakSentence, parseHcRanges, periodsOfTyped, periodsText } from '../offpeak';
 import { html } from '../trusted';
 import { esc } from '../ui';
@@ -21,7 +21,7 @@ export function mountOffPeak(el: HTMLElement | null) {
   if (!el || !ds) return;
   const hc = offPeakNow(() => el.isConnected && mountOffPeak(el));
   if (!hc) {
-    el.innerHTML = html('<section class="card" id="hc-card"><p class="hint muted" role="status">Chargement des heures creuses…</p></section>');
+    el.innerHTML = html(`<section class="card" id="hc-card">${waiting('des heures creuses')}</section>`);
     return;
   }
   const typed = typedRanges();
