@@ -93,6 +93,11 @@ export function lazyAction<M>(btn: HTMLElement, load: () => Promise<M>, run: (m:
  */
 export function lazyView<M>(load: () => Promise<M>) {
   let mod: M | null = null;
+  /**
+   * #593: the draw each zone is waiting for. Two draws on one zone (the same element drawn again
+   * before its module came): only the last one paints it and ends its wait, never the first.
+   */
+  const waitingFor = new WeakMap<HTMLElement, symbol>();
   return {
     /** The module once loaded: the page's event handlers have nothing to handle before. */
     get: () => mod,
@@ -108,17 +113,26 @@ export function lazyView<M>(load: () => Promise<M>) {
      * announces (#579: role="status", and `el` aria-busy until it is drawn or says its failure).
      */
     draw(el: HTMLElement, fn: (m: M) => void, what: string) {
-      if (mod) return fn(mod);
+      if (mod) {
+        if (waitingFor.delete(el)) el.removeAttribute('aria-busy'); // an older draw was waiting: this one ends it
+        return fn(mod);
+      }
+      const turn = Symbol(what);
+      waitingFor.set(el, turn);
       el.setAttribute('aria-busy', 'true');
       el.innerHTML = html(waiting('', 'empty'));
       void lazyCard(
         load,
         (m) => {
           mod = m;
-          if (el.isConnected) fn(m);
+          if (el.isConnected && waitingFor.get(el) === turn) fn(m);
         },
         { zone: el, what },
-      ).finally(() => el.removeAttribute('aria-busy'));
+      ).finally(() => {
+        if (waitingFor.get(el) !== turn) return;
+        waitingFor.delete(el);
+        el.removeAttribute('aria-busy');
+      });
     },
   };
 }
