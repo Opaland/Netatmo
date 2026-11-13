@@ -14,6 +14,31 @@ const online = () => navigator.onLine !== false;
 /** A module could not be fetched offline: Chromium keeps that failure until a reload (WebKit: #605). */
 const importFailedOffline = { value: false };
 
+/**
+ * #605: the module files whose load failed (the <link rel=modulepreload> that Vite adds for a lazy
+ * chunk and its imports). WebKit serves that failure again, to an import in the page, after a
+ * reload and after a new navigation, until the file itself is fetched again; Chromium keeps it in
+ * the page until a reload. Recorded here (a link's error does not bubble: capture phase).
+ */
+const failedModules = new Set<string>();
+if (typeof window !== 'undefined')
+  window.addEventListener(
+    'error',
+    (e) => {
+      const t = e.target;
+      if (t instanceof HTMLLinkElement && t.rel === 'modulepreload' && t.href) failedModules.add(t.href);
+    },
+    true,
+  );
+
+/** Fetch the failed module files again (same origin, past the HTTP cache), and drop their links. */
+async function refetchFailedModules(): Promise<void> {
+  const urls = [...failedModules];
+  failedModules.clear();
+  for (const link of document.querySelectorAll<HTMLLinkElement>('link[rel=modulepreload]')) if (urls.includes(link.href)) link.remove();
+  await Promise.all(urls.map((u) => fetch(u, { cache: 'reload' }).catch(() => undefined)));
+}
+
 function zoneOf(zone: Zone): HTMLElement | null {
   return typeof zone === 'string' ? document.getElementById(zone) : (zone ?? null);
 }
@@ -43,9 +68,11 @@ function showFailure(el: HTMLElement, what: string, outcome: 'offline' | 'reload
     if (outcome === 'reload') return location.reload();
     p.remove();
     // Back online after a module failed offline. Chromium keeps that failure until a reload; WebKit
-    // keeps it THROUGH a reload, and even a new navigation, but fetches it again for an import made
-    // in the page (#605). So: try in place first, and reload only if it fails again.
-    retry(online() && importFailedOffline.value);
+    // keeps it THROUGH a reload, and even a new navigation, until the file is fetched again (#605).
+    // So: fetch the failed files again, try in place, and reload only if it fails again.
+    const afterOffline = online() && importFailedOffline.value;
+    if (!afterOffline) return retry(false);
+    void refetchFailedModules().then(() => retry(true));
   });
   p.append(b);
   el.replaceChildren(p);

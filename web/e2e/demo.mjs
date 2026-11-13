@@ -927,9 +927,15 @@ try {
     await ctx.close();
   }
   // #249: a lazy card that cannot load offline says so and offers to try again (never vanishes).
-  {
-    progress('carte différée hors ligne');
-    const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 }, serviceWorkers: 'block' });
+  // Twice: in the browser of the run, the message is read and audited (axe, CSP); in a browser of
+  // its own and without the audit, « Réessayer » once online must bring the card back (#605).
+  // WebKit keeps a module's failed load for the whole process (not only the page) until the file
+  // is fetched again or the entry drops out of its memory cache: axe running offline, or an earlier
+  // context, let it drop and hid the defect (green locally, red in CI, PR #612).
+  for (const audited of [true, false]) {
+    progress(`carte différée hors ligne${audited ? ' : message et audit' : ' : « Réessayer »'}`);
+    const solo = audited ? null : await (BROWSER === 'webkit' ? webkit : chromium).launch();
+    const ctx = await (solo ?? browser).newContext({ viewport: { width: 1280, height: 900 }, serviceWorkers: 'block' });
     await ctx.addInitScript(recordViolations);
     const page = await ctx.newPage();
     page.on('pageerror', (e) => errors.push(`carte hors ligne: ${e.message}`));
@@ -947,36 +953,31 @@ try {
       await failed.waitFor({ timeout: 15000 });
       const text = await failed.innerText();
       check(/indisponible hors connexion/.test(text) && /Réessayer/.test(text), `carte hors ligne : message inattendu « ${text} »`);
-      await audit(page, 'carte-hors-ligne');
-      await checkViolations(page, 'carte hors ligne');
-      // back online: the browser keeps the failed module until a reload, the card says so
-      await ctx.setOffline(false);
-      // (#308: Outils → Volets loads no document that would redraw the page when the network comes back:
-      // the « Réessayer » button itself sees that the module failed offline and reloads the page)
-      await page.waitForSelector('#shutters-zone [data-lazy-retry]', { timeout: 15000 });
-      // WebKit applies setOffline(false) a moment later: the household clicks once the network is back
-      const online = await page.evaluate(async () => {
-        for (const t0 = Date.now(); Date.now() - t0 < 10000; await new Promise((r) => setTimeout(r, 200)))
-          if (await fetch('manifest.webmanifest', { cache: 'no-store' }).then((r) => r.ok, () => false)) return true;
-        return false;
-      });
-      check(online, 'carte hors ligne : le serveur reste injoignable 10 s après le retour en ligne');
-      // #605: WebKit keeps the failed module through a reload and even a new navigation (only an
-      // import made in the page once online fetches it again): « Réessayer » tries in place first,
-      // and reloads only when that fails again (Chromium keeps the failure until a reload, and the
-      // demo is then opened again from the lock screen). Seen red in WebKit before the fix.
-      await page.click('#shutters-zone [data-lazy-retry]');
-      await page.waitForSelector('#shutters-card, #demo', { timeout: 15000 }).catch(() => {});
-      if (await page.locator('#demo').count()) {
-        await openDemo(page);
-        await go(page, 'outils-volets');
+      if (audited) {
+        await audit(page, 'carte-hors-ligne');
+        await checkViolations(page, 'carte hors ligne');
+      } else {
+        await ctx.setOffline(false);
+        // (#308: Outils → Volets loads no document that would redraw the page when the network comes
+        // back: the « Réessayer » button itself sees that the module failed offline.) #605: it fetches
+        // the failed files again, tries in place, and reloads only when that fails again (Chromium
+        // keeps the failure in the page until a reload; the demo is then opened again). Seen red in
+        // WebKit before the fix, and with an in-place try alone (no fetch).
+        await page.waitForSelector('#shutters-zone [data-lazy-retry]', { timeout: 15000 });
+        await page.click('#shutters-zone [data-lazy-retry]');
+        await page.waitForSelector('#shutters-card, #demo', { timeout: 15000 }).catch(() => {});
+        if (await page.locator('#demo').count()) {
+          await openDemo(page);
+          await go(page, 'outils-volets');
+        }
+        const back = await page.waitForSelector('#shutters-card', { timeout: 15000 }).then(() => true, () => false);
+        known.check('carte-revient', back, `carte hors ligne : la carte ne revient pas par « Réessayer » (${(await page.locator('#shutters-zone').innerText().catch(() => '?')).slice(0, 120)})`);
       }
-      const back = await page.waitForSelector('#shutters-card', { timeout: 15000 }).then(() => true, () => false);
-      known.check('carte-revient', back, `carte hors ligne : la carte ne revient pas par « Réessayer » (${(await page.locator('#shutters-zone').innerText().catch(() => '?')).slice(0, 120)})`);
     } catch (err) {
       errors.push(`carte hors ligne : ${err}`);
     }
     await ctx.close();
+    await solo?.close();
   }
   // #579: a view loaded on demand says it is coming to a screen reader (role="status" in a zone
   // aria-busy), and the zone is no longer busy once drawn. The module of « Hiver contre hiver » is
