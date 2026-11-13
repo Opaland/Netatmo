@@ -3,7 +3,8 @@
 //   a banner (role=status, 44 px, axe, 360 px with the text at 200 %) offers « Recharger »;
 //   with two tabs open, « Recharger » in one activates it and reloads that one, the other is not
 //   reloaded behind the reader's back and its own button reloads it. The remembered key keeps
-//   both unlocked. The first visit shows no banner.
+//   both unlocked. The first visit shows no banner. #606: red in WebKit before the fix (the
+//   reloaded tab saw its new worker « activating » for 40 s and more: it was reloaded mid-activation).
 // - « Recharger l'application » (Paramètres → À propos): the remembered key (IndexedDB), the
 //   notes (localStorage) and the encrypted data cache are the same before and after (read in
 //   the storage itself, not through setOffline: it does not apply to the service worker). #604:
