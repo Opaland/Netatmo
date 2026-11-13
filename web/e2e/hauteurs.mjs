@@ -5,12 +5,18 @@
 // - every page that has a height limit (e2e/hauteurs-limites.mjs, the guard's own list): its
 //   height, its limit and its margin in px. A limit exceeded makes the script fail, like the guard.
 // Prints a Markdown table to paste into the review. No limit is added here (cadrage v2.3 § 2).
+// #596: E2E_BROWSER=webkit measures and prints the same tables in WebKit, WITHOUT judging the
+// limits: they were measured in Chromium, and a WebKit limit would be a new threshold, the owner's
+// decision (cadrage v2.6). The guard that does judge them in WebKit is e2e/features.mjs.
 // Run after `npm run build`: npm run e2e:hauteurs   (port E2E_PORT, default 4204)
-import { chromium, devices } from 'playwright';
+import { chromium, devices, webkit } from 'playwright';
 import { HEIGHT_LIMITS, displayOptions, measureHeight } from './hauteurs-limites.mjs';
 import { frames, goto, openDemo, ready, startPreview } from './lib.mjs';
+import { BROWSER } from './captures.mjs';
 
 const PORT = Number(process.env.E2E_PORT ?? 4204);
+const ENGINE = BROWSER === 'webkit' ? 'WebKit' : 'Chromium';
+const JUDGED = BROWSER !== 'webkit';
 const FONT = 'html, body, button, input, select, textarea { font-family: "DejaVu Sans", system-ui, sans-serif !important; }';
 const BIG = 'html { font-size: 200% !important; }';
 
@@ -85,7 +91,7 @@ async function heights(browser, base, big) {
 }
 
 const { base, stop } = await startPreview(PORT);
-const browser = await chromium.launch();
+const browser = await (BROWSER === 'webkit' ? webkit : chromium).launch();
 const t0 = Date.now();
 try {
   // the limits: each on its own display, at 100 % (as the guard measures them)
@@ -102,20 +108,20 @@ try {
 
   const fr = (x, d = 1) => x.toLocaleString('fr-FR', { minimumFractionDigits: d, maximumFractionDigits: d });
   const where = (d) => (d === 'iphone' ? 'iPhone 13' : '360 × 800');
-  console.log('\n**Limites de hauteur** (`e2e/hauteurs-limites.mjs`, DejaVu Sans, démo, Chromium)\n');
+  console.log(`\n**Limites de hauteur** (\`e2e/hauteurs-limites.mjs\`, DejaVu Sans, démo, ${ENGINE}${JUDGED ? '' : ', mesurées sans être jugées'})\n`);
   console.log('| Écran | Affichage | Hauteur | Limite | Marge |');
   console.log('|---|---|---|---|---|');
   for (const l of limits) {
     const name = ROWS.find(([, r]) => r === l.route)?.[0] ?? l.route;
     console.log(`| ${name} (${l.issue}) | ${where(l.display)} | ${fr(l.h, 0)} px | ${l.screens} écrans, ${fr(l.max, 0)} px | ${l.ok ? '' : '**'}${fr(l.margin, 0)} px${l.ok ? '' : '**'} |`);
   }
-  console.log('\n**Hauteurs** (écrans de 800 px, `scrollHeight / 800`, DejaVu Sans, démo, Chromium)\n');
+  console.log(`\n**Hauteurs** (écrans de 800 px, \`scrollHeight / 800\`, DejaVu Sans, démo, ${ENGINE})\n`);
   console.log('| Écran | 360 px | 360 px à 200 % |');
   console.log('|---|---|---|');
   ROWS.forEach(([label], i) => console.log(`| ${label} | ${fr(normal[i] / 800)} | ${fr(big[i] / 800)} |`));
   console.log(`\n(${Math.round((Date.now() - t0) / 1000)} s)`);
 
-  for (const l of limits) if (!l.ok) errors.push(l.message);
+  if (JUDGED) for (const l of limits) if (!l.ok) errors.push(l.message);
 } finally {
   await browser.close();
   stop();

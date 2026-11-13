@@ -1,5 +1,5 @@
 // v1.6 #301 / #308: the Compteur tab (maquette docs/design/maquettes/compteur.html) and its four
-// detail pages, on Chromium:
+// detail pages, in Chromium and in WebKit (E2E_BROWSER=webkit, #596):
 // - one period for the tab: the control changes every card, each card says what it counts;
 // - a room filter left on is named (it does not apply to the meter);
 // - 360 px phone, text at 200 %: no horizontal scroll, nothing sticks out, « Veille » on one line;
@@ -7,8 +7,8 @@
 // Run after `npm run build`: node e2e/compteur.mjs   (port E2E_PORT, captures: e2e/captures.mjs)
 import { spawn } from 'node:child_process';
 import AxeBuilder from '@axe-core/playwright';
-import { chromium } from 'playwright';
-import { capturesOut } from './captures.mjs';
+import { chromium, webkit } from 'playwright';
+import { BROWSER, SHOT, capturesOut } from './captures.mjs';
 
 const PORT = Number(process.env.E2E_PORT ?? 4183);
 const OUT = capturesOut(); // #583: e2e/screenshots/ only in the CI's font
@@ -61,7 +61,7 @@ async function audit(page, where, enhanced = false) {
 
 try {
   await waitForServer();
-  const browser = await chromium.launch();
+  const browser = await (BROWSER === 'webkit' ? webkit : chromium).launch();
 
   // the period, what each card counts, the filter that does not apply
   {
@@ -86,7 +86,7 @@ try {
     await page.waitForFunction(() => /\d+ W en permanence/.test(document.querySelector('a[href="#compteur-veille"] .s')?.textContent ?? ''), null, { timeout: 15000 }).catch(() =>
       errors.push('ligne « Veille » sans la puissance permanente'),
     );
-    await page.screenshot({ path: `${OUT}/compteur-mobile.png`, fullPage: true });
+    await page.screenshot({ path: `${OUT}/${SHOT}compteur-mobile.png`, fullPage: true });
     // one period for the tab and its pages: « Mois » changes the cards and is kept on a detail page
     await page.click('[data-set=meter][data-value=month]');
     await ready(page);
@@ -115,7 +115,7 @@ try {
     for (const key of PAGES.slice(1)) {
       await go(page, key);
       await page.waitForSelector('#view .counted', { timeout: 15000 }).catch(() => errors.push(`#${key} : pas de ligne « Compté : »`));
-      await page.screenshot({ path: `${OUT}/${key}-mobile.png`, fullPage: true });
+      await page.screenshot({ path: `${OUT}/${SHOT}${key}-mobile.png`, fullPage: true });
     }
     check(/pas tout le logement/.test(await page.locator('#offpeak-card .counted').innerText()), 'heures creuses : ne dit pas qu’elles ne comptent que les radiateurs et le chauffe-eau');
     // #301: a filter left on elsewhere is named on the tab
@@ -190,7 +190,7 @@ try {
         return found;
       });
       check(!out.length, `360 px, texte 200 %/${key} : ${out.slice(0, 5).join(', ')}`);
-      await page.screenshot({ path: `${OUT}/compteur-texte200-${key}.png`, fullPage: true });
+      await page.screenshot({ path: `${OUT}/${SHOT}compteur-texte200-${key}.png`, fullPage: true });
     }
     await audit(page, '360 px, texte 200 %/compteur-autres');
     await ctx.close();

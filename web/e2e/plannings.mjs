@@ -1,5 +1,5 @@
 // v1.6 #211 / #210: Outils → « Mes plannings et les heures creuses » and the absences rebuilt from
-// the absence mode of the radiators, on Chromium with the demo:
+// the absence mode of the radiators, with the demo, in Chromium and in WebKit (E2E_BROWSER=webkit, #596):
 // - plannings: what is counted, share in off-peak hours, a comfort start per room with its real
 //   warm-up, one figured suggestion (the living room: start earlier, in off-peak hours), a slot
 //   never reached (the bathroom), read-only said;
@@ -10,8 +10,8 @@
 // Run after `npm run build`: node e2e/plannings.mjs   (port E2E_PORT, captures: e2e/captures.mjs)
 import { spawn } from 'node:child_process';
 import AxeBuilder from '@axe-core/playwright';
-import { chromium } from 'playwright';
-import { capturesOut } from './captures.mjs';
+import { chromium, webkit } from 'playwright';
+import { BROWSER, SHOT, capturesOut } from './captures.mjs';
 
 const PORT = Number(process.env.E2E_PORT ?? 4187);
 const OUT = capturesOut(); // #583: e2e/screenshots/ only in the CI's font
@@ -67,7 +67,7 @@ const text = async (page, sel) => (await page.locator(sel).first().innerText()).
 
 try {
   await waitForServer();
-  const browser = await chromium.launch();
+  const browser = await (BROWSER === 'webkit' ? webkit : chromium).launch();
 
   {
     const ctx = await browser.newContext({ viewport: { width: 360, height: 780 }, deviceScaleFactor: 2, hasTouch: true, serviceWorkers: 'block' });
@@ -94,7 +94,7 @@ try {
     const sdb = await text(page, '#plan-r-sdb');
     check(/À revoir/.test(sdb) && /n'est atteint que/.test(sdb), `Salle de bain : créneau jamais atteint non signalé → ${sdb.slice(0, 400)}`);
     check(/sans atteindre la consigne/.test(sdb), 'Salle de bain : heures de montée inutiles absentes');
-    await page.screenshot({ path: `${OUT}/plannings-mobile.png`, fullPage: true });
+    await page.screenshot({ path: `${OUT}/${SHOT}plannings-mobile.png`, fullPage: true });
 
     // ------------------------------------------------------------ #428: one source of the off-peak hours
     // The demo counts its half hours HC from 22 h to 6 h: read in the data, they win over what is typed.
@@ -128,7 +128,7 @@ try {
       )
       .catch(() => errors.push('⚙ Mon contrat : la plage « à compter du » n’est pas relue avec sa date'));
     check((await rows.nth(2).locator('[data-hc=since]').inputValue()) === '2026-10-01', '⚙ Mon contrat : la date « à compter du » n’est pas remise dans le formulaire');
-    await page.screenshot({ path: `${OUT}/heures-creuses-mobile.png`, fullPage: true });
+    await page.screenshot({ path: `${OUT}/${SHOT}heures-creuses-mobile.png`, fullPage: true });
     await go(page, 'outils-voiture');
     check(/Heures creuses lues dans vos relevés : 22 h → 6 h/.test(await text(page, '#ev-result')), 'recharge : la source des heures creuses n’est pas dite');
     await go(page, 'parametres-contrat');
@@ -152,7 +152,7 @@ try {
     await page.waitForFunction(() => /Début avancé de 12 h/.test(document.querySelector('#absence-card')?.textContent ?? ''), null, { timeout: 10000 }).catch(() => errors.push('absences : la correction du début ne s’applique pas'));
     const after = (await text(page, '#absence-card')).match(/du (\d+ sept\. \d+ h)/)?.[1];
     check(before && after && before !== after, `absences : début inchangé après correction (${before} → ${after})`);
-    await page.screenshot({ path: `${OUT}/absences-mobile.png`, fullPage: true });
+    await page.screenshot({ path: `${OUT}/${SHOT}absences-mobile.png`, fullPage: true });
     await page.locator('#absence-card [data-absence-earlier]').first().click(); // back as seen by the radiators
     await page.waitForFunction(() => !/Début avancé de 12 h/.test(document.querySelector('#absence-card')?.textContent ?? ''), null, { timeout: 10000 }).catch(() => errors.push('absences : la correction ne s’annule pas'));
 
@@ -185,7 +185,7 @@ try {
         return found;
       });
       check(!out.length, `360 px, texte 200 %/${key} : ${out.slice(0, 5).join(', ')}`);
-      await page.screenshot({ path: `${OUT}/plannings-texte200-${key}.png`, fullPage: true });
+      await page.screenshot({ path: `${OUT}/${SHOT}plannings-texte200-${key}.png`, fullPage: true });
     }
     await ctx.close();
   }
