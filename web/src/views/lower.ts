@@ -247,9 +247,9 @@ function markersHtml(p: LowerPrefs): string {
 }
 
 /**
- * The setup is a `.lower-setup`, not a `.table-details`: it opens by itself while no room is
- * chosen, and main.ts reads the toggle of a `.table-details` as « show every table » (Accueil grew
- * by its values table after a visit to Air et confort).
+ * The setup is a `.lower-setup`, not a « Voir les valeurs » fold (`valuesFold`, ui.ts): it opens
+ * by itself while no room is chosen, and the toggle of a values fold is « show every table »
+ * (Accueil grew by its values table after a visit to Air et confort, #452).
  */
 function setupHtml(p: LowerPrefs): string {
   const free = freeModules();

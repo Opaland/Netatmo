@@ -9,7 +9,7 @@ import { type DayRecord, bucketLabel } from '../aggregate';
 import { tariffSplit } from '../analysis';
 import { ds, state } from '../app';
 import { barChart, cssVar } from '../charts';
-import { type LegendItem, alert, countedNote, gauge, howDetails, legend, list, seg } from '../components';
+import { type LegendItem, alert, countedNote, gauge, legend, list, seg } from '../components';
 import { HOME_PERIODS, type HomeRange, homeRange, scopeTitle } from '../home';
 import { lazyCard } from '../lazy';
 import {
@@ -32,7 +32,7 @@ import { usageLabel } from '../glossary';
 import type { MeterPage, Route } from '../router';
 import { tenant, tenantNote } from '../tenant';
 import { html } from '../trusted';
-import { activeRooms, avgPrice, catColor, contracts, esc, fmtKwh, lastDay, longDate, nf0, tariffColor, tariffNames } from '../ui';
+import { activeRooms, avgPrice, catColor, contracts, esc, fmtKwh, lastDay, longDate, nf0, tableToggle, tariffColor, tariffNames } from '../ui';
 import * as analyse from './analyse';
 
 const hasCurve = () => !!((ds!.meta as { linky_curve_years?: number[] }).linky_curve_years ?? []).length;
@@ -157,7 +157,7 @@ function powerCard(r: HomeRange): string {
     <p id="power-verdict">${v ? `${esc(v.text)} ` : ''}Au plus fort le ${esc(longDate(peak.day))}.</p>
     <p id="offload-line" hidden></p>
     <div class="chart" id="pmax-chart" role="img" aria-label="Puissance la plus haute par ${gran(r) === 'day' ? 'jour' : 'mois'}${kva ? ' et puissance souscrite' : ''}"></div>
-    ${ds!.meta.has_roomstate ? howDetails('Voir les valeurs', '<div id="offload-zone" hidden></div>') : ''}
+    ${ds!.meta.has_roomstate ? tableToggle('<div id="offload-zone" hidden></div>') : ''}
     ${counted(`la puissance la plus haute appelée chaque jour, relevée par le compteur, ${esc(coveredText(cov))}${kva ? ` ; souscrite : ${kva} kVA, votre contrat au ${esc(longDate(r.to))}` : ''}.`)}
   </section>`;
 }

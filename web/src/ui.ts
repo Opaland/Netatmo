@@ -56,9 +56,15 @@ export function cardTable(head: string[], rows: string[][], label: string) {
     .join('')}</ul>`;
 }
 
+/**
+ * #546: `.table-details` is only a look, shared with « Comment c'est calculé » and other folds.
+ * The « Voir les valeurs » folds carry `data-values`, and only their toggle is the `showTables`
+ * preference: one marker, written here and read by main.ts through `valuesFold()`.
+ */
 export function tableToggle(content: string) {
-  return `<details class="table-details" ${state.showTables ? 'open' : ''}><summary>Voir les valeurs</summary>${content}</details>`;
+  return `<details class="table-details" data-values ${state.showTables ? 'open' : ''}><summary>Voir les valeurs</summary>${content}</details>`;
 }
+export const valuesFold = (el: Element): el is HTMLDetailsElement => el instanceof HTMLDetailsElement && el.hasAttribute('data-values');
 
 // ------------------------------------------------------------------ dates and filters
 export function lastDay(): string {
