@@ -131,12 +131,26 @@ const PLACING = /^(?:width|max-width|min-width|box-sizing|flex(?:-[a-z]+)?|margi
  * #402: rules that restyle a select outside the base rule (`select { … }` in style.css, and the
  * `button, input, select` reset): `file: selector { prop }`.
  */
+/** The selectors of a list, split on the commas outside parentheses (`:is(a, b)` stays whole). */
+function splitSelectors(list: string): string[] {
+  const out = [''];
+  let depth = 0;
+  for (const c of list) {
+    depth += c === '(' ? 1 : c === ')' ? -1 : 0;
+    if (c === ',' && depth === 0) out.push('');
+    else out[out.length - 1] += c;
+  }
+  return out;
+}
+
 export function selectRestyles(files: Record<string, string>): string[] {
   const found: string[] = [];
   for (const [file, text] of Object.entries(files)) {
     if (!file.endsWith('.css')) continue;
     for (const r of rules(text)) {
-      if (!r.selector.split(',').some((s) => /(?:^|[\s>+~(])select(?![\w-])/.test(s.trim()))) continue;
+      // a select inside :has() is a condition on the subject, not the subject (#594: a table of fields)
+      const subject = (s: string) => s.trim().replace(/:has\((?:[^()]|\([^()]*\))*\)/g, '');
+      if (!splitSelectors(r.selector).some((s) => /(?:^|[\s>+~(])select(?![\w-])/.test(subject(s)))) continue;
       if (r.selector === 'select' || r.selector === 'button, input, select') continue;
       for (const d of r.decls) if (!PLACING.test(d.prop)) found.push(`${file}: ${r.selector} { ${d.prop} }`);
     }
@@ -298,6 +312,8 @@ describe('design system usage (#317)', () => {
     expect(selectRestyles({ 'x.css': '.money-field input,\n.money-field select { padding: 10px; width: 100%; }' })).toEqual(['x.css: .money-field input, .money-field select { padding }']);
     expect(selectRestyles({ 'x.css': '@media (min-width: 1px) { .a > select { border: 0; } }' })).toHaveLength(1);
     expect(selectRestyles({ 'x.css': '.select { border: 0; }' })).toEqual([]);
+    expect(selectRestyles({ 'x.css': '.t:has(td input, td select) td:first-child { white-space: normal; }' })).toEqual([]);
+    expect(selectRestyles({ 'x.css': '.t:has(td input) select { padding: 0; }' })).toHaveLength(1);
     expect(accentData({ 'views/x.ts': "gauge({ value: 1, color: '--accent' })" })).toHaveLength(1);
     expect(accentData({ 'views/x.ts': "series: [{ name: 'Pic', color: cssVar('--accent'), data }]" })).toHaveLength(1);
     expect(accentData({ 'views/x.ts': "shareBar(o.share, o.color ?? '--accent')" })).toHaveLength(1);
