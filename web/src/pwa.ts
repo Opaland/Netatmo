@@ -4,7 +4,7 @@
 //   showed the prompt as soon as one tab activates the new version).
 // - A new version WAITS (vite.config.ts: registerType 'prompt', no skipWaiting). A banner
 //   (role=status) says so; « Recharger » sends SKIP_WAITING to the waiting worker, then reloads
-//   once the controller has changed. Decision of 10/11/2026: no reload by surprise.
+//   once it is activated (#606: not at the controller change, while it is still « activating »). Decision of 10/11/2026: no reload by surprise.
 // - #334 (a version stuck in « waiting » for days, an installed app never closed): the button
 //   activates the waiting worker whatever the other tabs, and the app looks for a new version
 //   each time it comes back to the foreground. Another tab activated it: this one is not
@@ -22,7 +22,7 @@ export interface SwContainer extends EventTarget {
   getRegistration(): Promise<SwRegistration | undefined>;
 }
 export interface SwRegistration extends EventTarget {
-  readonly waiting: { postMessage(m: unknown): void } | null;
+  readonly waiting: (EventTarget & { readonly state: string; postMessage(m: unknown): void }) | null;
   readonly installing: (EventTarget & { readonly state: string }) | null;
   update(): Promise<unknown>;
 }
@@ -54,7 +54,8 @@ export function createUpdater({ sw, onUpdate, reload, later = setTimeout }: Deps
     if (reg.waiting && sw.controller && reg.waiting !== first) onUpdate('waiting');
   };
   sw.addEventListener('controllerchange', () => {
-    if (requested) return reloadOnce();
+    // #606: asked here, the reload waits for « activated » (apply), not this « activating »
+    if (requested) return;
     // `clients.claim()` of the very first installation also changes the controller (null → worker)
     if (hadController) onUpdate('elsewhere');
     hadController = true;
@@ -79,6 +80,13 @@ export function createUpdater({ sw, onUpdate, reload, later = setTimeout }: Deps
       const waiting = reg?.waiting;
       // nothing waits any more (another tab activated it): this page only needs a reload
       if (!waiting) return reloadOnce();
+      // #606: reload once the worker is ACTIVATED. At controllerchange it is still « activating »,
+      // and WebKit leaves the page reloaded at that moment with a worker that stays « activating »
+      // for it (seen 40 s and more in Playwright's WebKit; the worker itself was activated, and
+      // the other pages saw it so).
+      waiting.addEventListener('statechange', () => {
+        if (waiting.state === 'activated' || waiting.state === 'redundant') reloadOnce();
+      });
       waiting.postMessage({ type: 'SKIP_WAITING' });
       later(reloadOnce, 10_000);
     },
