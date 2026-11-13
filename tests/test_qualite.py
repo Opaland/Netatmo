@@ -116,7 +116,10 @@ def test_water_heater_gap_is_not_a_room_gap(tmp_path):
         store.merge(A, day, 7777)
         if not "2024-01-20" <= day <= "2024-03-09":  # 50 days without the water heater
             store.merge(W, day, 3333)
-    rooms = [{"id": A, "name": NAMES[A], "category": "heating"}, {"id": W, "name": NAMES[W], "category": "water_heater"}]
+    rooms = [
+        {"id": A, "name": NAMES[A], "category": "heating"},
+        {"id": W, "name": NAMES[W], "category": "water_heater"},
+    ]
     store.save({"name": "Famille Zorglub", "timezone": "Europe/Paris"}, rooms, {})
     gaps = Report(Store(tmp_path, PASSPHRASE)).gaps()
     assert gaps["Intuis, au moins une pièce chauffée"] == {}
