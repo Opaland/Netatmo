@@ -39,8 +39,8 @@ def factor(day: date) -> float:
 
 def energy(room: str, local: datetime) -> float:
     h = local.hour
-    if room == W:
-        return 900.0 if h in (2, 3, 4) else 0.0
+    if room == W:  # never the same day twice (a frozen value is a finding)
+        return round(900.0 * (1 + 0.01 * ((local.date() - FIRST).days % 11)), 1) if h in (2, 3, 4) else 0.0
     return round((40 + 300 * (h in (6, 7, 8)) + 400 * (18 <= h <= 21)) * factor(local.date()), 1)
 
 
@@ -261,7 +261,7 @@ def test_day_twice_its_tariffs(clean):
     clean.merge(A, day, round(2 * sum(cols), 1))
     clean.save(clean.meta["home"], clean.meta["rooms"])
     f = found(clean)
-    assert set(f) == {"tarifs-additionnes"}
+    assert set(f) == {"tarifs-additionnes", "somme-jour"}  # its hours no longer make the day either
     assert f["tarifs-additionnes"][0].day == day and "deux fois" in f["tarifs-additionnes"][0].text
 
 
@@ -363,3 +363,106 @@ def test_a_day_in_two_year_files_is_read_once_from_its_own_year(clean):
     store = Store(clean.dir, PASSPHRASE)
     real = Report(store, []).real_wh["2024-03-05"]
     assert real == pytest.approx(own + store.year(2024)[W]["2024-03-05"])
+
+
+# ---------------------------------------------------------------- values (part 2 of #532)
+def save(store: Store) -> Store:
+    store.save(store.meta["home"], store.meta["rooms"])
+    return Store(store.dir, PASSPHRASE)
+
+
+def test_hours_that_do_not_make_the_day(clean):
+    hour = clean.doc("2024.hourly")["hourly"][A]["2024-03-12T10"]
+    clean.put("2024.hourly", "hourly", A, "2024-03-12T10", hour + 500)
+    f = found(save(clean))
+    assert set(f) == {"somme-jour"}
+    x = f["somme-jour"][0]
+    assert (x.day, x.room, x.doc) == ("2024-03-12", A, "2024.hourly")
+    assert x.value == pytest.approx(x.other + 500)
+
+
+def test_hours_twice_the_day(clean):
+    hours = clean.doc("2024.hourly")["hourly"][A]
+    for k in [k for k in hours if k.startswith("2024-03-12")]:
+        clean.put("2024.hourly", "hourly", A, k, 2 * hours[k])
+    f = found(save(clean))
+    assert set(f) == {"somme-jour"} and "deux fois le jour" in f["somme-jour"][0].text
+
+
+def test_rooms_above_the_meter(clean):
+    clean.put("linky", "daily", "2024-03-12", None, 100)
+    f = found(save(clean))
+    assert set(f) == {"pieces-sur-linky", "somme-jour"}  # the curve of that day no longer makes it either
+    assert [x.day for x in f["pieces-sur-linky"]] == ["2024-03-12"]
+
+
+def test_impossible_energy(clean):
+    clean.put("shelly", "daily", "p0", "2024-03-12", -3.0)
+    f = found(save(clean))
+    assert set(f) == {"valeur-impossible"}
+    assert (f["valeur-impossible"][0].day, f["valeur-impossible"][0].text) == ("2024-03-12", "énergie négative")
+
+
+def test_room_above_what_it_can_use_in_a_day(clean):
+    clean.merge(A, "2024-03-12", 90_000.0)
+    f = found(save(clean))
+    assert "valeur-impossible" in f and "plus de 80 kWh" in f["valeur-impossible"][0].text
+
+
+def test_kwh_stored_as_wh(clean):
+    days = ["2024-03-12", "2024-03-13", "2024-03-14"]
+    for d in days:
+        clean.put("shelly", "daily", "p0", d, round(clean.doc("shelly")["daily"]["p0"][d] / 1000, 3))
+    f = found(save(clean))
+    assert set(f) == {"unite"}
+    assert [x.day for x in f["unite"]] == days
+
+
+def test_two_days_almost_nothing_are_not_a_unit(clean):
+    for d in ["2024-03-12", "2024-03-13"]:  # under jours_unite: a plug nearly off, not a unit
+        clean.put("shelly", "daily", "p0", d, 0.5)
+    assert found(save(clean)) == {}
+
+
+def test_a_day_a_thousand_times_too_large(clean):
+    clean.put("shelly", "daily", "p0", "2024-03-12", clean.doc("shelly")["daily"]["p0"]["2024-03-12"] * 1000)
+    f = found(save(clean))
+    assert set(f) == {"unite"} and "plus grand" in f["unite"][0].text
+
+
+def test_frozen_reading(clean):
+    for i in range(6):
+        clean.put("weather", "outdoor", f"2024-03-{10 + i:02d}", None, [1.0, 5.0, 3.0])
+    clean.put("weather", "outdoor", "2024-03-16", None, [2.0, 6.0, 4.0])
+    f = found(save(clean))
+    assert set(f) == {"valeur-figee"}
+    assert (f["valeur-figee"][0].at, f["valeur-figee"][0].other) == ("2024-03-10…2024-03-15", 6.0)
+
+
+def test_four_equal_days_are_not_frozen(clean):
+    for i in range(4):
+        clean.put("weather", "outdoor", f"2024-03-{10 + i:02d}", None, [1.0, 5.0, 3.0])
+    assert found(save(clean)) == {}
+
+
+def test_peak_above_the_meter_maximum(clean):
+    clean.put("linky", "pmax", "2024-03-12", None, 0.5)  # kVA: below the evening hours of the room
+    f = found(save(clean))
+    assert set(f) == {"pic-impossible"}
+    assert {x.day for x in f["pic-impossible"]} == {"2024-03-12"}
+    assert {x.doc for x in f["pic-impossible"]} == {"2024.hourly", "2024.linky30"}
+
+
+def test_peak_above_any_home_without_maximum(clean):
+    clean.put("2024.hourly", "hourly", A, "2024-03-12T10", 40_000.0)
+    f = found(save(clean))
+    assert {"pic-impossible", "somme-jour"} <= set(f)
+    assert "36 kVA" in f["pic-impossible"][0].text
+
+
+def test_meter_index_going_back(clean):
+    for d, v in (("2024-03-10", 1_000_000), ("2024-03-11", 1_010_000), ("2024-03-12", 1_005_000)):
+        clean.put("linky", "index", "total", d, v)
+    f = found(save(clean))
+    assert set(f) == {"compteur-recule"}
+    assert (f["compteur-recule"][0].day, f["compteur-recule"][0].value) == ("2024-03-12", 1_005_000)
