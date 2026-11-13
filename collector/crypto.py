@@ -171,6 +171,11 @@ def envelope_kdf(envelope: object) -> Kdf:
 
 
 def decrypt_json(envelope: dict, passphrase: str) -> object:
+    return json.loads(decrypt_bytes(envelope, passphrase))
+
+
+def decrypt_bytes(envelope: dict, passphrase: str) -> bytes:
+    """The plaintext of an envelope (the data audit, #532, parses it itself to see duplicate keys)."""
     kdf = envelope_kdf(envelope)
     try:
         salt = base64.b64decode(envelope["salt"])
@@ -181,7 +186,7 @@ def decrypt_json(envelope: dict, passphrase: str) -> object:
         pt = AESGCM(key).decrypt(base64.b64decode(envelope["iv"]), base64.b64decode(envelope["ct"]), None)
     except Exception as exc:  # cryptography raises InvalidTag
         raise DecryptError("Phrase de passe incorrecte ou fichier corrompu") from exc
-    return json.loads(pt)
+    return pt
 
 
 # ----------------------------------------------------------------- keyinfo.json

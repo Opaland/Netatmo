@@ -32,7 +32,7 @@ from datetime import date, timedelta
 from .devices import StoppedError, parse_stopped, stopped_on
 from .model import IGNORE, WATER_HEATER
 from .room30 import SLOTS, unpack
-from .storage import Store
+from .storage import Store, own_year_first
 
 SUSPECT_WH = 80_000  # a room using more than 80 kWh in a day (3.3 kW for 24 h) is not credible
 # Intuis above Linky by more than this is impossible (Intuis counts a part of what the meter sees).
@@ -158,12 +158,14 @@ class Report:
         self.first, self.last = (min(firsts.values()), store.last_day()) if firsts else (None, None)
 
         # month -> [real, estimated, missing, suspect, stopped] per kind, rooms with data (heating)
-        values: dict[str, dict[str, object]] = {}
+        # #532: a day in two year files is read once (the file of its own year), as in the app
+        values = {
+            rid: days
+            for rid, days in own_year_first([(y, {"daily": daily[y]}) for y in years], "daily").items()
+            if rid in self.kind
+        }
         flagged: dict[str, set[str]] = {}
         for y in years:
-            for rid, days in daily[y].items():
-                if rid in self.kind:
-                    values.setdefault(rid, {}).update(days)
             for rid, days in estimated[y].items():
                 if rid in self.kind and isinstance(days, dict):
                     flagged.setdefault(rid, set()).update(days)

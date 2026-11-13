@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   type DayRecord,
+  type Meta,
   aggregate,
   bucketKeys,
   cumulativeByYear,
@@ -9,6 +10,7 @@ import {
   monthlyByYear,
   seasonOf,
   toCsv,
+  toRecords,
   weekStart,
 } from './aggregate';
 import { BadEnvelope, checkEnvelope, decryptEnvelope, deriveKey } from './crypto';
@@ -32,6 +34,21 @@ describe('dates', () => {
   it('heating seasons run September to August', () => {
     expect(seasonOf('2024-09-01')).toBe('2024-2025');
     expect(seasonOf('2025-08-31')).toBe('2024-2025');
+  });
+});
+
+describe('a day in two year files (#532)', () => {
+  it('is one record, from the file of its own year, never the sum', () => {
+    const meta = { rooms: [{ id: 'r1', name: 'Salon', category: 'heating' }] } as unknown as Meta;
+    const recs = toRecords(meta, { '2024': { r1: { '2024-12-31': 3000, '2024-12-30': 1000 } }, '2025': { r1: { '2024-12-31': 9000, '2025-01-01': 2000 } } });
+    expect(recs.map((r) => [r.day, r.kwh])).toEqual([
+      ['2024-12-30', 1],
+      ['2024-12-31', 3],
+      ['2025-01-01', 2],
+    ]);
+    // own year wins even when its file comes second
+    const back = toRecords(meta, { '2025': { r1: { '2024-12-31': 9000 } }, '2024': { r1: { '2024-12-31': 3000 } } });
+    expect(back.map((r) => r.kwh)).toEqual([3]);
   });
 });
 

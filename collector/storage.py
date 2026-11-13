@@ -315,6 +315,22 @@ class KeyMap:
             self.store.set_top(self.name, self.field, {"salt": self.salt, "keys": dict(self.keys)})
 
 
+def own_year_first(docs: list[tuple[str, dict]], section: str) -> dict[str, dict[str, Any]]:
+    """{room: {day: value}} of one section of the year documents [(year, doc)]. A day found in two
+    year files (#532, `deux-fichiers` of the audit) is read once, never added: the value of the file
+    of its own year wins, else the first read. The app applies the same rule (aggregate.ts toRecords)."""
+    out: dict[str, dict[str, Any]] = {}
+    for year, doc in docs:
+        for rid, days in (doc.get(section) or {}).items():
+            if not isinstance(days, dict):
+                continue
+            cur = out.setdefault(rid, {})
+            for d, v in days.items():
+                if d not in cur or str(d)[:4] == str(year):
+                    cur[d] = v
+    return out
+
+
 def month_coverage(
     daily: dict[str, dict[str, float]],
     estimated: dict[str, dict[str, Any]],

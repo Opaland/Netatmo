@@ -64,7 +64,7 @@ def cmd_diagnose(s: Settings, args: argparse.Namespace) -> None:
     from .diagnose import compatibility_report, history, history_deep, inventory, probe_history, run
 
     if args.qualite:  # S-1.32 #336: counts read from the encrypted archive, no API call
-        cmd_quality(s)
+        cmd_quality(s, args.rapport)
         return
     if args.inventory:  # S-1.19: every configured source, Intuis optional
         has_intuis = all((s.username, s.password, s.client_id, s.client_secret))
@@ -83,8 +83,10 @@ def cmd_diagnose(s: Settings, args: argparse.Namespace) -> None:
         run(client, status_only=args.status)
 
 
-def cmd_quality(s: Settings) -> None:
-    """Data-quality report of data/ (counts only, safe for a public log)."""
+def cmd_quality(s: Settings, rapport: str | None = None) -> None:
+    """Data-quality report of data/ (counts only, safe for a public log), then the audit of the
+    dates and overlaps (#532): counts here, the detail encrypted into `rapport` when given."""
+    from .audit import REPORT_NAME, audit, public_lines, write_report
     from .crypto import DecryptError
     from .quality import report, stopped_of
 
@@ -95,9 +97,19 @@ def cmd_quality(s: Settings) -> None:
         store = Store(s.data_dir, s.passphrase)
         # #346 / #440: a room switched off on purpose is not missing (the secret, else the old
         # plaintext variable #459, else the archive)
-        lines = report(store, stopped_of(store, household_setting("STOPPED_ROOMS_JSON")))
+        checked = audit(store)
+        try:
+            lines = report(store, stopped_of(store, household_setting("STOPPED_ROOMS_JSON")))
+        except ValueError:  # an unreadable day key (#532): the audit below names how many, and where
+            lines = ["Bilan qualité : impossible, une date illisible dans l'archive (voir l'audit ci-dessous)."]
     except DecryptError as err:
         raise SystemExit("Bilan qualité : déchiffrement impossible (DATA_PASSPHRASE ?).") from err
+    lines += public_lines(checked)
+    if rapport:
+        write_report(checked, store, Path(rapport))
+        lines.append(
+            f"Détail chiffré avec la clé des données : {REPORT_NAME} (à ouvrir dans l'appli, État des données)."
+        )
     print("\n".join(lines))
 
 
@@ -1072,6 +1084,11 @@ def main(argv: list[str] | None = None) -> None:
         "--qualite",
         action="store_true",
         help="bilan qualité de l'archive chiffrée, par mois : nombres seulement (S-1.32, DATA_PASSPHRASE)",
+    )
+    dg.add_argument(
+        "--rapport",
+        metavar="DOSSIER",
+        help="avec --qualite : écrit le détail de l'audit (#532), chiffré avec la clé des données, dans ce dossier",
     )
     sn = sub.add_parser("snapshot", help="relevé horaire chiffré de l'état des pièces (S-13.2)")
     sn.add_argument("--out", required=True, metavar="DOSSIER")

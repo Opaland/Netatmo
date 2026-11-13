@@ -59,18 +59,25 @@ export const MONTHS_SHORT = ['janv.', 'févr.', 'mars', 'avr.', 'mai', 'juin', '
 export const MONTHS_LONG = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
 export const CATEGORY_LABEL: Record<Category, string> = { heating: 'Chauffage', water_heater: 'Chauffe-eau', ignore: 'Ignoré' };
 
-/** Flatten {year: {daily: {room: {day: Wh}}}} into kWh records. */
+/**
+ * Flatten {year: {daily: {room: {day: Wh}}}} into kWh records. #532: a room-day found in two year
+ * files is one record, never two added: the file of the day's own year wins, else the first read
+ * (the rule of the collector, storage.py `own_year_first`; the data audit names such days).
+ */
 export function toRecords(meta: Meta, years: Record<string, Record<string, Record<string, number>>>): DayRecord[] {
   const cat = new Map(meta.rooms.map((r) => [r.id, r.category] as const));
-  const out: DayRecord[] = [];
-  for (const daily of Object.values(years)) {
+  const seen = new Map<string, DayRecord>();
+  for (const [year, daily] of Object.entries(years)) {
     for (const [room, days] of Object.entries(daily)) {
       const c = cat.get(room) ?? 'heating';
       if (c === 'ignore') continue;
-      for (const [day, wh] of Object.entries(days)) out.push({ day, room, cat: c, kwh: wh / 1000 });
+      for (const [day, wh] of Object.entries(days)) {
+        const k = `${room}|${day}`;
+        if (!seen.has(k) || day.slice(0, 4) === year) seen.set(k, { day, room, cat: c, kwh: wh / 1000 });
+      }
     }
   }
-  return out.sort((a, b) => (a.day < b.day ? -1 : a.day > b.day ? 1 : 0));
+  return [...seen.values()].sort((a, b) => (a.day < b.day ? -1 : a.day > b.day ? 1 : 0));
 }
 
 export function applyFilter(records: DayRecord[], f: Filter): DayRecord[] {

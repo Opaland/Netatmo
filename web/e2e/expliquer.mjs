@@ -8,7 +8,8 @@
 // Run after `npm run build`: node e2e/expliquer.mjs  (starts `vite preview` itself; port: E2E_PORT;
 // E2E_BROWSER=webkit|chromium). Captures in e2e/screenshots/expliquer-*.png.
 import { spawn } from 'node:child_process';
-import { mkdirSync } from 'node:fs';
+import { mkdirSync, readFileSync } from 'node:fs';
+import { webcrypto } from 'node:crypto';
 import AxeBuilder from '@axe-core/playwright';
 import { chromium, webkit } from 'playwright';
 
@@ -59,6 +60,21 @@ async function audit(page, where, enhanced = false) {
   for (const v of violations.filter((v) => v.impact === 'serious' || v.impact === 'critical'))
     errors.push(`${BROWSER} ${where} : axe « ${v.id} » → ${v.nodes.slice(0, 3).map((n) => n.target.join(' ')).join(' | ')}`);
 }
+/**
+ * #532: an audit report as the workflow Diagnostic writes it (the shared fixture of
+ * tests/test_audit.py), its fictive room named as a demo room, encrypted with the demo key.
+ */
+async function auditFile() {
+  const info = JSON.parse(readFileSync('dist/demo/keyinfo.json', 'utf8'));
+  const named = readFileSync('src/__fixtures__/audit-report.json', 'utf8').replaceAll('1234500100', 'r-bureau');
+  const base = await webcrypto.subtle.importKey('raw', new TextEncoder().encode('demo'), 'PBKDF2', false, ['deriveKey']);
+  const key = await webcrypto.subtle.deriveKey({ name: 'PBKDF2', salt: Buffer.from(info.salt, 'base64'), iterations: info.iter, hash: 'SHA-256' }, base, { name: 'AES-GCM', length: 256 }, false, ['encrypt']);
+  const iv = webcrypto.getRandomValues(new Uint8Array(12));
+  const ct = Buffer.from(await webcrypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, new TextEncoder().encode(named)));
+  return Buffer.from(JSON.stringify({ v: 1, kdf: 'PBKDF2-SHA256', iter: info.iter, salt: info.salt, iv: Buffer.from(iv).toString('base64'), ct: ct.toString('base64') }));
+}
+const AUDIT = await auditFile();
+
 const wide = (page) => page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
 const BEDROOM = /Chambre enfant : hors ligne depuis le 5 nov\. 2026/;
 const STOVE = /arrêté depuis le 14 oct\. 2025 \(poêle\)/;
@@ -320,6 +336,18 @@ try {
       const dev = await page.locator('#devices-card').innerText();
       check(/Radiateur arrêté volontairement : Cuisine, depuis le 14 octobre 2025 \(chauffée par un poêle à bois\)/.test(dev), `${name} : État des appareils sans « radiateur arrêté volontairement » (« ${dev.slice(0, 300)} »)`);
       check(/Un module Intuis ne répond plus\s+Radiateur \(Chambre enfant\)/.test(dev) && !/adiateur \(Cuisine\) depuis/.test(dev), `${name} : État des appareils dit la Cuisine injoignable (« ${dev.slice(0, 300)} »)`);
+      // #532: the detailed audit, opened from the file the workflow Diagnostic gives (encrypted)
+      const auditCard = page.locator('#audit-card');
+      await page.waitForSelector('#audit-card #audit-file', { state: 'attached', timeout: 15000 });
+      check(/workflow Diagnostic/.test(await auditCard.innerText()), `${name} : carte « Audit détaillé » sans le mode d'emploi`);
+      await page.setInputFiles('#audit-card #audit-file', { name: 'audit-donnees.enc.json', mimeType: 'application/json', buffer: AUDIT });
+      await page.waitForSelector('#audit-card [data-audit="heure-inexistante"]', { timeout: 15000 });
+      await page.click('#audit-card [data-audit="heure-inexistante"] > summary');
+      await page.click('#audit-card [data-audit="deux-fichiers"] > summary');
+      const au = (await auditCard.innerText()).replace(/\s+/g, ' ');
+      check(/31 mars 2024, Bureau/.test(au) && /Heure qui n’existe pas|Heure qui n'existe pas/.test(au), `${name} : audit sans le cas du 31 mars 2024 (Bureau) (« ${au.slice(0, 300)} »)`);
+      check(/5 mars 2024, Bureau/.test(au) && /celle du fichier de l'année du jour/.test(au), `${name} : audit sans le jour rangé dans deux fichiers (« ${au.slice(0, 300)} »)`);
+      check(/gardé chiffré sur cet appareil/.test(au), `${name} : rapport d'audit non gardé chiffré`);
       check((await wide(page)) <= 1, `${name} : défilement horizontal sur État des données (${await wide(page)} px)`);
       await audit(page, `${name}/etat`, enhanced);
 

@@ -27,6 +27,7 @@ import { offlineDays, offlineModules, restarts, setupDates, splitStopped } from 
 import { MONTHS_LONG, dayShort, plural, withUnit } from '../glossary';
 import { suspectDays } from '../reconstitute';
 import { html } from '../trusted';
+import { lazyCard } from '../lazy';
 import { esc } from '../ui';
 import { stoppedRooms } from './offline-rooms';
 import { incidentsCard } from './incidents';
@@ -114,8 +115,11 @@ export function mountEtat(el: HTMLElement | null) {
         )
         .join('')}
     </details>
+    <section class="card" id="audit-card" aria-labelledby="audit-title"><p class="hint muted" role="status">Audit détaillé : chargement…</p></section>
     ${incidentsCard(rawDataset() ?? ds!, stoppedRooms(), SOURCE_NAME)}`;
   void fine(i);
+  // #532: the detailed audit (a report made by the workflow Diagnostic), loaded on demand
+  void lazyCard(() => import('./audit'), (m) => m.mountAudit(document.getElementById('audit-card')), { zone: 'audit-card', what: 'Audit détaillé' });
 }
 
 const LEVEL_TOKEN = { good: '--state-good', fair: '--state-warn', poor: '--state-bad' } as const;
