@@ -339,6 +339,7 @@ try {
       // #532: the detailed audit, opened from the file the workflow Diagnostic gives (encrypted)
       const auditCard = page.locator('#audit-card');
       await page.waitForSelector('#audit-card #audit-file', { state: 'attached', timeout: 15000 });
+      await page.click('#audit-fold > summary'); // folded: État des données holds in 4 screens (#387)
       check(/workflow Diagnostic/.test(await auditCard.innerText()), `${name} : carte « Audit détaillé » sans le mode d'emploi`);
       await page.setInputFiles('#audit-card #audit-file', { name: 'audit-donnees.enc.json', mimeType: 'application/json', buffer: AUDIT });
       await page.waitForSelector('#audit-card [data-audit="heure-inexistante"]', { timeout: 15000 });

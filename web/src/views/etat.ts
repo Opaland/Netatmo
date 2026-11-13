@@ -115,7 +115,7 @@ export function mountEtat(el: HTMLElement | null) {
         )
         .join('')}
     </details>
-    <section class="card" id="audit-card" aria-labelledby="audit-title"><p class="hint muted" role="status">Audit détaillé : chargement…</p></section>
+    <div id="audit-card"><details class="card fold"><summary><h2>Audit détaillé des données</h2> <span class="fold-sub">chargement…</span></summary></details></div>
     ${incidentsCard(rawDataset() ?? ds!, stoppedRooms(), SOURCE_NAME)}`;
   void fine(i);
   // #532: the detailed audit (a report made by the workflow Diagnostic), loaded on demand

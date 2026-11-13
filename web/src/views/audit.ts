@@ -37,16 +37,24 @@ export async function mountAudit(el: HTMLElement | null): Promise<void> {
   draw(el, stored);
 }
 
+/** The summary line of the fold (État des données holds in 4 screens with every card folded, #387). */
+function foldSub(r: AuditReport | null): string {
+  if (!r) return 'bonnes dates, chevauchements : rapport à ouvrir';
+  const s = auditSummary(r);
+  return s.found.length ? `${plural(s.defects, 'cas', 'cas')} impossible${s.defects > 1 ? 's' : ''}, ${plural(s.toCheck, 'cas', 'cas')} à vérifier` : 'aucun défaut trouvé';
+}
+
 function draw(el: HTMLElement, r: AuditReport | null) {
   const d = ds!;
-  el.innerHTML = html(`<div class="card-head"><h2 id="audit-title">Audit détaillé des données</h2></div>
+  const open = !!el.querySelector<HTMLDetailsElement>('#audit-fold')?.open;
+  el.innerHTML = html(`<details class="card fold" id="audit-fold"${open ? ' open' : ''}><summary><h2>Audit détaillé des données</h2> <span class="fold-sub">${esc(foldSub(r))}</span></summary>
     ${r ? reportHtml(r) : intro()}
     ${message ? alertHtml(message.ok ? 'info' : 'bad', esc(message.text), { role: 'status' }) : ''}
     <div class="controls">
       <button type="button" class="${r ? 'link' : 'primary'}" id="audit-open">${r ? 'Ouvrir un autre rapport' : 'Ouvrir le rapport…'}</button>
       <input type="file" id="audit-file" accept=".json,application/json" hidden>
       ${r ? '<button type="button" class="link" id="audit-forget">Oublier ce rapport</button>' : ''}
-    </div>`);
+    </div></details>`);
   // a hidden input behind a button: the file input's own box does not fit 360 px at 200 %
   el.querySelector('#audit-open')?.addEventListener('click', () => el.querySelector<HTMLInputElement>('#audit-file')?.click());
   el.querySelector<HTMLInputElement>('#audit-file')?.addEventListener('change', (e) => {
@@ -82,10 +90,7 @@ function intro(): string {
 function reportHtml(r: AuditReport): string {
   const s = auditSummary(r);
   const who = names();
-  const head = s.found.length
-    ? `${plural(s.defects, 'cas', 'cas')} impossible${s.defects > 1 ? 's' : ''}, ${plural(s.toCheck, 'cas', 'cas')} à vérifier`
-    : 'aucun défaut trouvé';
-  return `<p class="card-sub">Rapport du ${esc(dayShort(r.made, true))}${r.last ? `, données jusqu’au ${esc(dayShort(r.last, true))}` : ''} : <strong>${esc(head)}</strong>. Aucune donnée n’a été modifiée : l’audit ne fait que lire.</p>
+  return `<p class="card-sub">Rapport du ${esc(dayShort(r.made, true))}${r.last ? `, données jusqu’au ${esc(dayShort(r.last, true))}` : ''} : <strong>${esc(foldSub(r))}</strong>. Aucune donnée n’a été modifiée : l’audit ne fait que lire.</p>
     ${s.found.map((c) => checkHtml(r, c, who)).join('')}
     ${s.clean.length ? `<p class="hint muted">Rien trouvé : ${esc(s.clean.map((c) => c.title.toLowerCase()).join(' ; '))}.</p>` : ''}
     <details class="fold" id="audit-thresholds"><summary>Seuils utilisés${s.hypotheses ? ` (${s.hypotheses} à confirmer)` : ''}</summary>
