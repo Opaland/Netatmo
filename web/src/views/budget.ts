@@ -164,11 +164,13 @@ function gridCard(): string {
   const priceLine = (r: typeof g.prev) =>
     r.hc === r.hp ? `${num(r.hp, 4)} €/kWh` : `HC ${num(r.hc, 4)} · HP ${num(r.hp, 4)} €/kWh`;
   // #311 (constat C2): a tariff change is information, not an overconsumption: an « info » alert
-  const action = `<p><strong>${signedEur(imp.total)} par an</strong>${imp.pct !== null ? ` (${pct(imp.pct)})` : ''} pour votre consommation.</p>
+  // #554: « Comparer les offres » ends the sentence of the amount (it fits on its last line) instead
+  // of a row of its own: the alert keeps its two actions and is one line shorter on a phone
+  const action = `<p><strong>${signedEur(imp.total)} par an</strong>${imp.pct !== null ? ` (${pct(imp.pct)})` : ''} pour votre consommation. <a class="link" href="#outils-offres">Comparer les offres</a></p>
     <details class="table-details"><summary>Comment c'est calculé</summary>
       <p class="hint">Dont ${signedEur(imp.energy)} d'énergie et ${signedEur(imp.subscription)} d'abonnement. Les mêmes ${fmtKwh(kwh)} (chauffage + chauffe-eau, du ${longDate(from)} au ${longDate(last)}, avec leur répartition heures pleines / creuses) sont chiffrés à l'ancienne grille (${priceLine(g.prev)}, abonnement ${fmtEur(g.prev.fixedYear)} par an) puis à la nouvelle (${priceLine(g.next)}, abonnement ${fmtEur(g.next.fixedYear)} par an), pour ${c.kva} kVA. Source : grille publiée par la CRE (open data EDF). Le reste du logement n'est pas compté.</p>
     </details>
-    <p class="alert-actions"><a class="link" href="#outils-offres">Comparer les offres</a> <button type="button" class="link grid-seen" id="grid-seen">Masquer jusqu'au prochain tarif</button></p>`;
+    <p class="alert-actions"><button type="button" class="link grid-seen" id="grid-seen">Masquer jusqu'au prochain tarif</button></p>`;
   return `<div id="grid-card">${alert('info', `Nouveau tarif réglementé ${future ? 'à partir du' : 'depuis le'} ${longDate(g.next.from)}`, '', action)}</div>`;
 }
 

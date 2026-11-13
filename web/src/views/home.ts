@@ -376,7 +376,7 @@ function chartCard(records: DayRecord[], r: HomeRange): string {
     ])}
     <div class="chart home-chart" id="home-chart" role="img" aria-label="Consommation par mois et ${esc(TEMP.outdoor.toLowerCase())}"></div>
     ${tableToggle(table(['Mois', `${CATEGORY.heating} (kWh)`, `${CATEGORY.water} (kWh)`, 'Total (kWh)', `${TEMP.outdoor} (°C)`], rows))}
-    <p class="card-foot"><a class="link" href="#historique">Par jour, par semaine ou par pièce : Historique</a></p>
+    <p class="card-foot"><a class="link" href="#historique">Par jour, semaine ou pièce : Historique</a></p>
   </section>`;
 }
 
