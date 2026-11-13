@@ -4,6 +4,7 @@
 // to the button; each choice applies to all the charts at once and is kept on this device
 // (after a reload): « Comparer avec l'an dernier » removes « Un an plus tôt », « Un point sur
 // chaque valeur », « Afficher les valeurs ». #370: the control acted on stays where it was.
+// #600: a tooltip shown in a chart leaves no horizontal scroll at 360 px (WebKit).
 // Run after `npm run build`: node e2e/reglages.mjs (port: E2E_PORT; E2E_BROWSER=webkit|chromium).
 // Captures in e2e/screenshots/reglages-*.png.
 import { chromium, webkit } from 'playwright';
@@ -91,6 +92,28 @@ try {
       }),
     );
     check(folds.length > 0 && folds.every((v) => v >= 44), `200 % : titre de « Voir les valeurs » écrasé à côté du bouton (${folds.join(', ')} px)`);
+    await ctx.close();
+  }
+
+  // #600: a tooltip shown in the middle of a chart leaves no horizontal scroll (WebKit kept the
+  // overflow of an earlier place of the tooltip, moved by transform: 43 px here, 11 px in the sweep)
+  {
+    const ctx = await browser.newContext({ viewport: { width: 360, height: 800 } });
+    const page = await ctx.newPage();
+    await openDemo(page, base, null, 'historique');
+    const chart = page.locator('#cmp-chart');
+    await chart.locator('canvas').waitFor({ timeout: 15000 });
+    await chart.scrollIntoViewIfNeeded();
+    const box = await chart.boundingBox();
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+    // the tooltip is shown (else this check could not fail)
+    const shown = await page
+      .waitForFunction(() => [...document.querySelectorAll('#cmp-chart div')].some((d) => d.style.zIndex === '9999999' && d.style.display !== 'none' && d.textContent), null, { timeout: 5000 })
+      .then(() => true, () => false);
+    check(shown, 'Historique : la bulle du graphique de comparaison ne s’affiche pas au survol');
+    await frames(page);
+    const over = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
+    check(over <= 0, `Historique : la bulle du graphique laisse ${over} px de défilement en largeur`);
     await ctx.close();
   }
 

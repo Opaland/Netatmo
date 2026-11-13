@@ -1059,6 +1059,10 @@ details.fold[open] > summary {
 .chart {
   width: 100%;
   height: 300px;
+  /* #600: the tooltip is confined to its chart (charts.ts, confine), so nothing is ever drawn
+     outside it; WebKit kept the overflow of an earlier place of the tooltip (moved by transform)
+     and the page scrolled sideways by it. Clipped here, it no longer reaches the page. */
+  overflow: clip;
 }
 .chart.tall {
   height: 360px;

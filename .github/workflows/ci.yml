@@ -138,7 +138,8 @@ jobs:
           E2E_BROWSER: webkit
       # #595 : le balayage dans WebKit (A18 : un débordement propre à WebKit), portée réduite écrite
       # dans e2e/sweep.mjs (WEBKIT_SCOPE_RUNS × WEBKIT_SCOPE_DISPLAYS : la démo à 360 px et 200 %,
-      # trous-reels à 360 px), mêmes invariants et même auto-contrôle. Fixtures fictives dans dist/.
+      # trous-reels à 360 px, et l'explorateur de contrôles sur la démo à 360 px, #599, #600), mêmes
+      # invariants et même auto-contrôle. Fixtures fictives dans dist/.
       - uses: actions/setup-python@v7
         with:
           python-version: "3.12"

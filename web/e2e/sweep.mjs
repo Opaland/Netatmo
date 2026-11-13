@@ -24,7 +24,7 @@
 //
 // Run after `npm run build`: node e2e/sweep.mjs   (starts `vite preview` itself)
 //   E2E_BROWSER=webkit: the same sweep in WebKit (#595), by default in its reduced scope
-//     SWEEP_SCOPE=webkit (WEBKIT_SCOPE_RUNS × WEBKIT_SCOPE_DISPLAYS, no explorer)
+//     SWEEP_SCOPE=webkit (WEBKIT_SCOPE_RUNS × WEBKIT_SCOPE_DISPLAYS, and the explorer on the demo)
 //   SWEEP_SCOPE=ci (default in Chromium: every route on the plain demo in the four displays and in the
 //     explorer, the other fixtures at 360 px, the vue Proche at 360 px and text 200 %, #451) | full (every fixture × every display, axe and
 //     explorer everywhere: manual or nightly run)
@@ -57,7 +57,7 @@ const BROWSER = env.E2E_BROWSER === 'webkit' ? 'webkit' : 'chromium';
 const ENGINE = BROWSER === 'webkit' ? webkit : chromium;
 const SCOPE = env.SWEEP_SCOPE ?? (BROWSER === 'webkit' ? 'webkit' : 'ci');
 const WEBKIT_SCOPE = SCOPE === 'webkit';
-const EXPLORE = env.SWEEP_EXPLORE !== undefined ? env.SWEEP_EXPLORE !== '0' : !WEBKIT_SCOPE;
+const EXPLORE = env.SWEEP_EXPLORE !== '0';
 const WORKERS = Math.max(1, Number(env.SWEEP_WORKERS ?? Math.min(4, cpus().length)));
 const ROUTE_FILTER = env.SWEEP_ROUTES ? new RegExp(env.SWEEP_ROUTES) : null;
 const list = (v) => (v ? v.split(',').map((s) => s.trim()).filter(Boolean) : null);
@@ -133,11 +133,11 @@ const DISPLAYS = {
  * 200 %, in WebKit only) is swept: every route of the plain demo at 360 px and at text 200 %, axe
  * included, and the gaps of a real account (trous-reels, #570) at 360 px. Left to the Chromium
  * sweep, on purpose: 1280 px and dark (a wide screen and the colours do not depend on the engine's
- * layout of a phone), the other fixtures, and the control explorer: SWEEP_EXPLORE=1 runs it in
- * WebKit too (194 s instead of 52 s on a 4-core machine, 13/11/2026), and there it finds two
- * defects of WebKit alone, #599 (a select of ⚙ Objectifs sends the page up) and #600 (11 px of
- * horizontal scroll left by an old position of a chart tooltip): it joins this scope once they are
- * fixed. Not a hole in the page invariants: every one runs, on fewer cases.
+ * layout of a phone) and the other fixtures. The control explorer runs too, on the plain demo at
+ * 360 px (#599, #600: it found two defects of WebKit alone, a list of ⚙ Objectifs that sent the
+ * page up and a chart tooltip that left 11 px of horizontal scroll; 165 s instead of 66 s without
+ * it on a 4-core machine, 13/11/2026); SWEEP_EXPLORE=0 leaves it out. Not a hole in the page
+ * invariants: every one runs, on fewer cases.
  */
 const WEBKIT_SCOPE_RUNS = ['demo', 'trous-reels'];
 const WEBKIT_SCOPE_DISPLAYS = ['360', 'texte-200'];
