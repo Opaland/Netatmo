@@ -47,7 +47,10 @@ try {
   check(!/\+4\d\s?%/.test(y25.at(-1)), `Année par année : évolution 2025 « ${y25.at(-1)} » (la hausse d'un chauffe-eau non mesuré)`);
   const years = await text('#years-card');
   check(/Évolution de 2025 : hors Bureau \(ajouté le 20 oct\. 2025\) et Chauffe-eau \(sans relevé sur l’une des périodes comparées\)/.test(years), 'Année par année : 2025 ne nomme pas ce qui est laissé hors de l’évolution (ajouté, sans relevé)');
-  check(/Total de 2024 incomplet : 366 jours manquants/.test(years), 'Année par année : le total 2024 ne dit pas ses jours manquants');
+  // #580: one count of missing days for 2024 (45, the change's), the water heater named, not counted 366 days
+  check(/Total de 2024 incomplet : sans le chauffe-eau \(non mesuré\), et 45 jours manquants pour le chauffage/.test(years), `Année par année : le total 2024 ne dit pas ce qu’il compte (${years.match(/Total de 2024[^\n]*/)?.[0]})`);
+  check(/2024 compte 45 jours estimés ou manquants/.test(years), 'Année par année : l’évolution de 2025 ne compte plus 45 jours pour 2024');
+  check(!/366 jours manquants/.test(years), 'Année par année : « 366 jours manquants » pour une année dont le chauffe-eau est déjà « non mesuré »');
 
   // Rapport annuel 2025 and 2024
   await goto(page, 'rapport');
@@ -95,6 +98,8 @@ try {
   // Hiver contre hiver: the days missing of each winter are said under the change
   const winter = await text('.season-tiles + p');
   check(/2024–2025 : \d+ jours estimés ou manquants/.test(winter), `Hiver contre hiver : les manques de 2024–2025 ne sont pas dits (${winter})`);
+  // #580: the note follows a sentence ended by a period: it starts with a capital
+  check(/\. Hors Bureau \(ajouté le 20 oct\. 2025\)/.test(winter), `Hiver contre hiver : la note ne commence pas par une majuscule (${winter})`);
 
   // Expliquer janvier 2025: no « Eau chaude » part, the water heater's run said with its own end
   await goto(page, 'outils-expliquer');
