@@ -117,3 +117,33 @@ describe('S-1.10 suspect days', () => {
     expect(suspectDays(records, { weather: null, linky, estimated: new Set() })).toEqual([]);
   });
 });
+
+// #532: whatever the holes, a rebuilt value is only ever for a room-day without any value (lost),
+// never for an estimated or a measured one, and the measured total is never changed by it.
+describe('#532 reconstitution : jamais ajoutée à un jour réel ou estimé', () => {
+  it('rebuilds lost room-days only, the measured total untouched (fixed seed)', () => {
+    let seed = 532;
+    const rnd = () => ((seed = (Math.imul(seed, 1103515245) + 12345) >>> 0) / 2 ** 32);
+    let total = 0;
+    for (let round = 0; round < 30; round++) {
+      const recs: DayRecord[] = [];
+      const estimated = new Set<string>();
+      for (let i = 0; i < 90; i++) {
+        const day = addDays('2024-01-01', i);
+        for (const [room, cat] of [['a', 'heating'], ['b', 'heating'], ['w', 'water_heater']] as const) {
+          if (rnd() < 0.15) continue; // a hole
+          recs.push({ day, room, cat, kwh: 2 + rnd() * 8 });
+          if (rnd() < 0.05) estimated.add(`${room}|${day}`);
+        }
+      }
+      const linky = new Map(Array.from({ length: 90 }, (_, i) => [addDays('2024-01-01', i), 40 + rnd() * 10] as [string, number]));
+      const rebuilt = rebuildLost(recs, { weather: null, linky, estimated });
+      const has = new Set(recs.map((r) => `${r.room}|${r.day}`));
+      total += rebuilt.length;
+      for (const r of rebuilt) for (const room of [...r.rooms, ...r.byRoom.keys()]) expect(has.has(`${room}|${r.day}`)).toBe(false);
+      const measured = rebuildTotals(recs, rebuilt).reduce((a, y) => a + y.measured, 0);
+      expect(measured).toBeCloseTo(recs.reduce((a, r) => a + r.kwh, 0), 6);
+    }
+    expect(total).toBeGreaterThan(100); // the property is tried on many rebuilt days, not on none
+  });
+});
