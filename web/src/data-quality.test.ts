@@ -395,12 +395,24 @@ describe('#532 trous : cause et traitement par l’appli', () => {
   const lost = new Set(span('2024-03-10', '2024-03-20'));
   const skip = { a: lost, b: lost, c: lost, w: lost };
   const allDays = span('2024-01-01', '2024-12-31');
-  it('a collection that failed: still at Intuis, recoverable by a full collection', () => {
-    const failures = Object.fromEntries(span('2024-03-10', '2024-03-25').map((d) => [d, ['intuis']]));
-    const r = qualityReport(base(recs('2024-01-01', '2024-12-31', skip), { linky: new Map(allDays.map((d) => [d, 30])), devices: { failures } }));
-    const g = r.sources.find((s) => s.id === 'heating')!.gaps[0];
-    expect(g.cause).toBe('collecte Intuis en échec (16 nuits) : ces jours n’ont pas été redemandés à temps');
+  const heatingGap = (failures: Record<string, string[]>) =>
+    qualityReport(base(recs('2024-01-01', '2024-12-31', skip), { linky: new Map(allDays.map((d) => [d, 30])), devices: { failures } })).sources.find(
+      (s) => s.id === 'heating',
+    )!.gaps[0];
+  it('a collection that failed every night until the days left the window: still at Intuis', () => {
+    // each night asks for the last 35 days: from the 21st to 35 days after the gap, every night failed
+    const g = heatingGap(Object.fromEntries(span('2024-03-10', '2024-04-24').map((d) => [d, ['intuis']])));
+    expect(g.cause).toBe('collecte Intuis en échec (46 nuits) : ces jours n’ont pas été redemandés à temps');
     expect(g.recover).toMatch(/^Oui : Intuis garde l’historique/);
+  });
+  it('revue v2.2: a night that worked after the gap asked for its days again: the gap is Intuis’s', () => {
+    // 16 nights failed, then the night of the 26th worked and asked Intuis for the 35 days before it
+    const g = heatingGap(Object.fromEntries(span('2024-03-10', '2024-03-25').map((d) => [d, ['intuis']])));
+    expect(g.cause).toMatch(/historique Intuis n'a rien renvoyé/);
+    expect(g.recover).toMatch(/^Non chez Intuis/);
+    // one night of the window failed for Linky only: it asked Intuis
+    const one = { ...Object.fromEntries(span('2024-03-21', '2024-04-24').map((d) => [d, ['intuis']])), '2024-04-02': ['linky'] };
+    expect(heatingGap(one).recover).toMatch(/^Non chez Intuis/);
   });
   it('a collection that did not run: Linky and the station are silent too', () => {
     const linky = new Map(allDays.filter((d) => !lost.has(d)).map((d) => [d, 30]));

@@ -1,5 +1,50 @@
 # Historique des versions
 
+## v2.2 — novembre 2026 : audit des données (en cours)
+
+Toutes les données reprises et vérifiées : bonnes dates, bonnes valeurs, trous et chevauchements
+([feuille de route](docs/bmad/feuille-de-route.md), #532, demande du propriétaire du 12/11/2026), plus
+les finitions de la revue de fin de v2.1 (#541) et la préférence « tableaux ouverts » (#546). Revue de
+fin de version par les **72 personas**, revue design des écrans nouveaux ou changés et revue de code
+par agent : [`docs/bmad/revues/v2.2.md`](docs/bmad/revues/v2.2.md). Le premier rapport sur les vraies
+données est un geste du propriétaire ; les seuils marqués « hypothèse » s'y confirment (revue, § 9 et
+§ 10).
+
+- **Audit des données** (#532)
+  - Dates et chevauchements (#545) : `collector/audit.py`, lancé par le workflow **Diagnostic** (case
+    « Bilan qualité et audit des données »), lit toutes les séries datées sans aucun appel d'API ni
+    aucune écriture : dates impossibles, même instant écrit deux fois, jour rangé dans le fichier d'une
+    autre année ou dans deux fichiers, heure sautée au passage à l'heure d'été, heures décalées, Intuis
+    et Linky décalés, jour estimé qui a des heures mesurées, tarifs additionnés, même énergie mesurée
+    par deux sources. Le journal public ne montre que des nombres par contrôle et par mois ; le détail
+    est un artefact chiffré avec la clé des données (7 jours), ouvert dans État des données → Année par
+    année → « Audit détaillé des données », vérifié champ par champ et gardé scellé sur l'appareil.
+  - Un jour présent dans deux fichiers d'année n'est plus additionné par l'appli : une seule valeur,
+    celle du fichier de son année, pour l'énergie, les tarifs et les températures, comme le bilan
+    qualité (#545).
+  - Les valeurs (#547) : heures qui ne font pas le jour, radiateurs au-dessus du compteur, énergie
+    impossible, unité (mille fois trop petite ou trop grande), valeur figée, pic au-delà du maximum du
+    Linky, index du compteur qui recule ; chaque seuil nommé une fois, avec sa raison, « hypothèse »
+    quand il reste à confirmer.
+  - Les trous (#548) : deux causes de plus (collecte Intuis en échec, collecte arrêtée), qui rendent le
+    trou récupérable chez Intuis ; sous chaque trou, « Dans l'appli : … » dit ce qu'en fait l'appli ;
+    une propriété à graine fixe prouve qu'un jour reconstitué ne s'ajoute jamais à un jour mesuré.
+- **Finitions du plan de la maison** (#541, #544) : une seule règle pour couper un nom (entre
+  graphèmes, avec « … ») ; un plan trop grand pour un secret refusé avant tout envoi ; libellés de
+  taille à jour ; une pièce non liée nommée « Chambre … » dite « Chambres » en vue foyer ; les mots du
+  dessin au moins à la taille du plus petit texte et suivant le 200 % (les lettres des appareils
+  deviennent des points quand elles couvriraient les cases voisines), mesurés par le balayage ; la
+  liste des appareils repliée dans ⚙ Mon logement (8,4 → 7,8 écrans) ; une phrase quand des pièces ne
+  sont liées à aucune pièce Intuis.
+- **Préférence « tableaux ouverts »** (#546, #549) : seuls les replis « Voir les valeurs » la suivent ;
+  ouvrir « Comment c'est calculé » n'ouvre plus les tableaux des autres écrans. Le repli de délestage du
+  Compteur la suit désormais (décision du propriétaire à confirmer, revue § 10, D59).
+- **Revue de fin de version** (revue, § 6 et § 12) : un trou n'est plus dit « collecte Intuis en échec,
+  récupérable » quand une nuit réussie a redemandé ses jours ; la démo est cohérente avec l'audit (les
+  heures font le jour, plus d'heure sautée au printemps : 107 cas → 1) ; l'audit détaillé dit qu'il
+  vérifie aussi les valeurs ; README, SECURITY.md, PROJET.md et l'architecture à jour ; captures de
+  référence régénérées dans la police de la CI (DejaVu Sans).
+
 ## v2.1 — novembre 2026 : maison connectée
 
 Plan de la maison ([feuille de route](docs/bmad/feuille-de-route.md)), plus les finitions de la revue

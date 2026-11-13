@@ -382,8 +382,10 @@ des dates et des noms, que le journal public ne peut pas montrer. Chaque trou de
 
 - **sa cause probable**, de la plus sûre à la moins sûre : chauffe-eau réinstallé ; même trou que les
   radiateurs ; appareil injoignable (relevé de nuit des modules) ; coupure de courant (redémarrage de
-  la passerelle) ou d'Internet (journal des incidents) ; **collecte Intuis en échec** (nuits en échec
-  du journal des appareils, dans les 35 jours que chaque collecte redemande) ; **collecte arrêtée** (le
+  la passerelle) ou d'Internet (journal des incidents) ; **collecte Intuis en échec** (toutes les nuits
+  après le trou ont échoué, d'après le journal des appareils, jusqu'à ce que ses jours sortent des
+  35 jours que chaque collecte redemande : une seule nuit réussie entre-temps les a redemandés, et le
+  trou est alors chez Intuis ; revue de fin de v2.2) ; **collecte arrêtée** (le
   compteur Linky et la station manquent aussi ces jours-là) ; sinon, l'historique Intuis n'a rien
   renvoyé (ni les jours ni le total du mois). Une pièce **arrêtée volontairement** (⚙ Mon logement)
   n'a pas de trou : pas de données attendues ;

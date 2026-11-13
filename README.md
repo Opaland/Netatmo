@@ -615,6 +615,16 @@ chauffage est très en dessous de la signature par temps froid (moins de 35 %) a
 davantage. Les jours perdus ou estimés sont exclus des **Jours inhabituels** (et de la droite qui sert
 à les repérer) ; un jour très en dessous de la signature y porte la mention « suspect ».
 
+L'écran **État des données** dit, pour chaque trou de 3 jours ou plus, sa **cause probable**, s'il est
+**récupérable** et ce qu'en fait l'appli (un jour manquant reste vide : rien n'est ajouté aux totaux).
+L'**audit des données** (v2.2, #532) va plus loin : le workflow **Diagnostic** (case « Bilan qualité et
+audit des données ») contrôle toutes les séries datées (dates impossibles, heure du changement d'heure,
+jour rangé dans deux fichiers d'année, heures qui ne font pas le jour, valeurs impossibles, figées ou
+mille fois trop petites, pics au-delà du compteur, même énergie comptée par deux sources) ; le journal
+public n'en montre que des nombres par mois, le détail est un artefact **chiffré avec la clé des
+données**, à ouvrir dans État des données → Année par année → Audit détaillé. Mode d'emploi et seuils :
+[`docs/audit-donnees.md`](docs/audit-donnees.md) § 8 et § 9. L'audit ne réécrit rien.
+
 ## Utilisation en local (facultatif)
 
 ```bash
@@ -644,7 +654,7 @@ python -m collector discover
 | `python -m collector diagnose --status` | Seulement les noms des champs des pièces et modules de `homestatus` (fenêtre ouverte ?) |
 | `python -m collector diagnose --report` | **Rapport de compatibilité** anonyme (S-10.4) : types de module et de pièce, familles de mesure qui répondent, profondeur d'historique ; ni identifiant, ni nom, ni valeur. Avant d'installer, un foyer le colle dans une issue avec le gabarit « Compatibilité » |
 | `python -m collector diagnose --probe-history` | Types de mesure candidats pour un historique des fenêtres / du boost : accepté ou refusé, nombre de points (S-13.1) |
-| `python -m collector diagnose --qualite` | Bilan qualité de l'archive chiffrée (`DATA_PASSPHRASE`), par année et par mois : jours réels / estimés / manquants / suspects / arrêtés volontairement (chauffage en pièces-jours, chauffe-eau ; même règle que l'écran État des données), Linky jour, couverture des demi-heures (Linky, pièces) et du relevé horaire, jours de station par module, recoupement Linky / Intuis, plus long trou de l'année. Nombres seulement, aucune valeur ni nom (S-1.32). Workflow **Diagnostic**, case « Bilan qualité des données » |
+| `python -m collector diagnose --qualite` | Bilan qualité de l'archive chiffrée (`DATA_PASSPHRASE`), par année et par mois : jours réels / estimés / manquants / suspects / arrêtés volontairement (chauffage en pièces-jours, chauffe-eau ; même règle que l'écran État des données), Linky jour, couverture des demi-heures (Linky, pièces) et du relevé horaire, jours de station par module, recoupement Linky / Intuis, plus long trou de l'année ; puis l'**audit des données** (#532 : dates, changements d'heure, jours rangés deux fois, heures qui ne font pas le jour, valeurs impossibles ou figées, unités, pics, deux sources pour la même énergie), en nombre de cas par contrôle et par mois. Nombres seulement, aucune valeur ni nom (S-1.32). Avec `--rapport DOSSIER`, le détail (jours, valeurs) est écrit chiffré avec la clé des données (`audit-donnees.enc.json`), à ouvrir dans État des données. Workflow **Diagnostic**, case « Bilan qualité et audit des données » (le détail en artefact `audit-donnees`, 7 jours) ; mode d'emploi : [`docs/audit-donnees.md`](docs/audit-donnees.md) § 8 |
 | `python -m collector snapshot --out DOSSIER` | Un relevé chiffré de l'état des pièces (utilisé par le workflow « Relevé horaire ») |
 | `python -m collector restore-backup FICHIER [--dry-run]` | Restaure dans `data/` une sauvegarde chiffrée téléchargée depuis l'appli |
 | `python -m collector demo` | Régénère les données de démonstration |

@@ -37,7 +37,10 @@ signalement privé, et cité dans la PR du correctif si vous le souhaitez.
   Anthropic ; chiffrement avant commit ; journaux publics de GitHub Actions.
 - **Les workflows** (`.github/workflows/`) : permissions, secrets, déploiement Pages et attestation
   de provenance.
-- **Le chiffrement des données** (`data/*.enc.json`) : format d'enveloppe, dérivation de la clé.
+- **Le chiffrement des données** (`data/*.enc.json`) : format d'enveloppe, dérivation de la clé ;
+  et, depuis la v2.2, le **rapport d'audit des données** (`audit-donnees.enc.json`, #532) : écrit par le
+  workflow Diagnostic avec la même enveloppe et la même clé, gardé 7 jours comme artefact, ouvert dans
+  État des données puis gardé scellé sur l'appareil.
 - **La copie locale sur un NAS** (`scripts/nas/copie-locale/`) : script de synchronisation et
   serveur statique servis sur le réseau de la maison ; et les scripts d'installation
   (`scripts/depot_pret.py`, `scripts/donnees.sh`).
@@ -63,6 +66,11 @@ Chaque point est tenu par un test qui échoue s'il est cassé :
   les sources échouent — `tests/test_fuites.py` ; le plan de la maison n'est jamais cité, même
   invalide (le plan précédent est gardé) — `tests/test_plan_maison.py`. Un nom saisi dans le plan
   reste du texte partout où il est écrit (éditeur, dessin, Pièces → Plan) — `web/e2e/plan-edition.mjs`.
+- **Audit des données** (#532) : le journal public n'en montre que des nombres par contrôle et par
+  mois (ni valeur, ni nom, ni jour ; un fichier illisible est nommé avec l'année masquée) —
+  `tests/test_audit.py` (`test_public_log_has_counts_only`) ; le détail est chiffré avec la clé des
+  données — `test_detail_encrypted_with_the_data_key` ; l'appli le vérifie champ par champ avant de
+  l'afficher (entrée non sûre, fuzz) — `web/src/fuzz.test.ts`, `web/src/audit-report.test.ts`.
 - **IA** : pièces et capteurs envoyés sous pseudonyme, jamais leurs noms —
   `tests/test_collector.py` (`test_insights_never_send_room_or_module_names`) et, sur la démonstration
   complète, `tests/test_promesses.py` (ni nom, ni jour daté hors des cinq jours inhabituels au plus).

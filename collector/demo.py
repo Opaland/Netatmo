@@ -10,6 +10,7 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from . import room30
+from .audit import local_exists
 from .devices import collect_status
 from .homeassistant import import_bytes
 from .model import HEATING, WATER_HEATER
@@ -18,6 +19,7 @@ from .station import NOISY_ABOVE, aggregate_days, pressure_trends
 from .storage import KeyMap, Store
 from .stove import evening_from
 
+PARIS = ZoneInfo("Europe/Paris")
 ROOMS = [
     ("r-salon", "Salon", HEATING, 2.2, 20.0),
     ("r-cuisine", "Cuisine", HEATING, 1.0, 19.5),
@@ -193,6 +195,8 @@ def _station_hours(store: Store, rnd: random.Random, d: date, tmean: float, tmin
             "m2": [kids_t, 52 + KIDS_CO2[h] / 100 + rnd.gauss(0, 2), kids_co2],
             "m3": [11 + 0.35 * tmean + rnd.gauss(0, 0.15), cellar_hum + rnd.gauss(0, 1), 470 + rnd.gauss(0, 25)],
         }
+        if not local_exists(hour, PARIS):  # #532: skipped by the spring change (same draws above)
+            continue
         for key, (t, hum, co2) in rows.items():
             value = [round(t, 1), round(hum), None if co2 is None else round(co2)]
             store.put(f"{d.year}.station_h", "hourly", key, hour, value)
@@ -620,6 +624,19 @@ def stove_fires_of(store: Store, today: date) -> dict:
     return detect_fires(room30_of(store), candidates, outdoor, None, None, "Europe/Paris")
 
 
+def _keep_day(hp: list[float], hc: list[float], day_wh: float) -> None:
+    """#532: a fire evening stops the radiator for a few half hours, but the demo's day (and its
+    hours, tariffs, Linky) is drawn before the fires: the energy of the stopped half hours goes to
+    the other heated half hours of the day, so that they still add up to the day (as Intuis's do)."""
+    left = sum(hp) + sum(hc)
+    if left <= 0 or day_wh <= 0:
+        return
+    scale = day_wh / left
+    for col in (hp, hc):
+        for i, wh in enumerate(col):
+            col[i] = wh * scale
+
+
 def _room30(store: Store, today: date, office: dict[date, list[int]]) -> None:
     """S-1.26: six weeks of per-room half hours, consistent with the hourly energy of the demo:
     each hour split in two, HP / HC by the clock, a setpoint lowered by 2 °C at night, the measured
@@ -634,8 +651,11 @@ def _room30(store: Store, today: date, office: dict[date, list[int]]) -> None:
         for rid, _name, _cat, _w, setpoint in ROOMS:
             hours = store.doc(f"{d.year}.hourly").get("hourly", {}).get(rid, {})
             hp, hc = [0.0] * 48, [0.0] * 48
+            draws = [rnd.uniform(0.7, 1.3) for _ in range(48)]
             for i in range(48):
-                wh = hours.get(f"{day}T{i // 2:02d}", 0.0) / 2 * rnd.uniform(0.7, 1.3)
+                # #532: the two halves of an hour add up to the hour (same draws as before)
+                pair = draws[i - i % 2] + draws[i - i % 2 + 1]
+                wh = hours.get(f"{day}T{i // 2:02d}", 0.0) * draws[i] / pair
                 (hc if i in HC_SLOTS else hp)[i] = wh
             t: list[float | None] = [None] * 48
             sp: list[float | None] = [None] * 48
@@ -664,6 +684,7 @@ def _room30(store: Store, today: date, office: dict[date, list[int]]) -> None:
                     else:
                         cur += (sp[i] - cur) * inertia + noise
                     t[i] = cur
+            _keep_day(hp, hc, sum(hours.get(f"{day}T{h:02d}", 0.0) for h in range(24)))
             if not is_offline(rid, d):  # random draws above stay the same
                 room30.merge_day(store, rid, day, room30.to_days_from_columns(hp, hc, t, sp))
 
@@ -954,14 +975,18 @@ def generate(out_dir: Path, passphrase: str = "demo", start_year: int = 2022, to
             if d >= hourly_from and wh:
                 shape = WATER_SHAPE if cat == WATER_HEATER else HEAT_SHAPE
                 s = sum(shape)
-                for h, w in enumerate(shape):
-                    if w:
-                        key = f"{d.isoformat()}T{h:02d}"
-                        v = round(wh * w / s * rnd.uniform(0.8, 1.2), 1)
-                        if not is_offline(rid, d):  # the meter sees it, Intuis does not
-                            store.put(f"{d.year}.hourly", "hourly", rid, key, v)
-                        if seen:
-                            hours_wh[h] += v
+                drawn = {h: wh * w / s * rnd.uniform(0.8, 1.2) for h, w in enumerate(shape) if w}
+                # #532: the hours of a day add up to the day (as Intuis's do), and the hour skipped
+                # by the spring change does not exist; the same draws, the rest of the demo unchanged
+                drawn = {h: v for h, v in drawn.items() if local_exists(f"{d.isoformat()}T{h:02d}", PARIS)}
+                scale = wh / sum(drawn.values())
+                for h, raw in drawn.items():
+                    key = f"{d.isoformat()}T{h:02d}"
+                    v = round(raw * scale, 1)
+                    if not is_offline(rid, d):  # the meter sees it, Intuis does not
+                        store.put(f"{d.year}.hourly", "hourly", rid, key, v)
+                    if seen:
+                        hours_wh[h] += v
         ratio = heat_num / heat_den if heat_den else None
         store.put("weather", "wind", d.isoformat(), None, _wind_day(rnd_wind, d, tmean, ratio))
         if rnd_wind.random() < 0.45:

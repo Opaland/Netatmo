@@ -132,7 +132,7 @@ Décidée par le propriétaire en novembre 2026, à la fin de la v1.3. Détail d
 Pendant la v1.5 et la v1.6, les revues multi-personas continuent (cadrage et fin de version), mais leurs
 propositions de **nouvelles fonctions** vont au jalon suivant (v1.7 ou v2), pas à la version en cours.
 
-La suite (v1.8 à v2.1, jalon « Matériel (attend le propriétaire) ») et la **règle de passage d'une
+La suite (v1.8 à v2.2, jalon « Matériel (attend le propriétaire) ») et la **règle de passage d'une
 version à la suivante** (12/11/2026 : revue par les 72 personas et revue design obligatoires, défauts
 bloquants corrigés avant la clôture, version suivante sans validation explicite, choix de produit,
 design et architecture au propriétaire sans bloquer l'enchaînement) sont dans

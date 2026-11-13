@@ -59,11 +59,6 @@ export const MONTHS_SHORT = ['janv.', 'févr.', 'mars', 'avr.', 'mai', 'juin', '
 export const MONTHS_LONG = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
 export const CATEGORY_LABEL: Record<Category, string> = { heating: 'Chauffage', water_heater: 'Chauffe-eau', ignore: 'Ignoré' };
 
-/**
- * Flatten {year: {daily: {room: {day: Wh}}}} into kWh records. #532: a room-day found in two year
- * files is one record, never two added: the file of the day's own year wins, else the first read
- * (the rule of the collector, storage.py `own_year_first`; the data audit names such days).
- */
 /** #532: a day read from the file of `year`, when the day was already read from another file:
  * kept only when `year` is the day's own year (else the first read stays). One rule for every
  * section of the year files (energy, tariffs, temperatures), as the collector's own_year_first. */
@@ -78,6 +73,11 @@ export function mergeYear<V>(o: Record<string, Record<string, V>> | undefined, y
   }
 }
 
+/**
+ * Flatten {year: {daily: {room: {day: Wh}}}} into kWh records. #532: a room-day found in two year
+ * files is one record, never two added: the file of the day's own year wins, else the first read
+ * (the rule of the collector, storage.py `own_year_first`; the data audit names such days).
+ */
 export function toRecords(meta: Meta, years: Record<string, Record<string, Record<string, number>>>): DayRecord[] {
   const cat = new Map(meta.rooms.map((r) => [r.id, r.category] as const));
   const seen = new Map<string, DayRecord>();
