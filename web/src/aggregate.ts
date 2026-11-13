@@ -64,13 +64,26 @@ export const CATEGORY_LABEL: Record<Category, string> = { heating: 'Chauffage', 
  * section of the year files (energy, tariffs, temperatures), as the collector's own_year_first. */
 export const keepFromYear = (seen: boolean, day: string, year: string): boolean => !seen || day.slice(0, 4) === year;
 
-/** {room: {day: v}} of one year file into `into`, by keepFromYear. */
-export function mergeYear<V>(o: Record<string, Record<string, V>> | undefined, year: string, into: Map<string, Map<string, V>>): void {
+/** {room: {day: v}} of one year file into `into`, by keepFromYear. The keys may be days, hours or
+ * half hours ("YYYY-MM-DD…"): their first four characters are their year. `as` converts a value
+ * (Wh to kWh for the hours). #550: the fine series (hours, half hours, station, curve) too. */
+export function mergeYear<V, W = V>(
+  o: Record<string, Record<string, V>> | undefined,
+  year: string | number,
+  into: Map<string, Map<string, W>>,
+  as: (v: V) => W = (v) => v as unknown as W,
+): void {
   for (const [room, days] of Object.entries(o ?? {})) {
-    const m = into.get(room) ?? new Map<string, V>();
-    for (const [d, v] of Object.entries(days)) if (keepFromYear(m.has(d), d, year)) m.set(d, v);
+    const m = into.get(room) ?? new Map<string, W>();
+    mergeFlatYear(days, year, m, as);
     into.set(room, m);
   }
+}
+
+/** {key: v} of one year file into `into`, by keepFromYear (the Linky curve has no room level). */
+export function mergeFlatYear<V, W = V>(o: Record<string, V> | undefined, year: string | number, into: Map<string, W>, as: (v: V) => W = (v) => v as unknown as W): void {
+  const y = String(year);
+  for (const [k, v] of Object.entries(o ?? {})) if (keepFromYear(into.has(k), k, y)) into.set(k, as(v));
 }
 
 /**

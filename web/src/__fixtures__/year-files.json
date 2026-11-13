@@ -1,0 +1,12 @@
+{
+  "_doc": "#550: one rule for a day found in two year files, held by tests/test_deux_fichiers.py (collector/storage.py own_year_first) and web/src/aggregate.test.ts (keepFromYear, mergeYear, mergeFlatYear). Year files read in increasing order; the file of the day's own year wins, else the first read. Fictitious values.",
+  "docs": [
+    ["2023", { "r1": { "2023-12-31": 500 } }],
+    ["2024", { "r1": { "2023-12-31": 700, "2024-03-05": 1000, "2024-12-31": 3000, "2025-01-01": 1500 }, "r2": { "2022-06-01": 10 } }],
+    ["2025", { "r1": { "2024-03-05": 1234, "2025-01-01": 2000 }, "r2": { "2022-06-01": 20 } }]
+  ],
+  "expected": {
+    "r1": { "2023-12-31": 500, "2024-03-05": 1000, "2024-12-31": 3000, "2025-01-01": 2000 },
+    "r2": { "2022-06-01": 10 }
+  }
+}
