@@ -27,7 +27,7 @@ import {
 import { html } from '../trusted';
 import { activeRooms, downloadBlob, esc, fmt1 as num1, fmtKwh, lastDay, longDate, table } from '../ui';
 import { onCard } from '../events';
-import { switchField } from '../components';
+import { switchField, waiting } from '../components';
 
 const signed = (v: number) => `${v > 0 ? '+' : v < 0 ? '−' : ''}${num1(Math.abs(v))}`;
 /** Today in the device's time zone (the evening being noted). */
@@ -153,7 +153,7 @@ async function drawComparison() {
     out.innerHTML = html('<p class="hint muted">La comparaison demande les données horaires (prochaine collecte complète).</p>');
     return;
   }
-  out.innerHTML = html('<p class="hint muted">Chargement des données horaires…</p>');
+  out.innerHTML = html(waiting('des données horaires'));
   const d = ds;
   const weather = ds.weather;
   let hourly;

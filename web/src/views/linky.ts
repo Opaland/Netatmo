@@ -14,7 +14,7 @@ import { memo } from '../memo';
 import { type Coverage, coverage, coveredText, standbyYear } from '../meter';
 import { periodAt } from '../offers';
 import { term } from '../plain';
-import { countedNote, countedInner } from '../components';
+import { countedNote, countedInner, loadingText, statusLine } from '../components';
 import { html } from '../trusted';
 import { activeRooms, catColor, contracts, esc, flatPriceAt, fmtEur, longDate, measureColor, nf0 } from '../ui';
 
@@ -62,7 +62,7 @@ interface Loaded {
 function loaded(redraw: () => void): Loaded | string {
   const v = doc.get(ds, redraw);
   if (v) return wider ? { ...v, hourly: wider.hourly, since: wider.since } : v;
-  if (doc.status(ds) !== 'failed') return 'Chargement de la courbe de charge…';
+  if (doc.status(ds) !== 'failed') return loadingText('de la courbe de charge');
   return navigator.onLine ? 'Courbe de charge indisponible.' : 'Courbe de charge : disponible au prochain accès réseau.';
 }
 
@@ -98,7 +98,7 @@ export function renderStandby(zone: HTMLElement, r: Range) {
   const v = loaded(() => zone.isConnected && renderStandby(zone, r));
   const head = `<div class="card-head"><h2>Veille</h2></div>`;
   if (typeof v === 'string') {
-    zone.innerHTML = html`<section class="card">${head}<p class="hint muted">${v}</p></section>`;
+    zone.innerHTML = html`<section class="card">${head}${statusLine(v)}</section>`;
     return;
   }
   const cov = curveDays(v.curve, r);
@@ -125,7 +125,7 @@ export function renderStandby(zone: HTMLElement, r: Range) {
 export function renderTypical(zone: HTMLElement, r: Range) {
   const v = loaded(() => zone.isConnected && renderTypical(zone, r));
   if (typeof v === 'string') {
-    zone.innerHTML = html`<section class="card"><div class="card-head"><h2>Journée type</h2></div><p class="hint muted">${v}</p></section>`;
+    zone.innerHTML = html`<section class="card"><div class="card-head"><h2>Journée type</h2></div>${statusLine(v)}</section>`;
     return;
   }
   const c = v.curve;

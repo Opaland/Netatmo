@@ -1,6 +1,6 @@
 // Analyse: AI insight, energy signature, anomalies, calendar, hourly profile,
 // peak / off-peak split, Netatmo station and room temperatures.
-import { countedNote } from '../components';
+import { countedNote, statusLine, waiting } from '../components';
 import { type DayRecord, addDays, bucketLabel, minusYears, seasonOf } from '../aggregate';
 import { anomalies, dayProfile, daysAbove, weekHourGrid } from '../analysis';
 import { type CiFit, MIN_DAYS, type SeasonSignatures, seasonSignatures, signatureDays } from '../indoorsig';
@@ -167,7 +167,7 @@ export function renderAnalyse(view: HTMLElement, records: DayRecord[], part: Ana
       'compteur',
       () => `<section class="card" aria-labelledby="hourly-title">
     <div class="card-head"><h2 id="hourly-title">Par jour et par heure</h2></div>
-    <div id="hourly-zone"><p class="hint muted">${(ds!.meta.hourly_years ?? []).length ? 'Chargement des données horaires…' : 'Les données horaires arriveront avec la prochaine collecte complète.'}</p></div>
+    <div id="hourly-zone">${(ds!.meta.hourly_years ?? []).length ? waiting('des données horaires') : statusLine('Les données horaires arriveront avec la prochaine collecte complète.')}</div>
   </section>`,
     ],
     ['teletravail', () => '<div id="telework-zone"></div>'],

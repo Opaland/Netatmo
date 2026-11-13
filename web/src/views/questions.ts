@@ -6,6 +6,7 @@ import { BEDROOMS_ID } from '../household';
 import { QUESTIONS, type QuestionId, answer, answerableMonths, defaultMonth, monthLabel } from '../questions';
 import { activeRooms, costAvailable, costOf, esc, lastDay } from '../ui';
 import { html } from '../trusted';
+import { loadingText } from '../components';
 import { stoppedShown } from './offline-rooms';
 import { type Drops, type RoomState, bedroomGrouping } from '../windows';
 
@@ -48,7 +49,7 @@ export function mountQuestions(el: HTMLElement | null) {
   const waiting = question === 'cold' && ds.meta.has_roomstate && states.status(ds) === 'loading';
   const roomName = (id: string) => (id === BEDROOMS_ID ? 'Chambres (regroupées)' : (names.get(id) ?? 'pièce inconnue'));
   const res = waiting
-    ? { ok: true, lines: ['Chargement des relevés de l’état des pièces…'] }
+    ? { ok: true, lines: [loadingText('des relevés de l’état des pièces')] }
     : question
     ? answer(question, month, {
         records,

@@ -13,7 +13,7 @@ import { contracts, fmtEur, lastDay, longDate, nf0, offCol, table } from '../ui'
 import { html } from '../trusted';
 import '../simulators.css';
 import { lsKey } from '../scope';
-import { alertHtml } from '../components';
+import { alertHtml, statusLine, waiting } from '../components';
 import { offPeakSentence } from '../offpeak';
 import { offPeakNow } from './offpeak-state';
 
@@ -102,7 +102,7 @@ export function mountEv(view: HTMLElement) {
     // #428: the shared off-peak hours (read, typed or assumed)
     const hc = offPeakNow(() => card.isConnected && show());
     if (!hc) {
-      zoneHc.innerHTML = html('<p class="hint muted" role="status">Chargement des heures creuses…</p>');
+      zoneHc.innerHTML = html(waiting('des heures creuses'));
       return;
     }
     const plan = evPlan(v, hc.share);
@@ -169,9 +169,9 @@ function drawPeaks(zone: HTMLElement, plan: NonNullable<ReturnType<typeof evPlan
   const curve = curveDoc.get(ds, () => zone.isConnected && drawPeaks(zone, plan, hasCurve));
   if (!curve) {
     const failed = curveDoc.status(ds) === 'failed';
-    zone.innerHTML = html`<p class="hint muted">${
-      !failed ? 'Chargement de la courbe de charge…' : navigator.onLine ? 'Courbe de charge indisponible.' : 'Courbe de charge indisponible hors ligne.'
-    }</p>`;
+    zone.innerHTML = html(
+      !failed ? waiting('de la courbe de charge') : statusLine(navigator.onLine ? 'Courbe de charge indisponible.' : 'Courbe de charge indisponible hors ligne.'),
+    );
     return;
   }
   const end = lastCurveDay(curve);
