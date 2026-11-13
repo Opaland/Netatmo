@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { type SwContainer, type SwRegistration, cachesToClear, createUpdater } from './pwa';
+import { type SwContainer, type SwRegistration, cachesToClear, createUpdater, reloadApp } from './pwa';
 import { IOS_GESTURE, installState } from './install';
 import { MANIFEST, SHORTCUTS, THEME_COLOR } from './manifest';
 import { parseRoute } from './router';
@@ -165,6 +165,39 @@ describe('« Recharger l’application » ne touche qu’au code (#357)', () => 
     expect(out.some((n) => n.includes('Autre'))).toBe(false);
     // even a misconfiguration naming the data cache as the tariff one keeps it
     expect(cachesToClear(names, scope, 'energy-data@Netatmo', 'energy-data@Netatmo')).not.toContain('energy-data@Netatmo');
+  });
+  /** Runs reloadApp against fakes; `revived`: the browser revives the registration being removed (Chromium). */
+  async function reloadSteps(revived: boolean) {
+    const steps: string[] = [];
+    const scope = 'https://opaland.github.io/Netatmo/';
+    const reg = { scope, unregister: async () => (steps.push('unregister'), true) };
+    const worker = Object.assign(new EventTarget(), { state: 'installed' });
+    const next = revived ? { ...reg, installing: null, waiting: null } : { installing: worker, waiting: null };
+    vi.stubGlobal('navigator', {
+      onLine: true,
+      serviceWorker: { getRegistration: async () => reg, register: async (url: string) => (steps.push(`register ${url}`), next) },
+    });
+    vi.stubGlobal('caches', { keys: async () => [`workbox-precache-v2-${scope}`, 'energy-data'], delete: async (n: string) => (steps.push(`delete ${n}`), true) });
+    vi.stubGlobal('window', globalThis);
+    vi.stubGlobal('location', { reload: () => steps.push('reload') });
+    try {
+      const done = reloadApp();
+      await Promise.resolve();
+      await new Promise((r) => setTimeout(r, 0));
+      steps.push('—');
+      worker.state = 'activated';
+      worker.dispatchEvent(new Event('statechange'));
+      expect(await done).toBeNull();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+    return steps;
+  }
+  it('#604: registers the current version again and waits for it BEFORE the reload (WebKit empties the origin’s caches without one)', async () => {
+    expect(await reloadSteps(false)).toEqual(['delete workbox-precache-v2-https://opaland.github.io/Netatmo/', 'unregister', 'register sw.js', '—', 'reload']);
+  });
+  it('#604: a revived registration (Chromium) is removed again, then the page reloads', async () => {
+    expect(await reloadSteps(true)).toEqual(['delete workbox-precache-v2-https://opaland.github.io/Netatmo/', 'unregister', 'register sw.js', 'unregister', 'reload', '—']);
   });
   it('the card says what is kept', () => {
     const h = appCardHtml({ install: 'installed', persisted: true, offline: true });
