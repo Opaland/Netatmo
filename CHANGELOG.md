@@ -1,5 +1,35 @@
 # Historique des versions
 
+## v2.5 — novembre 2026 : ce que l'appli dit, exactement (en cours)
+
+Lancée par le propriétaire le 13/11/2026 (« Lance une 2.4 2.5 2.6 2.7 2.8 2.9 3.0 »), cadrée sur les
+constats mesurés encore ouverts des revues v2.3 et v2.4 ([cadrage](docs/bmad/revues/v2.5-cadrage.md)) :
+que chaque phrase de l'appli soit vraie et dite à qui doit l'entendre. Revue de fin de version par les
+**72 personas**, revue design des écrans changés et revue de code par agent :
+[`docs/bmad/revues/v2.5.md`](docs/bmad/revues/v2.5.md). Les formes retenues par les PR restent des
+propositions (revue, § 10 : D78 à D80) ; aucune donnée réelle lue ni réécrite.
+
+- **Attentes annoncées** (#579, #585) : « Chargement… » est écrit une fois et dit dans une ligne
+  `role="status"` ; une vue chargée à la demande est `aria-busy` jusqu'à son dessin ou son échec ; les
+  quatre recopies du chargement à la demande de `pages.ts` passent par `lazyView`. Par la revue : le
+  bilan d'État des données et les simulateurs solaire et thermodynamique ne restent plus « occupés »
+  une fois dessinés, et le balayage le vérifie sur toutes les routes.
+- **Année par année** (#580, #589) : un seul compte de jours manquants par année ; l'usage déjà « non
+  mesuré » dans sa colonne est nommé, pas recompté (« sans le chauffe-eau (non mesuré), et 45 jours
+  manquants pour le chauffage ») ; la note d'Hiver contre hiver commence par une majuscule.
+- **« Récupérable ? »** (#581, #587) : la méta chiffrée du rattrapage dit quelles pièces ont été
+  redemandées ; une pièce qu'Intuis ne liste plus n'hérite plus du « redemandé » d'une autre. Le
+  journal public reste par série et par mois.
+- **Courbe Linky** (#582, #586) : la collecte et le rattrapage marquent les jours lus en entier avec la
+  lecture 2026 (section `read` du fichier chiffré de la courbe, rien d'autre n'est réécrit) ; Journée
+  type ne dit plus « rangé avec l'ancienne lecture » qu'au conditionnel, pour un jour sans marque.
+- **Captures de référence** (#583, #588) : écrites dans `web/e2e/screenshots/` seulement dans la police
+  de la CI (DejaVu Sans), sinon dans `screenshots-poste/` (jamais commité), garde dans le processus qui
+  les écrit ; CONTRIBUTING dit comment régénérer et cite `e2e:trous`.
+- **Revue de fin de version** (revue, § 6 et § 12) : la correction `aria-busy` ci-dessus, avec un
+  invariant du balayage vu rouge ; captures de référence régénérées dans la police de la CI, acceptées
+  par la garde ; #576 fermée (ses six constats repris par le lot).
+
 ## v2.4 — novembre 2026 : données manquantes ou mal affichées
 
 Demande du propriétaire du 13/11/2026 (« traiter le problème de data manquantes ou mal affichées,

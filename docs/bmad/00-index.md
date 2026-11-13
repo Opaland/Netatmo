@@ -18,7 +18,7 @@ Ce dossier ajoute une revue par 72 personas pour mesurer les besoins avant de co
 |---|---|---|---|
 | 01 | [01-project-brief.md](01-project-brief.md) | Analyst | Problème, utilisateurs, objectifs, KPI, contraintes, risques |
 | 02 | [02-revue-50-personas.md](02-revue-50-personas.md) | Analyst / UX | 50 personas, verdicts, propositions, synthèse des 15 besoins, mesure du besoin domotique et IA ; § 12 : personas 51 à 62 ajoutés ; § 13 : personas 63 à 72 (fin de v1.6) |
-| — | [revues/](revues/) | Analyst / PO | Revue de cadrage et de fin de chaque version (v1.2, v1.3, v1.4, v1.5, v1.6, v1.7, v1.8, v1.9, v2.0, v2.1) |
+| — | [revues/](revues/) | Analyst / PO | Revue de cadrage et de fin de chaque version (v1.2 à v2.5) |
 | 03 | [03-prd.md](03-prd.md) | PM | Vision, personas retenus, exigences FR / NFR, hors périmètre, plan de versions |
 | 04 | [04-architecture.md](04-architecture.md) | Architect | Architecture actuelle, modèle de données chiffré, couche IA, pont local, ADR |
 | 05 | [05-epics-stories.md](05-epics-stories.md) | PO / SM | Épopées, récits utilisateur, critères d'acceptation, taille, priorité, statut |
@@ -50,7 +50,8 @@ Documents antérieurs, toujours valables : [README](../../README.md), [notes API
 | v2.2 : audit des données (dates, chevauchements, valeurs, trous et leur cause ; rapport chiffré lu dans État des données ; finitions du plan, préférence « tableaux ouverts ») | Livré et clos ([revue de fin](revues/v2.2.md), 55 👍 / 16 ➖ / 1 👎 ; revue de code § 12, PR #551) ; restent le premier rapport sur les vraies données et les seuils « hypothèse » (§ 9), les décisions (§ 10) |
 | v2.3 : fiabilité et suites des revues (marge de l'Historique et de l'Accueil, premier écran à 45 % du budget, hauteurs mesurées dans le dépôt, un jour dans deux fichiers lu une fois partout, unités et faux positifs de l'audit) | Livrée et close ([cadrage](revues/v2.3-cadrage.md), [revue de fin](revues/v2.3.md), 55 👍 / 16 ➖ / 1 👎 ; revue de code § 12, PR #565) ; restent les décisions (§ 10) et les preuves du propriétaire (§ 9) |
 | v2.4 : données manquantes ou mal affichées (pics impossibles du bilan réel, courbe Linky au format 2026, rattrapage sans écrasement, jamais 0 et « incomplet » face aux trous réels) | Livrée et close ([revue de fin](revues/v2.4.md), 55 👍 / 16 ➖ / 1 👎 ; revue de code § 12, PR #577) ; restent les gestes du propriétaire sur son compte (§ 9) et les décisions (§ 10) |
-| Après la v2.4, jalon « Matériel » | [Feuille de route](feuille-de-route.md) |
+| v2.5 : ce que l'appli dit, exactement (attentes annoncées au lecteur d'écran, un compte de jours manquants dans Année par année, « redemandé » par pièce, lecture de la courbe marquée par jour, captures seulement dans la police de la CI) | Livrée ([cadrage](revues/v2.5-cadrage.md), [revue de fin](revues/v2.5.md), 55 👍 / 16 ➖ / 1 👎 ; revue de code § 12) ; clôture après la PR de la revue ; restent les gestes du propriétaire (revue v2.4 § 9, revue v2.5 § 9) et les décisions (§ 10) |
+| Après la v2.5, jalon « Matériel » | [Feuille de route](feuille-de-route.md) |
 
 ## Conventions
 

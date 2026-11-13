@@ -15,7 +15,7 @@
 //     no control under --target-min (#405), no button outside the components (#402), one h1
 //     per screen, the page title, no h2 larger than it (#403);
 //   - axe: no serious or critical violation (WCAG 2.1 AA);
-//   - the view becomes ready (#view[data-ready], #260).
+//   - the view becomes ready (#view[data-ready], #260), and nothing in it stays aria-busy (#579).
 // Then a control explorer: on each page, every checkbox, switch, segment, radio, chip and select
 // is operated one by one, then every group all on / all off, and the invariants are checked
 // again, plus « a table or a chart that was there did not vanish » (the bug « 5 jours cochés →
@@ -459,6 +459,13 @@ function pageChecks() {
       (el) => visible(el) && ((scrolls(el) && el.scrollWidth > el.clientWidth + 1) || el.getBoundingClientRect().right > right + 1),
     );
     if (hidden.length) out.push({ kind: 'colonne-cachee', detail: `${whole.id || '(sans id)'} : ${path(hidden[0])}`, quiet: `${whole.id || '(sans id)'} : ${path(hidden[0])}` });
+  }
+  // #579 (revue v2.5): once the view is ready, nothing in it is still declared busy. A screen reader
+  // may hold back what a zone aria-busy="true" holds; the State page, the solar and water heater
+  // simulators kept it after being drawn, and the e2e of #585 looked at one zone only.
+  for (const busy of document.querySelectorAll('#view[aria-busy="true"], #view [aria-busy="true"]')) {
+    // quiet: the path by the app's own classes only (an id may be made of data on real data)
+    out.push({ kind: 'attente-restee', detail: busy.id ? `#${busy.id}` : path(busy), quiet: path(busy) || busy.tagName.toLowerCase() });
   }
   return out;
 }
@@ -910,12 +917,15 @@ async function selfTest(browser, run, display) {
       Object.assign(scroller.firstChild.style, { display: 'inline-block', width: '1200px' });
       whole.append(scroller);
       view.append(whole);
+      // #579: and a zone left busy once the view is ready (an id of « data »: never quiet)
+      view.append(Object.assign(document.createElement('div'), { id: 'secret-attente-42', textContent: 'x' }));
+      document.getElementById('secret-attente-42').setAttribute('aria-busy', 'true');
     });
     const found = await s.page.evaluate(pageChecks);
     const kinds = found.map((f) => f.kind);
-    const missing = ['texte-interdit', 'carte-vide', 'defilement-horizontal', 'textes-recouverts', 'texte-coupe', 'mot-coupe', 'etiquettes-axe-en-double', 'etiquettes-axe-recouvertes', 'legende-coupee', 'colonne-cachee', 'titre-axe-coupe', 'texte-dessin-trop-petit'].filter((k) => !kinds.includes(k));
+    const missing = ['texte-interdit', 'carte-vide', 'defilement-horizontal', 'textes-recouverts', 'texte-coupe', 'mot-coupe', 'etiquettes-axe-en-double', 'etiquettes-axe-recouvertes', 'legende-coupee', 'colonne-cachee', 'titre-axe-coupe', 'texte-dessin-trop-petit', 'attente-restee'].filter((k) => !kinds.includes(k));
     if (kinds.filter((k) => k === 'mot-coupe').length < 2) missing.push('mot-coupe (césure par trait, #434)');
-    if (found.some((f) => /recouver|coupe/.test(f.kind) && /secret|Salon/i.test(f.quiet ?? ''))) throw new Error('auto-contrôle : le diagnostic discret d’un texte recouvert ou coupé cite un contenu');
+    if (found.some((f) => /recouver|coupe|attente/.test(f.kind) && /secret|Salon/i.test(f.quiet ?? ''))) throw new Error('auto-contrôle : le diagnostic discret d’un texte recouvert ou coupé cite un contenu');
     if (missing.length) throw new Error(`auto-contrôle : invariants muets (${missing.join(', ')})`);
     const quiet = found.find((f) => f.kind === 'defilement-horizontal').quiet ?? '';
     if (!/^\d+ px : div\.card > span/.test(quiet) || !quiet.includes('texte trop long dans : p.hint') || /secret/i.test(quiet))
@@ -998,7 +1008,7 @@ try {
     const browser = await chromium.launch();
     try {
       await selfTest(browser, runs[0], displays[0]);
-      console.log('Auto-contrôle : les invariants voient un « NaN », une carte vide, un débordement, deux textes l’un sur l’autre, un texte coupé par sa carte, un mot coupé en son milieu ou par un trait de césure, un axe aux étiquettes en double, des noms d’axe l’un sur l’autre, une légende coupée et un mot trop petit dans un dessin ; le diagnostic discret ne cite aucun contenu.');
+      console.log('Auto-contrôle : les invariants voient un « NaN », une carte vide, un débordement, deux textes l’un sur l’autre, un texte coupé par sa carte, un mot coupé en son milieu ou par un trait de césure, un axe aux étiquettes en double, des noms d’axe l’un sur l’autre, une légende coupée, un mot trop petit dans un dessin et une zone restée « occupée » (aria-busy) ; le diagnostic discret ne cite aucun contenu.');
     } finally {
       await browser.close();
     }

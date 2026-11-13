@@ -120,6 +120,7 @@ export function mountEtat(el: HTMLElement | null) {
       <div id="audit-card"><details class="fold"><summary><h3>Audit détaillé des données</h3> <span class="fold-sub">chargement…</span></summary></details></div>
     </details>
     ${incidentsCard(rawDataset() ?? ds!, stoppedRooms(), SOURCE_NAME)}`;
+  el.removeAttribute('aria-busy'); // #579: the report (pages.ts #etat-bilan) is drawn; its late parts say their own wait
   void fine(i);
   // #532: the detailed audit (a report made by the workflow Diagnostic), loaded on demand, folded inside
   // « Année par année » (État des données holds in 4 screens, #387: no height of its own while closed)
