@@ -5,7 +5,7 @@
 // and the car, then with a 5 or 10 kWh battery. Every price, cost and efficiency is typed by the
 // owner and recalled under the result: nothing is assumed by the code.
 import { datasetDoc, ds, onLock } from '../app';
-import { alert, alertHtml, list } from '../components';
+import { alert, alertHtml, list, statusLine, waiting as waitingLine } from '../components';
 import { lastCurveDay } from '../curve';
 import { loadCurve, loadSolarDoc } from '../data';
 import { loadNote, saveNote } from '../local-store';
@@ -138,7 +138,7 @@ function draw(view: HTMLElement, d: NonNullable<typeof ds>) {
   const curve = curveDoc.get(d, () => view.isConnected && draw(view, d));
   if (!curve || waiting) {
     const failed = curveDoc.status(d) === 'failed';
-    zone.innerHTML = html(`<p class="hint muted" role="status">${failed ? (navigator.onLine ? 'Courbe de charge indisponible.' : 'Courbe de charge indisponible hors ligne.') : 'Chargement de la courbe de charge et du profil…'}</p>`);
+    zone.innerHTML = html(failed ? statusLine(navigator.onLine ? 'Courbe de charge indisponible.' : 'Courbe de charge indisponible hors ligne.') : waitingLine('de la courbe de charge et du profil'));
     return;
   }
   if (!lastCurveDay(curve)) {
