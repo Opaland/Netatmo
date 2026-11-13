@@ -184,8 +184,10 @@ def _price_at(contract: list[dict], day: str) -> tuple[float, float, float] | No
 def _energy_cost(store: Store, rooms: dict, contract: list[dict], first: str, last: str) -> float | None:
     """Energy cost (€, subscription excluded) of the rooms over [first, last], as the app
     computes it: tariff detail when known, else the room's usual off-peak share."""
-    years = sorted({int(first[:4]), int(last[:4])})
-    tariffs = [store.doc(str(y)).get("tariffs", {}) for y in years]
+    # #550: the year files read as the app reads them (a day in two files once, its own year's value)
+    years = [str(y) for y in range(int(first[:4]), int(last[:4]) + 1)]
+    merged = store.section("tariffs")
+    tariffs = [{rid: {d: v for d, v in days.items() if d[:4] == y} for rid, days in merged.items()} for y in years]
     water = {rid for rid, r in rooms.items() if r["category"] == "water_heater"}
     c1 = c2 = 0.0
     for t in tariffs:
@@ -205,23 +207,22 @@ def _energy_cost(store: Store, rooms: dict, contract: list[dict], first: str, la
             all_off, all_tot = all_off + o, all_tot + tot
     overall = all_off / all_tot if all_tot else 0.3
     cost, priced = 0.0, False
-    for y, t in zip(years, tariffs, strict=True):
-        for rid, days in store.year(y).items():
-            if rid not in rooms:
+    for rid, days in store.daily().items():
+        if rid not in rooms:
+            continue
+        for d, wh in days.items():
+            if not first <= d <= last:
                 continue
-            for d, wh in days.items():
-                if not first <= d <= last:
-                    continue
-                p = _price_at(contract, d)
-                if not p:
-                    continue
-                priced = True
-                v = t.get(rid, {}).get(d)
-                if v and v[1] + v[2] > 0:
-                    cost += (v[off] * p[1] + (v[on] + v[0]) * p[2]) / 1000
-                else:
-                    s = shares.get(rid, overall)
-                    cost += wh / 1000 * (s * p[1] + (1 - s) * p[2])
+            p = _price_at(contract, d)
+            if not p:
+                continue
+            priced = True
+            v = merged.get(rid, {}).get(d)
+            if v and v[1] + v[2] > 0:
+                cost += (v[off] * p[1] + (v[on] + v[0]) * p[2]) / 1000
+            else:
+                s = shares.get(rid, overall)
+                cost += wh / 1000 * (s * p[1] + (1 - s) * p[2])
     return cost if priced else None
 
 
@@ -238,13 +239,12 @@ def _unusual_days(store: Store, rooms: dict, weather: dict, first: str, last: st
     s0 = y if m >= 9 else y - 1
     a, b = f"{s0}-09-01", f"{s0 + 1}-08-31"
     heat: dict[str, float] = {}
-    for yy in (s0, s0 + 1):
-        for rid, days in store.year(yy).items():
-            if rooms.get(rid, {}).get("category") != "heating":
-                continue
-            for d, wh in days.items():
-                if a <= d <= b:
-                    heat[d] = heat.get(d, 0) + wh / 1000
+    for rid, days in store.daily().items():  # #550: as the app reads the year files
+        if rooms.get(rid, {}).get("category") != "heating":
+            continue
+        for d, wh in days.items():
+            if a <= d <= b:
+                heat[d] = heat.get(d, 0) + wh / 1000
     pts = [(weather[d][2], k, d) for d, k in heat.items() if d in weather and weather[d][2] < 15 and k > 0.2]
     n = len(pts)
     if n < 10:
@@ -366,18 +366,19 @@ def compute_facts(store: Store, month: str) -> dict:
     first, last = _month_bounds(month)
     pfirst, plast = _minus_year(first), _minus_year(last)
 
+    daily = store.daily()  # #550: a day in two year files once, as the app reads it
+
     def sums(a: str, b: str) -> tuple[dict[str, float], dict[str, float]]:
         per_room: dict[str, float] = {}
         per_cat: dict[str, float] = {}
-        for y in {int(a[:4]), int(b[:4])}:
-            for rid, days in store.year(y).items():
-                if rid not in rooms:
-                    continue
-                v = sum(wh for d, wh in days.items() if a <= d <= b) / 1000
-                if v:
-                    per_room[rid] = per_room.get(rid, 0) + v
-                    cat = rooms[rid]["category"]
-                    per_cat[cat] = per_cat.get(cat, 0) + v
+        for rid, days in daily.items():
+            if rid not in rooms:
+                continue
+            v = sum(wh for d, wh in days.items() if a <= d <= b) / 1000
+            if v:
+                per_room[rid] = per_room.get(rid, 0) + v
+                cat = rooms[rid]["category"]
+                per_cat[cat] = per_cat.get(cat, 0) + v
         return per_room, per_cat
 
     now_r, now_c = sums(first, last)

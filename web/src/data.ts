@@ -1,6 +1,6 @@
 // Fetching the encrypted files and remembering the derived key on this device.
 
-import { type DayRecord, type Meta, mergeYear, toRecords } from './aggregate';
+import { type DayRecord, type Meta, mergeFlatYear, mergeYear, toRecords } from './aggregate';
 import { loadOffers, loadTempo } from './offers';
 import { type Hourly, type TariffMap, type TempoRow, type TrveRow, type Weather, parseTrveCsv } from './analysis';
 import type { ShellyDoc } from './breakdown';
@@ -301,13 +301,8 @@ async function fetchHourly(ds: Dataset, years: number[]): Promise<Hourly> {
   const docs = await Promise.all(
     years.map((y) => optional<{ hourly?: Record<string, Record<string, number>> }>(ds.source, `${y}.hourly`, ds.key)),
   );
-  for (const doc of docs) {
-    for (const [room, hours] of Object.entries(doc?.hourly ?? {})) {
-      const m = out.get(room) ?? new Map<string, number>();
-      for (const [h, wh] of Object.entries(hours)) m.set(h, wh / 1000);
-      out.set(room, m);
-    }
-  }
+  // #550: an hour in two year files: the value of the file of its own year (mergeYear)
+  docs.forEach((doc, i) => mergeYear(doc?.hourly, years[i], out, (wh: number) => wh / 1000));
   return out;
 }
 
@@ -339,18 +334,11 @@ export function loadStationHourly(ds: Dataset): Promise<StationHourly> {
 
 async function fetchStationHourly(ds: Dataset): Promise<StationHourly> {
   const out: StationHourly = new Map();
+  const years = ds.meta.station_hourly_years ?? [];
   const docs = await Promise.all(
-    (ds.meta.station_hourly_years ?? []).map((y) =>
-      optional<{ hourly?: Record<string, Record<string, [number | null, number | null, number | null]>> }>(ds.source, `${y}.station_h`, ds.key),
-    ),
+    years.map((y) => optional<{ hourly?: Record<string, Record<string, [number | null, number | null, number | null]>> }>(ds.source, `${y}.station_h`, ds.key)),
   );
-  for (const doc of docs) {
-    for (const [mod, hours] of Object.entries(doc?.hourly ?? {})) {
-      const m = out.get(mod) ?? new Map();
-      for (const [h, v] of Object.entries(hours)) m.set(h, v);
-      out.set(mod, m);
-    }
-  }
+  docs.forEach((doc, i) => mergeYear(doc?.hourly, years[i], out)); // #550: as the energy
   return out;
 }
 
@@ -384,7 +372,7 @@ async function fetchCurve(ds: Dataset): Promise<Map<string, number>> {
   const years = (ds.meta as Meta & { linky_curve_years?: number[] }).linky_curve_years ?? [];
   const docs = await Promise.all(years.map((y) => optional<{ curve?: Record<string, number> }>(ds.source, `${y}.linky30`, ds.key)));
   const out = new Map<string, number>();
-  for (const doc of docs) for (const [k, wh] of Object.entries(doc?.curve ?? {})) out.set(k, wh);
+  docs.forEach((doc, i) => mergeFlatYear(doc?.curve, years[i], out)); // #550: as the energy
   return out;
 }
 
@@ -405,7 +393,7 @@ export function loadRoom30(ds: Dataset, since?: string): Promise<Room30> {
   }
   return once(caches.room30, ds, years.join(','), async () => {
     const docs = await Promise.all(years.map((y) => optional<Room30Doc>(ds.source, `${y}.room30`, ds.key)));
-    return (await import('./room30')).mergeDocs(docs);
+    return (await import('./room30')).mergeDocs(docs, years);
   });
 }
 

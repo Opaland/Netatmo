@@ -22,9 +22,16 @@ describe('room30 (S-1.26)', () => {
   });
 
   it('merges the yearly documents', () => {
-    const r = mergeDocs([{ rooms: { a: { '2025-12-31': day() } } }, null, { rooms: { a: { '2026-01-01': day() }, b: { '2026-01-01': day() } } }]);
+    const r = mergeDocs([{ rooms: { a: { '2025-12-31': day() } } }, null, { rooms: { a: { '2026-01-01': day() }, b: { '2026-01-01': day() } } }], [2025, 2026, 2027]);
     expect([...r.get('a')!.keys()]).toEqual(['2025-12-31', '2026-01-01']);
     expect(r.has('b')).toBe(true);
+  });
+
+  it("keeps the half hours of the file of the day's own year (#550)", () => {
+    const own: Day30 = [100, 0, 19, 19];
+    const other: Day30 = [900, 0, 25, 25];
+    const r = mergeDocs([{ rooms: { a: { '2025-12-31': own } } }, { rooms: { a: { '2025-12-31': other } } }], [2025, 2026]);
+    expect(r.get('a')!.get('2025-12-31')).toEqual(own);
   });
 
   it('rebuilds hourly kWh, merged like the household view', () => {

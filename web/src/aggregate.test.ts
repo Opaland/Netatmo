@@ -10,6 +10,7 @@ import {
   monthlyByYear,
   seasonOf,
   toCsv,
+  mergeFlatYear,
   mergeYear,
   toRecords,
   weekStart,
@@ -17,6 +18,7 @@ import {
 import { BadEnvelope, checkEnvelope, decryptEnvelope, deriveKey } from './crypto';
 import vector from './__fixtures__/python-vector.json';
 import padded from './__fixtures__/python-vector-padded.json';
+import yearFiles from './__fixtures__/year-files.json';
 
 const rec = (day: string, kwh: number, room = 'a', cat: DayRecord['cat'] = 'heating'): DayRecord => ({ day, room, cat, kwh });
 
@@ -64,6 +66,21 @@ describe('a day in two year files (#532)', () => {
     mergeYear({ r1: { '2024-12-31': 9 } }, '2025', back);
     mergeYear({ r1: { '2024-12-31': 3 } }, '2024', back);
     expect(back.get('r1')!.get('2024-12-31')).toBe(3);
+  });
+
+  it('keeps the same value as the collector (vector shared with tests/test_deux_fichiers.py, #550)', () => {
+    const docs = yearFiles.docs as [string, Record<string, Record<string, number>>][];
+    const into = new Map<string, Map<string, number>>();
+    for (const [year, daily] of docs) mergeYear(daily, year, into);
+    const got = Object.fromEntries([...into].map(([room, m]) => [room, Object.fromEntries(m)]));
+    expect(got).toEqual(yearFiles.expected);
+    // the energy (toRecords) and the series without a room level (the Linky curve) too
+    const recs = toRecords({ rooms: [] } as unknown as Meta, Object.fromEntries(docs));
+    const want = Object.entries(yearFiles.expected).flatMap(([room, days]) => Object.entries(days as Record<string, number>).map(([d, wh]) => `${room} ${d} ${wh}`));
+    expect(recs.map((r) => `${r.room} ${r.day} ${Math.round(r.kwh * 1000)}`).sort()).toEqual(want.sort());
+    const flat = new Map<string, number>();
+    for (const [year, daily] of docs) mergeFlatYear(daily.r1, year, flat, (wh) => wh / 1000);
+    expect(Object.fromEntries([...flat].map(([k, v]) => [k, Math.round(v * 1000)]))).toEqual(yearFiles.expected.r1);
   });
 });
 
