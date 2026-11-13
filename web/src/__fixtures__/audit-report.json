@@ -146,6 +146,83 @@
     "2024-03": 1
    },
    "shown": 1
+  },
+  {
+   "code": "somme-jour",
+   "group": "valeurs",
+   "title": "Heures qui ne font pas le jour",
+   "what": "les heures (ou demi-heures) complètes du jour ne retrouvent pas le total du jour, au-delà de la tolérance",
+   "app": "le total du jour fait foi ; la courbe heure par heure de ce jour ne le retrouve pas",
+   "level": "defaut",
+   "count": 0,
+   "months": {},
+   "shown": 0
+  },
+  {
+   "code": "pieces-sur-linky",
+   "group": "valeurs",
+   "title": "Radiateurs au-dessus du compteur",
+   "what": "les relevés Intuis du jour dépassent ce que le compteur Linky a compté pour toute la maison",
+   "app": "le jour est compté tel quel ; le bilan le compte « Intuis > Linky »",
+   "level": "defaut",
+   "count": 0,
+   "months": {},
+   "shown": 0
+  },
+  {
+   "code": "valeur-impossible",
+   "group": "valeurs",
+   "title": "Énergie impossible",
+   "what": "une énergie négative, qui n'est pas un nombre, ou une pièce au-delà de ce qu'elle peut consommer en un jour",
+   "app": "le jour est compté et marqué « suspect » dans le bilan",
+   "level": "defaut",
+   "count": 0,
+   "months": {},
+   "shown": 0
+  },
+  {
+   "code": "unite",
+   "group": "valeurs",
+   "title": "Énergie mille fois trop petite ou trop grande",
+   "what": "des jours mille fois plus petits ou plus grands que les jours voisins : kWh rangés comme des Wh, ou l'inverse (ou un appareil éteint une semaine et plus)",
+   "app": "la valeur est comptée telle quelle : elle fausse le total",
+   "level": "a-verifier",
+   "count": 0,
+   "months": {},
+   "shown": 0
+  },
+  {
+   "code": "valeur-figee",
+   "group": "valeurs",
+   "title": "Valeur figée",
+   "what": "la même valeur non nulle revient plusieurs jours de suite : capteur ou relevé figé ?",
+   "app": "les jours sont comptés tels quels",
+   "level": "a-verifier",
+   "count": 0,
+   "months": {},
+   "shown": 0
+  },
+  {
+   "code": "pic-impossible",
+   "group": "valeurs",
+   "title": "Pic impossible pour la puissance",
+   "what": "l'énergie d'une heure ou d'une demi-heure demande plus de puissance que le maximum du compteur ce jour-là (ou que le plus gros abonnement d'une maison, sans relevé du maximum)",
+   "app": "la valeur est comptée telle quelle",
+   "level": "defaut",
+   "count": 0,
+   "months": {},
+   "shown": 0
+  },
+  {
+   "code": "compteur-recule",
+   "group": "valeurs",
+   "title": "Index du compteur qui recule",
+   "what": "l'index du compteur Linky d'un jour est plus bas que celui de la veille",
+   "app": "la consommation déduite des index devient négative ce jour-là",
+   "level": "defaut",
+   "count": 0,
+   "months": {},
+   "shown": 0
   }
  ],
  "thresholds": [
@@ -203,6 +280,41 @@
    "value": 14,
    "unit": "jours",
    "why": "jours communs (les deux sources au-dessus de l'écart absolu) avant de dire que deux sources mesurent la même chose",
+   "hypothesis": true
+  },
+  {
+   "name": "facteur_unite",
+   "value": 300,
+   "unit": "×",
+   "why": "écart aux jours voisins (médiane de 15 jours de part et d'autre) qui dit une erreur d'unité : un facteur 1 000 (Wh / kWh) moins la variation ordinaire d'un jour à l'autre",
+   "hypothesis": true
+  },
+  {
+   "name": "jours_unite",
+   "value": 7,
+   "unit": "jours",
+   "why": "jours de suite mille fois trop petits avant de parler d'unité : un appareil éteint quelques jours (veille de 1 à 3 Wh) donne le même rapport ; une erreur d'unité dure",
+   "hypothesis": true
+  },
+  {
+   "name": "jours_figes",
+   "value": 5,
+   "unit": "jours",
+   "why": "jours de suite à la même valeur non nulle avant de parler de valeur figée",
+   "hypothesis": true
+  },
+  {
+   "name": "puissance_max",
+   "value": 36,
+   "unit": "kVA",
+   "why": "le plus gros raccordement d'une maison au tarif bleu ; plafond quand le Linky ne donne pas le maximum du jour (une moyenne sur une heure ne peut pas dépasser le maximum atteint)",
+   "hypothesis": false
+  },
+  {
+   "name": "suspect_jour",
+   "value": 80.0,
+   "unit": "kWh",
+   "why": "énergie d'une pièce en un jour au-delà de laquelle elle est impossible (3,3 kW pendant 24 h ; bilan qualité, quality.py)",
    "hypothesis": true
   },
   {
