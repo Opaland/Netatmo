@@ -1,6 +1,6 @@
 # Historique des versions
 
-## v2.3 — novembre 2026 : fiabilité et suites des revues (en cours)
+## v2.3 — novembre 2026 : fiabilité et suites des revues
 
 Les dettes mesurées par les revues de fin de v2.0 à v2.2 et les suites de la revue v2.2
 ([cadrage](docs/bmad/revues/v2.3-cadrage.md), version lancée par le propriétaire le 13/11/2026) :
