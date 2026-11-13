@@ -33,13 +33,11 @@
 //     each line says « page X : OK » or « page X : échec : <invariant> », never a value, a name
 //     nor a text of the page (the repository is public); rooms are numbered, not named.
 // Missing fixtures (web/dist/demo-fixtures) are generated with python3 -m collector fixtures.
-import { execFileSync } from 'node:child_process';
-import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { cpus } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright';
-import { frames, goto, openData, openDemo, ready, seriousAxe, startPreview } from './lib.mjs';
+import { RICH_STORAGE, dataFixtures, frames, goto, openData, openDemo, ready, registryRoutes, roomRoutes, seedStorage, seriousAxe, serveFixtureAsData, startPreview } from './lib.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const WEB = join(HERE, '..');
@@ -54,31 +52,6 @@ const list = (v) => (v ? v.split(',').map((s) => s.trim()).filter(Boolean) : nul
 if (SOURCE === 'data' && !env.DATA_PASSPHRASE) {
   console.error('SWEEP_SOURCE=data : DATA_PASSPHRASE manquant.');
   process.exit(2);
-}
-
-// ------------------------------------------------------------------ routes (src/router.ts)
-function routes() {
-  const src = readFileSync(join(WEB, 'src/router.ts'), 'utf8');
-  const keys = (name) => {
-    const block = new RegExp(`export const ${name} = \\{([\\s\\S]*?)\\} as const;`).exec(src);
-    if (!block) throw new Error(`router.ts : ${name} introuvable`);
-    return [...block[1].matchAll(/^\s*'?([\w-]+)'?\s*:/gm)].map((m) => m[1]);
-  };
-  const tabs = [...src.matchAll(/^\s*\['(\w+)', '[^']+'\],$/gm)].map((m) => m[1]);
-  const simple = /SIMPLE_PAGES = new Set\(\[([^\]]+)\]\)/.exec(src)[1].match(/[\w-]+/g);
-  return [
-    ...new Set(tabs),
-    ...simple,
-    ...keys('TOOLS').map((k) => `outils-${k}`),
-    ...keys('METER_PAGES').map((k) => `compteur-${k}`),
-    ...keys('HISTORY_PAGES').map((k) => `historique-${k}`),
-    'parametres',
-    ...keys('SETTINGS').map((k) => `parametres-${k}`),
-    'bienvenue',
-    'bienvenue-2',
-    'bienvenue-3',
-    'bienvenue-4',
-  ];
 }
 
 // ------------------------------------------------------------------ fixtures and displays
@@ -103,28 +76,12 @@ const RICH = new Set(['compte-charge']);
 // a real account shows (⚙ Sources: GitHub login, identifiers, manual collection) is swept too.
 // The browser is served the fixture where the app fetches data/ (nothing is copied into dist/).
 const AS_DATA = RICH;
-/** What a device of a fuller account keeps (made up): Shelly clamp names of 60 characters without a space. */
-const RICH_STORAGE = {
-  shelly: JSON.stringify({
-    names: { p4c0: 'Circuit_prises_cuisine_buanderie_et_cellier_du_sous-sol_nord', p4c1: 'Ballon_thermodynamique_garage_et_atelier_du_rez-de-chaussée' },
-    roles: { p4c1: 'water' },
-  }),
-};
 const DISPLAYS = {
   360: { viewport: { width: 360, height: 800 } },
   1280: { viewport: { width: 1280, height: 900 } },
   'texte-200': { viewport: { width: 360, height: 800 }, big: true },
   sombre: { viewport: { width: 390, height: 900 }, colorScheme: 'dark' },
 };
-
-function dataFixtures() {
-  const dir = join(WEB, 'dist/demo-fixtures');
-  if (!existsSync(join(dir, 'sans-prix', 'meta.enc.json'))) {
-    console.log('Fixtures absentes : python3 -m collector fixtures');
-    execFileSync('python3', ['-m', 'collector', 'fixtures', '-o', dir], { cwd: join(WEB, '..'), stdio: 'inherit' });
-  }
-  return readdirSync(dir).filter((n) => existsSync(join(dir, n, 'meta.enc.json')));
-}
 
 /**
  * Known failures, reported as such (they do not fail the run) until fixed; a known failure
@@ -491,31 +448,8 @@ class Session {
     this.ctx = await this.browser.newContext({ viewport: d.viewport, colorScheme: d.colorScheme ?? 'light', serviceWorkers: 'block' });
     const storage = { ...(this.run.storage ?? {}) };
     if (SOURCE === 'data' || this.run.asData) storage.state ??= '{}'; // a device already used: no first launch
-    if (this.run.asData) {
-      const dir = join(WEB, 'dist/demo-fixtures', this.run.data);
-      const prefix = `${new URL(base).pathname}data/`;
-      await this.ctx.route(
-        (url) => url.pathname.startsWith(prefix),
-        (route) => {
-          const file = join(dir, new URL(route.request().url()).pathname.slice(prefix.length));
-          return file.startsWith(`${dir}/`) && existsSync(file) ? route.fulfill({ path: file }) : route.fulfill({ status: 404, body: '' });
-        },
-      );
-    }
-    await this.ctx.addInitScript(
-      (entries) => {
-        try {
-          // the app's namespace (src/scope.ts): « intuis-history@<dépôt> » under a path, else « intuis-history »
-          const dir = location.pathname.replace(/[^/]*$/, '').replace(/^\/+|\/+$/g, '');
-          const prefix = dir ? `intuis-history@${dir}` : 'intuis-history';
-          localStorage.clear();
-          for (const [k, v] of entries) localStorage.setItem(`${prefix}:${k}`, v);
-        } catch {
-          /* storage blocked: defaults */
-        }
-      },
-      Object.entries(storage),
-    );
+    if (this.run.asData) await serveFixtureAsData(this.ctx, base, join(WEB, 'dist/demo-fixtures', this.run.data));
+    await seedStorage(this.ctx, storage);
     this.page = await this.ctx.newPage();
     this.page.on('pageerror', () => this.errors.push('erreur-js'));
     this.page.on('pageerror', (e) => QUIET || this.errorDetails.push(e.message));
@@ -542,10 +476,8 @@ class Session {
     await this.ctx?.close();
   }
   /** Rooms of the list (« piece-<id> »), in their order. */
-  async rooms() {
-    await goto(this.page, 'pieces');
-    const hrefs = await this.page.$$eval('#view a[href^="#piece-"]', (as) => as.map((a) => a.getAttribute('href').slice(1)));
-    return [...new Set(hrefs)];
+  rooms() {
+    return roomRoutes(this.page);
   }
   /** Invariants on the page shown; failures go to the report under `where`. */
   async check(where, { axe = false } = {}) {
@@ -963,7 +895,7 @@ function record(w, found) {
 }
 
 // ------------------------------------------------------------------ main
-const ROUTES = routes();
+const ROUTES = registryRoutes();
 let base;
 let stop = () => {};
 const t0 = Date.now();
