@@ -64,6 +64,20 @@ export const CATEGORY_LABEL: Record<Category, string> = { heating: 'Chauffage', 
  * files is one record, never two added: the file of the day's own year wins, else the first read
  * (the rule of the collector, storage.py `own_year_first`; the data audit names such days).
  */
+/** #532: a day read from the file of `year`, when the day was already read from another file:
+ * kept only when `year` is the day's own year (else the first read stays). One rule for every
+ * section of the year files (energy, tariffs, temperatures), as the collector's own_year_first. */
+export const keepFromYear = (seen: boolean, day: string, year: string): boolean => !seen || day.slice(0, 4) === year;
+
+/** {room: {day: v}} of one year file into `into`, by keepFromYear. */
+export function mergeYear<V>(o: Record<string, Record<string, V>> | undefined, year: string, into: Map<string, Map<string, V>>): void {
+  for (const [room, days] of Object.entries(o ?? {})) {
+    const m = into.get(room) ?? new Map<string, V>();
+    for (const [d, v] of Object.entries(days)) if (keepFromYear(m.has(d), d, year)) m.set(d, v);
+    into.set(room, m);
+  }
+}
+
 export function toRecords(meta: Meta, years: Record<string, Record<string, Record<string, number>>>): DayRecord[] {
   const cat = new Map(meta.rooms.map((r) => [r.id, r.category] as const));
   const seen = new Map<string, DayRecord>();
@@ -73,7 +87,7 @@ export function toRecords(meta: Meta, years: Record<string, Record<string, Recor
       if (c === 'ignore') continue;
       for (const [day, wh] of Object.entries(days)) {
         const k = `${room}|${day}`;
-        if (!seen.has(k) || day.slice(0, 4) === year) seen.set(k, { day, room, cat: c, kwh: wh / 1000 });
+        if (keepFromYear(seen.has(k), day, year)) seen.set(k, { day, room, cat: c, kwh: wh / 1000 });
       }
     }
   }

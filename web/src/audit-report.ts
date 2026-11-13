@@ -57,6 +57,8 @@ export interface AuditReport {
   checks: AuditCheck[];
   thresholds: AuditThreshold[];
   findings: AuditFinding[];
+  /** Checks or files the audit could not read (« clés : TypeError »): not verified. */
+  errors: string[];
 }
 
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
@@ -150,6 +152,7 @@ export function parseAuditReport(raw: unknown): AuditReport {
       checks: parsed,
       thresholds: thresholds.map(threshold),
       findings: findings.slice(0, MAX_FINDINGS).flatMap((f) => finding(f, codes) ?? []),
+      errors: (Array.isArray(own(o, 'errors')) ? (own(o, 'errors') as unknown[]) : []).flatMap((e) => text(e, 200) ?? []).slice(0, MAX_CHECKS),
     };
   } catch (err) {
     if (err instanceof Invalid) throw new Error(`Rapport d’audit illisible (${err.message}).`);

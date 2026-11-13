@@ -1,6 +1,6 @@
 // Fetching the encrypted files and remembering the derived key on this device.
 
-import { type DayRecord, type Meta, toRecords } from './aggregate';
+import { type DayRecord, type Meta, mergeYear, toRecords } from './aggregate';
 import { loadOffers, loadTempo } from './offers';
 import { type Hourly, type TariffMap, type TempoRow, type TrveRow, type Weather, parseTrveCsv } from './analysis';
 import type { ShellyDoc } from './breakdown';
@@ -158,13 +158,6 @@ export async function openRemembered(source: Source, key: CryptoKey, open = load
   return ds;
 }
 
-const toMap2 = <V>(o: Record<string, Record<string, V>> | undefined, into: Map<string, Map<string, V>>) => {
-  for (const [room, days] of Object.entries(o ?? {})) {
-    const m = into.get(room) ?? new Map<string, V>();
-    for (const [d, v] of Object.entries(days)) m.set(d, v);
-    into.set(room, m);
-  }
-};
 
 export async function load(source: Source, key: CryptoKey): Promise<Dataset> {
   const meta = await decryptEnvelope<Meta>(await getJson<Envelope>(`${dataDir(source)}/meta.enc.json`), key);
@@ -204,7 +197,7 @@ export async function load(source: Source, key: CryptoKey): Promise<Dataset> {
   const temps: Dataset['temps'] = new Map();
   const estimated = new Set<string>();
   let coverage: Coverage | null = null;
-  for (const [, doc] of years) {
+  for (const [year, doc] of years) {
     if (doc.coverage) {
       coverage ??= new Map();
       for (const [room, months] of Object.entries(doc.coverage)) {
@@ -213,8 +206,8 @@ export async function load(source: Source, key: CryptoKey): Promise<Dataset> {
         coverage.set(room, m);
       }
     }
-    toMap2(doc.tariffs, tariffs);
-    toMap2(doc.temps, temps);
+    mergeYear(doc.tariffs, year, tariffs); // #532: the day's own year file wins, as for the energy
+    mergeYear(doc.temps, year, temps);
     for (const [room, days] of Object.entries(doc.estimated ?? {})) for (const d of Object.keys(days)) estimated.add(`${room}|${d}`);
   }
   // Tariff values are stored in Wh like everything else: convert to kWh once.

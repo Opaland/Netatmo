@@ -21,6 +21,8 @@ describe('#532 rapport d’audit écrit par le collecteur', () => {
     expect([two.count, two.months]).toEqual([1, { '2024-03': 1 }]);
     expect(findingsOf(r, 'deux-fichiers').map((f) => [f.day, f.room, f.value])).toEqual([['2024-03-05', '1234500100', 1234]]);
     expect(r.thresholds.some((t) => t.hypothesis)).toBe(true);
+    expect(r.errors).toEqual([]);
+    expect(parseAuditReport({ ...report, errors: ['clés : TypeError', 5] }).errors).toEqual(['clés : TypeError']);
   });
 
   it('résume : impossibles d’abord, puis à vérifier, et ce qui n’a rien trouvé', () => {

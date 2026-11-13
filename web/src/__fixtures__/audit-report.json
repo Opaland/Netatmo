@@ -104,9 +104,9 @@
   {
    "code": "estime-sur-reel",
    "group": "dates",
-   "title": "Jour estimé qui ressemble à un jour réel",
-   "what": "le jour est marqué « estimé » (part égale du total du mois) mais sa valeur diffère des autres jours estimés du mois",
-   "app": "le jour est compté une fois, comme estimé : jamais ajouté à une valeur réelle",
+   "title": "Jour estimé qui a des heures mesurées",
+   "what": "le jour est marqué « estimé » (part du total du mois), mais Intuis a des relevés à l'heure ou à la demi-heure ce jour-là : une mesure existe",
+   "app": "le jour est compté une fois, comme estimé : jamais ajouté aux heures mesurées",
    "level": "a-verifier",
    "count": 0,
    "months": {},
@@ -266,5 +266,6 @@
    "room": "1234500100",
    "text": "« 2024-03-05 » est rangé dans 2025.enc.json, le fichier de 2025"
   }
- ]
+ ],
+ "errors": []
 }

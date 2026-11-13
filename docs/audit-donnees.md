@@ -296,7 +296,7 @@ l'archive chiffrée (`collector/audit.py`), sans rien appeler ni rien réécrire
    **`audit-donnees`** du même passage (en bas de la page du passage, gardé 7 jours). Il est
    **chiffré avec la clé des données**, comme les fichiers de `data/` : sans la phrase de passe, il ne
    dit rien. Le télécharger, le décompresser (c'est un `.zip`).
-4. Dans l'appli : **État des données** → carte **« Audit détaillé des données »** → *Ouvrir le
+4. Dans l'appli : **État des données** → repli **« Année par année »** → **« Audit détaillé des données »** → *Ouvrir le
    rapport…* → choisir `audit-donnees.enc.json`. Il est déchiffré sur l'appareil avec la clé déjà
    ouverte, rien n'est envoyé ; il reste gardé chiffré sur cet appareil (« Oublier ce rapport »
    l'efface).
@@ -317,10 +317,12 @@ appareils) : est une série tout objet dont les clés sont des dates.
 | `decalage-heures` | des heures (demi-heures) dont la somme ne retrouve le total du jour qu'une fois décalées d'1 ou 2 h (UTC au lieu de l'heure de Paris) ou d'un jour (rangées sous le mauvais jour) ; Intuis heure et demi-heure contre le jour, courbe Linky contre le jour Linky | courbes heure par heure décalées d'autant |
 | `decalage-fuseau` | la courbe heure par heure des radiateurs suit celle du Linky avec 1 ou 2 h d'écart (corrélation) | idem, et partage heures pleines / creuses décalé |
 | `decalage-jour-linky` | Intuis dépasse le Linky plusieurs jours d'un mois, mais plus si l'un des deux est pris un jour plus tôt ou plus tard | recoupement et reconstitution sur le mauvais jour |
-| `estime-sur-reel` | un jour marqué estimé (part égale du total du mois) dont la valeur diffère des autres jours estimés du mois | compté une fois, comme estimé : jamais ajouté à une valeur réelle |
+| `estime-sur-reel` | un jour marqué estimé (part du total du mois) pour lequel Intuis a pourtant des heures ou des demi-heures mesurées (deux parts différentes dans un même mois ne sont pas un défaut : la reprise d'historique répartit deux fois un mois coupé par deux de ses fenêtres d'un an) | compté une fois, comme estimé : jamais ajouté aux heures mesurées |
 | `marque-sans-valeur` | un jour marqué estimé sans valeur | compté estimé, à 0 kWh |
 | `tarifs-additionnes` | un jour qui vaut deux fois la somme de ses tarifs (deux familles de mesure additionnées) ou moins qu'elle | total du jour et partage HP / HC en désaccord |
 | `deux-sources` | une prise ou un capteur Home Assistant qui mesure jour après jour la même énergie qu'une pièce Intuis | « Autres usages » la retire deux fois du Linky |
+
+Robustesse : un fichier illisible ou une structure inattendue n'arrête ni le bilan du § 7 ni les autres contrôles ; le journal dit « Non vérifié : … » avec le nom du contrôle (ou le genre de fichier, l'année masquée) et le type d'erreur, l'appli le redit en tête du rapport.
 
 Limite connue : un décalage d'une heure se voit mal dans les **totaux** d'un jour quand la
 consommation varie peu autour de minuit ; c'est pourquoi `decalage-fuseau` compare aussi les

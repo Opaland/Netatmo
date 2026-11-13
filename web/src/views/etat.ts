@@ -114,11 +114,12 @@ export function mountEtat(el: HTMLElement | null) {
         <p>${esc(v.headline)}.</p>${v.counts ? `<p class="hint muted">${esc(v.counts)}</p>` : ''}${v.reasons.length ? `<ul>${v.reasons.map((x) => `<li>${esc(x)}</li>`).join('')}</ul>` : ''}${v.answer ? `<p class="hint${v.reasons.length ? '' : ' muted'}">${esc(v.answer)}</p>` : ''}</div>`,
         )
         .join('')}
+      <div id="audit-card"><details class="fold"><summary><h3>Audit détaillé des données</h3> <span class="fold-sub">chargement…</span></summary></details></div>
     </details>
-    <div id="audit-card"><details class="card fold"><summary><h2>Audit détaillé des données</h2> <span class="fold-sub">chargement…</span></summary></details></div>
     ${incidentsCard(rawDataset() ?? ds!, stoppedRooms(), SOURCE_NAME)}`;
   void fine(i);
-  // #532: the detailed audit (a report made by the workflow Diagnostic), loaded on demand
+  // #532: the detailed audit (a report made by the workflow Diagnostic), loaded on demand, folded inside
+  // « Année par année » (État des données holds in 4 screens, #387: no height of its own while closed)
   void lazyCard(() => import('./audit'), (m) => m.mountAudit(document.getElementById('audit-card')), { zone: 'audit-card', what: 'Audit détaillé' });
 }
 
