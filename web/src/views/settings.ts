@@ -434,7 +434,7 @@ export function handleClick(btn: HTMLElement): boolean {
     return true;
   }
   if (btn.id === 'setup-open') {
-    void lazyAction(btn, () => import('./setup'), (m) => m.mountSetup(document.getElementById('setup-zone'), ds!.source === 'demo'), 'Assistant de premier lancement');
+    void lazyAction(btn, () => import('./setup'), (m) => m.mountSetup(document.getElementById('setup-zone'), ds!.source === 'demo', true), 'Assistant de premier lancement');
     return true;
   }
   if (btn.id === 'legal-open') {
