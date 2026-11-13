@@ -536,7 +536,7 @@ def catch_up_curve(
             wanted.discard(day)
 
 
-CURVE_SERIE = "Linky à la demi-heure (jours)"
+CURVE_SERIE = "linky30"  # key of the catch-up tally (collector/rattrapage.py LABELS)
 
 
 # ---------------------------------------------------------------- token dates (S-1.12)

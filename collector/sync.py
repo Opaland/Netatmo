@@ -377,7 +377,7 @@ class Syncer:
             rooms = {rid for rid, days in missing.items() if any(lo <= d < hi for d in days)}
             for rid in rooms:
                 for d in sorted(x for x in missing[rid] if lo <= x < hi):
-                    tally.asked(SERIES[kinds[rid]], d)
+                    tally.asked(kinds[rid], d)
             # the bucket of a local day is stamped at its local midnight: start half a day before
             begin = int(datetime.combine(start, datetime.min.time(), zone).timestamp()) - DAY // 2
             stop = int(datetime.combine(end, datetime.min.time(), zone).timestamp())
@@ -395,10 +395,7 @@ class Syncer:
                 if tariffs is not None and day not in self.store.doc(day[:4]).get("tariffs", {}).get(rid, {}):
                     self._store_tariffs(home, rid, ts, tariffs)
                 missing[rid].discard(day)
-                tally.added(SERIES[kinds[rid]], day)
-
-
-SERIES = {"heating": "chauffage (pièces-jours)", "water": "chauffe-eau (jours)"}
+                tally.added(kinds[rid], day)
 
 
 def _month_days(month: str) -> list[str]:

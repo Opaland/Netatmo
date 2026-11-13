@@ -237,7 +237,7 @@ describe('fine sources', () => {
     const s = fineSource('linky30', curveParts(curve), null)!;
     expect(s.years[0]).toMatchObject({ expected: 20, full: 14, partial: 1, missing: 5 });
     expect(s.gaps[0].days).toBe(5);
-    expect(s.notes[0]).toMatch(/1 jour incomplet/);
+    expect(s.notes.join(' ')).toMatch(/1 jour incomplet/);
   });
   it('hourly snapshots: bitmask of the hours', () => {
     const s = fineSource('roomstate', seenParts({ '2026-01-01': 0xffffff, '2026-01-02': 0b111, '2026-01-03': 0xffffff }), null)!;
@@ -429,7 +429,8 @@ describe('#532 trous : cause et traitement par l’appli', () => {
     const r = qualityReport(base(recs('2024-01-01', '2024-12-31', skip), { linky, station }));
     const g = r.sources.find((s) => s.id === 'heating')!.gaps[0];
     expect(g.cause).toBe('collecte arrêtée : le compteur Linky et la station manquent aussi ces jours-là');
-    expect(g.recover).toMatch(/Récupérer tout l’historique disponible/);
+    expect(g.recover).toMatch(/^Oui : Intuis garde l’historique ; cocher « rattrapage »/);
+    expect(g.recover).not.toMatch(/Récupérer tout l’historique/); // #569: that gesture rewrites present days
   });
   it('a gap where Linky has the days stays lost at Intuis', () => {
     const r = qualityReport(base(recs('2024-01-01', '2024-12-31', skip), { linky: new Map(allDays.map((d) => [d, 30])) }));

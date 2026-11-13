@@ -15,10 +15,10 @@ from collector.api import IntuisClient
 from collector.budget import METER
 from collector.config import Settings
 from collector.enedis import CURVE_SERIE, catch_up_curve
-from collector.rattrapage import Tally, public_lines, run
+from collector.rattrapage import Tally, meta_doc, public_lines, run
 from collector.station import STATION_SERIE, Station
 from collector.storage import Store
-from collector.sync import SERIES, Syncer
+from collector.sync import Syncer
 
 FIX = Path(__file__).parent / "fixtures"
 TZ = ZoneInfo("Europe/Paris")
@@ -113,7 +113,7 @@ def test_catch_up_adds_only_the_missing_days_and_never_a_present_one(tmp_path):
     assert after["tariffs"]["100"]["2024-01-04"] == [0.0, VALUE - 1000, 1000.0]  # tariffs of an added day
     # only the rooms with a hole were asked, in one range (holes 14 days apart at most share it)
     assert {rooms for _t, _b, _e, rooms in asked} == {("100", "300")} and len(asked) == 4
-    assert tally.months == {SERIES["heating"]: {"2024-01": [3, 3]}, SERIES["water"]: {"2024-01": [1, 1]}}
+    assert tally.months == {"heating": {"2024-01": [3, 3]}, "water": {"2024-01": [1, 1]}}
 
 
 def test_catch_up_is_idempotent(tmp_path):
@@ -153,7 +153,7 @@ def test_a_zero_is_not_added_and_a_stopped_room_is_not_asked(tmp_path):
     stopped = [{"room": "300", "from": "2024-01-15", "reason": "retires", "label": ""}]
     tally = run(syncer.store, syncer, syncer.home(), stopped)
     assert "2024-01-04" not in syncer.store.year(2024)["100"]
-    assert tally.months == {SERIES["heating"]: {"2024-01": [3, 0]}}  # the water heater: not asked
+    assert tally.months == {"heating": {"2024-01": [3, 0]}}  # the water heater: not asked
 
 
 def test_the_call_cap_stops_cleanly_and_keeps_what_was_added(tmp_path):
@@ -166,7 +166,7 @@ def test_the_call_cap_stops_cleanly_and_keeps_what_was_added(tmp_path):
         tally = run(syncer.store, syncer, home, [])
     finally:
         METER.reset()
-    assert "plafond" in tally.notes[SERIES["heating"]]
+    assert "plafond" in tally.notes["heating"]
     assert tally.total_added() == 0  # the four families are needed to pick the largest: nothing half-read
 
 
@@ -321,10 +321,27 @@ def test_the_collection_runs_the_catch_up_only_when_the_case_is_ticked(tmp_path,
     assert "RATTRAPAGE: ${{ inputs.rattrapage && 'true' || '' }}" in step
     assert "run: python -m collector -v ${{ inputs.backfill && 'backfill' || 'sync' }}" in step
     src = Path(main.__file__).read_text()
-    assert '_catch_up(s, store, syncer, kept) if _flag("RATTRAPAGE") else []' in src
+    assert '_catch_up(s, store, syncer, kept) if _flag("RATTRAPAGE") else ([], None)' in src
     asked: list = []
     syncer = _intuis(tmp_path, asked)
     _archive(syncer.store)
     syncer.last_home = syncer.home()  # as the night's collection (Syncer.run) does
-    lines = main._catch_up(Settings(), syncer.store, syncer, {})
+    lines, doc = main._catch_up(Settings(), syncer.store, syncer, {})
     assert any("chauffage (pièces-jours) : 3 ajoutés sur 3 demandés" in line for line in lines), lines
+    assert doc["months"] == {"heating": {"2024-01": [3, 3]}, "water": {"2024-01": [1, 1]}}
+    assert set(doc["at"]) == {"heating", "water"}
+
+
+def test_meta_keeps_older_months_and_replaces_the_months_asked_again():
+    first = Tally()
+    for d in ("2023-09-01", "2023-09-02", "2024-03-05"):
+        first.asked("heating", d)
+    first.added("heating", "2024-03-05")
+    doc = meta_doc(None, first, "2026-11-13")
+    assert doc == {"at": {"heating": "2026-11-13"}, "months": {"heating": {"2023-09": [2, 0], "2024-03": [1, 1]}}}
+    again = Tally()
+    again.asked("heating", "2023-09-01")
+    again.asked("station", "2026-01-10")
+    doc = meta_doc({**doc, "months": {**doc["months"], "x": {}}}, again, "2026-11-20")
+    assert doc["months"] == {"heating": {"2023-09": [1, 0], "2024-03": [1, 1]}, "station": {"2026-01": [1, 0]}}
+    assert doc["at"] == {"heating": "2026-11-20", "station": "2026-11-20"}

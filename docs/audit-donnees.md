@@ -391,8 +391,12 @@ des dates et des noms, que le journal public ne peut pas montrer. Chaque trou de
   renvoyé (ni les jours ni le total du mois). Une pièce **arrêtée volontairement** (⚙ Mon logement)
   n'a pas de trou : pas de données attendues ;
 - **s'il est récupérable** : un trou de collecte (échec, arrêt) est encore chez Intuis, qui garde son
-  historique : relancer « Collecte quotidienne » en cochant « Récupérer tout l'historique disponible » ;
-  un trou chez Intuis ne l'est pas ;
+  historique : relancer « Collecte quotidienne » en cochant « rattrapage » (§ 10 : il ajoute ces jours
+  sans réécrire les autres ; « Récupérer tout l'historique disponible », lui, réécrit) ; un trou chez
+  Intuis ne l'est probablement pas, et le dit sans réserve une fois qu'un rattrapage l'a redemandé en
+  vain (« redemandé le …, Intuis n'a rien rendu ») ; de même pour la station (Netatmo garde
+  l'historique) et la courbe Linky (24 mois chez Enedis, dit une fois sous « Compteur Linky à la
+  demi-heure ») ;
 - **ce qu'en fait l'appli** (« Dans l'appli : … », `gapTreatment`) : un jour manquant est **laissé
   vide**, rien n'est ajouté aux totaux, il est écarté des comparaisons (signature, jours inhabituels,
   « Expliquer un mois ») ; « Jours perdus chez Intuis » peut l'estimer **à part**, jamais ajouté aux
@@ -478,5 +482,6 @@ s'arrête (code HTTP, plafond) ; jamais une valeur, un nom, un identifiant ni un
    monter (un jour ajouté), jamais baisser.
 5. Pour le chauffe-eau 2023-2024 : Actions → **Diagnostic**, case « Tester la profondeur d'historique »,
    et lire la date d'installation du module `NMW` et ses jours par type (tableau ci-dessus).
-6. Ce qui reste à 0 ajouté est perdu chez la source : l'appli le dit une fois dans État des données
-   (« Récupérable ? »).
+6. Ce qui reste à 0 ajouté est perdu chez la source : la collecte garde dans les métadonnées chiffrées ce
+   que le rattrapage a demandé et obtenu, par série et par mois (`meta.catch_up`), et État des données le
+   dit alors une fois, sous chaque trou (« Récupérable ? Non : redemandé le …, Intuis n'a rien rendu »).

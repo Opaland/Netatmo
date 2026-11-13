@@ -162,7 +162,57 @@ export interface QualityInput {
   suspects?: string[];
   /** #346: radiators switched off on purpose (⚙ Mon logement): no data expected from `from` on. */
   stopped?: { room: string; from: string; text: string }[];
+  /** #569: the last catch-up of the missing days (meta.catch_up, catchUpOf). */
+  catchUp?: CatchUp | null;
 }
+
+/**
+ * #569: the catch-up of the missing days (case « rattrapage » of Collecte quotidienne,
+ * collector/rattrapage.py): per series (heating, water, station, linky30), the day of its last run
+ * and, per month, the days it asked and the days the source gave back.
+ */
+export interface CatchUp {
+  at: Record<string, string>;
+  months: Record<string, Record<string, [number, number]>>;
+}
+export const CATCH_UP_SERIES = ['heating', 'water', 'station', 'linky30'] as const;
+const isDay = (v: unknown): v is string => typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v);
+const isCount = (v: unknown): v is number => typeof v === 'number' && Number.isInteger(v) && v >= 0;
+const own = (o: unknown, k: string): unknown => (o && typeof o === 'object' && Object.hasOwn(o, k) ? (o as Record<string, unknown>)[k] : null);
+/** meta.catch_up read defensively (own keys only, counts and months only); null when absent. */
+export function catchUpOf(raw: unknown): CatchUp | null {
+  const at: Record<string, string> = {};
+  const months: Record<string, Record<string, [number, number]>> = {};
+  for (const serie of CATCH_UP_SERIES) {
+    const day = own(own(raw, 'at'), serie);
+    const cells = own(own(raw, 'months'), serie);
+    if (!isDay(day) || !cells || typeof cells !== 'object' || Array.isArray(cells)) continue;
+    const kept: Record<string, [number, number]> = {};
+    for (const [m, c] of Object.entries(cells)) {
+      if (/^\d{4}-\d{2}$/.test(m) && Array.isArray(c) && isCount(c[0]) && isCount(c[1])) kept[m] = [c[0], c[1]];
+    }
+    at[serie] = day;
+    months[serie] = kept;
+  }
+  return Object.keys(at).length ? { at, months } : null;
+}
+/** The gesture, said in every « Récupérable ? » it may help. */
+export const CATCH_UP = 'cocher « rattrapage » en lançant Collecte quotidienne (Actions) : ces jours sont ajoutés, sans réécrire les autres';
+/**
+ * #569: the day of the catch-up that asked every month of [from, to] for `serie`, when the gap is
+ * still there (the source gave nothing back for its days), else null.
+ */
+export function askedInVain(c: CatchUp | null | undefined, serie: (typeof CATCH_UP_SERIES)[number], from: string, to: string): string | null {
+  if (!c || !Object.hasOwn(c.at, serie) || !Object.hasOwn(c.months, serie)) return null;
+  const at = c.at[serie];
+  const cells = c.months[serie];
+  if (at <= to) return null;
+  for (let m = from.slice(0, 7); m <= to.slice(0, 7); m = addDays(`${m}-28`, 7).slice(0, 7)) {
+    if (!Object.hasOwn(cells, m) || !cells[m][0]) return null;
+  }
+  return at;
+}
+const lostAt = (at: string, source: string, why: string) => `Non : redemandé le ${dayShort(at, true)} (rattrapage), ${source} n’a rien rendu : ${why}.`;
 
 /** Days a stopped room is not expected to send anything, up to `last`. */
 function stoppedDays(input: Pick<QualityInput, 'stopped' | 'last'>, room: string): string[] {
@@ -217,7 +267,7 @@ const mostlyIn = (set: Set<string> | null, from: string, to: string) => {
 /** #532: days of Intuis the nightly collection asks again (collector `sync --days`, 35 by default). */
 export const INTUIS_REFETCH_DAYS = 35;
 /** #532: a gap the collection did not ask for is still at Intuis, which keeps its history. */
-const AT_INTUIS = 'Oui : Intuis garde l’historique. Relancer la collecte en cochant « Récupérer tout l’historique disponible » (Actions → Collecte quotidienne).';
+const AT_INTUIS = `Oui : Intuis garde l’historique ; ${CATCH_UP}.`;
 
 /** #532: the collection did not run these days: every other source (Linky, station) is silent too. */
 function collectionStopped(input: QualityInput, from: string, to: string): boolean {
@@ -225,7 +275,14 @@ function collectionStopped(input: QualityInput, from: string, to: string): boole
   return others.length > 0 && others.every((have) => mostlyIn(absentWithin(have, from, to), from, to));
 }
 
-const NOT_AT_INTUIS = 'Non chez Intuis (ni les jours ni le total du mois) ; une estimation à part reste possible (« Reconstituer », plus bas).';
+const RECONSTITUTE = 'Une estimation à part reste possible (« Reconstituer », plus bas).';
+/** #569: lost at Intuis, said once: after a catch-up that asked the days in vain, else probably. */
+function notAtIntuis(input: QualityInput, serie: 'heating' | 'water', from: string, to: string, why = 'Intuis ne garde pas ces jours'): string {
+  const at = askedInVain(input.catchUp, serie, from, to);
+  return at
+    ? `${lostAt(at, 'Intuis', why)} ${RECONSTITUTE}`
+    : `Non chez Intuis d’après la récupération de l’historique (ni les jours ni le total du mois) ; pour en être sûr, ${CATCH_UP}. ${RECONSTITUTE}`;
+}
 
 /** Days of [from, to] a module of one of `rooms` did not answer (nightly status). */
 function offlineIn(input: QualityInput, rooms: { id: string }[], from: string, to: string): number {
@@ -313,7 +370,7 @@ function intuis(input: QualityInput, kind: 'heating' | 'water'): SourceQuality |
         ? 'Non : le chauffe-eau ne mesurait rien pendant cette période.'
         : failed || stopped
           ? AT_INTUIS
-          : `${NOT_AT_INTUIS}${linkyHas(from, to) ? ' Le compteur Linky a ces jours : la reconstitution s’appuie dessus.' : ''}`,
+          : `${notAtIntuis(input, kind, from, to, kind === 'water' && !sameAsRadiators ? 'le chauffe-eau ne remontait pas ses relevés, ou Intuis ne les a pas gardés' : undefined)}${linkyHas(from, to) ? ' Le compteur Linky a ces jours : la reconstitution s’appuie dessus.' : ''}`,
     });
   }
   const offlineNow = input.devices?.offlineNow ?? [];
@@ -343,7 +400,7 @@ function intuis(input: QualityInput, kind: 'heating' | 'water'): SourceQuality |
         all: false,
         ongoing,
         cause,
-        recover: ongoing ? 'Les jours reviendront quand le module répondra à nouveau ; les jours passés sont perdus chez Intuis.' : NOT_AT_INTUIS,
+        recover: ongoing ? 'Les jours reviendront quand le module répondra à nouveau ; les jours passés sont perdus chez Intuis.' : notAtIntuis(input, kind, from, to),
         link: ongoing || offDays ? '#parametres-sources' : undefined,
       });
     }
@@ -455,7 +512,11 @@ function station(input: QualityInput): SourceQuality | null {
   const name = (k: string) => s.modules?.[k]?.name ?? 'module';
   const gaps: Gap[] = [];
   let scattered = 0;
-  const recover = 'Netatmo garde l’historique de la station, mais la collecte ne redemande que les 10 jours avant le dernier relevé.';
+  // #569: the nightly collection only asks the 10 days before the last reading; the catch-up asks the rest
+  const recover = (from: string, to: string) => {
+    const at = askedInVain(input.catchUp, 'station', from, to);
+    return at ? lostAt(at, 'Netatmo', 'le module n’a rien envoyé ces jours-là') : `Oui : Netatmo garde l’historique de la station ; ${CATCH_UP}.`;
+  };
   for (const [from, to] of runs(cov.allMissing)) {
     const n = span(from, to);
     if (n < MIN_GAP) {
@@ -468,7 +529,7 @@ function station(input: QualityInput): SourceQuality | null {
       : mostlyIn(absentWithin(input.linky ? new Set(input.linky.keys()) : null, from, to), from, to)
         ? 'collecte arrêtée : le compteur Linky manque aussi ces jours-là'
         : 'collecte de la station interrompue (connexion Netatmo à renouveler ?)';
-    gaps.push({ from, to, days: n, who: 'tous les modules', all: true, ongoing: false, cause, recover });
+    gaps.push({ from, to, days: n, who: 'tous les modules', all: true, ongoing: false, cause, recover: recover(from, to) });
   }
   for (const [key, missing] of cov.partMissing) {
     const health = s.health?.[key] ?? {};
@@ -492,7 +553,7 @@ function station(input: QualityInput): SourceQuality | null {
         all: false,
         ongoing,
         cause: low ? 'pile faible juste avant : le module s’est arrêté' : mute ? 'module injoignable (hors de portée de la station ?)' : 'le module n’a rien renvoyé',
-        recover: low ? 'Changer la pile ; les jours sans relevé sont perdus.' : recover,
+        recover: low ? 'Changer la pile ; les jours sans relevé sont perdus.' : recover(from, to),
         link: low || mute ? '#parametres-sources' : undefined,
       });
     }
@@ -514,6 +575,7 @@ export function fineSource(
   intuisFirst: string | null,
   rooms: { id: string; name: string }[] = [],
   cuts?: Map<string, CutKind>,
+  catchUp?: CatchUp | null,
 ): SourceQuality | null {
   if (!f.parts.some((p) => p.days.size)) return null;
   const cov = coverParts(f.parts, f.last);
@@ -525,9 +587,10 @@ export function fineSource(
   }[id];
   const recover = {
     room30: 'La collecte redemande l’historique à la demi-heure nuit après nuit ; un trou déjà parcouru n’est pas redemandé.',
-    linky30: 'Les jours anciens ne sont pas redemandés à Enedis.',
+    linky30: '', // #569: depends on the gap (curveRecover)
     roomstate: 'Non : c’est un relevé de l’instant, Intuis n’en garde pas l’historique.',
   }[id];
+  const recoverOf = (from: string, to: string) => (id === 'linky30' ? curveRecover(catchUp, from, to, f.last) : recover);
   const name = (k: string) => rooms.find((r) => r.id === k)?.name ?? k;
   const gaps: Gap[] = [];
   let scattered = 0;
@@ -537,23 +600,42 @@ export function fineSource(
     else {
       // #394: the hourly snapshot needs the home online; a cut explains its gap (not Intuis history)
       const cut = id === 'roomstate' ? cutIn(cuts, from, to) : null;
-      gaps.push({ from, to, days: n, who: id === 'room30' ? 'toutes les pièces' : 'tout', all: true, ongoing: false, cause: cut ? cutCause(cut, 'la maison était injoignable') : cause, recover });
+      gaps.push({ from, to, days: n, who: id === 'room30' ? 'toutes les pièces' : 'tout', all: true, ongoing: false, cause: cut ? cutCause(cut, 'la maison était injoignable') : cause, recover: recoverOf(from, to) });
     }
   }
   for (const [part, missing] of cov.partMissing) {
     for (const [from, to] of runs(missing)) {
       const n = span(from, to);
       if (n < MIN_GAP) scattered += n;
-      else gaps.push({ from, to, days: n, who: name(part), all: false, ongoing: to === f.last, cause, recover });
+      else gaps.push({ from, to, days: n, who: name(part), all: false, ongoing: to === f.last, cause, recover: recoverOf(from, to) });
     }
   }
   const notes: string[] = [];
   if (id === 'room30' && cov.first && intuisFirst && cov.first > addDays(intuisFirst, 30)) {
     notes.push(`Historique rattrapé du plus récent au plus ancien, quelques semaines par nuit : disponible depuis le ${dayShort(cov.first, true)} pour l’instant.`);
   }
+  if (id === 'linky30' && cov.first && cov.first > addDays(curveStart(f.last), 7)) notes.push(curveBefore(catchUp, curveStart(f.last), cov.first));
   const thin = cov.years.reduce((a, y) => a + y.partial, 0);
   if (id !== 'room30' && thin) notes.push(`${thin} jour${thin > 1 ? 's' : ''} incomplet${thin > 1 ? 's' : ''} (une partie des ${id === 'roomstate' ? 'heures' : 'demi-heures'} seulement).`);
   return { id, label, first: cov.first, last: f.last, years: cov.years, gaps: tidy(gaps, ['pièce', 'pièces']), scattered, notes };
+}
+
+/** #569: Enedis keeps 24 months of load curve (collector/enedis.py CURVE_KEEP_DAYS, documentation Enedis Data Connect). */
+export const LINKY30_KEEP_DAYS = 730;
+// the last half hour is yesterday's: the collector counts its 730 days back from today
+const curveStart = (last: string) => addDays(last, 1 - LINKY30_KEEP_DAYS);
+function curveRecover(c: CatchUp | null | undefined, from: string, to: string, last: string): string {
+  if (to < curveStart(last)) return 'Non : Enedis ne garde la courbe de charge que 24 mois.';
+  const at = askedInVain(c, 'linky30', from, to);
+  return at ? lostAt(at, 'Enedis', 'la courbe de charge n’était pas collectée ces jours-là') : `Oui, Enedis la garde 24 mois ; ${CATCH_UP}.`;
+}
+/** #569: the half hours before the first one kept: still at Enedis over 24 months, lost before. Said once. */
+function curveBefore(c: CatchUp | null | undefined, start: string, first: string): string {
+  const at = askedInVain(c, 'linky30', start, addDays(first, -1));
+  const since = dayShort(start, true);
+  return at
+    ? `Demi-heures depuis le ${dayShort(first, true)} : redemandées le ${dayShort(at, true)} (rattrapage) depuis le ${since}, Enedis n’a rien rendu (la courbe de charge n’était pas encore collectée ; elle s’active dans l’espace client Enedis) ; avant le ${since}, Enedis ne la garde plus.`
+    : `Demi-heures depuis le ${dayShort(first, true)}. Enedis garde la courbe de charge 24 mois : les jours depuis le ${since} se rattrapent (cocher « rattrapage » en lançant Collecte quotidienne, Actions) ; avant, ils sont perdus.`;
 }
 
 /** Parts of the 30-min Linky curve (keys « YYYY-MM-DDTHH:MM »): a day with fewer than 40 half hours is thin. */

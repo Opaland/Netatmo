@@ -71,7 +71,7 @@ PRESSURE_TYPES = "pressure,min_pressure,max_pressure"
 # dB, hourly mean strictly above: a lively conversation or a loud television. Chosen by judgement
 # (no norm for a living room), only counts « noisy hours »; shown with its value in the app.
 NOISY_ABOVE = 55
-STATION_SERIE = "station (jours par module)"
+STATION_SERIE = "station"  # key of the catch-up tally (collector/rattrapage.py LABELS)
 
 
 class StationError(SourceError):
