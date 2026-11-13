@@ -6,6 +6,8 @@
 // - « Poêle à bois »: the folds « Noter un achat de bois » and « Hypothèses » stay open after an
 //   action, and the efficiency applies when its field is left, before the first purchase too.
 // - « Surfaces »: a value typed does not redraw the grid; the focus goes on to the next field.
+// - ⚙ Objectifs, « Alerte froid prolongé » (#599): choosing in a list keeps it where it was on
+//   screen (the card is drawn again around it; WebKit sent the page up), and keeps the focus.
 // Run after `npm run build`: node e2e/logement.mjs (port: E2E_PORT; E2E_BROWSER=webkit|chromium).
 // Captures in e2e/screenshots/logement-*.png.
 import { chromium, webkit } from 'playwright';
@@ -211,6 +213,28 @@ try {
     await frames(page);
     check((await inputs.nth(1).inputValue()) === '9', `surfaces : seconde valeur perdue (« ${await inputs.nth(1).inputValue()} »)`);
     await page.locator('#works-card').screenshot({ path: `${OUT}/logement-${BROWSER}-surfaces.png` });
+    await ctx.close();
+  });
+
+  // ------------------------------------------------------------ ⚙ Objectifs : Alerte froid prolongé
+  // #599: the card draws itself again around the list chosen from; WebKit sent the page ~900 px up
+  await part('alerte froid', async () => {
+    const { ctx, page } = await newPage();
+    await openDemo(page, base, null, 'parametres-objectifs');
+    await page.locator('#cold-card #cold-threshold').waitFor({ state: 'attached', timeout: 15000 });
+    for (const [sel, v] of [['#cold-threshold', '10'], ['#cold-days', '2']]) {
+      const list = page.locator(`#cold-card ${sel}`);
+      await list.scrollIntoViewIfNeeded();
+      const was = await list.evaluate((e) => ({ y: window.scrollY, top: e.getBoundingClientRect().top }));
+      await list.focus();
+      await list.selectOption(v);
+      await frames(page);
+      await ready(page);
+      const now = await page.locator(`#cold-card ${sel}`).evaluate((e) => ({ y: window.scrollY, top: e.getBoundingClientRect().top, focused: e === document.activeElement, value: e.value }));
+      check(was.y > 100, `alerte froid ${sel} : la liste n'est pas assez bas pour voir un saut (${Math.round(was.y)} px)`);
+      check(Math.abs(now.top - was.top) <= 2, `alerte froid ${sel} : la liste a bougé à l'écran (${Math.round(was.top)} → ${Math.round(now.top)} px, défilement ${Math.round(was.y)} → ${Math.round(now.y)} px)`);
+      check(now.focused && now.value === v, `alerte froid ${sel} : focus perdu ou choix non gardé`);
+    }
     await ctx.close();
   });
 } catch (e) {
