@@ -373,3 +373,34 @@ rapport réel.
 - Chaque défaut confirmé devient une **issue** (constat, scénario, impact) ; une correction de
   l'archive réelle reste un geste du propriétaire, avec sauvegarde et vérification des totaux
   (`python -m collector verify` avant et après) : l'audit, lui, ne réécrit jamais rien.
+
+## 9. Les trous : cause probable et traitement par l'appli (#532)
+
+La liste des trous vit dans l'appli (État des données → « Source par source », chaque source dépliée),
+calculée sur l'appareil à partir des documents déchiffrés (`web/src/data-quality.ts`) : elle a besoin
+des dates et des noms, que le journal public ne peut pas montrer. Chaque trou de 3 jours ou plus dit :
+
+- **sa cause probable**, de la plus sûre à la moins sûre : chauffe-eau réinstallé ; même trou que les
+  radiateurs ; appareil injoignable (relevé de nuit des modules) ; coupure de courant (redémarrage de
+  la passerelle) ou d'Internet (journal des incidents) ; **collecte Intuis en échec** (nuits en échec
+  du journal des appareils, dans les 35 jours que chaque collecte redemande) ; **collecte arrêtée** (le
+  compteur Linky et la station manquent aussi ces jours-là) ; sinon, l'historique Intuis n'a rien
+  renvoyé (ni les jours ni le total du mois). Une pièce **arrêtée volontairement** (⚙ Mon logement)
+  n'a pas de trou : pas de données attendues ;
+- **s'il est récupérable** : un trou de collecte (échec, arrêt) est encore chez Intuis, qui garde son
+  historique : relancer « Collecte quotidienne » en cochant « Récupérer tout l'historique disponible » ;
+  un trou chez Intuis ne l'est pas ;
+- **ce qu'en fait l'appli** (« Dans l'appli : … », `gapTreatment`) : un jour manquant est **laissé
+  vide**, rien n'est ajouté aux totaux, il est écarté des comparaisons (signature, jours inhabituels,
+  « Expliquer un mois ») ; « Jours perdus chez Intuis » peut l'estimer **à part**, jamais ajouté aux
+  mesures ; un jour estimé depuis le total du mois est compté une fois, comme estimé ; une suite de
+  0 kWh est une mesure, pas un manque.
+
+**Jamais de double compte** : la reconstitution ne vise que des pièces-jours sans aucune valeur et ne
+change pas le total mesuré (test à graine fixe, `reconstitute.test.ts`) ; un jour présent dans deux
+fichiers d'année est lu une fois (§ 8, `deux-fichiers`) ; un jour estimé qui a des heures mesurées est
+signalé (§ 8, `estime-sur-reel`), compté une seule fois.
+
+**L'absence du foyer n'explique pas un trou** : absent, les radiateurs continuent d'envoyer leurs
+relevés (hors-gel, 0 kWh) ; elle peut expliquer une suite de 0 kWh, pas un jour sans valeur. C'est
+pourquoi elle n'est pas proposée comme cause d'un manque.

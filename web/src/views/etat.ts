@@ -17,6 +17,7 @@ import {
   curveParts,
   fineSource,
   gapPeriod,
+  gapTreatment,
   monthStatus,
   qualityReport,
   seenParts,
@@ -140,18 +141,19 @@ function sourceBlock(s: SourceQuality): string {
       }),
       `${s.label} : jours couverts par année`,
     )}
-    ${shown.length ? `<ul class="gaps">${shown.map(gapItem).join('')}</ul>` : '<p class="hint muted">Aucun trou de 3 jours ou plus.</p>'}
+    ${shown.length ? `<ul class="gaps">${shown.map((g) => gapItem(g, s.id)).join('')}</ul>` : '<p class="hint muted">Aucun trou de 3 jours ou plus.</p>'}
     ${more > 0 ? `<p class="hint muted">Et ${more} autre${more > 1 ? 's trous plus courts' : ' trou plus court'}.</p>` : ''}
     ${s.scattered ? `<p class="hint muted">${plural(s.scattered, 'jour')} isolé${s.scattered > 1 ? 's' : ''} sans valeur (1 ou 2 jours de suite).</p>` : ''}
     ${s.notes.map((n) => `<p class="hint muted">${esc(n)}</p>`).join('')}
   </details>`;
 }
 
-function gapItem(g: Gap): string {
+function gapItem(g: Gap, id: SourceQuality['id']): string {
   const what = g.kind === 'zero' ? `0 kWh pendant ${g.days} jours` : `${g.ongoing ? 'Muet depuis' : 'Trou de'} ${g.days} jour${g.days > 1 ? 's' : ''}`;
   return `<li><p><strong>${esc(what)}</strong>, ${esc(g.who)}, ${esc(gapPeriod(g))}.</p>
     <p>Cause probable : ${esc(g.cause)}.${g.link ? ` <a href="${esc(g.link)}">Voir l’état des appareils</a>` : ''}</p>
-    <p class="muted">Récupérable ? ${esc(g.recover)}</p></li>`;
+    <p class="muted">Récupérable ? ${esc(g.recover)}</p>
+    <p class="muted">Dans l’appli : ${esc(gapTreatment(id, g))}</p></li>`;
 }
 
 /** The half-hour and hourly sources, loaded on demand (several documents). */
