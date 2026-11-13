@@ -10,6 +10,8 @@
 // validInvoice, Object.hasOwn in parseRoute and parseStopped, the days check of the cold draft).
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { COLD_DAYS, COLD_MAX_ROOMS, parseColdConfig, parseColdDraft } from './cold';
+import { parseAuditReport } from './audit-report';
+import auditFixture from './__fixtures__/audit-report.json';
 import { ARGON2_MAX, ARGON2_MIN, BadEnvelope, checkEnvelope, checkKeyInfo } from './crypto';
 import { textCell, untextCell } from './csv';
 import { parseEvInput } from './ev';
@@ -637,6 +639,42 @@ describe('#359 fuzz : adresses, facture, CSV, enveloppes', () => {
       const fallback: object = { repli: true };
       const v = await loadNote<object>('fuzz', 'demo', key, () => ({ lu: true }), fallback);
       assert(v === fallback, 'une note forgée a été lue');
+    });
+  });
+});
+
+describe('#532 fuzz : rapport d’audit ouvert depuis un fichier', () => {
+  it('une erreur en français, ou un rapport aux champs typés et bornés', () => {
+    const base = auditFixture as unknown as Record<string, unknown>;
+    const FIELDS = ['kind', 'v', 'made', 'last', 'timezone', 'checks', 'thresholds', 'findings'];
+    fuzz('parseAuditReport', (r) => {
+      let raw: unknown;
+      if (r() < 0.2) raw = anyValue(r);
+      else {
+        const o: Record<string, unknown> = { ...base };
+        for (let i = Math.floor(r() * 3); i > 0; i--) {
+          const k = pick(r, [...FIELDS, '__proto__', 'constructor']);
+          const v = k === 'checks' || k === 'findings' ? [...(Array.isArray(base[k]) ? (base[k] as unknown[]) : []), anyValue(r), { ...pick(r, (base.findings as Record<string, unknown>[]) ?? [{}]), [pick(r, ['day', 'value', 'text', 'code', 'room'])]: anyValue(r) }] : anyValue(r);
+          Object.defineProperty(o, k, { value: v, enumerable: true, configurable: true, writable: true });
+        }
+        raw = o;
+      }
+      let rep;
+      try {
+        rep = parseAuditReport(raw);
+      } catch (err) {
+        notPolluted();
+        return assert(err instanceof Error && /[a-zé]/.test(err.message), 'message');
+      }
+      notPolluted();
+      assert(realDay(rep.made), 'date du rapport');
+      const codes = new Set(rep.checks.map((c) => c.code));
+      for (const c of rep.checks) assert(isStr(c.title) && Number.isFinite(c.count) && c.count >= 0 && Number.isFinite(c.shown), 'contrôle');
+      for (const f of rep.findings) {
+        assert(codes.has(f.code) && isStr(f.text) && f.text.length <= 600, 'cas');
+        assert(f.day === undefined || realDay(f.day), 'jour');
+        assert(f.value === undefined || Number.isFinite(f.value), 'valeur');
+      }
     });
   });
 });

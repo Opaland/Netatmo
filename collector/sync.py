@@ -44,6 +44,11 @@ STRATEGIES = [("home", ALL)] + [("home", t) for t in MEASURE_TYPES] + [("room", 
 TEMPERATURES = "temperature,sp_temperature"
 HOURLY_DAYS_BACKFILL = 365
 HOURLY_DAYS_SYNC = 4
+# A month whose days fall short of its total by no more than this is complete (the two scales of the
+# same backend agree within rounding and late values). Also the tolerance of the data audit (#532)
+# when it compares two scales of one series (collector/audit.py).
+MONTH_GAP_WH = 100.0
+MONTH_GAP_SHARE = 0.05
 
 Series = dict[str, list[tuple[int, float]]]
 ColSeries = dict[str, list[tuple[int, Columns]]]
@@ -234,7 +239,7 @@ class Syncer:
                 days = {d: v for d, v in year_daily.items() if d.startswith(month)}
                 have = sum(days.values())
                 gap = month_wh - have
-                if gap <= max(100.0, 0.05 * month_wh):
+                if gap <= max(MONTH_GAP_WH, MONTH_GAP_SHARE * month_wh):
                     continue
                 # Never before yesterday: today's values are still arriving.
                 limit = to_local_day(int(time.time()) - DAY, home.timezone)

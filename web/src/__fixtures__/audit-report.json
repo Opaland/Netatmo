@@ -1,0 +1,271 @@
+{
+ "kind": "audit-donnees",
+ "v": 1,
+ "made": "2024-05-01",
+ "last": "2024-04-30",
+ "timezone": "Europe/Paris",
+ "checks": [
+  {
+   "code": "cle-invalide",
+   "group": "dates",
+   "title": "Date illisible ou impossible",
+   "what": "une clé de la série n'est pas une date de la forme attendue, ou n'existe pas au calendrier",
+   "app": "la valeur est ignorée ou rangée à part : elle ne compte dans aucun jour",
+   "level": "defaut",
+   "count": 0,
+   "months": {},
+   "shown": 0
+  },
+  {
+   "code": "doublon-horodatage",
+   "group": "dates",
+   "title": "Même instant écrit deux fois",
+   "what": "deux clés désignent le même jour ou la même heure (écritures différentes, ou clé répétée dans le fichier)",
+   "app": "une seule des deux valeurs est lue, l'autre est perdue sans le dire",
+   "level": "defaut",
+   "count": 1,
+   "months": {
+    "2024-04": 1
+   },
+   "shown": 1
+  },
+  {
+   "code": "mauvais-fichier",
+   "group": "dates",
+   "title": "Jour rangé dans le fichier d'une autre année",
+   "what": "le jour est daté d'une année et rangé dans le fichier d'une autre, souvent à la borne de fin d'année",
+   "app": "le jour est lu, mais la couverture de l'année le compte du mauvais côté",
+   "level": "defaut",
+   "count": 1,
+   "months": {
+    "2024-03": 1
+   },
+   "shown": 1
+  },
+  {
+   "code": "deux-fichiers",
+   "group": "dates",
+   "title": "Même jour dans deux fichiers d'année",
+   "what": "la même série a une valeur pour ce jour dans deux fichiers d'année",
+   "app": "une seule valeur est lue, celle du fichier de l'année du jour (jamais la somme des deux)",
+   "level": "defaut",
+   "count": 1,
+   "months": {
+    "2024-03": 1
+   },
+   "shown": 1
+  },
+  {
+   "code": "heure-inexistante",
+   "group": "dates",
+   "title": "Heure qui n'existe pas (changement d'heure)",
+   "what": "une valeur est posée sur une heure locale qui n'existe pas, celle que le passage à l'heure d'été saute",
+   "app": "la valeur compte dans le jour, mais à une heure qu'aucune horloge n'a affichée",
+   "level": "defaut",
+   "count": 1,
+   "months": {
+    "2024-03": 1
+   },
+   "shown": 1
+  },
+  {
+   "code": "decalage-heures",
+   "group": "dates",
+   "title": "Heures décalées par rapport au jour",
+   "what": "la somme des heures (ou demi-heures) ne retrouve le total du jour qu'une fois décalée : heures en UTC au lieu de l'heure de Paris, ou rangées sous le mauvais jour",
+   "app": "les courbes heure par heure sont décalées d'autant ; les totaux par jour ne changent pas",
+   "level": "a-verifier",
+   "count": 0,
+   "months": {},
+   "shown": 0
+  },
+  {
+   "code": "decalage-fuseau",
+   "group": "dates",
+   "title": "Heures d'Intuis et du Linky décalées",
+   "what": "la courbe heure par heure des radiateurs suit celle du compteur Linky avec une ou deux heures d'écart : l'une des deux est rangée en UTC au lieu de l'heure de Paris ?",
+   "app": "les courbes heure par heure et le partage heures pleines / creuses sont décalés d'autant",
+   "level": "a-verifier",
+   "count": 0,
+   "months": {},
+   "shown": 0
+  },
+  {
+   "code": "decalage-jour-linky",
+   "group": "dates",
+   "title": "Intuis et Linky décalés d'un jour",
+   "what": "les radiateurs dépassent le compteur Linky plusieurs jours du mois, mais plus du tout si l'un est décalé d'un jour",
+   "app": "le recoupement Intuis / Linky et la reconstitution des jours perdus se trompent de jour",
+   "level": "a-verifier",
+   "count": 0,
+   "months": {},
+   "shown": 0
+  },
+  {
+   "code": "estime-sur-reel",
+   "group": "dates",
+   "title": "Jour estimé qui a des heures mesurées",
+   "what": "le jour est marqué « estimé » (part du total du mois), mais Intuis a des relevés à l'heure ou à la demi-heure ce jour-là : une mesure existe",
+   "app": "le jour est compté une fois, comme estimé : jamais ajouté aux heures mesurées",
+   "level": "a-verifier",
+   "count": 0,
+   "months": {},
+   "shown": 0
+  },
+  {
+   "code": "marque-sans-valeur",
+   "group": "dates",
+   "title": "Jour marqué estimé sans valeur",
+   "what": "le jour est marqué « estimé » mais aucune valeur n'est rangée ce jour-là",
+   "app": "l'application le compte comme estimé, à 0 kWh",
+   "level": "defaut",
+   "count": 0,
+   "months": {},
+   "shown": 0
+  },
+  {
+   "code": "tarifs-additionnes",
+   "group": "dates",
+   "title": "Jour et tarifs qui ne s'accordent pas",
+   "what": "l'énergie du jour vaut deux fois la somme de ses tarifs (deux familles de mesure additionnées) ou moins que cette somme (impossible : le jour garde la plus grande famille)",
+   "app": "le total du jour et le partage heures pleines / creuses ne disent pas la même chose",
+   "level": "defaut",
+   "count": 0,
+   "months": {},
+   "shown": 0
+  },
+  {
+   "code": "deux-sources",
+   "group": "dates",
+   "title": "Deux sources pour la même énergie",
+   "what": "une prise ou un capteur mesure jour après jour la même énergie qu'une pièce Intuis",
+   "app": "« Autres usages » la retire une seconde fois du Linky : elle y est comptée deux fois",
+   "level": "a-verifier",
+   "count": 1,
+   "months": {
+    "2024-03": 1
+   },
+   "shown": 1
+  }
+ ],
+ "thresholds": [
+  {
+   "name": "ecart_absolu",
+   "value": 100.0,
+   "unit": "Wh",
+   "why": "écart toléré entre deux échelles d'une même série (heures et jour, tarifs et jour) : celui que la collecte accepte entre le total du mois et ses jours (collector/sync.py)",
+   "hypothesis": true
+  },
+  {
+   "name": "ecart_relatif",
+   "value": 5.0,
+   "unit": "%",
+   "why": "même origine que l'écart absolu ; le plus grand des deux s'applique",
+   "hypothesis": true
+  },
+  {
+   "name": "jours_recents",
+   "value": 4,
+   "unit": "jours",
+   "why": "les derniers jours ne sont pas comparés : la collecte relit leurs heures chaque nuit, les valeurs arrivent en retard",
+   "hypothesis": false
+  },
+  {
+   "name": "jours_min_mois",
+   "value": 7,
+   "unit": "jours",
+   "why": "jours comparables d'un mois en dessous desquels on ne conclut pas à un décalage (une semaine)",
+   "hypothesis": true
+  },
+  {
+   "name": "part_decalee",
+   "value": 80,
+   "unit": "%",
+   "why": "part des jours comparables qui doivent coller avec un même décalage, alors que la moitié au plus collent sans",
+   "hypothesis": true
+  },
+  {
+   "name": "gain_correlation",
+   "value": 0.1,
+   "unit": "",
+   "why": "gain de corrélation entre les heures d'Intuis et du Linky, une fois décalées, au-delà duquel on signale le décalage (sur au moins une semaine d'heures communes)",
+   "hypothesis": true
+  },
+  {
+   "name": "jours_linky_min",
+   "value": 3,
+   "unit": "jours",
+   "why": "jours d'un mois où Intuis dépasse le Linky avant de chercher un décalage d'un jour (un ou deux jours isolés sont déjà comptés dans le bilan)",
+   "hypothesis": true
+  },
+  {
+   "name": "jours_sources_min",
+   "value": 14,
+   "unit": "jours",
+   "why": "jours communs (les deux sources au-dessus de l'écart absolu) avant de dire que deux sources mesurent la même chose",
+   "hypothesis": true
+  },
+  {
+   "name": "depassement_linky",
+   "value": 10,
+   "unit": "%",
+   "why": "Intuis au-dessus du Linky de plus de 10 % et 500 Wh : impossible (bilan qualité, collector/quality.py)",
+   "hypothesis": false
+  }
+ ],
+ "findings": [
+  {
+   "code": "deux-fichiers",
+   "doc": "2025",
+   "series": "énergie du jour (Intuis)",
+   "day": "2024-03-05",
+   "at": "2024-03-05",
+   "room": "1234500100",
+   "value": 1234.0,
+   "other": 4238.5,
+   "text": "« 2024-03-05 » est dans 2024.enc.json et dans 2025.enc.json"
+  },
+  {
+   "code": "deux-sources",
+   "doc": "shelly",
+   "series": "prise connectée, énergie du jour",
+   "day": "2024-03-01",
+   "at": "2024-03-01…2024-04-30",
+   "room": "1234500300",
+   "value": 61.0,
+   "other": 61.0,
+   "text": "la prise « Frigo Zorglub » donne 61 jours sur 61 la même énergie que cette pièce Intuis"
+  },
+  {
+   "code": "doublon-horodatage",
+   "doc": "2024",
+   "series": "énergie du jour (Intuis)",
+   "day": "2024-04-05",
+   "at": "2024-4-5",
+   "room": "1234500100",
+   "value": 999.0,
+   "other": 3460.0,
+   "text": "« 2024-4-5 » et « 2024-04-05 » désignent le même instant : deux valeurs pour une"
+  },
+  {
+   "code": "heure-inexistante",
+   "doc": "2024.hourly",
+   "series": "énergie par heure (Intuis)",
+   "day": "2024-03-31",
+   "at": "2024-03-31T02",
+   "room": "1234500100",
+   "value": 50.0,
+   "text": "« 2024-03-31T02 » n'existe pas à l'heure locale (Europe/Paris) : le passage à l'heure d'été la saute"
+  },
+  {
+   "code": "mauvais-fichier",
+   "doc": "2025",
+   "series": "énergie du jour (Intuis)",
+   "day": "2024-03-05",
+   "at": "2024-03-05",
+   "room": "1234500100",
+   "text": "« 2024-03-05 » est rangé dans 2025.enc.json, le fichier de 2025"
+  }
+ ],
+ "errors": []
+}

@@ -277,3 +277,82 @@ Passage du : _(date)_ — version : _(commit)_
   basses un jour froid relèvent des « jours suspects » de l'appli, pas de ce bilan)_
 - *Pièce arrêtée volontairement* — _(ses jours sont comptés « a », pas « m » : vérifier qu'aucune
   pièce ne reste en manquants chaque mois sans raison)_
+
+## 8. Audit des données : dates et chevauchements (#532)
+
+Demande du propriétaire (12/11/2026) : « reprendre toutes les données, existantes et récupérées :
+bonne date, bonne valeur ; pour les trous, vérifier qu'on n'a pas de chevauchement ou d'autre
+problème ». Le bilan du § 7 compte les jours ; l'audit regarde **chaque date et chaque série** de
+l'archive chiffrée (`collector/audit.py`), sans rien appeler ni rien réécrire.
+
+### Mode d'emploi (geste du propriétaire)
+
+1. GitHub → onglet **Actions** → workflow **Diagnostic** → *Run workflow* → cocher seulement
+   **« Bilan qualité et audit des données »**. Aucun secret à ajouter.
+2. Le journal de l'étape « Bilan qualité des données » donne, après le bilan du § 7, le **nombre de
+   cas par contrôle et par mois** (jamais une valeur, un nom, un identifiant ni un jour : le journal
+   est public ; test : `tests/test_audit.py`), puis les seuils utilisés.
+3. Le **détail** (jour ou heure exacts, valeurs, fichier, série, pièce) est l'artefact
+   **`audit-donnees`** du même passage (en bas de la page du passage, gardé 7 jours). Il est
+   **chiffré avec la clé des données**, comme les fichiers de `data/` : sans la phrase de passe, il ne
+   dit rien. Le télécharger, le décompresser (c'est un `.zip`).
+4. Dans l'appli : **État des données** → repli **« Année par année »** → **« Audit détaillé des données »** → *Ouvrir le
+   rapport…* → choisir `audit-donnees.enc.json`. Il est déchiffré sur l'appareil avec la clé déjà
+   ouverte, rien n'est envoyé ; il reste gardé chiffré sur cet appareil (« Oublier ce rapport »
+   l'efface).
+
+### Les contrôles
+
+Toutes les séries datées de tous les fichiers sont lues, quelle que soit la source (Intuis jour,
+heure, demi-heure, tarifs, températures ; Linky ; station ; météo ; prises ; Home Assistant ; volets ;
+appareils) : est une série tout objet dont les clés sont des dates.
+
+| Contrôle | Ce qu'il cherche | Ce que fait l'appli d'un tel jour |
+|---|---|---|
+| `cle-invalide` | une clé qui n'est pas une date de la forme de sa série, ou une date impossible (30 février) | ignorée |
+| `doublon-horodatage` | deux écritures du même instant (« 2024-1-5 » et « 2024-01-05 »), ou la même clé deux fois dans un fichier | une seule valeur lue, l'autre perdue sans le dire |
+| `mauvais-fichier` | un jour rangé dans le fichier d'une autre année (borne de fin d'année) | lu, mais compté dans la couverture de la mauvaise année |
+| `deux-fichiers` | le même jour d'une même série dans deux fichiers d'année | **une seule valeur, celle du fichier de l'année du jour** (avant #532, l'appli additionnait les deux ; corrigé, `aggregate.ts` `toRecords`, et le bilan du § 7, `storage.py` `own_year_first`) |
+| `heure-inexistante` | une valeur sur l'heure que le passage à l'heure d'été saute (2 h–3 h, heure de Paris), dans une série horaire ou à la demi-heure | comptée dans le jour, à une heure qu'aucune horloge n'a affichée |
+| `decalage-heures` | des heures (demi-heures) dont la somme ne retrouve le total du jour qu'une fois décalées d'1 ou 2 h (UTC au lieu de l'heure de Paris) ou d'un jour (rangées sous le mauvais jour) ; Intuis heure et demi-heure contre le jour, courbe Linky contre le jour Linky | courbes heure par heure décalées d'autant |
+| `decalage-fuseau` | la courbe heure par heure des radiateurs suit celle du Linky avec 1 ou 2 h d'écart (corrélation) | idem, et partage heures pleines / creuses décalé |
+| `decalage-jour-linky` | Intuis dépasse le Linky plusieurs jours d'un mois, mais plus si l'un des deux est pris un jour plus tôt ou plus tard | recoupement et reconstitution sur le mauvais jour |
+| `estime-sur-reel` | un jour marqué estimé (part du total du mois) pour lequel Intuis a pourtant des heures ou des demi-heures mesurées (deux parts différentes dans un même mois ne sont pas un défaut : la reprise d'historique répartit deux fois un mois coupé par deux de ses fenêtres d'un an) | compté une fois, comme estimé : jamais ajouté aux heures mesurées |
+| `marque-sans-valeur` | un jour marqué estimé sans valeur | compté estimé, à 0 kWh |
+| `tarifs-additionnes` | un jour qui vaut deux fois la somme de ses tarifs (deux familles de mesure additionnées) ou moins qu'elle | total du jour et partage HP / HC en désaccord |
+| `deux-sources` | une prise ou un capteur Home Assistant qui mesure jour après jour la même énergie qu'une pièce Intuis | « Autres usages » la retire deux fois du Linky |
+
+Robustesse : un fichier illisible ou une structure inattendue n'arrête ni le bilan du § 7 ni les autres contrôles ; le journal dit « Non vérifié : … » avec le nom du contrôle (ou le genre de fichier, l'année masquée) et le type d'erreur, l'appli le redit en tête du rapport.
+
+Limite connue : un décalage d'une heure se voit mal dans les **totaux** d'un jour quand la
+consommation varie peu autour de minuit ; c'est pourquoi `decalage-fuseau` compare aussi les
+**profils** horaires d'Intuis et du Linky. Sans courbe Linky, seul le décalage d'un jour est sûr.
+
+### Les seuils
+
+Chaque seuil qui change ce qui est signalé est nommé une fois (`THRESHOLDS`, `collector/audit.py`),
+avec sa raison ; le rapport les porte et l'appli les affiche (« Seuils utilisés »). Ceux qui ne
+viennent pas d'une mesure ou d'une règle sont marqués **hypothèse** : à confirmer sur le premier
+rapport réel.
+
+| Seuil | Valeur | Raison | Statut |
+|---|---|---|---|
+| `ecart_absolu`, `ecart_relatif` | 100 Wh, 5 % (le plus grand) | l'écart que la collecte accepte déjà entre le total du mois et ses jours (`sync.py`, `MONTH_GAP_*`), repris pour deux échelles d'une même série | hypothèse |
+| `jours_recents` | 4 jours | la collecte relit les heures des 4 derniers jours chaque nuit (`HOURLY_DAYS_SYNC`) : valeurs pas encore définitives | justifié |
+| `jours_min_mois` | 7 jours | jours comparables d'un mois en dessous desquels on ne conclut pas à un décalage | hypothèse |
+| `part_decalee` | 80 % | part des jours qui doivent coller avec un même décalage (et la moitié au plus sans) | hypothèse |
+| `gain_correlation` | 0,1 | gain de corrélation Intuis / Linky d'un décalage avant de le signaler | hypothèse |
+| `jours_linky_min` | 3 jours | jours où Intuis dépasse le Linky avant de chercher un décalage d'un jour | hypothèse |
+| `jours_sources_min` | 14 jours | jours communs avant de dire que deux sources mesurent la même chose | hypothèse |
+| `depassement_linky` | 10 % et 500 Wh | Intuis ne peut pas dépasser le compteur qui le mesure (bilan § 7, `quality.py`) | justifié |
+
+### Ce que le propriétaire regarde
+
+- Dans le **journal** : une ligne non nulle autre que `heure-inexistante` en mars ou `decalage-*`
+  isolé sur un mois mérite l'ouverture du détail.
+- Dans le **détail** : pour chaque cas, le fichier et la série disent d'où il vient ; un
+  `deux-fichiers` ou un `doublon-horodatage` dit une valeur perdue ; un `decalage-*` sur plusieurs
+  mois de suite dit une série rangée dans le mauvais fuseau.
+- Chaque défaut confirmé devient une **issue** (constat, scénario, impact) ; une correction de
+  l'archive réelle reste un geste du propriétaire, avec sauvegarde et vérification des totaux
+  (`python -m collector verify` avant et après) : l'audit, lui, ne réécrit jamais rien.

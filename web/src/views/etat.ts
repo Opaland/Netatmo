@@ -27,6 +27,7 @@ import { offlineDays, offlineModules, restarts, setupDates, splitStopped } from 
 import { MONTHS_LONG, dayShort, plural, withUnit } from '../glossary';
 import { suspectDays } from '../reconstitute';
 import { html } from '../trusted';
+import { lazyCard } from '../lazy';
 import { esc } from '../ui';
 import { stoppedRooms } from './offline-rooms';
 import { incidentsCard } from './incidents';
@@ -113,9 +114,13 @@ export function mountEtat(el: HTMLElement | null) {
         <p>${esc(v.headline)}.</p>${v.counts ? `<p class="hint muted">${esc(v.counts)}</p>` : ''}${v.reasons.length ? `<ul>${v.reasons.map((x) => `<li>${esc(x)}</li>`).join('')}</ul>` : ''}${v.answer ? `<p class="hint${v.reasons.length ? '' : ' muted'}">${esc(v.answer)}</p>` : ''}</div>`,
         )
         .join('')}
+      <div id="audit-card"><details class="fold"><summary><h3>Audit détaillé des données</h3> <span class="fold-sub">chargement…</span></summary></details></div>
     </details>
     ${incidentsCard(rawDataset() ?? ds!, stoppedRooms(), SOURCE_NAME)}`;
   void fine(i);
+  // #532: the detailed audit (a report made by the workflow Diagnostic), loaded on demand, folded inside
+  // « Année par année » (État des données holds in 4 screens, #387: no height of its own while closed)
+  void lazyCard(() => import('./audit'), (m) => m.mountAudit(document.getElementById('audit-card')), { zone: 'audit-card', what: 'Audit détaillé' });
 }
 
 const LEVEL_TOKEN = { good: '--state-good', fair: '--state-warn', poor: '--state-bad' } as const;

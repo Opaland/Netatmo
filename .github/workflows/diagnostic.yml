@@ -18,7 +18,7 @@ on:
         type: boolean
         default: false
       qualite:
-        description: "Bilan qualité des données (archive chiffrée : nombres par mois, sans valeurs ni noms, S-1.32)"
+        description: "Bilan qualité et audit des données (journal : nombres par mois ; détail chiffré en artefact, S-1.32, #532)"
         type: boolean
         default: false
 
@@ -67,4 +67,15 @@ jobs:
           STOPPED_ROOMS_JSON: ${{ inputs.qualite && secrets.STOPPED_ROOMS_JSON || '' }}
           # #502: the plaintext variable as narrowly as the secret (only the quality report reads it)
           STOPPED_ROOMS_JSON_VARIABLE: ${{ inputs.qualite && vars.STOPPED_ROOMS_JSON || '' }}
-        run: python -m collector diagnose --qualite
+        # #532: the audit of the dates and overlaps prints counts per month too; its detail (days,
+        # values) is written encrypted with the data key, for the app only (État des données).
+        run: python -m collector diagnose --qualite --rapport "$RUNNER_TEMP/audit"
+      # #532: the encrypted detail of the audit (same envelope as data/), kept 7 days: the owner
+      # downloads it, unzips it and opens audit-donnees.enc.json in the app. Never in clear.
+      - uses: actions/upload-artifact@v4
+        if: ${{ inputs.qualite }}
+        with:
+          name: audit-donnees
+          path: ${{ runner.temp }}/audit/audit-donnees.enc.json
+          retention-days: 7
+          if-no-files-found: error
