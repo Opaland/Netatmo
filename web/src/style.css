@@ -1143,6 +1143,21 @@ th {
 .table-wrap thead th:first-child {
   z-index: 2;
 }
+/* #594 (WCAG 2.4.11): in a table of fields (⚙ Sources, Air et confort), a field must fit whole
+   beside the pinned column, ring included (ui.ts keepFocusClear scrolls it there). At
+   360 px a pinned name of « Tableau électrique · canal 1 » left 90 px for a 244 px field: the
+   name wraps within 30vw (words whole: the sweep refuses a cut word, #384; a longer one widens
+   the column), the field stays within 32vw. The header keeps one line, as in every table: the
+   row heights of Air et confort do not move. Measured by e2e/clavier.mjs at 360 px, the CI's
+   font; the room left beside « Pièce (radiateurs) » is about 120 px. */
+.table-wrap:has(td input, td select, td textarea) td:first-child {
+  max-width: 30vw;
+  white-space: normal;
+  overflow-wrap: normal;
+}
+.table-wrap td :is(input, select, textarea) {
+  max-width: 32vw;
+}
 .num {
   text-align: right;
 }

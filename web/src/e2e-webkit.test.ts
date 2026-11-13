@@ -27,8 +27,20 @@ function webkitReady(): string[] {
 
 /** The WebKit jobs of `yaml` (their name starts with e2e-webkit). */
 const webkitJobs = (yaml: string) => [...yaml.matchAll(/^ {2}(e2e-webkit[\w-]*):\s*$/gm)].map((m) => m[1]);
-/** The npm scripts run by the WebKit jobs of `yaml`. */
-const inWebkitJob = (yaml: string) => new Set(ciSteps(yaml, webkitJobs(yaml)).map((s) => /^npm run (\S+)$/.exec(s.cmd)?.[1]).filter(Boolean));
+/** The npm scripts run by the WebKit jobs of `yaml`, with those they run in turn (`e2e:sweep` runs `e2e:clavier`). */
+function inWebkitJob(yaml: string): Set<string> {
+  const run = new Set<string>();
+  const add = (name: string) => {
+    if (run.has(name)) return;
+    run.add(name);
+    for (const m of (scripts[name] ?? '').matchAll(/\bnpm run ([\w:-]+)/g)) add(m[1]);
+  };
+  for (const s of ciSteps(yaml, webkitJobs(yaml))) {
+    const name = /^npm run (\S+)$/.exec(s.cmd)?.[1];
+    if (name) add(name);
+  }
+  return run;
+}
 /** What can run in WebKit but the e2e-webkit job of `yaml` does not run. */
 const missing = (yaml: string) => webkitReady().filter((name) => !inWebkitJob(yaml).has(name));
 

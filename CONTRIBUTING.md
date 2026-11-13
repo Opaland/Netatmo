@@ -71,6 +71,14 @@ WebKit, les captures s'écrivent `webkit-<nom>.png` ; `e2e:hauteurs` y mesure sa
 ouvre la démo sur `trous-reels`, la forme des trous d'un vrai compte (#570) : jamais 0 pour un trou,
 « incomplet », comparaisons sans l'appareil non mesuré.
 
+`npm run e2e:clavier` (#594, lancé à la suite du balayage par `npm run e2e:sweep`, donc dans la porte)
+parcourt **au clavier seul** chaque route du registre et chaque pièce, à 360 × 800, sur la démo et
+sur `compte-charge` (replis ouverts) : à chaque arrêt de Tab, un anneau de focus (WCAG 2.4.7) et
+l'élément **peint** (`document.elementFromPoint` au centre d'une de ses lignes, WCAG 2.4.11) ; dans
+un tableau qui défile, le champ entier à droite de la colonne collante. Un auto-contrôle (élément
+glissé sous un autre, sans anneau, à moitié sous une colonne collante) le fait échouer d'abord.
+`E2E_BROWSER=webkit` le lance dans WebKit ; `CLAVIER_ROUTES=<regex>` en restreint les routes.
+
 Les **limites de hauteur** des pages (l'Accueil en 3 écrans d'iPhone 13, l'Historique en 4…) sont
 écrites une fois, dans `web/e2e/hauteurs-limites.mjs`, que lisent la garde (`e2e/features.mjs`) et
 `npm run e2e:hauteurs` (#556) : ce dernier imprime, en DejaVu Sans, la hauteur de chaque écran du

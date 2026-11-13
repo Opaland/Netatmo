@@ -1,7 +1,10 @@
 // #353: what every end-to-end script needs, in one place: the preview server, the « view ready »
 // signal (#260) instead of fixed delays, the demo opening (optionally on a named fixture) and
 // the axe audit. New scripts use it; the older ones move to it when they are touched.
-import { spawn } from 'node:child_process';
+import { execFileSync, spawn } from 'node:child_process';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import AxeBuilder from '@axe-core/playwright';
 import { assertFreshDist } from './dist-a-jour.mjs';
 
@@ -103,3 +106,92 @@ export function knownFailures(browser, known, fail) {
     report: () => lines.forEach((l) => console.log(l)),
   };
 }
+
+const WEB = join(dirname(fileURLToPath(import.meta.url)), '..');
+
+/**
+ * Every route of the registry (src/router.ts): the five tabs, the simple view, each tool, meter
+ * page, history page and settings page, and the first launch. Rooms (« piece-<id> ») come from
+ * the data opened (roomRoutes). Shared by the sweep and the keyboard walk (#594).
+ */
+export function registryRoutes() {
+  const src = readFileSync(join(WEB, 'src/router.ts'), 'utf8');
+  const keys = (name) => {
+    const block = new RegExp(`export const ${name} = \\{([\\s\\S]*?)\\} as const;`).exec(src);
+    if (!block) throw new Error(`router.ts : ${name} introuvable`);
+    return [...block[1].matchAll(/^\s*'?([\w-]+)'?\s*:/gm)].map((m) => m[1]);
+  };
+  const tabs = [...src.matchAll(/^\s*\['(\w+)', '[^']+'\],$/gm)].map((m) => m[1]);
+  const simple = /SIMPLE_PAGES = new Set\(\[([^\]]+)\]\)/.exec(src)[1].match(/[\w-]+/g);
+  return [
+    ...new Set(tabs),
+    ...simple,
+    ...keys('TOOLS').map((k) => `outils-${k}`),
+    ...keys('METER_PAGES').map((k) => `compteur-${k}`),
+    ...keys('HISTORY_PAGES').map((k) => `historique-${k}`),
+    'parametres',
+    ...keys('SETTINGS').map((k) => `parametres-${k}`),
+    'bienvenue',
+    'bienvenue-2',
+    'bienvenue-3',
+    'bienvenue-4',
+  ];
+}
+
+/** Folders of web/dist/demo-fixtures (made-up data, python -m collector fixtures), generated when missing. */
+export function dataFixtures() {
+  const dir = join(WEB, 'dist/demo-fixtures');
+  if (!existsSync(join(dir, 'sans-prix', 'meta.enc.json'))) {
+    console.log('Fixtures absentes : python3 -m collector fixtures');
+    execFileSync('python3', ['-m', 'collector', 'fixtures', '-o', dir], { cwd: join(WEB, '..'), stdio: 'inherit' });
+  }
+  return readdirSync(dir).filter((n) => existsSync(join(dir, n, 'meta.enc.json')));
+}
+
+/** Rooms of the list (« piece-<id> ») of the data opened, in their order. */
+export async function roomRoutes(page) {
+  await goto(page, 'pieces');
+  const hrefs = await page.$$eval('#view a[href^="#piece-"]', (as) => as.map((a) => a.getAttribute('href').slice(1)));
+  return [...new Set(hrefs)];
+}
+
+/**
+ * Serve a fixture folder (web/dist/demo-fixtures/<name>) where the app fetches data/, to open it
+ * as real data (lock screen, passphrase « demo »): nothing is copied into dist/.
+ */
+export async function serveFixtureAsData(ctx, base, dir) {
+  const prefix = `${new URL(base).pathname}data/`;
+  await ctx.route(
+    (url) => url.pathname.startsWith(prefix),
+    (route) => {
+      const file = join(dir, new URL(route.request().url()).pathname.slice(prefix.length));
+      return file.startsWith(`${dir}/`) && existsSync(file) ? route.fulfill({ path: file }) : route.fulfill({ status: 404, body: '' });
+    },
+  );
+}
+
+/** Every page of `ctx` starts with exactly these device settings ({ key: string }, app namespace). */
+export async function seedStorage(ctx, storage) {
+  await ctx.addInitScript(
+    (entries) => {
+      try {
+        // the app's namespace (src/scope.ts): « intuis-history@<dépôt> » under a path, else « intuis-history »
+        const dir = location.pathname.replace(/[^/]*$/, '').replace(/^\/+|\/+$/g, '');
+        const prefix = dir ? `intuis-history@${dir}` : 'intuis-history';
+        localStorage.clear();
+        for (const [k, v] of entries) localStorage.setItem(`${prefix}:${k}`, v);
+      } catch {
+        /* storage blocked: defaults */
+      }
+    },
+    Object.entries(storage),
+  );
+}
+
+/** What a device of a fuller account keeps (made up): Shelly clamp names of 60 characters without a space. */
+export const RICH_STORAGE = {
+  shelly: JSON.stringify({
+    names: { p4c0: 'Circuit_prises_cuisine_buanderie_et_cellier_du_sous-sol_nord', p4c1: 'Ballon_thermodynamique_garage_et_atelier_du_rez-de-chaussée' },
+    roles: { p4c1: 'water' },
+  }),
+};
