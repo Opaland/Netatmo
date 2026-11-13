@@ -4,6 +4,8 @@
 // - S-2.3: an invoice is reconciled and the gap explained (Synthèse);
 // - S-6.2: a works marker gives the signature before / after and kWh/m² (Analyse);
 // - S-6.6: the research export is anonymised (no name, no real date) and carries its licence.
+// - #249, #605: a lazy card opened offline says so, and comes back by « Réessayer » once online
+//   (moved from e2e/demo.mjs to run in both engines).
 // Run after `npm run build`: node e2e/features.mjs   (E2E_BROWSER=webkit|chromium, port E2E_PORT)
 import { spawn } from 'node:child_process';
 import { readFileSync } from 'node:fs';
@@ -150,6 +152,15 @@ const tileAmounts = (page) =>
     }),
   );
 
+/** Poll until the page reaches the server again (`path` answers 200), at most 10 s. */
+async function expect200(page, path) {
+  const ok = await page.evaluate(async (u) => {
+    for (const t0 = Date.now(); Date.now() - t0 < 10000; await new Promise((r) => setTimeout(r, 200)))
+      if (await fetch(u, { cache: 'no-store' }).then((r) => r.ok, () => false)) return true;
+    return false;
+  }, path);
+  check(ok, `réseau : ${path} injoignable 10 s après le retour en ligne`);
+}
 const recordViolations = () => {
   window.__csp = [];
   document.addEventListener('securitypolicyviolation', (e) => window.__csp.push(`${e.violatedDirective} ${(e.sample || '').slice(0, 60)}`.trim()));
@@ -435,6 +446,55 @@ try {
   }
 
   // #387: État des données, a verdict per source and the detail folded, holds in 4 screens
+  // #249: a lazy card that cannot load offline says so and offers to try again (never vanishes).
+  {
+    progress('carte différée hors ligne');
+    const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 }, serviceWorkers: 'block' });
+    await ctx.addInitScript(recordViolations);
+    const page = await ctx.newPage();
+    page.on('pageerror', (e) => errors.push(`${BROWSER} carte hors ligne: ${e.message}`));
+    try {
+      await page.goto(base);
+      await page.click('#demo');
+      await page.waitForSelector('header.top', { timeout: 30000 });
+      await go(page, 'accueil');
+      await page.waitForSelector('.kpi');
+      // #555: Outils is itself a lazy view, warmed when the browser is idle. Load it first (online,
+      // without the shutters card), so that offline only the card's own module is missing: otherwise
+      // the whole page says « indisponible » or the card, depending on whether the warm-up ran.
+      await go(page, 'outils-pac');
+      await ctx.setOffline(true);
+      await page.evaluate(() => (location.hash = '#outils-volets'));
+      const failed = page.locator('#shutters-zone .lazy-failed');
+      await failed.waitFor({ timeout: 15000 });
+      const text = await failed.innerText();
+      check(/indisponible hors connexion/.test(text) && /Réessayer/.test(text), `carte hors ligne : message inattendu « ${text} »`);
+      await audit(page, 'carte-hors-ligne');
+      await checkViolations(page, 'carte hors ligne');
+      // back online: the browser keeps the failed module until a reload, the card says so
+      await ctx.setOffline(false);
+      // (#308: Outils → Volets loads no document that would redraw the page when the network comes back:
+      // the « Réessayer » button itself sees that the module failed offline and reloads the page)
+      await page.waitForSelector('#shutters-zone [data-lazy-retry]', { timeout: 15000 });
+      // #605: WebKit keeps the failed module through a reload and even a new navigation (only an
+      // import made in the page once online fetches it again): « Réessayer » tries in place first,
+      // and reloads only when that fails again (Chromium keeps the failure until a reload, and the
+      // demo is then opened again from the lock screen). Seen red in WebKit before the fix.
+      // WebKit applies setOffline(false) a moment later: the household clicks once the network is back
+      await expect200(page, 'manifest.webmanifest');
+      await page.click('#shutters-zone [data-lazy-retry]');
+      await page.waitForSelector('#shutters-card, #demo', { timeout: 15000 }).catch(() => {});
+      if (await page.locator('#demo').count()) {
+        await page.click('#demo');
+        await page.waitForSelector('header.top', { timeout: 30000 });
+        await go(page, 'outils-volets');
+      }
+      await page.waitForSelector('#shutters-card', { timeout: 15000 }).catch(async () => errors.push(`${BROWSER} carte hors ligne : la carte ne revient pas par « Réessayer » (${(await page.locator('#shutters-zone').innerText().catch(() => '?')).slice(0, 120)})`));
+    } catch (err) {
+      errors.push(`${BROWSER} carte hors ligne : ${err}`);
+    }
+    await ctx.close();
+  }
   progress('état des données');
   {
     await go(page, 'etat');

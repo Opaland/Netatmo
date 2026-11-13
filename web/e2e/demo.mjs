@@ -902,43 +902,7 @@ try {
     }
     await ctx.close();
   }
-  // #249: a lazy card that cannot load offline says so and offers to try again (never vanishes).
-  {
-    progress('carte différée hors ligne');
-    const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 }, serviceWorkers: 'block' });
-    await ctx.addInitScript(recordViolations);
-    const page = await ctx.newPage();
-    page.on('pageerror', (e) => errors.push(`carte hors ligne: ${e.message}`));
-    try {
-      await openDemo(page);
-      await go(page, 'accueil');
-      await page.waitForSelector('.kpi');
-      // #555: Outils is itself a lazy view, warmed when the browser is idle. Load it first (online,
-      // without the shutters card), so that offline only the card's own module is missing: otherwise
-      // the whole page says « indisponible » or the card, depending on whether the warm-up ran.
-      await go(page, 'outils-pac');
-      await ctx.setOffline(true);
-      await page.evaluate(() => (location.hash = '#outils-volets'));
-      const failed = page.locator('#shutters-zone .lazy-failed');
-      await failed.waitFor({ timeout: 15000 });
-      const text = await failed.innerText();
-      check(/indisponible hors connexion/.test(text) && /Réessayer/.test(text), `carte hors ligne : message inattendu « ${text} »`);
-      await audit(page, 'carte-hors-ligne');
-      await checkViolations(page, 'carte hors ligne');
-      // back online: the browser keeps the failed module until a reload, the card says so
-      await ctx.setOffline(false);
-      // (#308: Outils → Volets loads no document that would redraw the page when the network comes back:
-      // the « Réessayer » button itself sees that the module failed offline and reloads the page)
-      await page.waitForSelector('#shutters-zone [data-lazy-retry]', { timeout: 15000 });
-      await Promise.all([page.waitForEvent('load'), page.click('#shutters-zone [data-lazy-retry]')]);
-      await openDemo(page);
-      await go(page, 'outils-volets');
-      await page.waitForSelector('#shutters-card', { timeout: 15000 }).catch(() => errors.push('carte hors ligne : la carte ne revient pas après rechargement'));
-    } catch (err) {
-      errors.push(`carte hors ligne : ${err}`);
-    }
-    await ctx.close();
-  }
+  // #249 (carte différée hors ligne): e2e/features.mjs, in Chromium and WebKit (#605).
   // #579: a view loaded on demand says it is coming to a screen reader (role="status" in a zone
   // aria-busy), and the zone is no longer busy once drawn. The module of « Hiver contre hiver » is
   // held back (warm-up included) until the wait has been read.

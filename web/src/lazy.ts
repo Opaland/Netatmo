@@ -11,7 +11,7 @@ import { html } from './trusted';
 type Zone = HTMLElement | string | null | undefined;
 
 const online = () => navigator.onLine !== false;
-/** A module could not be fetched offline: the browser keeps that failure until a reload. */
+/** A module could not be fetched offline: Chromium keeps that failure until a reload (WebKit: #605). */
 const importFailedOffline = { value: false };
 
 function zoneOf(zone: Zone): HTMLElement | null {
@@ -25,7 +25,7 @@ const MESSAGES: Record<'offline' | 'reload' | 'error', [string, string]> = {
 };
 
 /** Replace the content of `el` with the failure message and its button (no innerHTML). */
-function showFailure(el: HTMLElement, what: string, outcome: 'offline' | 'reload' | 'error', retry: () => void) {
+function showFailure(el: HTMLElement, what: string, outcome: 'offline' | 'reload' | 'error', retry: (thenReload: boolean) => void) {
   el.hidden = false;
   el.removeAttribute('aria-busy');
   const [text, label] = MESSAGES[outcome];
@@ -40,10 +40,12 @@ function showFailure(el: HTMLElement, what: string, outcome: 'offline' | 'reload
   b.dataset.lazyRetry = outcome;
   b.addEventListener('click', (e) => {
     e.stopPropagation(); // not an app-level click
-    // back online after a module failed offline: only a reload fetches it again
-    if (outcome === 'reload' || (online() && importFailedOffline.value)) return location.reload();
+    if (outcome === 'reload') return location.reload();
     p.remove();
-    retry();
+    // Back online after a module failed offline. Chromium keeps that failure until a reload; WebKit
+    // keeps it THROUGH a reload, and even a new navigation, but fetches it again for an import made
+    // in the page (#605). So: try in place first, and reload only if it fails again.
+    retry(online() && importFailedOffline.value);
   });
   p.append(b);
   el.replaceChildren(p);
@@ -56,11 +58,12 @@ function showFailure(el: HTMLElement, what: string, outcome: 'offline' | 'reload
  */
 export function lazyCard<M>(load: () => Promise<M>, fill: (m: M) => unknown, opts: { zone: Zone; what: string }): Promise<void> {
   const d = ds;
-  const run = (): Promise<void> =>
+  const run = (thenReload = false): Promise<void> =>
     track(runLazy(load, fill, { online, stale: () => ds !== d, what: opts.what, importFailedOffline }).then(({ outcome }) => {
       if (outcome === 'ok' || outcome === 'stale') return;
+      if (thenReload && outcome === 'reload') return location.reload(); // the in-place try failed (Chromium)
       const el = zoneOf(opts.zone);
-      if (el?.isConnected) showFailure(el, opts.what, outcome, () => void run());
+      if (el?.isConnected) showFailure(el, opts.what, outcome, (again) => void run(again));
     }));
   return run();
 }
