@@ -10,13 +10,12 @@
 // - the lock screen of a site without data offers the assistant.
 // Run after `npm run build`: node e2e/assistant.mjs (port: E2E_PORT; E2E_BROWSER=webkit|chromium).
 import { randomBytes } from 'node:crypto';
-import { mkdirSync } from 'node:fs';
 import { chromium, webkit } from 'playwright';
 import { frames, openData, ready, seriousAxe, startPreview } from './lib.mjs';
+import { capturesOut } from './captures.mjs';
 
 const BROWSER = process.env.E2E_BROWSER === 'webkit' ? 'webkit' : 'chromium';
-const OUT = process.env.E2E_OUT ?? 'e2e/screenshots';
-mkdirSync(OUT, { recursive: true });
+const OUT = capturesOut(); // #583: e2e/screenshots/ only in the CI's font
 const { base, stop } = await startPreview(Number(process.env.E2E_PORT ?? 4197));
 const errors = [];
 const check = (ok, msg) => ok || errors.push(`${BROWSER}: ${msg}`);

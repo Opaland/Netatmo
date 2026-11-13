@@ -7,15 +7,14 @@
 //   room alone in frost guard kept apart; Historique says how many days away each winter;
 // - 360 px phone, text at 200 %: no horizontal scroll, nothing sticks out;
 // - axe-core clean in light, dark and high contrast (7:1), light and dark.
-// Run after `npm run build`: node e2e/plannings.mjs   (port E2E_PORT, captures in E2E_OUT)
+// Run after `npm run build`: node e2e/plannings.mjs   (port E2E_PORT, captures: e2e/captures.mjs)
 import { spawn } from 'node:child_process';
-import { mkdirSync } from 'node:fs';
 import AxeBuilder from '@axe-core/playwright';
 import { chromium } from 'playwright';
+import { capturesOut } from './captures.mjs';
 
 const PORT = Number(process.env.E2E_PORT ?? 4187);
-const OUT = process.env.E2E_OUT ?? 'e2e/screenshots';
-mkdirSync(OUT, { recursive: true });
+const OUT = capturesOut(); // #583: e2e/screenshots/ only in the CI's font
 const busy = await fetch(`http://localhost:${PORT}/`).then(
   () => true,
   () => false,

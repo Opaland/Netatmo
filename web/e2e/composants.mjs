@@ -2,13 +2,12 @@
 // and high contrast, at 360 px with the system text at 200 %. Run: node e2e/composants.mjs
 // (starts `vite` itself; port: E2E_PORT). Captures in e2e/screenshots/composants-*.png.
 import { spawn } from 'node:child_process';
-import { mkdirSync } from 'node:fs';
 import AxeBuilder from '@axe-core/playwright';
 import { chromium, webkit } from 'playwright';
+import { capturesOut } from './captures.mjs';
 
 const PORT = Number(process.env.E2E_PORT ?? 4183);
-const OUT = process.env.E2E_OUT ?? 'e2e/screenshots';
-mkdirSync(OUT, { recursive: true });
+const OUT = capturesOut(); // #583: e2e/screenshots/ only in the CI's font
 const server = spawn(process.execPath, ['node_modules/vite/bin/vite.js', '--port', String(PORT), '--strictPort'], { stdio: 'ignore' });
 const base = `http://localhost:${PORT}/composants.html`;
 const errors = [];

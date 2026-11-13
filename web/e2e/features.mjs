@@ -6,16 +6,16 @@
 // - S-6.6: the research export is anonymised (no name, no real date) and carries its licence.
 // Run after `npm run build`: node e2e/features.mjs   (E2E_BROWSER=webkit|chromium, port E2E_PORT)
 import { spawn } from 'node:child_process';
-import { mkdirSync, readFileSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import AxeBuilder from '@axe-core/playwright';
 import { argon2Folder } from './argon2-data.mjs';
 import { displayOptions, measureHeight } from './hauteurs-limites.mjs';
 import { chromium, devices, webkit } from 'playwright';
+import { capturesOut } from './captures.mjs';
 
 const BROWSER = process.env.E2E_BROWSER === 'webkit' ? 'webkit' : 'chromium';
 const PORT = Number(process.env.E2E_PORT ?? 4181);
-const OUT = process.env.E2E_OUT ?? 'e2e/screenshots';
-mkdirSync(OUT, { recursive: true });
+const OUT = capturesOut(); // #583: e2e/screenshots/ only in the CI's font
 const busy = await fetch(`http://localhost:${PORT}/`).then(
   () => true,
   () => false,

@@ -158,6 +158,8 @@ quand un outil la rend impossible à refaire.
 - **Conduite** : une porte qui régénère les références tourne avec la police de la CI imposée au
   système (fichier `FONTCONFIG_FILE` qui écarte les autres polices et met DejaVu Sans pour
   `system-ui` et `sans-serif`), et `fc-match sans-serif` se vérifie avant de committer des captures.
+  Depuis #583, la machine le garde là où les captures s'écrivent (`web/e2e/captures.mjs`) : hors
+  de DejaVu Sans, elles vont dans `web/e2e/screenshots-poste/`, jamais commité.
 
 ### A16 · 12/11/2026 — Un invariant borné laissait passer le cas le plus exposé (revue v1.8)
 

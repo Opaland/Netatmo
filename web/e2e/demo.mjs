@@ -5,13 +5,13 @@
 // S-7.8, S-7.11, S-7.12: pinned room, swipe, offline.
 // Run after `npm run build`: node e2e/demo.mjs  (starts `vite preview` itself; port: E2E_PORT).
 import { spawn } from 'node:child_process';
-import { mkdirSync, readFileSync, readdirSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import AxeBuilder from '@axe-core/playwright';
 import { chromium, devices } from 'playwright';
+import { capturesOut } from './captures.mjs';
 
 const PORT = Number(process.env.E2E_PORT ?? 4179);
-const OUT = process.env.E2E_OUT ?? 'e2e/screenshots';
-mkdirSync(OUT, { recursive: true });
+const OUT = capturesOut(); // #583: e2e/screenshots/ only in the CI's font
 // A port that already answers belongs to another server: never test someone else's build.
 const busy = await fetch(`http://localhost:${PORT}/`).then(
   () => true,

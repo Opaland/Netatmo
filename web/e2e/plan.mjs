@@ -9,13 +9,12 @@
 // - Nothing of the plan is kept in clear on this device.
 // Run after `npm run build`: node e2e/plan.mjs (port: E2E_PORT; E2E_BROWSER=webkit|chromium).
 // Captures in e2e/screenshots/plan-*.png.
-import { mkdirSync } from 'node:fs';
 import { chromium, webkit } from 'playwright';
 import { frames, goto, openDemo, ready, seriousAxe, startPreview } from './lib.mjs';
+import { capturesOut } from './captures.mjs';
 
 const BROWSER = process.env.E2E_BROWSER === 'webkit' ? 'webkit' : 'chromium';
-const OUT = process.env.E2E_OUT ?? 'e2e/screenshots';
-mkdirSync(OUT, { recursive: true });
+const OUT = capturesOut(); // #583: e2e/screenshots/ only in the CI's font
 const { base, stop } = await startPreview(Number(process.env.E2E_PORT ?? 4202));
 const errors = [];
 const check = (ok, msg) => ok || errors.push(`${BROWSER}: ${msg}`);

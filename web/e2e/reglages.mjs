@@ -6,13 +6,12 @@
 // chaque valeur », « Afficher les valeurs ». #370: the control acted on stays where it was.
 // Run after `npm run build`: node e2e/reglages.mjs (port: E2E_PORT; E2E_BROWSER=webkit|chromium).
 // Captures in e2e/screenshots/reglages-*.png.
-import { mkdirSync } from 'node:fs';
 import { chromium, webkit } from 'playwright';
 import { goto, openDemo, ready, seriousAxe, startPreview, frames } from './lib.mjs';
+import { capturesOut } from './captures.mjs';
 
 const BROWSER = process.env.E2E_BROWSER === 'webkit' ? 'webkit' : 'chromium';
-const OUT = process.env.E2E_OUT ?? 'e2e/screenshots';
-mkdirSync(OUT, { recursive: true });
+const OUT = capturesOut(); // #583: e2e/screenshots/ only in the CI's font
 const { base, stop } = await startPreview(Number(process.env.E2E_PORT ?? 4191));
 const errors = [];
 const check = (ok, msg) => ok || errors.push(`${BROWSER}: ${msg}`);

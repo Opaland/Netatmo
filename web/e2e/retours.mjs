@@ -8,14 +8,13 @@
 // Run after `npm run build`: node e2e/retours.mjs  (starts `vite preview` itself; port: E2E_PORT;
 // E2E_BROWSER=webkit|chromium). Captures in e2e/screenshots/retours-*.png.
 import { spawn } from 'node:child_process';
-import { mkdirSync } from 'node:fs';
 import AxeBuilder from '@axe-core/playwright';
 import { chromium, webkit } from 'playwright';
+import { capturesOut } from './captures.mjs';
 
 const BROWSER = process.env.E2E_BROWSER === 'webkit' ? 'webkit' : 'chromium';
 const PORT = Number(process.env.E2E_PORT ?? 4189);
-const OUT = process.env.E2E_OUT ?? 'e2e/screenshots';
-mkdirSync(OUT, { recursive: true });
+const OUT = capturesOut(); // #583: e2e/screenshots/ only in the CI's font
 const busy = await fetch(`http://localhost:${PORT}/`).then(
   () => true,
   () => false,

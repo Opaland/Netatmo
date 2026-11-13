@@ -13,14 +13,14 @@
 // Run after `npm run build`: node e2e/pwa.mjs (serves dist/ itself, data/ answered by the demo
 // files, passphrase « demo »; port: E2E_PORT). Captures in e2e/screenshots/pwa-*.png.
 import { createServer } from 'node:http';
-import { mkdirSync, readFileSync, existsSync, statSync } from 'node:fs';
+import { readFileSync, existsSync, statSync } from 'node:fs';
 import { extname, join, normalize } from 'node:path';
 import AxeBuilder from '@axe-core/playwright';
 import { chromium } from 'playwright';
+import { capturesOut } from './captures.mjs';
 
 const PORT = Number(process.env.E2E_PORT ?? 4191);
-const OUT = process.env.E2E_OUT ?? 'e2e/screenshots';
-mkdirSync(OUT, { recursive: true });
+const OUT = capturesOut(); // #583: e2e/screenshots/ only in the CI's font
 const DIST = new URL('../dist/', import.meta.url).pathname;
 if (!existsSync(join(DIST, 'sw.js'))) {
   console.error('pwa : dist/sw.js absent, lancer `npm run build` avant.');
