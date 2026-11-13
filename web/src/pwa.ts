@@ -130,11 +130,37 @@ export function cachesToClear(names: string[], scope: string, tariffCache = TARI
   return names.filter((n) => n !== dataCache && (n === precache || n === tariffCache));
 }
 
+/** The worker, as startPwa registers it (relative to the page: Pages serves the app in a folder). */
+const SW_URL = 'sw.js';
+const SW_SCOPE = './';
+
+/** Set by reloadApp: the worker it installs claims this page, which is no other tab's update. */
+let appReloading = false;
+
+/** Resolve once `worker` is activated (or redundant), at the latest after `ms`. */
+function settled(worker: ServiceWorker | null, ms: number): Promise<void> {
+  return new Promise((done) => {
+    if (!worker || worker.state === 'activated' || worker.state === 'redundant') return done();
+    const timer = setTimeout(done, ms);
+    worker.addEventListener('statechange', () => {
+      if (worker.state !== 'activated' && worker.state !== 'redundant') return;
+      clearTimeout(timer);
+      done();
+    });
+  });
+}
+
 /**
  * Fetch the application again: the worker of this app is unregistered, its precache and the
- * tariffs dropped, then the page reloads and installs the current version. Untouched: the
- * remembered key (IndexedDB), the encrypted notes (localStorage), the encrypted data cache.
- * Needs the network (the code is downloaded again): refused offline.
+ * tariffs dropped, the current version registered again (installed, precached), then the page
+ * reloads. Untouched: the remembered key (IndexedDB), the encrypted notes (localStorage), the
+ * encrypted data cache. Needs the network (the code is downloaded again): refused offline.
+ *
+ * #604: the new registration is made BEFORE the reload. WebKit (Safari) empties every cache of
+ * the origin, the encrypted data included, when a page reloads after its last service worker
+ * registration was removed (seen in Playwright's WebKit: 17 → 0 entries; Chromium keeps them).
+ * Registered again first, the origin never has none, and the data cache stays (where the browser
+ * revives the old registration instead, it is removed again: that browser keeps the caches).
  */
 export async function reloadApp(): Promise<string | null> {
   if (!navigator.onLine) return 'Hors connexion : l’application ne peut pas être retéléchargée. Réessayez une fois en ligne.';
@@ -142,7 +168,18 @@ export async function reloadApp(): Promise<string | null> {
     const reg = 'serviceWorker' in navigator ? await navigator.serviceWorker.getRegistration() : undefined;
     const scope = reg?.scope ?? new URL('.', document.baseURI).href;
     if ('caches' in window) for (const name of cachesToClear(await caches.keys(), scope)) await caches.delete(name);
-    await reg?.unregister();
+    if (reg) {
+      appReloading = true;
+      await reg.unregister();
+      const next = await navigator.serviceWorker.register(SW_URL, { scope: SW_SCOPE });
+      const fresh = next.installing ?? next.waiting;
+      // A new registration (WebKit): its worker downloads the app again; reloaded before it is
+      // activated, the page would load uncontrolled. Chromium instead revives the registration
+      // being removed (same worker, nothing installing): removed again, as before #604, the
+      // reload installs the current version, and Chromium keeps the caches.
+      if (fresh) await settled(fresh, 15_000);
+      else await next.unregister();
+    }
   } catch (err) {
     return `Rechargement impossible : ${err instanceof Error ? err.message : String(err)}`;
   }
@@ -161,10 +198,11 @@ export function startPwa() {
   const sw = navigator.serviceWorker;
   const updater = createUpdater({
     sw: sw as unknown as SwContainer,
-    onUpdate: (kind) => showUpdateBanner(kind, () => void updater.apply()),
+    // the worker reloadApp installs claims this page: not « activated in another tab »
+    onUpdate: (kind) => appReloading || showUpdateBanner(kind, () => void updater.apply()),
     reload: () => location.reload(),
   });
-  sw.register('sw.js', { scope: './' }).then(
+  sw.register(SW_URL, { scope: SW_SCOPE }).then(
     (reg) => {
       // Playwright with service workers blocked resolves to undefined (a browser never does)
       if (!reg) return;
