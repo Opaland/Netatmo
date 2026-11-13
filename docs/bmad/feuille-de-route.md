@@ -14,6 +14,7 @@ et [`feuille-de-route.md`](../feuille-de-route.md) (revue à 6 personas, novembr
 | **v2.0** | Ouverture | Dépôt modèle (#29) ; assistant (#40) ; origine dédiée et transfert vers l'organisation (#229) ; branche `data` (#23) ; copie sur le NAS (#143) ; pont (#25) ; clé IA (#14) |
 | **v2.1** | Maison connectée | Plan de la maison (#202) ; Livebox (#282) ; NAS (#283) ; CPL (#284) ; TIC du Linky (#285) |
 | **v2.2** | Audit des données | Toutes les données reprises et vérifiées : bonnes dates, bonnes valeurs, trous et chevauchements (#532, demande du propriétaire du 12/11/2026) |
+| **v2.3** | Fiabilité et suites des revues | Lancée par le propriétaire le 13/11/2026, contenu cadré dans [`revues/v2.3-cadrage.md`](revues/v2.3-cadrage.md) : marge de l'Historique (#553) et de l'Accueil (#554) sans retirer d'information ; premier écran sous 50 % du budget (#555) ; mesure des hauteurs dans le dépôt (#556) ; suites de la revue v2.2 (#550) |
 | **Matériel (attend le propriétaire)** | Jalon sans date | #200, #24, #26, #281, #349, #350 : ils demandent un matériel ou un relevé que seul le propriétaire peut poser |
 
 ## Règle de passage d'une version à la suivante
