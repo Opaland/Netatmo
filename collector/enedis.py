@@ -496,10 +496,16 @@ def catch_up_curve(
     today: date | None = None,
 ) -> None:
     """#569: ask Enedis again the days of the last CURVE_KEEP_DAYS that hold NO half hour (before the
-    first night of the curve, or never sent), in CURVE_CHUNK_DAYS ranges, and add the half hours of
-    those days only: a day with at least one half hour is never asked nor rewritten. The nightly
-    collection keeps the recent days (CURVE_REFRESH_DAYS) for itself. A refusal (curve not kept
-    that far, no consent) stops the catch-up and is noted with its HTTP code only."""
+    first night of the curve, or never sent), in CURVE_CHUNK_DAYS ranges from the newest to the
+    oldest, and add the half hours of those days only: a day with at least one half hour is never
+    asked nor rewritten. The nightly collection keeps the recent days (CURVE_REFRESH_DAYS) for
+    itself. The first refusal (any answer but 200: curve not kept that far, no consent, too many
+    requests) stops the catch-up and is noted with its HTTP code only; the days of a range count as
+    asked only once Enedis has answered it.
+
+    Hypothesis (M4, not testable without the real API): `dateFin` is excluded, as in collect_curve,
+    and the half hour ending at midnight of `dateFin` belongs to the last day asked (parse_curve
+    keys it by its start); a point of another day is ignored (`wanted`)."""
     api = _Paced(http or _client(), token, min_interval)
     today = today or datetime.now(ZoneInfo(tz)).date()
     start = max(date.fromisoformat(first_day), today - timedelta(days=CURVE_KEEP_DAYS))
@@ -511,20 +517,15 @@ def catch_up_curve(
         if not have.get((start + timedelta(days=i)).isoformat())
     ]
     wanted = {d.isoformat() for d in absent}
-    refused: dict[str, str] = {}
-    for begin, end in day_ranges(absent, CURVE_CHUNK_DAYS):
-        for i in range((end - begin).days):
-            tally.asked(CURVE_SERIE, (begin + timedelta(days=i)).isoformat())
+    for begin, end in reversed(day_ranges(absent, CURVE_CHUNK_DAYS)):
         resp = api.get(API_CURVE, {"pointId": prm, "dateDebut": begin.isoformat(), "dateFin": end.isoformat()})
         if resp.status_code != 200:
-            # the first refusal is kept (the depth Enedis really serves); a refused token stops here
-            refused.setdefault("at", f"refus d'Enedis dès {begin.isoformat()[:7]} (HTTP {resp.status_code})")
-            tally.note(CURVE_SERIE, refused["at"])
-            if resp.status_code in (401, 403):
-                return
-            continue
+            tally.note(CURVE_SERIE, f"refus d'Enedis avant {end.isoformat()[:7]} (HTTP {resp.status_code}), arrêt")
+            return
         body = _json(resp, "courbe_de_charge_consommation")
         _check_found(body, len(_points(body)), "courbe_de_charge_consommation")
+        for i in range((end - begin).days):
+            tally.asked(CURVE_SERIE, (begin + timedelta(days=i)).isoformat())
         added: set[str] = set()
         for key, wh in parse_curve(body, tz).items():
             curve = store.doc(curve_doc(key[:4])).get("curve", {})

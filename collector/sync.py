@@ -375,25 +375,36 @@ class Syncer:
         for start, end in day_ranges(every, 1000, gap=CATCH_UP_GAP):
             lo, hi = start.isoformat(), end.isoformat()
             rooms = {rid for rid, days in missing.items() if any(lo <= d < hi for d in days)}
-            for rid in rooms:
-                for d in sorted(x for x in missing[rid] if lo <= x < hi):
-                    tally.asked(kinds[rid], d)
             # the bucket of a local day is stamped at its local midnight: start half a day before
             begin = int(datetime.combine(start, datetime.min.time(), zone).timestamp()) - DAY // 2
             stop = int(datetime.combine(end, datetime.min.time(), zone).timestamp())
-            best: dict[tuple[str, str], tuple[float, int, Columns | None]] = {}
-            for family in families:
-                for rid, pts in self._fetch_cols(endpoint, family, home, begin, stop, "1day", rooms=rooms).items():
-                    for ts, cols in pts:
+            answers = [
+                (family, self._fetch_cols(endpoint, family, home, begin, stop, "1day", rooms=rooms))
+                for family in families
+            ]
+            # #569 B1: a day counts as asked only once every family has answered (a cap or an
+            # error before that leaves the range uncounted, never « the source gave nothing »)
+            for rid in rooms:
+                for d in sorted(x for x in missing[rid] if lo <= x < hi):
+                    tally.asked(kinds[rid], d)
+            best: dict[tuple[str, str], float] = {}
+            tariffs: dict[tuple[str, str], tuple[int, Columns]] = {}
+            for family, cols in answers:
+                for rid, pts in cols.items():
+                    for ts, c in pts:
                         day = to_local_day(ts, home.timezone)
-                        v = total(cols)
-                        if day not in missing.get(rid, ()) or v <= best.get((rid, day), (0.0,))[0]:
+                        if day not in missing.get(rid, ()):
                             continue
-                        best[(rid, day)] = (v, ts, cols if family == TARIFFS else None)
-            for (rid, day), (v, ts, tariffs) in sorted(best.items()):
+                        v = total(c)
+                        best[(rid, day)] = max(v, best.get((rid, day), 0.0))
+                        if family == TARIFFS and v:  # the same rule as the nightly collection (_fetch_with)
+                            tariffs[(rid, day)] = (ts, c)
+            for (rid, day), v in sorted(best.items()):
+                if v <= 0:
+                    continue
                 self.store.merge(rid, day, round(v, 1))
-                if tariffs is not None and day not in self.store.doc(day[:4]).get("tariffs", {}).get(rid, {}):
-                    self._store_tariffs(home, rid, ts, tariffs)
+                if (rid, day) in tariffs and day not in self.store.doc(day[:4]).get("tariffs", {}).get(rid, {}):
+                    self._store_tariffs(home, rid, *tariffs[(rid, day)])
                 missing[rid].discard(day)
                 tally.added(kinds[rid], day)
 

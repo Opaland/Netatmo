@@ -279,19 +279,21 @@ class Station:
             if m["type"] in NO_TEMPERATURE or len(have) < 2:
                 continue
             first, last = date.fromisoformat(min(have)), date.fromisoformat(max(have))
+            today = datetime.now(zone).date()  # #569 M6: never the day still being measured
             absent = [
                 first + timedelta(days=i)
                 for i in range((last - first).days)
-                if (first + timedelta(days=i)).isoformat() not in have
+                if (first + timedelta(days=i)).isoformat() not in have and first + timedelta(days=i) < today
             ]
             indoor = m["type"] in ("NAMain", "NAModule4")
             for start, end in day_ranges(absent, 1000, gap=CATCH_UP_GAP):
                 begin = int(datetime.combine(start, datetime.min.time(), zone).timestamp())
                 stop = int(datetime.combine(end, datetime.min.time(), zone).timestamp())
-                wanted = {(start + timedelta(days=i)).isoformat() for i in range((end - start).days)}
-                for d in sorted(wanted):
+                wanted = {d.isoformat() for d in absent if start <= d < end}
+                rows = self._daily(m["id"], m["module"], daily_types(indoor), begin, stop)
+                for d in sorted(wanted):  # #569 B1: counted once Netatmo has answered
                     tally.asked(STATION_SERIE, d)
-                for ts, cols in self._daily(m["id"], m["module"], daily_types(indoor), begin, stop):
+                for ts, cols in rows:
                     day = datetime.fromtimestamp(ts, zone).strftime("%Y-%m-%d")
                     row = daily_row(cols, indoor)
                     if row is None or day not in wanted or day in have:

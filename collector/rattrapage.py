@@ -24,6 +24,8 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
 import httpx
 
@@ -82,11 +84,14 @@ def meta_doc(previous: object, tally: Tally, day: str) -> dict:
     """meta["catch_up"] (encrypted meta, read by État des données): {"at": {series: day of its last
     catch-up}, "months": {series: {"YYYY-MM": [asked, added]}}}. A month asked again replaces its
     counts (the days still missing then were asked that day, and the source gave nothing); the
-    other months are kept. Counts and months only, like the log."""
+    other months are kept. A series stopped on the way (cap, error, refusal: it has a note) is left
+    as it was. Counts and months only, like the log."""
     prev = previous if isinstance(previous, dict) else {}
     at = {k: v for k, v in (prev.get("at") or {}).items() if k in LABELS and isinstance(v, str)}
     months = {k: dict(v) for k, v in (prev.get("months") or {}).items() if k in LABELS and isinstance(v, dict)}
     for serie, cells in tally.months.items():
+        if serie in tally.notes:  # #569 B1: an interrupted series writes neither its months nor its day
+            continue
         asked = {m: list(c) for m, c in cells.items() if c[0]}
         if asked:
             months.setdefault(serie, {}).update(asked)
@@ -105,37 +110,61 @@ LABELS = {
 }
 
 
-def _guard(tally: Tally, serie: str, source: str, step) -> None:
-    """Run one source's catch-up; never fatal (the night's data must be committed anyway)."""
+def _guard(tally: Tally, series: tuple[str, ...], source: str, step) -> None:
+    """Run one source's catch-up; never fatal (the night's data must be committed anyway). A stop
+    is noted on every series of the source, which then keeps its previous meta (meta_doc)."""
+
+    def note(text: str) -> None:
+        for serie in series:
+            tally.note(serie, text)
+
     if source in METER.capped:
-        tally.note(serie, "plafond d'appels déjà atteint par la collecte : relancer le rattrapage")
+        note("plafond d'appels déjà atteint par la collecte : relancer le rattrapage")
         return
     try:
         step()
     except CallCapReached:
-        tally.note(serie, "plafond d'appels atteint : relancer le rattrapage pour continuer")
+        note("plafond d'appels atteint : relancer le rattrapage pour continuer")
     except ERRORS as err:
         # S-1.16: the type only, never the message (it may quote a URL holding the PRM)
-        tally.note(serie, f"interrompu ({type(err).__name__})")
+        note(f"interrompu ({type(err).__name__})")
 
 
-def run(store, syncer, home, stopped: list[dict], station=None, linky: tuple[str, str] | None = None) -> Tally:
+def run(
+    store,
+    syncer,
+    home,
+    stopped: list[dict],
+    station=None,
+    linky: tuple[str, str] | None = None,
+    today: str | None = None,
+) -> Tally:
     """The catch-up of every configured source. `station` is the logged-in Station client of the
     night (None when not configured or failing), `linky` the (token, PRM) pair (None without)."""
     from .enedis import CURVE_SERIE, catch_up_curve
+    from .model import IGNORE
     from .quality import Report
     from .station import STATION_SERIE
 
     tally = Tally()
-    report = Report(store, stopped)
-    _guard(tally, "heating", "intuis", lambda: syncer.catch_up(home, report.missing, report.kind, tally))
+    today = today or datetime.now(ZoneInfo(home.timezone)).date().isoformat()
+
+    def intuis() -> None:
+        report = Report(store, stopped)
+        # #569 B2: only the rooms Intuis still lists are asked (a room taken down keeps its history,
+        # keep_gone_rooms, but nothing can be asked for it); M6: never the day still being measured
+        listed = {r.id for r in home.rooms if r.category != IGNORE}
+        missing = {rid: {d for d in days if d < today} for rid, days in report.missing.items() if rid in listed}
+        syncer.catch_up(home, missing, report.kind, tally)
+
+    _guard(tally, ("heating", "water"), "intuis", intuis)
     if station is not None and station.access:
-        _guard(tally, STATION_SERIE, "netatmo", lambda: station.catch_up(home.timezone, tally))
+        _guard(tally, (STATION_SERIE,), "netatmo", lambda: station.catch_up(home.timezone, tally))
     if linky and store.first_day():
         token, prm = linky
         _guard(
             tally,
-            CURVE_SERIE,
+            (CURVE_SERIE,),
             "linky",
             lambda: catch_up_curve(store, token, prm, store.first_day(), home.timezone, tally),
         )

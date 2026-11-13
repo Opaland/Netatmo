@@ -9,6 +9,7 @@ __pycache__/
 .ruff_cache/
 # web
 web/node_modules/
+web/*.tsbuildinfo
 web/dist/
 e2e/screenshots/
 web/reports/

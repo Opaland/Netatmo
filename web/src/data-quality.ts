@@ -368,7 +368,8 @@ function intuis(input: QualityInput, kind: 'heating' | 'water'): SourceQuality |
       link: waterOff && !setup ? '#parametres-sources' : undefined,
       recover: setup
         ? 'Non : le chauffe-eau ne mesurait rien pendant cette période.'
-        : failed || stopped
+        : // #569 C2: a collection gap asked again in vain by a catch-up is lost too
+          (failed || stopped) && !askedInVain(input.catchUp, kind, from, to)
           ? AT_INTUIS
           : `${notAtIntuis(input, kind, from, to, kind === 'water' && !sameAsRadiators ? 'le chauffe-eau ne remontait pas ses relevés, ou Intuis ne les a pas gardés' : undefined)}${linkyHas(from, to) ? ' Le compteur Linky a ces jours : la reconstitution s’appuie dessus.' : ''}`,
     });
@@ -624,18 +625,20 @@ export function fineSource(
 export const LINKY30_KEEP_DAYS = 730;
 // the last half hour is yesterday's: the collector counts its 730 days back from today
 const curveStart = (last: string) => addDays(last, 1 - LINKY30_KEEP_DAYS);
+// #569 C4: a hypothesis (AGENTS.md §2: written as such), confirmed or not by the first catch-up's log
+const CURVE_KEEP = 'Enedis ne garde vraisemblablement plus la courbe de charge (24 mois d’après sa documentation, à confirmer)';
 function curveRecover(c: CatchUp | null | undefined, from: string, to: string, last: string): string {
-  if (to < curveStart(last)) return 'Non : Enedis ne garde la courbe de charge que 24 mois.';
+  if (to < curveStart(last)) return `Probablement non : ${CURVE_KEEP}.`;
   const at = askedInVain(c, 'linky30', from, to);
-  return at ? lostAt(at, 'Enedis', 'la courbe de charge n’était pas collectée ces jours-là') : `Oui, Enedis la garde 24 mois ; ${CATCH_UP}.`;
+  return at ? lostAt(at, 'Enedis', 'la courbe de charge n’était pas collectée ces jours-là') : `Oui, sans doute (24 mois chez Enedis d’après sa documentation) ; ${CATCH_UP}.`;
 }
 /** #569: the half hours before the first one kept: still at Enedis over 24 months, lost before. Said once. */
 function curveBefore(c: CatchUp | null | undefined, start: string, first: string): string {
   const at = askedInVain(c, 'linky30', start, addDays(first, -1));
   const since = dayShort(start, true);
   return at
-    ? `Demi-heures depuis le ${dayShort(first, true)} : redemandées le ${dayShort(at, true)} (rattrapage) depuis le ${since}, Enedis n’a rien rendu (la courbe de charge n’était pas encore collectée ; elle s’active dans l’espace client Enedis) ; avant le ${since}, Enedis ne la garde plus.`
-    : `Demi-heures depuis le ${dayShort(first, true)}. Enedis garde la courbe de charge 24 mois : les jours depuis le ${since} se rattrapent (cocher « rattrapage » en lançant Collecte quotidienne, Actions) ; avant, ils sont perdus.`;
+    ? `Demi-heures depuis le ${dayShort(first, true)} : redemandées le ${dayShort(at, true)} (rattrapage) depuis le ${since}, Enedis n’a rien rendu (la courbe de charge n’était pas encore collectée ; elle s’active dans l’espace client Enedis) ; avant, ${CURVE_KEEP}.`
+    : `Demi-heures depuis le ${dayShort(first, true)}. Les jours depuis le ${since} se rattrapent sans doute (cocher « rattrapage » en lançant Collecte quotidienne, Actions) ; avant, ${CURVE_KEEP}.`;
 }
 
 /** Parts of the 30-min Linky curve (keys « YYYY-MM-DDTHH:MM »): a day with fewer than 40 half hours is thin. */

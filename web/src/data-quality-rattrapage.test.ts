@@ -41,6 +41,16 @@ describe('#569 rattrapage : la raison dite une fois', () => {
     expect(askedInVain(catchUpOf({ ...asked, at: { heating: '2023-10-01' } }), 'heating', '2023-09-10', '2023-10-20')).toBeNull();
     expect(askedInVain(catchUpOf({ ...asked, months: { heating: { '2023-09': [140, 0], '2023-10': [0, 0] } } }), 'heating', '2023-09-10', '2023-10-20')).toBeNull();
   });
+  it('C2: a collection gap (« collecte arrêtée ») asked again in vain is said lost, not « Oui »', () => {
+    // the station and Linky are silent too: the collection did not run those days
+    const days = span('2023-01-01', '2024-12-31');
+    const linky = new Map(days.filter((d) => !lost.has(d)).map((d): [string, number] => [d, 30]));
+    const g = (catchUp: QualityInput['catchUp']) =>
+      qualityReport(base(recs('2023-01-01', '2024-12-31', { a: lost, b: lost, w: lost }), { linky, catchUp })).sources.find((s) => s.id === 'heating')!.gaps[0];
+    expect(g(null).cause).toMatch(/^collecte arrêtée/);
+    expect(g(null).recover).toMatch(/^Oui : Intuis garde l’historique ; cocher « rattrapage »/);
+    expect(g(catchUpOf(asked)).recover).toMatch(/^Non : redemandé le 14 nov\. 2026 \(rattrapage\), Intuis n’a rien rendu/);
+  });
   it('the water heater missing alone, asked in vain: it did not send its readings', () => {
     const gone = new Set(span('2024-05-01', '2024-05-31'));
     const r = qualityReport(base(recs('2023-01-01', '2024-12-31', { w: gone }), { catchUp: catchUpOf(asked) }));
@@ -63,7 +73,7 @@ describe('#569 rattrapage : la raison dite une fois', () => {
     for (const d of span('2025-11-09', '2026-11-12')) for (let i = 0; i < 48; i++) curve.set(`${d}T${String(Math.floor(i / 2)).padStart(2, '0')}:${i % 2 ? '30' : '00'}`, 100);
     const note = (c: QualityInput['catchUp'], m = curve) => fineSource('linky30', curveParts(m), null, [], undefined, c)!.notes.filter((n) => n.startsWith("Demi-heures depuis"));
     expect(note(null)).toEqual([
-      'Demi-heures depuis le 9 nov. 2025. Enedis garde la courbe de charge 24 mois : les jours depuis le 13 nov. 2024 se rattrapent (cocher « rattrapage » en lançant Collecte quotidienne, Actions) ; avant, ils sont perdus.',
+      'Demi-heures depuis le 9 nov. 2025. Les jours depuis le 13 nov. 2024 se rattrapent sans doute (cocher « rattrapage » en lançant Collecte quotidienne, Actions) ; avant, Enedis ne garde vraisemblablement plus la courbe de charge (24 mois d’après sa documentation, à confirmer).',
     ]);
     const months: Record<string, [number, number]> = {};
     for (const d of span('2024-11-13', '2025-11-08')) months[d.slice(0, 7)] = [30, 0];
@@ -78,7 +88,7 @@ describe('#569 rattrapage : la raison dite une fois', () => {
     const curve = new Map<string, number>();
     for (const d of span('2024-01-01', '2026-11-12')) if (d < '2024-02-01' || d > '2024-02-20') curve.set(`${d}T12:00`, 100);
     const g = fineSource('linky30', curveParts(curve), null)!.gaps.find((x) => x.from === '2024-02-01')!;
-    expect(g.recover).toBe('Non : Enedis ne garde la courbe de charge que 24 mois.');
+    expect(g.recover).toBe('Probablement non : Enedis ne garde vraisemblablement plus la courbe de charge (24 mois d’après sa documentation, à confirmer).');
   });
   it('reads meta.catch_up defensively', () => {
     expect(catchUpOf(null)).toBeNull();

@@ -447,20 +447,28 @@ après la collecte de la nuit, dans le même passage et sous les mêmes plafonds
 (`docs/api-notes.md`, « Nombre d'appels par collecte ») :
 
 - **Intuis** : chaque pièce-jour manquant (ni valeur, ni estimation, pièce non arrêtée volontairement :
-  la règle du bilan qualité, `quality.Report.missing`) est redemandé au pas du jour, par plages
+  la règle du bilan qualité, `quality.Report.missing`, tenue d'accord avec l'appli par le vecteur
+  partagé ; seulement les pièces qu'Intuis liste encore, jamais le jour en cours) est redemandé au pas
+  du jour, par plages
   (deux trous à moins de 14 jours partagent une requête), une requête par famille de mesure. Seule
   une valeur **non nulle** est ajoutée (un 0 peut être un jour pas encore rempli par Intuis) ; les
-  tarifs du jour ajouté aussi, s'ils manquent. Environ 4 appels par plage : le bilan du 13/11 en
+  tarifs du jour ajouté aussi, s'ils manquent, dès que la famille des tarifs répond (la règle de la
+  nuit). Environ 4 appels par plage : le bilan du 13/11 en
   donne une dizaine.
 - **Station** : par module, les jours manquants entre son premier et son dernier relevé (et la météo
   extérieure ou intérieure du jour, si elle manque aussi).
-- **Linky, demi-heures** : les jours des 24 derniers mois **sans aucune** demi-heure, par 7 jours
-  (≈ 52 appels pour un an, plafond Linky 200). Un jour qui a une demi-heure n'est pas redemandé.
+- **Linky, demi-heures** : les jours des 24 derniers mois **sans aucune** demi-heure, par 7 jours, du
+  plus récent au plus ancien (≈ 52 appels pour un an, plafond Linky 200). Un jour qui a une
+  demi-heure n'est pas redemandé. Le premier refus d'Enedis (quel que soit son code) arrête : c'est
+  la profondeur réelle, notée dans le journal. Les 24 mois et la borne `dateFin` exclue sont des
+  hypothèses, à confirmer par ce premier passage.
 
 **Ajouter seulement.** Un jour présent (réel, estimé, ou une demi-heure) n'est ni redemandé ni réécrit ;
 lancé deux fois, le rattrapage n'ajoute rien la seconde (tests `tests/test_rattrapage.py`, vus rouges
 sans chacune de ces gardes). Une source en échec, refusée ou au plafond s'arrête seule, garde ce qui
-est ajouté, et le journal le dit ; la collecte de la nuit est enregistrée quoi qu'il arrive. Ne jamais
+est ajouté, et le journal le dit ; un jour n'est compté « demandé » qu'une fois la réponse lue, et une
+source arrêtée en route ne change pas ce que l'appli sait déjà (`meta.catch_up`) : jamais un plafond
+ou une panne pris pour « la source n'a rien rendu » ; la collecte de la nuit est enregistrée quoi qu'il arrive. Ne jamais
 cocher en même temps « Récupérer tout l'historique disponible » : ce geste-là réécrit.
 
 **Le journal (public)** : par série et par mois, « mois ajoutés/demandés », et une note quand une source

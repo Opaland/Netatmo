@@ -39,8 +39,9 @@ def _midnight(day: str) -> int:
 
 
 # ---------------------------------------------------------------- Intuis
-def _intuis(tmp_path, asked: list):
-    """Fake Intuis: every room asked gets VALUE (as $1 + $2) for every day of the range."""
+def _intuis(tmp_path, asked: list, heating_family: float = 0):
+    """Fake Intuis: every room asked gets VALUE (as $1 + $2) for every day of the range, and
+    `heating_family` Wh under sum_energy_elec_heating (another family of the same energy)."""
 
     def handler(request: httpx.Request) -> httpx.Response:
         path = request.url.path
@@ -57,7 +58,7 @@ def _intuis(tmp_path, asked: list):
             last = datetime.fromtimestamp(req["date_end"] - 1, TZ).date()
             days = _days(first.isoformat(), last.isoformat())
             tariffs = mtype.startswith("sum_energy_elec$0")
-            row = [None, VALUE - 1000, 1000] if tariffs else [0]
+            row = [None, VALUE - 1000, 1000] if tariffs else [heating_family if "heating" in mtype else 0]
             measures = (
                 [{"beg_time": _midnight(days[0]), "step_time": DAY, "value": [row for _ in days]}] if days else []
             )
@@ -166,8 +167,14 @@ def test_the_call_cap_stops_cleanly_and_keeps_what_was_added(tmp_path):
         tally = run(syncer.store, syncer, home, [])
     finally:
         METER.reset()
-    assert "plafond" in tally.notes["heating"]
+    assert "plafond" in tally.notes["heating"] and "plafond" in tally.notes["water"]
     assert tally.total_added() == 0  # the four families are needed to pick the largest: nothing half-read
+    # B1: a range cut by the cap is not « asked »: the app must not read « Intuis gave nothing »
+    assert tally.months == {}
+    assert meta_doc({"at": {"water": "2026-01-01"}, "months": {"water": {"2024-01": [2, 2]}}}, tally, "2026-11-14") == {
+        "at": {"water": "2026-01-01"},
+        "months": {"water": {"2024-01": [2, 2]}},
+    }
 
 
 # ---------------------------------------------------------------- Netatmo station
@@ -256,7 +263,8 @@ def test_linky_curve_catch_up_goes_back_24_months_and_skips_present_days(tmp_pat
     tally = Tally()
     http = httpx.Client(transport=httpx.MockTransport(_curve_handler(calls)))
     catch_up_curve(store, "tok", "1", "2022-10-01", "Europe/Paris", tally, http=http, min_interval=0, today=today)
-    assert calls[0][0] == "2024-01-21"  # 730 days before today, not the first day of the archive
+    assert min(c[0] for c in calls) == "2024-01-21"  # 730 days before today, not the archive's first day
+    assert calls == sorted(calls, reverse=True)  # newest first: a refusal at the depth limit ends it
     asked = {d for b, e in calls for d in _days(b, (date.fromisoformat(e) - timedelta(days=1)).isoformat())}
     assert "2025-11-15" not in asked and "2025-12-01" not in asked and max(asked) == "2025-11-30"
     curve25 = store.doc("2025.linky30")["curve"]
@@ -268,18 +276,25 @@ def test_linky_curve_catch_up_goes_back_24_months_and_skips_present_days(tmp_pat
     assert sum(c[1] for c in tally.months[CURVE_SERIE].values()) == len(asked)
 
 
-def test_linky_curve_refusals_are_noted_with_their_code_only(tmp_path):
+def test_linky_curve_stops_at_the_first_refusal_and_counts_only_answered_days(tmp_path):
     today = date(2026, 1, 20)
     calls: list = []
     tally = Tally()
-    http = httpx.Client(transport=httpx.MockTransport(_curve_handler(calls, {"2024-01": 400, "2024-02": 400})))
+    http = httpx.Client(transport=httpx.MockTransport(_curve_handler(calls, {"2025-06": 400})))
     store = Store(tmp_path, "pw")
     catch_up_curve(store, "tok", "1", "2022-10-01", "Europe/Paris", tally, http=http, min_interval=0, today=today)
-    assert tally.notes[CURVE_SERIE] == "refus d'Enedis dès 2024-01 (HTTP 400)"
-    assert tally.months[CURVE_SERIE]["2024-03"][1] > 0  # the next ranges were still asked and added
+    refused = calls[-1]
+    assert refused[0].startswith("2025-06") and all(c[0] > refused[0] for c in calls[:-1])  # stopped there
+    assert (
+        tally.notes[CURVE_SERIE].startswith("refus d'Enedis avant 2025-0")
+        and "(HTTP 400), arrêt" in tally.notes[CURVE_SERIE]
+    )
+    asked = {d for m in tally.months[CURVE_SERIE].values() for d in [m[0]]}
+    assert asked and "2025-05" not in tally.months[CURVE_SERIE]  # the refused range is not « asked »
+    assert meta_doc(None, tally, "2026-01-20") == {"at": {}, "months": {}}  # interrupted: nothing kept
     calls.clear()
     tally = Tally()
-    http = httpx.Client(transport=httpx.MockTransport(_curve_handler(calls, {"2024-01": 401})))
+    http = httpx.Client(transport=httpx.MockTransport(_curve_handler(calls, {"2026-01": 401})))
     catch_up_curve(
         Store(tmp_path / "b", "pw"),
         "tok",
@@ -291,7 +306,7 @@ def test_linky_curve_refusals_are_noted_with_their_code_only(tmp_path):
         min_interval=0,
         today=today,
     )
-    assert len(calls) == 1  # a refused token: stop at once
+    assert len(calls) == 1 and tally.months == {}  # a refused token: stop at once, nothing counted
 
 
 # ---------------------------------------------------------------- public log
@@ -345,3 +360,133 @@ def test_meta_keeps_older_months_and_replaces_the_months_asked_again():
     doc = meta_doc({**doc, "months": {**doc["months"], "x": {}}}, again, "2026-11-20")
     assert doc["months"] == {"heating": {"2023-09": [1, 0], "2024-03": [1, 1]}, "station": {"2026-01": [1, 0]}}
     assert doc["at"] == {"heating": "2026-11-20", "station": "2026-11-20"}
+
+
+# ---------------------------------------------------------------- relecture adverse de #572
+def test_a_room_intuis_no_longer_lists_is_neither_asked_nor_counted(tmp_path):
+    """B2: a room taken down keeps its history (keep_gone_rooms) but cannot be asked."""
+    asked: list = []
+    syncer = _intuis(tmp_path, asked)
+    _archive(syncer.store)
+    syncer.store.meta["rooms"].append({"id": "999", "name": "Retirée", "category": "heating"})
+    for d in _days("2024-01-01", "2024-01-31"):
+        if d != "2024-01-15":
+            syncer.store.merge("999", d, 500.0)
+    tally = run(syncer.store, syncer, syncer.home(), [])
+    assert tally.months["heating"] == {"2024-01": [3, 3]}  # the hole of room 999 is not counted
+    assert all("999" not in rooms for *_x, rooms in asked)
+    assert "2024-01-15" not in syncer.store.year(2024)["999"]
+
+
+def test_the_day_still_being_measured_is_never_asked(tmp_path):
+    """M6: today is not a missing day; the nightly collection keeps it."""
+    asked: list = []
+    syncer = _intuis(tmp_path, asked)
+    _archive(syncer.store)
+    tally = run(syncer.store, syncer, syncer.home(), [], today="2024-01-20")
+    assert tally.months == {"heating": {"2024-01": [3, 3]}}  # the water heater's 20th is today
+    assert "2024-01-20" not in syncer.store.year(2024)["300"]
+
+
+def test_tariffs_of_an_added_day_follow_the_nightly_rule(tmp_path):
+    """M2: the tariffs are kept when the tariff family answers, even if another family is larger
+    (the same rule as _fetch_with)."""
+    asked: list = []
+    syncer = _intuis(tmp_path, asked, heating_family=VALUE + 500)
+    _archive(syncer.store)
+    run(syncer.store, syncer, syncer.home(), [])
+    doc = syncer.store.doc("2024")
+    assert doc["daily"]["100"]["2024-01-04"] == VALUE + 500  # the largest family, never the sum
+    assert doc["tariffs"]["100"]["2024-01-04"] == [0.0, VALUE - 1000, 1000.0]
+
+
+def test_the_collection_survives_any_error_of_the_catch_up(tmp_path, monkeypatch):
+    """C1: the catch-up runs before the night's save; an unexpected error must not lose it."""
+    import collector.__main__ as main
+    import collector.rattrapage as rattrapage
+
+    def boom(*_a, **_k):
+        raise KeyError("x")
+
+    monkeypatch.setattr(rattrapage, "run", boom)
+    syncer = _intuis(tmp_path, [])
+    _archive(syncer.store)
+    syncer.last_home = syncer.home()
+    lines, doc = main._catch_up(Settings(), syncer.store, syncer, {})
+    assert doc is None
+    assert lines == ["Rattrapage des jours manquants (#569) : interrompu (KeyError), rien n'est compté."]
+
+
+def _two_modules(handler_measure):
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/api/getstationsdata":
+            modules = [{"_id": "out", "type": "NAModule1", "module_name": "Dehors"}]
+            device = {"_id": "main", "type": "NAMain", "module_name": "Salon", "modules": modules}
+            return httpx.Response(200, json={"body": {"devices": [device]}})
+        return handler_measure(request)
+
+    return handler
+
+
+def test_station_weather_of_a_day_is_added_only_when_absent(tmp_path):
+    """M1: the outdoor (NAModule1) and indoor (NAMain) weather of an added day, never rewritten."""
+
+    def measure(request: httpx.Request) -> httpx.Response:
+        p = request.url.params
+        days = _days(
+            datetime.fromtimestamp(int(p["date_begin"]), TZ).date().isoformat(),
+            datetime.fromtimestamp(int(p["date_end"]) - 1, TZ).date().isoformat(),
+        )
+        value = [[1.0, 9.0, 5.0, 50, 900] for _ in days]
+        return httpx.Response(200, json={"body": [{"beg_time": _midnight(days[0]), "step_time": DAY, "value": value}]})
+
+    http = httpx.Client(transport=httpx.MockTransport(_two_modules(measure)))
+    st = Station(Store(tmp_path, "pw"), "id", "secret", "seed", http=http)
+    st.api.min_interval = 0
+    st.access = "token"
+    keys = st.module_keys(st.modules())
+    row = [18.0, 21.0, 19.5, 45, 600]
+    for d in _days("2026-01-01", "2026-01-31"):
+        if d not in ("2026-01-10", "2026-01-11"):
+            st.store.put("station", "daily", keys[0], d, row)
+            st.store.put("station", "daily", keys[1], d, row)
+    st.store.put("weather", "outdoor", "2026-01-10", None, [-3.0, 4.0, 0.5])  # from Open-Meteo, say
+    st.store.put("weather", "indoor", "2026-01-11", None, 20.0)
+    st.catch_up("Europe/Paris", Tally())
+    weather = st.store.doc("weather")
+    assert weather["outdoor"] == {"2026-01-10": [-3.0, 4.0, 0.5], "2026-01-11": [1.0, 9.0, 5.0]}
+    assert weather["indoor"] == {"2026-01-10": 5.0, "2026-01-11": 20.0}
+
+
+def test_a_station_error_counts_nothing_as_asked(tmp_path):
+    """B1: a range whose request failed is not « asked », and the series keeps its meta."""
+    from collector.rattrapage import _guard
+
+    http = httpx.Client(transport=httpx.MockTransport(_two_modules(lambda _r: httpx.Response(404))))
+    st = Station(Store(tmp_path, "pw"), "id", "secret", "seed", http=http)
+    st.api.min_interval = 0
+    st.access = "token"
+    key = st.module_keys(st.modules())[0]
+    for d in ("2026-01-01", "2026-01-05"):
+        st.store.put("station", "daily", key, d, [1.0, 2.0, 1.5, 50, 400])
+    tally = Tally()
+    _guard(tally, (STATION_SERIE,), "netatmo", lambda: st.catch_up("Europe/Paris", tally))
+    assert tally.months == {} and tally.notes[STATION_SERIE].startswith("interrompu (")
+    assert meta_doc(None, tally, "2026-01-20") == {"at": {}, "months": {}}
+
+
+def test_missing_days_agree_with_the_shared_rule_of_the_app(tmp_path):
+    """M3: the days the catch-up asks (Report.missing) are the « manquants » of the rule shared
+    with the app (web/src/__fixtures__/quality-rule.json, read by both test suites)."""
+    from test_qualite import VECTOR, _vector_store
+
+    from collector.quality import Report
+
+    rep = Report(_vector_store(tmp_path), VECTOR["stopped"])
+    per_month: dict[str, dict[str, int]] = {}
+    for rid, days in rep.missing.items():
+        for d in days:
+            cell = per_month.setdefault(d[:7], {})
+            cell[rep.kind[rid]] = cell.get(rep.kind[rid], 0) + 1
+    expected = {m: {k: c[2] for k, c in kinds.items() if c[2]} for m, kinds in VECTOR["expected"]["months"].items()}
+    assert per_month == {m: k for m, k in expected.items() if k}

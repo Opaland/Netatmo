@@ -727,10 +727,15 @@ def _catch_up(s: Settings, store: Store, syncer: Syncer, kept: dict) -> tuple[li
     if syncer.last_home is None:
         return [], None
     linky = (s.enedis_token, s.enedis_prm) if s.enedis_token and s.enedis_prm else None
-    # #346: a room switched off on purpose has no missing day (the secret, else the archive)
-    stopped = stopped_of(store, household_setting("STOPPED_ROOMS_JSON", warn=False))
-    tally = run(store, syncer, syncer.last_home, stopped, kept.get("station"), linky)
     today = datetime.now(ZoneInfo(syncer.last_home.timezone)).date().isoformat()
+    try:
+        # #346: a room switched off on purpose has no missing day (the secret, else the archive)
+        stopped = stopped_of(store, household_setting("STOPPED_ROOMS_JSON", warn=False))
+        tally = run(store, syncer, syncer.last_home, stopped, kept.get("station"), linky, today)
+    except Exception as err:  # noqa: BLE001 - #569 C1: never lose the night's data because of the catch-up
+        # the type only (S-1.16), as for the AI step; what was added before stays, the meta is unchanged
+        _warn(f"Rattrapage interrompu ({type(err).__name__})")
+        return [f"Rattrapage des jours manquants (#569) : interrompu ({type(err).__name__}), rien n'est compté."], None
     return public_lines(tally), meta_doc(store.meta.get("catch_up"), tally, today)
 
 
