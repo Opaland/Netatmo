@@ -100,6 +100,36 @@ async function segmentKeepsPlace(page, where, want) {
   return before;
 }
 
+/**
+ * #553: the same rule for a select that redraws its card (« Comparer » of « Hiver contre hiver »):
+ * choosing a value keeps the select where it was on the screen and keeps the focus on it.
+ */
+async function selectKeepsPlace(page, where, sel, value) {
+  const y = await page.evaluate((s) => {
+    const el = document.querySelector(s);
+    if (!el) return null;
+    const header = Math.max(0, ...[...document.querySelectorAll('header.top, .tabs')].map((h) => (getComputedStyle(h).position === 'sticky' ? h.getBoundingClientRect().bottom : 0)).filter((y) => y < window.innerHeight / 2));
+    return Math.max(0, el.getBoundingClientRect().top + window.scrollY - header - 8);
+  }, sel);
+  if (y === null) return errors.push(`${BROWSER} ${where} : pas de liste ${sel}`);
+  await page.evaluate((y) => window.scrollTo(0, y), y);
+  await page.waitForTimeout(200);
+  const at = (s) => document.querySelector(s)?.getBoundingClientRect().top ?? null;
+  const top0 = await page.evaluate(at, sel);
+  // a property, not a data-* attribute: the app finds the focused control again by its data-*
+  await page.evaluate((s) => (document.querySelector(s).e2eOld = true), sel);
+  await page.focus(sel);
+  await page.selectOption(sel, value);
+  // the card is redrawn: a new select, with the value chosen
+  await page.waitForFunction(([s, v]) => !document.querySelector(s)?.e2eOld && document.querySelector(s)?.value === v, [sel, value], { timeout: 15000 });
+  await ready(page);
+  await page.waitForTimeout(400); // late charts and lazy cards
+  const top1 = await page.evaluate(at, sel);
+  const focused = await page.evaluate((s) => document.activeElement === document.querySelector(s), sel);
+  check(top0 !== null && top1 !== null && Math.abs(top1 - top0) <= 5, `${where} : choisir « ${value} » dans ${sel} fait sauter la page (${Math.round(top0)} → ${Math.round(top1)} px de l'écran)`);
+  check(focused, `${where} : le focus quitte ${sel} après le choix « ${value} »`);
+}
+
 /** Ticks the first `n` weekdays of the telework card (Monday first), one change at a time. */
 async function tickDays(page, n) {
   for (let i = 0; i < 5; i++) {
@@ -251,7 +281,8 @@ try {
     if (name === 'clair' || name === 'texte-200') {
       progress(`${name} : segments sans saut de page`);
       await go(page, 'historique');
-      await segmentKeepsPlace(page, `${name}/historique`, '#view button[data-set="compareMode"][aria-checked="false"]');
+      await selectKeepsPlace(page, `${name}/historique`, '#view select[data-set="compareMode"]', 'monthly');
+      await selectKeepsPlace(page, `${name}/historique`, '#view select[data-set="compareMode"]', 'season');
       await segmentKeepsPlace(page, `${name}/historique (autre segment)`);
       for (const key of ['accueil', 'compteur']) {
         await go(page, key);
