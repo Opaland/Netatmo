@@ -844,6 +844,18 @@ def inventory_linky(token: str, prm: str, http=None, today=None, min_interval: f
         print(f"  cadrans / classes temporelles : {', '.join(sorted(series)) or '(aucun)'}")
         steps = sorted({str(st) for _d, _v, st in _points(index) if st and safe_keys([str(st)])})
         print(f"  pas : {', '.join(steps) or 'non indiqué'}")
+    # #568: what the load curve answer holds (quantities, units, step, points a day): codes only.
+    curve = bodies.get(INV_LINKY_ENDPOINTS[1])
+    if curve is not None:
+        result["curve_shape"] = curve_shape(curve, 7)
+        print_shape("courbe de charge", curve)
+        s = result["curve_shape"]
+        print(
+            f"  grandeurs : {', '.join(s['grandeurs']) or 'non nommées'} ;"
+            f" unités : {', '.join(s['unites']) or 'non dites'}"
+            f" ; pas : {', '.join(s['pas']) or 'non indiqué'} ; points par jour : {s['par_jour']}"
+            + (f" ; gardée par la collecte : {s['gardee']}" if s["gardee"] else "")
+        )
     # #219 / #277: maximum power with grandeurPhysique=TOUT (field names only).
     ep = INV_LINKY_ENDPOINTS[2]
     result["pmax_tout"] = ask(ep, today - timedelta(days=7), today, {"grandeurPhysique": "TOUT"}, keep="pmax_tout")
@@ -859,6 +871,29 @@ def inventory_linky(token: str, prm: str, http=None, today=None, min_interval: f
     result["depth_3y"] = ask(INV_LINKY_ENDPOINTS[0], old_end - timedelta(days=7), old_end)
     print(f"  profondeur : {INV_LINKY_ENDPOINTS[0]} il y a 3 ans → {txt(*result['depth_3y'])}")
     return result
+
+
+def curve_shape(body: object, days: int) -> dict:
+    """#568: the quantities (`grandeurPhysique`), units and steps of a load curve answer, and its
+    points a day: identifier-like codes only (`safe_keys`), never a value or a date."""
+    from .enedis import STEP_KEYS, _points, curve_choice
+
+    parts = body.get("grandeur") if isinstance(body, dict) else None
+    parts = [g for g in parts if isinstance(g, dict)] if isinstance(parts, list) else []
+    kept, _left = curve_choice(body)
+    steps: set[str] = set()
+    if isinstance(body, dict):
+        steps |= {str(body[k]) for k in STEP_KEYS if isinstance(body.get(k), str)}
+    steps |= {str(st) for _d, _v, st in _points(body) if st}
+    return {
+        "grandeurs": safe_keys(g.get("grandeurPhysique") for g in parts),
+        "unites": safe_keys(g.get("unite") for g in parts),
+        "pas": safe_keys(steps),
+        "par_jour": round(len(_points(body)) / days) if days else 0,
+        # the quantity the collector keeps (enedis.curve_choice), « ? » when unnamed
+        "gardee": (safe_keys([kept.get("grandeurPhysique")]) or ["?"])[0] if kept else "",
+        "metiers": safe_keys(g.get("grandeurMetier") for g in parts),
+    }
 
 
 def _label_values(obj: object) -> list[str]:

@@ -291,7 +291,10 @@ l'archive chiffrée (`collector/audit.py`), sans rien appeler ni rien réécrire
    **« Bilan qualité et audit des données »**. Aucun secret à ajouter.
 2. Le journal de l'étape « Bilan qualité des données » donne, après le bilan du § 7, le **nombre de
    cas par contrôle et par mois** (jamais une valeur, un nom, un identifiant ni un jour : le journal
-   est public ; test : `tests/test_audit.py`), puis les seuils utilisés.
+   est public ; test : `tests/test_audit.py`), puis les seuils utilisés. Sous chaque contrôle qui a
+   des cas, une ligne « dont … » par **genre de série** (étiquette fixe : « courbe de charge à la
+   demi-heure (Linky) », « énergie par heure (Intuis) »…, jamais une pièce) et, pour `somme-jour`,
+   combien de jours ont des heures au-dessus ou au-dessous du jour (#568).
 3. Le **détail** (jour ou heure exacts, valeurs, fichier, série, pièce) est l'artefact
    **`audit-donnees`** du même passage (en bas de la page du passage, gardé 7 jours). Il est
    **chiffré avec la clé des données**, comme les fichiers de `data/` : sans la phrase de passe, il ne
