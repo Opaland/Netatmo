@@ -1,0 +1,48 @@
+/* #202: the plan of the house (views/plan.ts, lazy chunk). Colours from the tokens only: the
+   sequential ramp for the values, the card and borders for the rest. */
+.plan-frame {
+  margin: 8px 0;
+  background: var(--surface-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 4px;
+}
+.plan-svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: 70vh;
+}
+.plan-room {
+  stroke: var(--border-strong);
+  stroke-width: 0.08;
+}
+.plan-room.heat-1 { fill: var(--seq-1); }
+.plan-room.heat-2 { fill: var(--seq-2); }
+.plan-room.heat-3 { fill: var(--seq-3); }
+.plan-room.heat-4 { fill: var(--seq-4); }
+.plan-room.heat-5 { fill: var(--seq-5); }
+.plan-room.heat-none { fill: var(--surface-sunken); }
+/* a halo of the card's colour under each letter: readable on the lightest and the darkest step */
+.plan-label {
+  fill: var(--text);
+  stroke: var(--surface-card);
+  stroke-width: 0.22;
+  paint-order: stroke;
+  stroke-linejoin: round;
+}
+.plan-value { font-weight: 600; }
+.plan-svg a:focus { outline: none; }
+.plan-svg a:focus-visible .plan-room,
+.plan-svg a:hover .plan-room {
+  stroke: var(--focus);
+  stroke-width: 0.3;
+}
+.plan-device rect {
+  fill: var(--surface-card);
+  stroke: var(--text);
+  stroke-width: 0.06;
+}
+.plan-device text { fill: var(--text); font-weight: 700; }
+.plan-controls { align-items: end; }
+.plan-overlay { pointer-events: none; }

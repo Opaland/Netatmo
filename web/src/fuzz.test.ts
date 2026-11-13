@@ -38,6 +38,7 @@ import { type VoletsDoc, evenings, loadNotes, recentFailures, shutterNames, summ
 import { readMark } from './storage';
 import { opensWith } from './sealed-notes';
 import { parseTenant } from './tenant';
+import { DEVICE_KINDS, GRID, LEVEL_ORDER, MAX_DEVICES, MAX_NAME, MAX_ROOMS, parsePlan, planJson } from './floorplan';
 
 const SEED = 20261110;
 const CASES = 2000;
@@ -367,6 +368,52 @@ describe('#359 fuzz : préférences relues de cet appareil', () => {
       for (const s of woodSeasons(w)) assert([s.steres, s.left, s.kwh, s.eur, s.short].every((v) => Number.isFinite(v) && v >= -1e-9), `saison ${s.season}`);
       assert(w.efficiency >= 10 && w.efficiency <= 100, 'rendement');
       assert(Object.keys(w.kwhPerStere).every((k) => Object.hasOwn(SPECIES, k)) && Object.values(w.kwhPerStere).every((v) => v >= 500 && v <= 3000), 'kWh par stère');
+    });
+  });
+
+  it('#202 plan de la maison : niveaux connus une fois, tout dans la grille, ids uniques, noms propres, relu à l’identique', () => {
+    fuzz('parsePlan', (r) => {
+      const n = () => (r() < 0.7 ? Math.floor(r() * (GRID + 4)) - 2 : pick(r, NUMBERS));
+      const id = () => (r() < 0.6 ? `${pick(r, ['p', 'a'])}${Math.floor(r() * 6)}` : pick(r, STRINGS));
+      const raw =
+        r() < 0.2
+          ? anyValue(r)
+          : {
+              levels: Array.from({ length: Math.floor(r() * 6) }, () =>
+                r() < 0.15
+                  ? anyValue(r)
+                  : {
+                      id: r() < 0.7 ? pick(r, ['cave', 'rdc', 'etage']) : pick(r, STRINGS),
+                      rooms: Array.from({ length: Math.floor(r() * 8) }, () =>
+                        r() < 0.1 ? anyValue(r) : { id: id(), name: r() < 0.5 ? randomString(r) : pick(r, STRINGS), x: n(), y: n(), w: n(), h: n(), room: pick(r, STRINGS), module: r() < 0.5 ? 'm0' : anyValue(r) },
+                      ),
+                      devices: Array.from({ length: Math.floor(r() * 8) }, () =>
+                        r() < 0.1 ? anyValue(r) : { id: id(), kind: r() < 0.6 ? pick(r, Object.keys(DEVICE_KINDS)) : pick(r, STRINGS), ref: pick(r, STRINGS), x: n(), y: n() },
+                      ),
+                    },
+              ),
+            };
+      const p = parsePlan(raw);
+      notPolluted();
+      if (!p) return;
+      const order = p.levels.map((l) => LEVEL_ORDER.indexOf(l.id));
+      assert(order.every((i, k) => i >= 0 && (k === 0 || i > order[k - 1])), `niveaux ${p.levels.map((l) => l.id).join(',')}`);
+      const ids = p.levels.flatMap((l) => [...l.rooms, ...l.devices].map((x) => x.id));
+      assert(new Set(ids).size === ids.length, 'ids en double');
+      for (const l of p.levels) {
+        assert(l.rooms.length <= MAX_ROOMS && l.devices.length <= MAX_DEVICES, 'trop d’éléments');
+        for (const x of l.rooms) {
+          assert([x.x, x.y, x.w, x.h].every(Number.isInteger) && x.x >= 0 && x.y >= 0 && x.w >= 1 && x.h >= 1 && x.x + x.w <= GRID && x.y + x.h <= GRID, `pièce ${x.id} hors grille`);
+          assert(isStr(x.name) && Array.from(x.name).length <= MAX_NAME && !/\p{Cc}/u.test(x.name) && x.name === x.name.trim(), 'nom');
+          assert(x.name.isWellFormed(), 'nom mal formé');
+        }
+        for (const d of l.devices) {
+          assert(Object.hasOwn(DEVICE_KINDS, d.kind) && Number.isInteger(d.x) && Number.isInteger(d.y) && d.x >= 0 && d.y >= 0 && d.x < GRID && d.y < GRID, `appareil ${d.id}`);
+          assert(isStr(d.ref) && d.ref.length <= 40 && !/[<>"' ]/.test(d.ref), 'référence');
+        }
+      }
+      const text = planJson(p);
+      assert(planJson(parsePlan(JSON.parse(text))!) === text, 'relu différemment');
     });
   });
 

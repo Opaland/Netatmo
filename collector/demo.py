@@ -230,6 +230,67 @@ SHELLY_PLUGS = [
 CLAMP_DAYS = 30
 
 
+def _plan_room(pid: str, name: str, box: tuple[int, int, int, int], room: str = "", module: str = "") -> dict:
+    x, y, w, h = box
+    links = {**({"room": room} if room else {}), **({"module": module} if module else {})}
+    return {"id": pid, "name": name, "x": x, "y": y, "w": w, "h": h, **links}
+
+
+def _plan_device(pid: str, kind: str, ref: str, x: int, y: int) -> dict:
+    return {"id": pid, "kind": kind, "ref": ref, "x": x, "y": y}
+
+
+# #202: the plan of the demo house (meta.floor_plan, secret FLOOR_PLAN_JSON), fictitious: rectangles
+# on a grid of 50 cm, the two default levels and the optional cellar (station module « Cave »).
+FLOOR_PLAN = {
+    "levels": [
+        {
+            "id": "cave",
+            "rooms": [_plan_room("p1", "Cave", (0, 0, 10, 8), module="m3")],
+            "devices": [_plan_device("a1", "station", "m3", 8, 1)],
+        },
+        {
+            "id": "rdc",
+            "rooms": [
+                _plan_room("p2", "Salon", (0, 0, 12, 10), "r-salon", "m0"),
+                _plan_room("p3", "Cuisine", (12, 0, 8, 6), "r-cuisine"),
+                _plan_room("p4", "Cellier", (12, 6, 8, 4)),
+            ],
+            "devices": [
+                _plan_device("a2", "radiateur", "r-salon", 0, 4),
+                _plan_device("a3", "station", "m0", 6, 5),
+                _plan_device("a4", "volet", "", 5, 9),
+                _plan_device("a5", "radiateur", "r-cuisine", 19, 2),
+                _plan_device("a6", "prise", "p0", 13, 1),
+                _plan_device("a7", "prise", "p1", 14, 1),
+                _plan_device("a8", "chauffe-eau", "r-ce", 18, 8),
+                _plan_device("a9", "prise", "p2", 15, 8),
+                _plan_device("a10", "compteur", "", 13, 9),
+                _plan_device("a11", "station", "m1", 21, 4),
+            ],
+        },
+        {
+            "id": "etage",
+            "rooms": [
+                _plan_room("p5", "Chambre parentale", (0, 0, 8, 6), "r-ch1"),
+                _plan_room("p6", "Chambre enfant", (8, 0, 6, 6), "r-ch2", "m2"),
+                _plan_room("p7", "Salle de bain", (14, 0, 6, 4), "r-sdb"),
+                _plan_room("p8", "Bureau", (0, 6, 8, 4), "r-bureau"),
+                _plan_room("p9", "Palier", (8, 6, 12, 4)),
+            ],
+            "devices": [
+                _plan_device("a12", "radiateur", "r-ch1", 0, 2),
+                _plan_device("a13", "radiateur", "r-ch2", 13, 2),
+                _plan_device("a14", "station", "m2", 9, 1),
+                _plan_device("a15", "radiateur", "r-sdb", 19, 1),
+                _plan_device("a16", "radiateur", "r-bureau", 0, 8),
+                _plan_device("a17", "volet", "", 3, 0),
+            ],
+        },
+    ]
+}
+
+
 def _shelly(store: Store, today: date) -> None:
     """Daily kWh of the demo Shelly plugs, last SHELLY_DAYS days (separate random stream)."""
     rnd = random.Random(158)
@@ -982,6 +1043,7 @@ def generate(out_dir: Path, passphrase: str = "demo", start_year: int = 2022, to
         "sources": _sources(today),
         "stopped_rooms": STOPPED,
         "wood": WOOD,
+        "floor_plan": FLOOR_PLAN,  # #202
         "stove_fires": stove_fires_of(store, today),  # #469
     }
     store.replace(

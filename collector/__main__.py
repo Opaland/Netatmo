@@ -419,6 +419,21 @@ def shared_contract(previous: list[dict] | None) -> list[dict] | None:
         return previous
 
 
+def floor_plan(previous: dict | None) -> dict | None:
+    """#202: FLOOR_PLAN_JSON (the plan of the house) if valid; the previous plan if invalid (a bad
+    write never erases the drawing); None when the secret is unset."""
+    from .floorplan import PlanError, parse_floor_plan
+
+    raw = os.environ.get("FLOOR_PLAN_JSON", "").strip()
+    if not raw:
+        return None
+    try:
+        return parse_floor_plan(raw)
+    except PlanError as err:
+        _warn(f"Secret FLOOR_PLAN_JSON ignoré ({err}) : le plan précédent est conservé")
+        return previous
+
+
 def write_renew_file(alerts: list[str]) -> None:
     """S-1.12: credentials to renew, one per line, for the workflow's alert issue (never a value)."""
     path = os.environ.get("RENEW_FILE")
@@ -633,6 +648,9 @@ def cmd_sync(s: Settings, args: argparse.Namespace, backfill: bool = False) -> N
     contract = shared_contract(store.meta.get("contract"))
     if contract:
         extra["contract"] = contract
+    plan = floor_plan(store.meta.get("floor_plan"))
+    if plan:
+        extra["floor_plan"] = plan  # #202: encrypted meta only, never a line of the log
     alerts = sources.alerts()
     for alert in alerts:
         _warn(alert)
