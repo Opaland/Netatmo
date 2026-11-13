@@ -13,6 +13,7 @@ from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
+import httpx
 import pytest
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
@@ -549,6 +550,43 @@ def test_peak_above_the_meter_maximum(clean):
     assert {x.doc for x in f["pic-impossible"]} == {"2024.hourly", "2024.linky30"}
 
 
+def _pmax_as_collected(store: Store, va: float, unit: str | None = "VA") -> None:
+    """The daily maximum written by the collector itself (enedis._collect_pmax), from an answer in
+    VA as the Conso API contract gives it: values stored in kVA, `pmax_unit` keeps the RAW unit (#567)."""
+    from collector import enedis
+
+    days = [(FIRST + timedelta(days=i)).isoformat() for i in range((LAST - FIRST).days + 1)]
+    # never the same maximum two days running (a frozen reading is a finding of its own)
+    grandeur: dict = {"points": [{"d": d, "v": str(int(va) + 10 * (i % 7))} for i, d in enumerate(days)]}
+    if unit:
+        grandeur["unite"] = unit
+    http = httpx.Client(transport=httpx.MockTransport(lambda _r: httpx.Response(200, json={"grandeur": [grandeur]})))
+    enedis._collect_pmax(store, enedis._Paced(http, "tok", 0), "1", FIRST, LAST + timedelta(days=1))
+
+
+def test_peaks_read_the_stored_maximum_in_kva_whatever_the_raw_unit(clean):
+    """#567: 59 648 « pics impossibles » on the first real report. The collector converts the VA of
+    the answer to kVA and keeps « VA » in `pmax_unit` (the raw unit); the check took the kVA values
+    for VA, a limit of a few watts, and flagged almost every hour and half hour."""
+    _pmax_as_collected(clean, 2500)
+    store = save(clean)
+    linky = store.doc("linky")
+    assert linky["pmax_unit"] == "VA" and linky["pmax"]["2024-03-12"] == 2.54  # the real form
+    assert found(store) == {}
+    # A real peak still is one: 2.5 kVA cannot draw 4 kWh in an hour.
+    store.put("2024.hourly", "hourly", A, "2024-03-12T19", 4000.0)
+    f = found(save(store))
+    assert [x.at for x in f["pic-impossible"]] == ["2024-03-12T19"]
+    assert f["pic-impossible"][0].other == 2540 and f["pic-impossible"][0].unit == "W"
+
+
+def test_maximum_values_are_reported_in_kva_whatever_the_raw_unit(clean):
+    """#567: the report says the unit of the stored values (kVA), not the raw unit of the answer."""
+    _pmax_as_collected(clean, 2500)
+    a = au.Audit.of(clean, au.read_docs(save(clean).dir, PASSPHRASE))
+    assert a.unit_of(au.SERIES_LABEL[("linky", "pmax")]) == "kVA"
+
+
 def test_peak_above_any_home_without_maximum(clean):
     clean.put("2024.hourly", "hourly", A, "2024-03-12T10", 40_000.0)
     f = found(save(clean))
@@ -674,13 +712,18 @@ DEMO_TODAY = date(2026, 11, 9)  # the day the published demo was generated (--to
 DEMO_EXPECTED = {"valeur-figee": 1}
 
 
-@pytest.mark.parametrize("where", ["generated", "published"])
+@pytest.mark.parametrize("where", ["generated", "generated-va", "published"])
 def test_the_demo_audits_clean(tmp_path, where):
-    if where == "generated":
+    if where.startswith("generated"):
         from collector import demo
 
         demo.generate(tmp_path, today=DEMO_TODAY)
         store = Store(tmp_path, "demo")
+        if where == "generated-va":  # #567: the raw unit of a real archive (the Conso API contract)
+            assert store.doc("linky")["pmax"]
+            store.set_top("linky", "pmax_unit", "VA")
+            store.save(store.meta["home"], store.meta["rooms"])
+            store = Store(tmp_path, "demo")
     else:
         store = Store(Path(__file__).resolve().parents[1] / "web" / "public" / "demo", "demo")
     hours = store.doc("2026.hourly")["hourly"]["r-salon"]
