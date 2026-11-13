@@ -188,6 +188,16 @@ tels quels (toujours chiffrés) dans `data/` (ou `DATA_DIR`), en remplaçant ceu
 commitez-les pour que le site les serve (dans la branche `data` si la variable `DATA_BRANCH` est
 posée, voir ci-dessous).
 
+**Ce que compte `verify` (#550).** L'énergie par année et par catégorie, comptée comme l'appli :
+chaque jour une fois, dans l'année du jour. Un jour présent dans deux fichiers d'année (l'audit le
+nomme `deux-fichiers`) garde la valeur du fichier de son année, jamais la somme des deux ; un jour
+rangé dans le fichier d'une autre année (`mauvais-fichier`) compte dans l'année du jour. Avant la
+v2.3, `verify` additionnait fichier par fichier : sur une archive qui a l'un de ces défauts, il
+écrit donc **en plus** les totaux fichier par fichier, ceux qu'il écrivait avant, pour qu'un relevé
+noté avec l'ancienne version se compare toujours ; sans ces défauts, il écrit exactement ce qu'il
+écrivait. `rekey` et `comparer` contrôlent les deux comptes (une copie fidèle les garde tous les
+deux). L'export CSV suit la même règle : une ligne par pièce et par jour.
+
 ### Branche des données (facultatif, #23)
 
 Par défaut, la collecte commite chaque nuit les fichiers chiffrés dans `data/` sur `main`. Pour
@@ -646,7 +656,7 @@ python -m collector discover
 | `python -m collector discover` | Connexion et inventaire : pièces, modules, catégorie retenue |
 | `python -m collector sync` | Récupère les 35 derniers jours (ou tout l'historique au premier lancement) |
 | `python -m collector backfill` | Force la récupération de tout l'historique |
-| `python -m collector verify` | Déchiffre les données locales et affiche les totaux par année |
+| `python -m collector verify` | Déchiffre les données locales et affiche les totaux par année, comptés comme l'appli (voir « Ce que compte `verify` ») |
 | `python -m collector comparer SOURCE COPIE` | Vérifie que deux dossiers chiffrés ont les mêmes fichiers, le même contenu déchiffré et les mêmes totaux, sans afficher de valeur (#23) |
 | `python -m collector export-csv -o conso.csv` | Export CSV (séparateur `;`, décimales `,`, pour Excel) |
 | `python -m collector insights [--force]` | Analyse du dernier mois par Claude (`ANTHROPIC_API_KEY`) |
