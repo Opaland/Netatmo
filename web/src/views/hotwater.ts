@@ -78,6 +78,7 @@ export function mountHotWater(view: HTMLElement) {
       <p class="hint">Retour : coût du thermodynamique moins celui d’un chauffe-eau électrique neuf (la dépense de toute façon à la fin de vie du ballon), divisé par l’économie d’une année, sans actualisation, entretien ni aides.</p>
     </details>
   </section>`);
+  view.removeAttribute('aria-busy'); // #579: the zone (pages.ts #hw-zone) is drawn, no longer waiting
   const form = view.querySelector<HTMLElement>('#hw-form')!;
   form.addEventListener('input', () => {
     store.save(parseHotWaterInputs(readNumberForm(form, 'hw')));

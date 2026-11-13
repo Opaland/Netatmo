@@ -109,6 +109,7 @@ export function mountSolar(view: HTMLElement) {
       <p class="hint">Économie : achats évités (heures pleines ou creuses selon la demi-heure) plus le surplus payé au tarif de rachat, sans abonnement ni taxes nouvelles. Retour : coût installé divisé par l’économie d’une année, sans actualisation ni entretien.</p>
     </details>
   </section>`);
+  view.removeAttribute('aria-busy'); // #579: the zone (pages.ts #solar-zone) is drawn, no longer waiting
   const form = view.querySelector<HTMLElement>('#solar-form')!;
   form.addEventListener('input', () => {
     saveInputs(parseSolarInputs(readNumberForm(form, 'solar')));
