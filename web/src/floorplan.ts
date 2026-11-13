@@ -89,6 +89,35 @@ export function cleanName(v: unknown): string {
   return Array.from(s).slice(0, MAX_NAME).join('').trim();
 }
 
+/** About the width of a character drawn, in font sizes; a pictograph (an emoji) counts as two. */
+export const CHAR_EM = 0.58;
+const WIDE = /\p{Extended_Pictographic}|\p{Regional_Indicator}/u;
+/** The characters as one sees them (graphemes: an emoji made of several code points is one). */
+function graphemes(s: string): string[] {
+  const Seg = (Intl as { Segmenter?: typeof Intl.Segmenter }).Segmenter;
+  return Seg ? Array.from(new Seg('fr', { granularity: 'grapheme' }).segment(s), (x) => x.segment) : Array.from(s);
+}
+/**
+ * A text cut to fit a width (in cells) at a font size (in cells), with « … » when it is cut; ''
+ * when not even two characters fit. The one rule of both drawings of the plan (Pièces → Plan and
+ * the editor, AGENTS.md §5): cut between graphemes, never inside an emoji (revue v2.1, #541).
+ */
+export function fitName(text: string, width: number, font: number): string {
+  const max = Math.floor((width - 0.5) / (font * CHAR_EM));
+  if (max < 2) return '';
+  const g = graphemes(text);
+  const units = (c: string) => (WIDE.test(c) ? 2 : 1);
+  if (g.reduce((n, c) => n + units(c), 0) <= max) return text;
+  let used = 0;
+  let out = '';
+  for (const c of g) {
+    if (used + units(c) > max - 1) break;
+    used += units(c);
+    out += c;
+  }
+  return out ? `${out}…` : '';
+}
+
 function parseRoom(v: unknown): PlanRoom | null {
   const o = obj(v);
   if (!o) return null;

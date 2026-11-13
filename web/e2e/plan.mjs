@@ -66,6 +66,8 @@ try {
     const cls = await classes(page);
     check(cls.some((c) => /heat-[1-5]/.test(c)) && cls.includes('plan-room heat-none'), `couleurs : ${cls.join(', ')} (une pièce mesurée et le cellier sans valeur attendus)`);
     check((await page.locator('#plan-card .legend span').count()) >= 2, 'légende absente');
+    // #541: the room of the plan linked to no room (Cellier) is said under the drawing
+    check(/1 pièce sur 3 de ce niveau n’est liée à aucune pièce Intuis/.test(await page.locator('#plan-card').innerText()), 'pièce non liée : rien ne le dit');
     check(/Compté :/.test(await page.locator('#plan-card .counted').innerText()), 'période non dite');
     await page.locator('#plan-card').screenshot({ path: `${OUT}/plan-${BROWSER}-rdc.png` });
     // the first floor by touch: five rooms, the bedrooms named (detail view)
@@ -112,7 +114,16 @@ try {
 
   await part('vue foyer', async () => {
     const { ctx, page } = await newPage();
-    await openDemo(page, base, null, 'parametres-affichage');
+    // #541: a room of the plan not linked to any Intuis room, named as a bedroom (editor of the demo)
+    await openDemo(page, base, null, 'parametres-logement');
+    await page.locator('#plan-edit-card .plan-edit-svg').waitFor(SHORT);
+    await page.locator('[data-plan-edit-level="etage"]').click();
+    await frames(page);
+    await page.locator('#plan-add-room').click();
+    await page.locator('#plan-edit-card [data-plan-f="name"]').fill('Chambre d’amis fictive');
+    await page.keyboard.press('Tab');
+    await frames(page);
+    await goto(page, 'parametres-affichage');
     await page.check('[data-toggle=household]');
     await ready(page);
     await openPlan(page);
@@ -120,7 +131,7 @@ try {
     await frames(page);
     const t = await tableText(page);
     const svgText = await page.locator('#plan-card .plan-svg').evaluate((s) => s.textContent + [...s.querySelectorAll('a')].map((a) => a.getAttribute('aria-label')).join(' '));
-    check(!/Chambre parentale|Chambre enfant/.test(t + svgText), 'vue foyer : une chambre du plan est nommée');
+    check(!/Chambre parentale|Chambre enfant|Chambre d’amis/.test(t + svgText), 'vue foyer : une chambre du plan est nommée');
     check(/Chambres/.test(t) && (await page.locator('#plan-card a[href="#piece-__bedrooms__"]').count()) >= 2, 'vue foyer : les chambres ne mènent pas à « Chambres »');
     await ctx.close();
   });
@@ -136,6 +147,28 @@ try {
       await frames(page);
       const wide = await page.evaluate(() => document.documentElement.scrollWidth - 360);
       check(wide <= 0, `200 % : défilement horizontal de ${wide} px au niveau ${lv}`);
+      // #541: every word drawn is painted at --font-xs at least (it follows the 200 %), and stays in its room
+      const small = await page.locator('#plan-card .plan-svg').evaluate((svg) => {
+        const probe = Object.assign(document.createElement('span'), { textContent: 'x' });
+        probe.style.fontSize = 'var(--font-xs)';
+        document.body.append(probe);
+        const min = parseFloat(getComputedStyle(probe).fontSize) - 0.3;
+        probe.remove();
+        const out = [];
+        for (const t of svg.querySelectorAll('text')) {
+          if (!t.textContent.trim() || getComputedStyle(t).visibility === 'hidden') continue;
+          const px = parseFloat(getComputedStyle(t).fontSize) * t.getScreenCTM().a;
+          if (px < min) out.push(`« ${t.textContent} » ${px.toFixed(1)} px < ${min.toFixed(1)}`);
+          const g = t.closest('g.plan-text');
+          if (g) {
+            const [x, , w] = g.dataset.box.split(' ').map(Number);
+            const b = t.getBBox();
+            if (b.x + b.width > x + w + 0.05) out.push(`« ${t.textContent} » sort de sa pièce`);
+          }
+        }
+        return out;
+      });
+      check(!small.length, `200 % : texte du dessin au niveau ${lv} : ${small.join(' ; ')}`);
     }
     await page.locator('#plan-card').screenshot({ path: `${OUT}/plan-${BROWSER}-200.png` });
     await ctx.close();

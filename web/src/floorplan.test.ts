@@ -1,6 +1,10 @@
 // #202: the plan of the house (floorplan.ts), read back from what was sealed or copied by the collection.
 import { describe, expect, it } from 'vitest';
-import { GRID, MAX_NAME, MAX_ROOMS, cleanName, emptyPlan, extent, freeId, heatClasses, overlaps, parsePlan, planJson, roomAt } from './floorplan';
+import { GRID, MAX_DEVICES, MAX_NAME, MAX_ROOMS, cleanName, emptyPlan, extent, fitName, freeId, heatClasses, overlaps, parsePlan, planJson, roomAt } from './floorplan';
+import { SECRET_MAX_BYTES, sealedLength } from './settings';
+
+const fsName = 'node:fs';
+const { readFileSync } = (await import(/* @vite-ignore */ fsName)) as { readFileSync: (u: URL, enc: 'utf8') => string };
 
 const room = (id: string, x: number, y: number, w: number, h: number, extra: Record<string, unknown> = {}) => ({ id, name: `Pièce ${id}`, x, y, w, h, ...extra });
 
@@ -124,5 +128,54 @@ describe('#202 carte de chaleur : classes', () => {
 
   it('negative values (a temperature below zero) are placed too', () => {
     expect(heatClasses([-5, 5]).classes).toEqual([1, 5]);
+  });
+});
+
+describe('#541 un nom coupé pour tenir dans sa pièce', () => {
+  const lone = /[\ud800-\udbff](?![\udc00-\udfff])|(?<![\ud800-\udbff])[\udc00-\udfff]/;
+  it('a name that fits is kept whole; a cut one ends with « … »; a room too narrow writes nothing', () => {
+    expect(fitName('Salon', 6, 0.9)).toBe('Salon');
+    expect(fitName('Chambre parentale', 6, 0.9)).toBe('Chambre p…');
+    expect(fitName('Salon', 1, 0.9)).toBe('');
+  });
+
+  it('never cuts inside an emoji, a pair of surrogates nor a sequence joined by ZWJ', () => {
+    for (let w = 2; w <= 12; w++) {
+      const one = fitName('🏠'.repeat(20), w, 0.9);
+      expect(one).not.toMatch(lone);
+      expect(one.replace('…', '')).toMatch(/^(🏠)*$/u);
+      const cook = fitName('👩‍🍳'.repeat(10), w, 0.9);
+      expect(cook.replace('…', '')).toMatch(/^(👩‍🍳)*$/u);
+    }
+  });
+
+  it('an emoji counts as two characters (it is drawn wider than a letter)', () => {
+    expect(fitName('🏠'.repeat(5), 6, 0.9)).toBe('🏠'.repeat(5));
+    expect(fitName('🏠'.repeat(6), 6, 0.9)).toBe('🏠🏠🏠🏠…');
+    expect(fitName('aaaaaaaaaaaa', 6, 0.9)).toBe('aaaaaaaaa…');
+  });
+});
+
+describe('#541 taille d’un plan à ses bornes', () => {
+  /** 3 levels × MAX_ROOMS rooms × MAX_DEVICES devices, ids and refs at their longest, names of MAX_NAME emojis. */
+  const biggest = () => {
+    const ref = (c: string) => c.repeat(40);
+    const id = (p: string, i: number) => `${p}${String(i).padStart(11, '0')}`;
+    let n = 0;
+    return {
+      levels: (['cave', 'rdc', 'etage'] as const).map((lv) => ({
+        id: lv,
+        rooms: Array.from({ length: MAX_ROOMS }, () => ({ id: id('p', n++), name: '🏠'.repeat(MAX_NAME), x: 10, y: 10, w: 38, h: 38, room: ref('r'), module: ref('m') })),
+        devices: Array.from({ length: MAX_DEVICES }, () => ({ id: id('a', n++), kind: 'chauffe-eau', ref: ref('d'), x: 47, y: 47 })),
+      })),
+    };
+  };
+  it('is the figure written in collector/floorplan.py, and too big for a secret once sealed', () => {
+    const json = planJson(parsePlan(biggest())!);
+    const bytes = new TextEncoder().encode(json).length;
+    const py = readFileSync(new URL('../../collector/floorplan.py', import.meta.url), 'utf8');
+    expect(py).toContain(`${bytes.toLocaleString('fr-FR').replace(/\s/g, ' ')} octets`);
+    expect(bytes).toBeLessThan(48 * 1024);
+    expect(sealedLength(json)).toBeGreaterThan(SECRET_MAX_BYTES);
   });
 });

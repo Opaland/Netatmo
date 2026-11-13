@@ -1,5 +1,6 @@
 import { defineConfig } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
+import { builtSourceRepo } from './src/build-env';
 import { MANIFEST } from './src/manifest';
 
 // #229: <compte>.github.io is one origin for every Pages site of the account, and the Cache API
@@ -16,8 +17,9 @@ export default defineConfig({
   define: {
     'import.meta.env.VITE_DATA_CACHE': JSON.stringify(cacheName('energy-data')),
     'import.meta.env.VITE_TARIFF_CACHE': JSON.stringify(cacheName('energy-tariffs')),
-    // #533: the repository of this build (a copy links to its own guide), src/source-repo.ts
-    'import.meta.env.VITE_SOURCE_REPO': JSON.stringify(env.VITE_SOURCE_REPO ?? env.GITHUB_REPOSITORY ?? ''),
+    // #533: the repository of this build (a copy links to its own guide), src/source-repo.ts; #541:
+    // an empty VITE_SOURCE_REPO does not hide GITHUB_REPOSITORY (src/build-env.ts)
+    'import.meta.env.VITE_SOURCE_REPO': JSON.stringify(builtSourceRepo(env)),
   },
   plugins: [
     VitePWA({

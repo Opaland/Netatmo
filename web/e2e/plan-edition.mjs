@@ -79,6 +79,9 @@ try {
     check(await card(page).locator('#plan-save').isDisabled(), 'démo : « Enregistrer pour le foyer » actif');
     await page.locator('[data-plan-edit-level="rdc"]').click();
     await frames(page);
+    // #541: the list of the devices is folded (the card was 1 476 px high at 360 px), and says how many
+    const fold = card(page).locator('#plan-devices');
+    check(!(await fold.evaluate((d) => d.open)) && /Appareils de ce niveau \(\d+\)/.test(await fold.locator('summary').innerText()), 'appareils : liste non repliée ou sans leur nombre');
     const before = await shapes(page).count();
     // a room: added (selected), named, sized by its fields
     await page.locator('#plan-add-room').click();
@@ -94,6 +97,11 @@ try {
     await frames(page);
     let b = await selectedBox(page);
     check(b[2] === 8, `largeur : ${b[2]} cases au lieu de 8`);
+    // #541: the label in metres follows the value, the focus goes on to the next field
+    check(/^Largeur \(4\s?m\)$/u.test(await card(page).locator('[data-plan-l="w"]').innerText()), `largeur : libellé « ${await card(page).locator('[data-plan-l="w"]').innerText()} »`);
+    check(await card(page).locator('[data-plan-f="h"]').evaluate((f) => f === document.activeElement), 'largeur : le focus ne passe pas à la profondeur');
+    // #541: the link to a station module says what it is for
+    check(/pas encore lu/.test(await card(page).locator('#plan-module-hint').innerText()), 'module de la station : son usage n’est pas dit');
     // dragged by the finger: 3 cells to the right, the field follows
     await card(page).locator('.plan-edit-svg').scrollIntoViewIfNeeded();
     // the size of a cell on the screen, as the drawing places it (the frame may letterbox it)
@@ -116,6 +124,7 @@ try {
     await card(page).locator('[data-plan-f="ref"]').selectOption({ label: 'Box TV' });
     await frames(page);
     check((await card(page).locator('[data-plan-select]').allInnerTexts()).some((t) => /Prise mesurée \(Box TV\)/.test(t)), 'appareil : la liste ne dit pas lequel');
+    check(await card(page).locator('#plan-devices').evaluate((d) => d.open), 'appareil choisi : sa liste reste repliée');
     await axe(page, 'éditeur');
     await card(page).screenshot({ path: `${OUT}/plan-edition-${BROWSER}.png` });
     // applied on this device at once: Pièces → Plan

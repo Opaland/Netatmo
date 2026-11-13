@@ -44,6 +44,8 @@
   stroke-width: 0.06;
 }
 .plan-device text { fill: var(--text); font-weight: 700; }
+/* #541: a device whose letter would not fit the drawing (plan-text.ts): a dot, said by the table */
+.plan-device.is-dot rect { stroke-width: 0.16; }
 .plan-controls { align-items: end; }
 .plan-overlay { pointer-events: none; }
 /* the editor (views/plan-edit.ts): a light grid. The drawing takes the finger (touch-action is not

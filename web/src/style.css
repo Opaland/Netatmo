@@ -1089,7 +1089,8 @@ details.fold[open] > summary {
 
 /* ---------------------------------------------------------------- tables (#319) */
 .table-details summary,
-.lower-setup summary {
+.lower-setup summary,
+.plan-fold summary {
   cursor: pointer;
   font-size: var(--font-sm);
   color: var(--text-muted);
