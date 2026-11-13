@@ -174,6 +174,11 @@ export interface QualityInput {
 export interface CatchUp {
   at: Record<string, string>;
   months: Record<string, Record<string, [number, number]>>;
+  /**
+   * #581: per series, the rooms the catch-up really asked, month -> day asked (collector
+   * meta_doc). Absent from a meta written before #581: then no single room is said « redemandé ».
+   */
+  rooms?: Partial<Record<string, Map<string, Record<string, string>>>>;
 }
 export const CATCH_UP_SERIES = ['heating', 'water', 'station', 'linky30'] as const;
 const isDay = (v: unknown): v is string => typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v);
@@ -194,7 +199,24 @@ export function catchUpOf(raw: unknown): CatchUp | null {
     at[serie] = day;
     months[serie] = kept;
   }
-  return Object.keys(at).length ? { at, months } : null;
+  if (!Object.keys(at).length) return null;
+  // #581: the rooms asked, read as defensively (any room id, in a Map: never an own key of an object)
+  const rawRooms = own(raw, 'rooms');
+  if (!rawRooms || typeof rawRooms !== 'object' || Array.isArray(rawRooms)) return { at, months };
+  const rooms: NonNullable<CatchUp['rooms']> = {};
+  for (const serie of Object.keys(at)) {
+    const per = own(rawRooms, serie);
+    if (!per || typeof per !== 'object' || Array.isArray(per)) continue;
+    const map = new Map<string, Record<string, string>>();
+    for (const [rid, ms] of Object.entries(per)) {
+      if (!ms || typeof ms !== 'object' || Array.isArray(ms)) continue;
+      const kept: Record<string, string> = {};
+      for (const [m, d] of Object.entries(ms)) if (/^\d{4}-\d{2}$/.test(m) && isDay(d)) kept[m] = d;
+      map.set(rid, kept);
+    }
+    rooms[serie] = map;
+  }
+  return { at, months, rooms };
 }
 /** The gesture, said in every « Récupérable ? » it may help. */
 export const CATCH_UP = 'cocher « rattrapage » en lançant Collecte quotidienne (Actions) : ces jours sont ajoutés, sans réécrire les autres';
@@ -202,8 +224,20 @@ export const CATCH_UP = 'cocher « rattrapage » en lançant Collecte quotidienn
  * #569: the day of the catch-up that asked every month of [from, to] for `serie`, when the gap is
  * still there (the source gave nothing back for its days), else null.
  */
-export function askedInVain(c: CatchUp | null | undefined, serie: (typeof CATCH_UP_SERIES)[number], from: string, to: string): string | null {
+export function askedInVain(c: CatchUp | null | undefined, serie: (typeof CATCH_UP_SERIES)[number], from: string, to: string, room?: string): string | null {
   if (!c || !Object.hasOwn(c.at, serie) || !Object.hasOwn(c.months, serie)) return null;
+  // #581: the gap of one room: only when THAT room was asked every month, after the gap
+  if (room !== undefined) {
+    const mine = c.rooms?.[serie]?.get(room);
+    if (!mine) return null; // not asked (no longer listed by Intuis), or a meta from before #581
+    let latest = '';
+    for (let m = from.slice(0, 7); m <= to.slice(0, 7); m = addDays(`${m}-28`, 7).slice(0, 7)) {
+      const day = Object.hasOwn(mine, m) ? mine[m] : '';
+      if (!day || day <= to) return null;
+      if (day > latest) latest = day;
+    }
+    return latest;
+  }
   const at = c.at[serie];
   const cells = c.months[serie];
   if (at <= to) return null;
@@ -277,8 +311,8 @@ function collectionStopped(input: QualityInput, from: string, to: string): boole
 
 const RECONSTITUTE = 'Une estimation à part reste possible (« Reconstituer », plus bas).';
 /** #569: lost at Intuis, said once: after a catch-up that asked the days in vain, else probably. */
-function notAtIntuis(input: QualityInput, serie: 'heating' | 'water', from: string, to: string, why = 'Intuis ne garde pas ces jours'): string {
-  const at = askedInVain(input.catchUp, serie, from, to);
+function notAtIntuis(input: QualityInput, serie: 'heating' | 'water', from: string, to: string, why = 'Intuis ne garde pas ces jours', room?: string): string {
+  const at = askedInVain(input.catchUp, serie, from, to, room);
   return at
     ? `${lostAt(at, 'Intuis', why)} ${RECONSTITUTE}`
     : `Non chez Intuis d’après la récupération de l’historique (ni les jours ni le total du mois) ; pour en être sûr, ${CATCH_UP}. ${RECONSTITUTE}`;
@@ -401,7 +435,7 @@ function intuis(input: QualityInput, kind: 'heating' | 'water'): SourceQuality |
         all: false,
         ongoing,
         cause,
-        recover: ongoing ? 'Les jours reviendront quand le module répondra à nouveau ; les jours passés sont perdus chez Intuis.' : notAtIntuis(input, kind, from, to),
+        recover: ongoing ? 'Les jours reviendront quand le module répondra à nouveau ; les jours passés sont perdus chez Intuis.' : notAtIntuis(input, kind, from, to, undefined, room),
         link: ongoing || offDays ? '#parametres-sources' : undefined,
       });
     }

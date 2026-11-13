@@ -39,7 +39,7 @@ def _midnight(day: str) -> int:
 
 
 # ---------------------------------------------------------------- Intuis
-def _intuis(tmp_path, asked: list, heating_family: float = 0):
+def _intuis(tmp_path, asked: list, heating_family: float = 0, empty: bool = False):
     """Fake Intuis: every room asked gets VALUE (as $1 + $2) for every day of the range, and
     `heating_family` Wh under sum_energy_elec_heating (another family of the same energy)."""
 
@@ -56,7 +56,7 @@ def _intuis(tmp_path, asked: list, heating_family: float = 0):
             asked.append((mtype, req["date_begin"], req["date_end"], tuple(rooms)))
             first = datetime.fromtimestamp(req["date_begin"], TZ).date() + timedelta(days=1)
             last = datetime.fromtimestamp(req["date_end"] - 1, TZ).date()
-            days = _days(first.isoformat(), last.isoformat())
+            days = [] if empty else _days(first.isoformat(), last.isoformat())  # #581: Intuis gives nothing
             tariffs = mtype.startswith("sum_energy_elec$0")
             row = [None, VALUE - 1000, 1000] if tariffs else [heating_family if "heating" in mtype else 0]
             measures = (
@@ -504,3 +504,55 @@ def test_missing_days_agree_with_the_shared_rule_of_the_app(tmp_path):
             cell[rep.kind[rid]] = cell.get(rep.kind[rid], 0) + 1
     expected = {m: {k: c[2] for k, c in kinds.items() if c[2]} for m, kinds in VECTOR["expected"]["months"].items()}
     assert per_month == {m: k for m, k in expected.items() if k}
+
+
+# ---------------------------------------------------------------- #581: per room, encrypted meta only
+ROOMS_FIXTURE = Path(__file__).resolve().parents[1] / "web/src/__fixtures__/catch-up-rooms.json"
+
+
+def test_the_meta_says_which_room_was_asked_and_the_app_reads_it(tmp_path):
+    """#581: room 100 (listed) has a hole in January 2024, asked again in vain; room 999 (no longer
+    listed by Intuis) has a hole the same month, never asked. The meta written by the real catch-up
+    names the rooms asked; web/src/data-quality-rattrapage.test.ts reads this same file
+    (regenerate with CATCH_UP_FIXTURE=1). The public log stays per series and month."""
+    import os
+
+    asked: list = []
+    syncer = _intuis(tmp_path, asked, empty=True)
+    store = syncer.store
+    store.meta["rooms"] = [
+        {"id": "100", "name": "Salon", "category": "heating"},
+        {"id": "200", "name": "Chambre", "category": "heating"},
+        {"id": "999", "name": "Retirée", "category": "heating"},
+    ]
+    holes = {"100": ["2024-01-04", "2024-01-09"], "999": ["2024-01-15", "2024-01-20"]}
+    for d in _days("2024-01-01", "2024-01-31"):
+        for rid in ("100", "200", "999"):
+            lo, hi = holes.get(rid, ["", ""])
+            if not lo <= d <= hi:
+                store.merge(rid, d, 1000.0)
+    tally = run(store, syncer, syncer.home(), [], today="2024-02-01")
+    doc = meta_doc(None, tally, "2026-11-14")
+    assert doc["rooms"] == {"heating": {"100": {"2024-01": "2026-11-14"}}}
+    assert doc["months"] == {"heating": {"2024-01": [6, 0]}}
+    text = "\n".join(public_lines(tally))
+    assert "100" not in text and "999" not in text and "Salon" not in text
+    fixture = {"catch_up": doc, "holes": holes, "month": ["2024-01-01", "2024-01-31"]}
+    out = json.dumps(fixture, ensure_ascii=False, indent=1) + "\n"
+    if os.environ.get("CATCH_UP_FIXTURE"):
+        ROOMS_FIXTURE.write_text(out, encoding="utf-8")
+    assert json.loads(ROOMS_FIXTURE.read_text(encoding="utf-8")) == fixture
+
+
+def test_the_rooms_of_an_older_meta_are_kept_and_a_stopped_series_keeps_its_rooms():
+    old = {"at": {"heating": "2026-11-13"}, "months": {"heating": {"2023-09": [2, 0]}}}  # before #581
+    t = Tally()
+    t.asked("heating", "2024-03-05", "100")
+    doc = meta_doc(old, t, "2026-11-20")
+    assert doc["rooms"] == {"heating": {"100": {"2024-03": "2026-11-20"}}}
+    assert doc["months"]["heating"] == {"2023-09": [2, 0], "2024-03": [1, 0]}
+    again = Tally()
+    again.asked("heating", "2024-03-06", "200")
+    again.note("heating", "interrompu (HTTPError)")
+    assert meta_doc(doc, again, "2026-11-21")["rooms"] == doc["rooms"]
+    assert "rooms" not in meta_doc(None, Tally(), "2026-11-21")
