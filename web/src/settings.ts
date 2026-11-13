@@ -106,6 +106,11 @@ export function repoFromLocation(loc: Location = window.location): string | null
   return m && repo ? `${m[1]}/${repo}` : null;
 }
 
+/** This page is served by GitHub Pages of `repo`. The host is always lower case and GitHub does
+ *  not tell owner or repository names apart by case: « Compte/Depot » typed with its capitals is
+ *  the site compte.github.io/Depot (#533). */
+export const isOwnSite = (repo: string, loc: Location = window.location): boolean => repoFromLocation(loc)?.toLowerCase() === repo.toLowerCase();
+
 export class GitHubError extends Error {
   constructor(
     message: string,
