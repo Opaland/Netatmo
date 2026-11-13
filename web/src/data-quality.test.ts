@@ -10,6 +10,7 @@ import {
   covered,
   curveParts,
   fineSource,
+  gapTreatment,
   lowYears,
   monthSpan,
   monthStatus,
@@ -387,5 +388,37 @@ describe('#336: the known cause of each gap', () => {
     expect(fineSource('roomstate', seenParts(seen), null)!.gaps[0].cause).toMatch(/relevé horaire non passé/);
     const s = fineSource('roomstate', seenParts(seen), null, [], new Map([['2026-01-08', 'internet']]))!;
     expect(s.gaps[0].cause).toBe('coupure Internet le 8 janv. 2026 : la maison était injoignable');
+  });
+});
+
+describe('#532 trous : cause et traitement par l’appli', () => {
+  const lost = new Set(span('2024-03-10', '2024-03-20'));
+  const skip = { a: lost, b: lost, c: lost, w: lost };
+  const allDays = span('2024-01-01', '2024-12-31');
+  it('a collection that failed: still at Intuis, recoverable by a full collection', () => {
+    const failures = Object.fromEntries(span('2024-03-10', '2024-03-25').map((d) => [d, ['intuis']]));
+    const r = qualityReport(base(recs('2024-01-01', '2024-12-31', skip), { linky: new Map(allDays.map((d) => [d, 30])), devices: { failures } }));
+    const g = r.sources.find((s) => s.id === 'heating')!.gaps[0];
+    expect(g.cause).toBe('collecte Intuis en échec (16 nuits) : ces jours n’ont pas été redemandés à temps');
+    expect(g.recover).toMatch(/^Oui : Intuis garde l’historique/);
+  });
+  it('a collection that did not run: Linky and the station are silent too', () => {
+    const linky = new Map(allDays.filter((d) => !lost.has(d)).map((d) => [d, 30]));
+    const station = { modules: { m0: { name: 'Station' } }, daily: { m0: Object.fromEntries(allDays.filter((d) => !lost.has(d)).map((d) => [d, [1, 2, 3, 50, 400]])) } };
+    const r = qualityReport(base(recs('2024-01-01', '2024-12-31', skip), { linky, station }));
+    const g = r.sources.find((s) => s.id === 'heating')!.gaps[0];
+    expect(g.cause).toBe('collecte arrêtée : le compteur Linky et la station manquent aussi ces jours-là');
+    expect(g.recover).toMatch(/Récupérer tout l’historique disponible/);
+  });
+  it('a gap where Linky has the days stays lost at Intuis', () => {
+    const r = qualityReport(base(recs('2024-01-01', '2024-12-31', skip), { linky: new Map(allDays.map((d) => [d, 30])) }));
+    expect(r.sources.find((s) => s.id === 'heating')!.gaps[0].cause).toMatch(/historique Intuis n'a rien renvoyé/);
+  });
+  it('says what the app does with the days: empty, never added; 0 kWh is a measure', () => {
+    expect(gapTreatment('heating', { kind: 'missing' })).toMatch(/^Laissé vide : rien n’est ajouté aux totaux.*sans jamais les ajouter aux mesures/);
+    expect(gapTreatment('water', {})).toBe(gapTreatment('heating', {}));
+    expect(gapTreatment('water', { kind: 'zero' })).toMatch(/^Compté 0 kWh/);
+    expect(gapTreatment('linky', {})).toMatch(/Autres usages/);
+    expect(gapTreatment('linky30', {})).toMatch(/totaux par jour n’en dépendent pas/);
   });
 });

@@ -182,13 +182,13 @@ const cutCause = (c: { day: string; kind: CutKind }, what: string) =>
 
 /**
  * Nights whose collection of `source` failed and could have fetched these days: the collection
- * asks again for the 10 days before it (Linky, station), so a day is lost when the nights up to
- * 10 days after it all failed.
+ * asks again for the `refetch` days before it (10 for Linky and the station; INTUIS_REFETCH_DAYS
+ * for Intuis), so a day is lost when the nights up to that many days after it all failed.
  */
-function failedNights(input: QualityInput, source: string, from: string, to: string): number {
+function failedNights(input: QualityInput, source: string, from: string, to: string, refetch = 10): number {
   const f = input.devices?.failures;
   if (!f) return 0;
-  const end = addDays(to, 10);
+  const end = addDays(to, refetch);
   return Object.entries(f).filter(([d, list]) => d >= from && d <= end && list.includes(source)).length;
 }
 /** At least 80 % of [from, to] in `set`. */
@@ -197,6 +197,17 @@ const mostlyIn = (set: Set<string> | null, from: string, to: string) => {
   const list = days(from, to);
   return list.filter((d) => set.has(d)).length >= 0.8 * list.length;
 };
+
+/** #532: days of Intuis the nightly collection asks again (collector `sync --days`, 35 by default). */
+export const INTUIS_REFETCH_DAYS = 35;
+/** #532: a gap the collection did not ask for is still at Intuis, which keeps its history. */
+const AT_INTUIS = 'Oui : Intuis garde l’historique. Relancer la collecte en cochant « Récupérer tout l’historique disponible » (Actions → Collecte quotidienne).';
+
+/** #532: the collection did not run these days: every other source (Linky, station) is silent too. */
+function collectionStopped(input: QualityInput, from: string, to: string): boolean {
+  const others = [input.linky ? new Set(input.linky.keys()) : null, stationDays(input)].filter((x): x is Set<string> => !!x?.size);
+  return others.length > 0 && others.every((have) => mostlyIn(absentWithin(have, from, to), from, to));
+}
 
 const NOT_AT_INTUIS = 'Non chez Intuis (ni les jours ni le total du mois) ; une estimation à part reste possible (« Reconstituer », plus bas).';
 
@@ -265,6 +276,13 @@ function intuis(input: QualityInput, kind: 'heating' | 'water'): SourceQuality |
     // radiators: a cut of the whole home (a cut cannot explain the water heater alone)
     else if (boot) cause = `coupure de courant probable (la passerelle Intuis a redémarré le ${dayShort(boot, true)})`;
     else if (cut) cause = cutCause(cut, 'la passerelle Intuis ne pouvait plus envoyer ses relevés');
+    // #532: not lost at Intuis but never asked for: the collection failed, or did not run at all
+    // (the water heater's own gaps keep their causes: a collection that did not run misses the radiators too)
+    const asked = kind === 'heating' && !boot && !cut;
+    const failed = asked ? failedNights(input, 'intuis', from, to, INTUIS_REFETCH_DAYS) : 0;
+    const stopped = asked && !failed && collectionStopped(input, from, to);
+    if (failed) cause = `collecte Intuis en échec (${failed} nuit${failed > 1 ? 's' : ''}) : ces jours n’ont pas été redemandés à temps`;
+    else if (stopped) cause = 'collecte arrêtée : le compteur Linky et la station manquent aussi ces jours-là';
     gaps.push({
       from,
       to,
@@ -275,7 +293,11 @@ function intuis(input: QualityInput, kind: 'heating' | 'water'): SourceQuality |
       cause,
       same: !setup && !!heatingLost && days(from, to).every((d) => heatingLost.has(d)),
       link: waterOff && !setup ? '#parametres-sources' : undefined,
-      recover: setup ? 'Non : le chauffe-eau ne mesurait rien pendant cette période.' : `${NOT_AT_INTUIS}${linkyHas(from, to) ? ' Le compteur Linky a ces jours : la reconstitution s’appuie dessus.' : ''}`,
+      recover: setup
+        ? 'Non : le chauffe-eau ne mesurait rien pendant cette période.'
+        : failed || stopped
+          ? AT_INTUIS
+          : `${NOT_AT_INTUIS}${linkyHas(from, to) ? ' Le compteur Linky a ces jours : la reconstitution s’appuie dessus.' : ''}`,
     });
   }
   const offlineNow = input.devices?.offlineNow ?? [];
@@ -814,4 +836,26 @@ export function sourceVerdict(s: SourceQuality): SourceVerdict {
   const ongoing = s.gaps.find((g) => g.ongoing && g.kind !== 'zero');
   const parts = [head, ...(ongoing ? [`muet depuis ${ongoing.days} jour${ongoing.days > 1 ? 's' : ''} (${ongoing.who})`] : [])];
   return { level: ongoing && level === 'good' ? 'fair' : level, overall, worst, text: parts.join(' · ') };
+}
+
+/**
+ * #532: what the app does with the days of a gap: never a value made up and added to the measured
+ * ones. The radiators' lost days are left empty (nothing added to a total), kept out of the
+ * comparisons (judgedOut: signature, unusual days, « Expliquer un mois »), and only estimated apart
+ * when the owner opens « Jours perdus chez Intuis » (reconstitute.ts: lost room-days only, shown
+ * apart, never added); estimated days are counted once, as estimated.
+ */
+export function gapTreatment(id: SourceId, g: Pick<Gap, 'kind'>): string {
+  if (g.kind === 'zero') return 'Compté 0 kWh : c’est une mesure, pas un manque.';
+  switch (id) {
+    case 'heating':
+    case 'water':
+      return 'Laissé vide : rien n’est ajouté aux totaux ; ces jours sont écartés des comparaisons (signature, jours inhabituels), et « Jours perdus chez Intuis » peut les estimer à part, sans jamais les ajouter aux mesures.';
+    case 'linky':
+      return 'Laissé vide : le recoupement avec Intuis, « Autres usages » et la reconstitution par le Linky sautent ces jours.';
+    case 'station':
+      return 'Laissé vide : les courbes de la station s’interrompent ; la météo de la commune reste utilisée pour la signature.';
+    default:
+      return 'Laissé vide : la courbe de ces jours s’interrompt ; les totaux par jour n’en dépendent pas.';
+  }
 }
