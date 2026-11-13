@@ -54,7 +54,7 @@ par nuit sans nouveauté. Le journal des Actions est **public** : rien de person
 | Fichier | Contenu (texte clair) | Producteur | Lecture par l'appli |
 |---|---|---|---|
 | `keyinfo.json` (**clair**) | `{"salt": b64, "iter": 600000}` | collecteur, une fois | Au déverrouillage |
-| `meta.enc.json` | `home`, `rooms` (id, nom, catégorie), années disponibles (`years`, `hourly_years`, `room30_years`, `station_hourly_years`…), `first_day`, `last_day`, sources et extras, contrat vu par Intuis, `updated` | collecteur | Toujours, en premier |
+| `meta.enc.json` | `home`, `rooms` (id, nom, catégorie), années disponibles (`years`, `hourly_years`, `room30_years`, `station_hourly_years`…), `first_day`, `last_day`, sources et extras, contrat vu par Intuis, plan de la maison (`floor_plan`, recopié du secret `FLOOR_PLAN_JSON`, lu par `parsePlan` seul, #202), `updated` | collecteur | Toujours, en premier |
 | `YYYY.enc.json` | `daily`: `{room: {"YYYY-MM-DD": Wh}}` · `tariffs` · `temps` · `estimated` · `coverage` | collecteur | Toutes les années au chargement |
 | `YYYY.hourly.enc.json` | `hourly`: `{room: {"YYYY-MM-DDTHH": Wh}}` | collecteur | À la demande, années utiles seulement |
 | `YYYY.room30.enc.json`, `room30.enc.json` | pièces au pas 30 min `[hp, hc, °C, consigne]` par jour local ; progression du rattrapage | `room30.py` (#327) | À la demande |

@@ -30,7 +30,9 @@ signalement privé, et cité dans la PR du correctif si vous le souhaitez.
 - **L'application** (`web/`) : déchiffrement local, clé « Rester connecté » (IndexedDB), notes
   chiffrées (localStorage), service worker et ses caches, politique de sécurité du contenu (CSP) et
   Trusted Types, appels à l'API GitHub depuis ⚙ Paramètres et l'assistant de premier lancement
-  (aussi ouvert depuis l'écran d'un site sans données).
+  (aussi ouvert depuis l'écran d'un site sans données) ; les réglages du foyer qu'elle scelle en
+  secrets du dépôt (localisation, radiateurs arrêtés, bois, contrat, alerte froid et, depuis la
+  v2.1, le **plan de la maison** `FLOOR_PLAN_JSON`, recopié par la collecte dans la méta chiffrée).
 - **Le collecteur** (`collector/`) : appels à Intuis, Netatmo, Conso API, Shelly, Open-Meteo,
   Anthropic ; chiffrement avant commit ; journaux publics de GitHub Actions.
 - **Les workflows** (`.github/workflows/`) : permissions, secrets, déploiement Pages et attestation
@@ -58,7 +60,9 @@ Chaque point est tenu par un test qui échoue s'il est cassé :
 - **Enveloppes chiffrées** : format inconnu ou dérivation faible refusés avant tout calcul (#236) —
   `web/src/aggregate.test.ts`, `tests/test_collector.py`.
 - **Journaux publics** : aucune valeur, aucun nom, aucun identifiant, aucun secret, même quand toutes
-  les sources échouent — `tests/test_fuites.py`.
+  les sources échouent — `tests/test_fuites.py` ; le plan de la maison n'est jamais cité, même
+  invalide (le plan précédent est gardé) — `tests/test_plan_maison.py`. Un nom saisi dans le plan
+  reste du texte partout où il est écrit (éditeur, dessin, Pièces → Plan) — `web/e2e/plan-edition.mjs`.
 - **IA** : pièces et capteurs envoyés sous pseudonyme, jamais leurs noms —
   `tests/test_collector.py` (`test_insights_never_send_room_or_module_names`) et, sur la démonstration
   complète, `tests/test_promesses.py` (ni nom, ni jour daté hors des cinq jours inhabituels au plus).

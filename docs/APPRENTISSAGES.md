@@ -178,3 +178,24 @@ quand un outil la rend impossible à refaire.
 - **Conduite** : un élagage par date ne propose jamais l'élément qu'on vient de faire ; le test
   rend le cas certain (anciennes entrées datées dans le futur) au lieu d'attendre une égalité
   d'horloge (`elaguer`, `tests/test_copie_locale.py`).
+
+### A18 · 13/11/2026 — Un débordement propre à WebKit passait un balayage qui ne tourne qu'en Chromium (#540, revue v2.1)
+
+- **Ce qui s'est passé** : à 360 px et texte 200 %, ⚙ Mon logement défilait en largeur de 225 px
+  en WebKit : la boîte de la liste « Motif » tenait dans sa colonne, mais WebKit laissait déborder
+  le **texte** de l'option la plus longue hors de la boîte. Le balayage (`e2e/sweep.mjs`) ne passe
+  qu'en Chromium, et l'e2e qui l'a vu en passant ne mesurait que sa propre carte.
+- **Conduite** : une revue de version sonde aussi les routes en WebKit à 200 % (largeur du
+  document) ; un e2e qui tourne en WebKit en CI mesure la page entière, pas seulement sa carte ;
+  une boîte qui tient ne prouve pas que son contenu tient (`select` : `overflow: hidden` dans la
+  règle unique).
+
+### A19 · 13/11/2026 — Une configuration de polices réduite à DejaVu changeait aussi le rendu (revue v2.1)
+
+- **Ce qui s'est passé** : pour régénérer les captures (A15), un `FONTCONFIG_FILE` ne listant que le
+  dossier DejaVu donnait bien `fc-match sans-serif` → DejaVu Sans, mais perdait les réglages de
+  rendu du système (lissage, hinting) : 140 captures changeaient de pixels sans changer de mise en
+  page. Vu en comparant une capture à la référence avant de committer.
+- **Conduite** : le fichier inclut la configuration du système (`/etc/fonts/fonts.conf`) et
+  **écarte** les polices absentes du runner (`<rejectfont>`, ici Inter) ; une régénération qui
+  change presque toutes les captures se compare à une référence avant d'être crue.

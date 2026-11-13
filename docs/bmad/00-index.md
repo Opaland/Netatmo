@@ -18,7 +18,7 @@ Ce dossier ajoute une revue par 72 personas pour mesurer les besoins avant de co
 |---|---|---|---|
 | 01 | [01-project-brief.md](01-project-brief.md) | Analyst | Problème, utilisateurs, objectifs, KPI, contraintes, risques |
 | 02 | [02-revue-50-personas.md](02-revue-50-personas.md) | Analyst / UX | 50 personas, verdicts, propositions, synthèse des 15 besoins, mesure du besoin domotique et IA ; § 12 : personas 51 à 62 ajoutés ; § 13 : personas 63 à 72 (fin de v1.6) |
-| — | [revues/](revues/) | Analyst / PO | Revue de cadrage et de fin de chaque version (v1.2, v1.3, v1.4, v1.5, v1.6, v1.7, v1.8, v1.9, v2.0) |
+| — | [revues/](revues/) | Analyst / PO | Revue de cadrage et de fin de chaque version (v1.2, v1.3, v1.4, v1.5, v1.6, v1.7, v1.8, v1.9, v2.0, v2.1) |
 | 03 | [03-prd.md](03-prd.md) | PM | Vision, personas retenus, exigences FR / NFR, hors périmètre, plan de versions |
 | 04 | [04-architecture.md](04-architecture.md) | Architect | Architecture actuelle, modèle de données chiffré, couche IA, pont local, ADR |
 | 05 | [05-epics-stories.md](05-epics-stories.md) | PO / SM | Épopées, récits utilisateur, critères d'acceptation, taille, priorité, statut |
@@ -46,7 +46,8 @@ Documents antérieurs, toujours valables : [README](../../README.md), [notes API
 | v1.8 : le bois et les réglages (bois dans l'isolation, réglages du foyer en secrets, ⚙ Mon logement, degrés-jours, stock de bois et flambées, heures creuses datées, bilan qualité) | Livré et clos ([revue de fin](revues/v1.8.md), 53 👍 / 18 ➖ / 1 👎 ; revue de code § 12, PR #503) ; restent les décisions (§ 10) et les preuves du propriétaire (§ 9) |
 | v1.9 : sécurité et méthode (Argon2id, paliers de taille, contrat et alerte froid en secrets, ensoleillement, repère kWh/m²/an face au DPE, défi à climat égal, rapport de compatibilité) | Livré et clos ([revue de fin](revues/v1.9.md), 53 👍 / 18 ➖ / 1 👎 ; revue de code § 12, PR #519) ; restent la migration Argon2id des vraies données (#139), les décisions (§ 10) et les preuves du propriétaire (§ 9) |
 | v2.0 : ouverture (guide d'installation et « dépôt prêt », assistant de premier lancement, branche `data`, copie locale sur le NAS, origine partagée signalée, page HTTP dite) | Livré et clos ([revue de fin](revues/v2.0.md), 54 👍 / 17 ➖ / 1 👎 ; revue de code § 12, PR #534) ; restent les gestes et preuves du propriétaire (§ 9 : NAS, branche `data`, modèle, transfert), les décisions (§ 10) ; pont (#25) et clé IA (#14) attendent leur condition |
-| v2.1, jalon « Matériel » | [Feuille de route](feuille-de-route.md) |
+| v2.1 : maison connectée (plan de la maison : lecture dans Pièces, éditeur dans ⚙ Mon logement ; finitions de l'assistant et de la trace d'un autre site) | Livré, revue de fin faite ([revue de fin](revues/v2.1.md), 54 👍 / 17 ➖ / 1 👎 ; revue de code § 12), **clôture à la fusion de sa PR** ; restent CO₂ et image de fond du plan (décisions D48, D49, § 10) ; Livebox, NAS, CPL et TIC au jalon « Matériel » (attendent le pont) |
+| v2.2, jalon « Matériel » | [Feuille de route](feuille-de-route.md) |
 
 ## Conventions
 
