@@ -22,7 +22,7 @@ import { type SwipeDir, onSwipe, step } from './swipe';
 import { HOME_PERIODS, type HomePeriod, homePeriod } from './home';
 import { historyPeriods } from './views/overview';
 import { tenant } from './tenant';
-import { downloadBlob, esc, filtered, lastDay, roomName } from './ui';
+import { downloadBlob, esc, filtered, lastDay, roomName, valuesFold } from './ui';
 import { renderLoading, renderLock, showApp } from './views/lock';
 import { toggleTerm } from './plain';
 import { dismissTip, finishOnboarding, needsOnboarding, readFlags, tipPending } from './onboarding';
@@ -491,7 +491,7 @@ app.addEventListener('submit', (e) => ds && dispatch([...pageHandlers(), ...card
 
 app.addEventListener('toggle', (e) => {
   const t = e.target as HTMLElement;
-  if (t.classList.contains('table-details')) state.showTables = (t as HTMLDetailsElement).open;
+  if (valuesFold(t)) state.showTables = t.open;
 }, true);
 
 // Redraw charts with the right colours (and patterns) when the OS theme or contrast flips.

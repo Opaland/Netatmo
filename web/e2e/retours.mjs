@@ -139,7 +139,24 @@ try {
     // on for every table of the app (Accueil grew by a table after a visit to Air et confort)
     await page.waitForSelector('#lower-card #lower-setup[open]', { timeout: 15000 });
     await go(page, 'accueil');
+    // the values fold of Accueil is drawn after `ready`: counting before it would find nothing
+    await page.waitForSelector('#consumption-card details.table-details', { state: 'attached', timeout: 15000 });
     check((await page.locator('#view details.table-details[open]').count()) === 0, `${name} : visiter Air et confort ouvre les tableaux de l'Accueil`);
+    // #546: « Comment c'est calculé » has the look of « Voir les valeurs » but is not that
+    // preference: opening it must not open the tables of the next screen
+    // the `toggle` event is queued after the click: wait for it, or the next screen replaces the
+    // fold before main.ts hears it (and the check passes for nothing)
+    await page.locator('#view .verdict details.table-details').first().evaluate(
+      (d) => new Promise((done) => {
+        d.addEventListener('toggle', done, { once: true });
+        d.querySelector('summary').click();
+      }),
+    );
+    check(await page.locator('#view .verdict details.table-details').first().evaluate((d) => d.open), `${name} : « Comment c'est calculé » de l'Accueil ne s'ouvre pas`);
+    await go(page, 'confort');
+    await go(page, 'accueil');
+    await page.waitForSelector('#consumption-card details.table-details', { state: 'attached', timeout: 15000 });
+    check((await page.locator('#view details.table-details[open] table').count()) === 0, `${name} : ouvrir « Comment c'est calculé » ouvre les tableaux de valeurs`);
     await go(page, 'confort');
     await page.waitForSelector('#probe-card', { timeout: 15000 });
     // #498: the explanation is folded under « Comment lire l’écart moyen »: still in the card

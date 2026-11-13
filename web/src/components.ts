@@ -39,7 +39,10 @@ export function card(o: CardOpts): string {
   ${o.sub ? `<p class="card-sub">${esc(o.sub)}</p>` : ''}${o.body}${o.how ? howDetails('Comment c’est calculé', o.how) : ''}
 </section>`;
 }
-/** One of the two fold labels of the app: « Comment c'est calculé », « Voir les valeurs ». */
+/**
+ * A fold with the look of « Voir les valeurs » (« Comment c'est calculé »…). Its toggle is not the
+ * `showTables` preference: a values table goes in `tableToggle()` (ui.ts, `data-values`, #546).
+ */
 export const howDetails = (label: string, body: string) => `<details class="table-details"><summary>${esc(label)}</summary>${body}</details>`;
 
 // ------------------------------------------------------------------ comparison and tile
