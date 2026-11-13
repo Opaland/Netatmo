@@ -8,13 +8,12 @@
 // - axe light and dark, 360 px with the system text at 200 % without horizontal scroll.
 // Run after `npm run build`: node e2e/proche.mjs   (port E2E_PORT, default 4184)
 import { spawn } from 'node:child_process';
-import { mkdirSync } from 'node:fs';
 import AxeBuilder from '@axe-core/playwright';
 import { chromium } from 'playwright';
+import { capturesOut } from './captures.mjs';
 
 const PORT = Number(process.env.E2E_PORT ?? 4184);
-const OUT = process.env.E2E_OUT ?? 'e2e/screenshots';
-mkdirSync(OUT, { recursive: true });
+const OUT = capturesOut(); // #583: e2e/screenshots/ only in the CI's font
 const server = spawn(process.execPath, ['node_modules/vite/bin/vite.js', 'preview', '--port', String(PORT), '--strictPort'], { stdio: 'ignore' });
 const base = `http://localhost:${PORT}/`;
 const errors = [];

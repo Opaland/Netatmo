@@ -39,11 +39,24 @@ en la nommant ; `--rapide` (lint, types, tests) suffit avant un commit. Le déta
 | `web/` | `npx tsc --noEmit` | types TypeScript |
 | `web/` | `npm test` | tests Vitest |
 | `web/` | `npm run build && npm run size` | build, puis budget de taille du premier écran (entrée + chunks préchargés) |
-| `web/` | `npm run e2e` | parcours de la démo dans Chromium (après `npm run build`), captures dans `web/e2e/screenshots/` |
+| `web/` | `npm run e2e` | parcours de la démo dans Chromium (après `npm run build`), captures dans `web/e2e/screenshots/` (police de la CI seulement, ci-dessous) |
 
 `npm run e2e` lance `vite preview` sur le port 4179 ; s'il est pris, choisissez-en un autre :
 `E2E_PORT=4200 npm run e2e`. Les e2e refusent de démarrer sur un `dist/` plus ancien que les sources
 (`web/e2e/dist-a-jour.mjs`) : lancer `npm run build` d'abord.
+
+Les **captures de référence** (`web/e2e/screenshots/`) sont celles d'un runner de la CI, rendues en
+DejaVu Sans. Le dossier des captures est écrit une fois, dans `web/e2e/captures.mjs` : sur un poste
+où `fc-match sans-serif` ou `fc-match system-ui` ne donne pas DejaVu Sans (ou sans `fc-match`), les
+e2e écrivent leurs captures dans `web/e2e/screenshots-poste/` (jamais commité) et le disent (#583,
+`docs/APPRENTISSAGES.md` A15, A19). Pour régénérer les références sur un poste Linux :
+`FONTCONFIG_FILE="$PWD/e2e/polices-ci.conf"` (dans `web/`, chemin absolu), qui inclut la
+configuration du système et écarte Inter ; y écarter aussi la police que préfère le poste. `E2E_OUT`
+choisit un autre dossier.
+
+`npm run e2e:trous` (après `python -m collector fixtures -o web/dist/demo-fixtures`, dans la porte)
+ouvre la démo sur `trous-reels`, la forme des trous d'un vrai compte (#570) : jamais 0 pour un trou,
+« incomplet », comparaisons sans l'appareil non mesuré.
 
 Les **limites de hauteur** des pages (l'Accueil en 3 écrans d'iPhone 13, l'Historique en 4…) sont
 écrites une fois, dans `web/e2e/hauteurs-limites.mjs`, que lisent la garde (`e2e/features.mjs`) et

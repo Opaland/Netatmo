@@ -11,6 +11,8 @@ __pycache__/
 web/node_modules/
 web/*.tsbuildinfo
 web/dist/
+# #583 : captures faites dans une autre police que celle de la CI (e2e/captures.mjs)
+web/e2e/screenshots-poste/
 e2e/screenshots/
 web/reports/
 web/.stryker-tmp/
