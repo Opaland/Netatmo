@@ -14,8 +14,11 @@ from __future__ import annotations
 
 import json
 
-# A plan of 3 levels x 30 rooms and 60 devices, at its longest, stays under 30 kB; GitHub refuses a
-# secret above 48 kB anyway.
+# A plan at its bounds (3 levels x 30 rooms and 60 devices, ids and refs at their longest, names of
+# 30 emojis) is 44 580 octets of JSON (measured and held by web/src/floorplan.test.ts). GitHub
+# limits a secret to 48 kB; the app refuses to send a plan whose sealed value (base64, a third
+# larger) would pass it (web/src/settings.ts secretTooBig), so what it saves stays under about
+# 36 kB. This bound only stops a secret written by hand that would be larger still.
 MAX_BYTES = 48 * 1024
 
 

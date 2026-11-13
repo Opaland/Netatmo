@@ -37,7 +37,8 @@ import {
   planJson,
 } from '../floorplan';
 import { fmt1 } from '../glossary';
-import { hasToken, putSecret } from '../settings';
+import { hasToken, putSecret, secretTooBig } from '../settings';
+import { deviceMark, floorCells, placeMark, roomLabel, watchPlanText } from '../plan-text';
 import { html } from '../trusted';
 import { esc } from '../ui';
 import { secretWhere, tokenHint } from './household-secret';
@@ -48,6 +49,8 @@ import '../simulators.css';
 let level: LevelId = 'rdc';
 let selected: string | null = null;
 let message: { ok: boolean; text: string } | null = null;
+/** #541: the list of the devices is folded (⚙ Mon logement ran to 8,4 screens at 360 px); open when the reader opened it or chose a device. */
+let devicesOpen = false;
 
 const meta = () => (rawDataset() ?? ds)!;
 /** The Intuis rooms a plan room or a radiator may be linked to (raw: the editor names them all). */
@@ -104,16 +107,9 @@ function drawingSvg(l: PlanLevel): string {
     )
     .join('');
   const names = l.rooms
-    .map((r) => (r.name ? `<text class="plan-label" x="${r.x + 0.3}" y="${r.y + 1.1}" font-size="0.9">${esc(Array.from(r.name).slice(0, Math.max(0, Math.floor((r.w - 0.5) / 0.52))).join(''))}</text>` : ''))
+    .map((r) => (r.name ? roomLabel(r, [r.name], 0.9) : ''))
     .join('');
-  const devices = l.devices
-    .map((d) => {
-      const mark = DEVICE_KINDS[d.kind].mark;
-      return `<g class="plan-device plan-edit-item${d.id === selected ? ' is-selected' : ''}" data-plan-item="${esc(d.id)}"><rect x="${d.x + 0.1}" y="${d.y + 0.1}" width="0.8" height="0.8" rx="0.2"></rect><text x="${d.x + 0.5}" y="${
-        d.y + 0.68
-      }" font-size="${mark.length > 1 ? 0.42 : 0.55}" text-anchor="middle">${esc(mark)}</text></g>`;
-    })
-    .join('');
+  const devices = l.devices.map((d) => deviceMark(d.x, d.y, DEVICE_KINDS[d.kind].mark, `plan-edit-item${d.id === selected ? ' is-selected' : ''}`, `data-plan-item="${esc(d.id)}"`)).join('');
   return `<svg class="plan-svg plan-edit-svg" viewBox="0 0 ${w} ${h}" role="img" aria-label="${esc(
     `Dessin du niveau ${LEVELS[l.id].toLowerCase()} : ${l.rooms.length} pièces, ${l.devices.length} appareils. Les mêmes positions se règlent dans les champs ci-dessous.`,
   )}">${grid}${rooms}<g class="plan-overlay" aria-hidden="true">${names}</g>${devices}</svg>`;
@@ -123,13 +119,20 @@ function itemsList(l: PlanLevel): string {
   const row = (x: PlanRoom | PlanDevice) =>
     `<li><button type="button" class="chip" aria-pressed="${x.id === selected}" data-plan-select="${esc(x.id)}">${esc(label(x))}</button></li>`;
   return `<p class="section-title">Pièces de ce niveau</p>${l.rooms.length ? `<ul class="plan-items" aria-label="Pièces de ce niveau">${l.rooms.map(row).join('')}</ul>` : '<p class="hint">Aucune pièce.</p>'}
-  <p class="section-title">Appareils de ce niveau</p>${l.devices.length ? `<ul class="plan-items" aria-label="Appareils de ce niveau">${l.devices.map(row).join('')}</ul>` : '<p class="hint">Aucun appareil.</p>'}`;
+  ${
+    l.devices.length
+      ? `<details class="plan-fold" id="plan-devices"${devicesOpen || l.devices.some((d) => d.id === selected) ? ' open' : ''}><summary>${esc(`Appareils de ce niveau (${l.devices.length})`)}</summary><ul class="plan-items" aria-label="Appareils de ce niveau">${l.devices.map(row).join('')}</ul></details>`
+      : '<p class="section-title">Appareils de ce niveau</p><p class="hint">Aucun appareil.</p>'
+  }`;
 }
 
 const num = (f: string, labelText: string, v: number, min: number, max: number) =>
-  `<label>${esc(labelText)}<input type="number" inputmode="numeric" data-plan-f="${f}" value="${v}" min="${min}" max="${max}" step="1"></label>`;
+  `<label><span data-plan-l="${f}">${esc(labelText)}</span><input type="number" inputmode="numeric" data-plan-f="${f}" value="${v}" min="${min}" max="${max}" step="1"></label>`;
 const options = (list: [string, string][], value: string, none: string) =>
   `<option value="">${esc(none)}</option>${list.map(([v, n]) => `<option value="${esc(v)}"${v === value ? ' selected' : ''}>${esc(n)}</option>`).join('')}`;
+
+/** « Largeur (6 m) »: the label of a size field, said again after each change (#541). */
+const sizeLabel = (f: 'w' | 'h', cells: number) => `${f === 'w' ? 'Largeur' : 'Profondeur'} (${metres(cells)})`;
 
 function itemForm(x: PlanRoom | PlanDevice | undefined): string {
   if (!x) return '<p class="hint">Touchez une pièce ou un appareil, sur le dessin ou dans la liste, pour le régler.</p>';
@@ -138,8 +141,9 @@ function itemForm(x: PlanRoom | PlanDevice | undefined): string {
     return `<div class="sim-form" role="group" aria-label="${esc(`Régler « ${label(x)} »`)}">
       <label>Nom<input type="text" data-plan-f="name" value="${esc(x.name)}" maxlength="${MAX_NAME}"></label>
       <label>Pièce Intuis<select data-plan-f="room">${options(intuisRooms(null).map((r) => [r.id, r.name]), x.room ?? '', 'aucune')}</select></label>
-      <label>Module de la station<select data-plan-f="module">${options(modules().map(([k, m]) => [k, m.name]), x.module ?? '', 'aucun')}</select></label>
-      ${num('x', 'Colonne', x.x, 0, GRID - 1)}${num('y', 'Ligne', x.y, 0, GRID - 1)}${num('w', `Largeur (${metres(x.w)})`, x.w, 1, GRID)}${num('h', `Profondeur (${metres(x.h)})`, x.h, 1, GRID)}
+      <label>Module de la station<select data-plan-f="module" aria-describedby="plan-module-hint">${options(modules().map(([k, m]) => [k, m.name]), x.module ?? '', 'aucun')}</select></label>
+      <p class="hint muted" id="plan-module-hint">Gardé avec le plan, pas encore lu : il servira à montrer l’air de la pièce (CO₂) si cette lecture est retenue.</p>
+      ${num('x', 'Colonne', x.x, 0, GRID - 1)}${num('y', 'Ligne', x.y, 0, GRID - 1)}${num('w', sizeLabel('w', x.w), x.w, 1, GRID)}${num('h', sizeLabel('h', x.h), x.h, 1, GRID)}
     </div>${pos}
     <div class="controls"><button type="button" class="btn secondary" data-plan-remove="${esc(x.id)}">Retirer cette pièce</button></div>`;
   const choices = refs(x.kind);
@@ -175,6 +179,7 @@ export function mountPlanEditor(card: HTMLElement | null, repo: () => string) {
   const sel = itemOf(l, selected);
   if (!sel) selected = null;
   const crossed = overlaps(l);
+  const tooBig = secretTooBig(planJson(p)); // #541: refused before sending, with its size
   const missing = LEVEL_ORDER.filter((id) => !p.levels.some((x) => x.id === id));
   card.innerHTML = html(`<section class="card" id="plan-edit-card" aria-labelledby="plan-edit-title">
     <div class="card-head"><h2 id="plan-edit-title">Plan de la maison</h2><span class="tag scope">foyer</span></div>
@@ -192,9 +197,10 @@ export function mountPlanEditor(card: HTMLElement | null, repo: () => string) {
     </div>
     <div id="plan-edit-items">${itemsList(l)}</div>
     <div id="plan-edit-form">${itemForm(sel)}</div>
+    ${tooBig ? alert('warn', 'Plan trop grand pour le foyer', `${tooBig}. Retirez des pièces ou des appareils, ou raccourcissez des noms.`) : ''}
     <p class="hint muted">${pending ? (planPersisted() ? 'Appliqué sur cet appareil, pas encore pour le foyer.' : 'Appliqué jusqu’au verrouillage : ce navigateur ne peut pas le garder.') : shared ? 'Enregistré pour le foyer.' : 'Rien d’enregistré pour le foyer.'} ${secretWhere(PLAN_SECRET).replace(' Contenu envoyé :', '')}</p>
     <div class="controls">
-      <button type="button" class="btn secondary" id="plan-save" ${canWrite && pending ? '' : 'disabled'}>Enregistrer pour le foyer</button>
+      <button type="button" class="btn secondary" id="plan-save" ${canWrite && pending && !tooBig ? '' : 'disabled'}>Enregistrer pour le foyer</button>
       ${pending && shared ? '<button type="button" class="link" id="plan-reset">Revenir à la version du foyer</button>' : ''}
     </div>
     <p class="hint muted">${demo ? 'Démo : appliqué sur cet appareil seulement, rien n’est envoyé.' : hasToken() ? 'Partagé avec les autres appareils après la prochaine collecte.' : tokenHint}</p>
@@ -268,6 +274,8 @@ export function mountPlanEditor(card: HTMLElement | null, repo: () => string) {
       const typed = f instanceof HTMLInputElement;
       commit(card, repo, parsePlan(next) ?? next, typed ? 'drawing' : 'all');
       if (typed && f.value !== String((x as unknown as Record<string, unknown>)[k] ?? f.value)) f.value = String((x as unknown as Record<string, unknown>)[k]);
+      // the labels in metres follow the sizes (the form is not redrawn: the caret stays, #541)
+      if (typed && isRoom(x)) for (const d of ['w', 'h'] as const) card.querySelector(`[data-plan-l="${d}"]`)?.replaceChildren(sizeLabel(d, x[d]));
     }),
   );
   card.querySelector('#plan-reset')?.addEventListener('click', () => {
@@ -301,6 +309,7 @@ function clamp(x: PlanRoom | PlanDevice) {
 }
 
 function bindList(card: HTMLElement, repo: () => string) {
+  card.querySelector<HTMLDetailsElement>('#plan-devices')?.addEventListener('toggle', (e) => (devicesOpen = (e.target as HTMLDetailsElement).open));
   card.querySelectorAll<HTMLButtonElement>('[data-plan-select]').forEach((b) =>
     b.addEventListener('click', () => {
       selected = b.dataset.planSelect!;
@@ -317,6 +326,7 @@ function bindList(card: HTMLElement, repo: () => string) {
 function bindDrawing(card: HTMLElement, repo: () => string) {
   const svg = card.querySelector<SVGSVGElement>('.plan-edit-svg');
   if (!svg) return;
+  watchPlanText(svg);
   svg.querySelectorAll<SVGElement>('[data-plan-item]').forEach((shape) =>
     shape.addEventListener('pointerdown', (e) => {
       const id = shape.dataset.planItem!;
@@ -331,6 +341,7 @@ function bindDrawing(card: HTMLElement, repo: () => string) {
       const x = itemOf(levelOf(p), id);
       if (!x) return;
       const origin = { x: x.x, y: x.y };
+      const floor = floorCells(svg);
       let moved = false;
       shape.setPointerCapture(e.pointerId);
       e.preventDefault();
@@ -343,13 +354,13 @@ function bindDrawing(card: HTMLElement, repo: () => string) {
         x.x = origin.x + dx;
         x.y = origin.y + dy;
         clamp(x);
-        const r = shape instanceof SVGRectElement ? shape : shape.querySelector('rect');
-        if (r) {
-          r.setAttribute('x', String(x.x + (isRoom(x) ? 0 : 0.1)));
-          r.setAttribute('y', String(x.y + (isRoom(x) ? 0 : 0.1)));
+        if (shape instanceof SVGRectElement) {
+          shape.setAttribute('x', String(x.x));
+          shape.setAttribute('y', String(x.y));
+        } else if (shape instanceof SVGGElement) {
+          shape.dataset.cell = `${x.x} ${x.y}`;
+          placeMark(shape, floor);
         }
-        const t = shape.querySelector('text');
-        if (t) (t.setAttribute('x', String(x.x + 0.5)), t.setAttribute('y', String(x.y + 0.68)));
       };
       const end = () => {
         shape.removeEventListener('pointermove', move);
