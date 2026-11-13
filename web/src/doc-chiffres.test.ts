@@ -74,6 +74,14 @@ describe('chiffres de la documentation (#362)', () => {
     ]);
   });
 
+  it('les limites de hauteur citées = celles de e2e/hauteurs-limites.mjs (#556)', async () => {
+    const { heightLimit } = (await import(/* @vite-ignore */ new URL('web/e2e/hauteurs-limites.mjs', root).href)) as {
+      heightLimit: (route: string, display: string) => { screens: number } | null;
+    };
+    agree(String(heightLimit('accueil', 'iphone')?.screens), [['CONTRIBUTING.md', /l'Accueil en (\d+) écrans d'iPhone 13/]]);
+    agree(String(heightLimit('historique', '360')?.screens), [['CONTRIBUTING.md', /l'Historique en (\d+)…/]]);
+  });
+
   it('le port des e2e cité = celui de e2e/demo.mjs', () => {
     const port = /E2E_PORT \?\? (\d+)/.exec(read('web/e2e/demo.mjs'))?.[1];
     expect(port).toBeTruthy();

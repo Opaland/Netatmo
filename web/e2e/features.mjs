@@ -9,6 +9,7 @@ import { spawn } from 'node:child_process';
 import { mkdirSync, readFileSync } from 'node:fs';
 import AxeBuilder from '@axe-core/playwright';
 import { argon2Folder } from './argon2-data.mjs';
+import { displayOptions, measureHeight } from './hauteurs-limites.mjs';
 import { chromium, devices, webkit } from 'playwright';
 
 const BROWSER = process.env.E2E_BROWSER === 'webkit' ? 'webkit' : 'chromium';
@@ -43,6 +44,13 @@ const errors = [];
 const check = (ok, msg) => ok || errors.push(`${BROWSER}: ${msg}`);
 const t0 = Date.now();
 const progress = (s) => console.log(`[${Math.round((Date.now() - t0) / 1000)} s] ${BROWSER} ${s}`);
+
+/** #556: the page shown holds in its limit (e2e/hauteurs-limites.mjs, written once); its margin is printed. */
+async function checkHeight(page, route, display) {
+  const m = await measureHeight(page, route, display);
+  progress(`${route} (${display}) : ${m.h} px, limite ${m.max}, marge ${m.margin} px`);
+  check(m.ok, m.message);
+}
 
 /**
  * #260: the view is drawn and every lazy card, document and chart it started has settled
@@ -164,7 +172,7 @@ try {
   await waitForServer();
   const engine = BROWSER === 'webkit' ? webkit : chromium;
   const browser = await engine.launch();
-  const iphone = { ...devices['iPhone 13'], deviceScaleFactor: 1 };
+  const iphone = displayOptions('iphone', devices);
 
   // ---------------------------------------------------------------- S-7.9: key erased by the browser
   {
@@ -430,16 +438,30 @@ try {
   progress('état des données');
   {
     await go(page, 'etat');
-    const [h, screenH] = await page.evaluate(() => [document.documentElement.scrollHeight, window.innerHeight]);
-    check(h <= 4 * screenH, `#387 : État des données fait ${h} px, plus de 4 écrans (${4 * screenH} px)`);
+    await checkHeight(page, 'etat', 'iphone');
   }
 
   // #311 / #302: Accueil holds in 3 iPhone screens; one period for the screen, each comparison named
   progress('accueil');
   {
     await go(page, 'accueil');
-    const [h, screenH] = await page.evaluate(() => [document.documentElement.scrollHeight, window.screen.height]);
-    check(h <= 3 * screenH, `#311 : l'Accueil fait ${h} px, plus de 3 écrans (${3 * screenH} px)`);
+    await checkHeight(page, 'accueil', 'iphone');
+    // #554: the margin found under the 3 screens without removing anything, in the CI's wide font
+    // (DejaVu Sans, A6): « Comparer les offres » ends the sentence of the tariff alert's amount
+    // (its actions hold on one line), the link to the Historique holds on one line, and the AI
+    // summary ends with a link like the other cards instead of a button
+    const dejavu = await page.addStyleTag({ content: 'html, body, button, input, select, textarea { font-family: "DejaVu Sans", system-ui, sans-serif !important; }' });
+    const gained = await page.evaluate(() => {
+      const oneLine = (el) => !!el && el.getBoundingClientRect().height <= parseFloat(getComputedStyle(el).lineHeight) * 1.5;
+      return {
+        'tarif : « Comparer les offres » dans la phrase du montant': !!document.querySelector('#grid-card .alert p:not(.alert-actions) a[href="#outils-offres"]'),
+        'tarif : actions sur une ligne': oneLine(document.querySelector('#grid-card .alert-actions')),
+        'lien vers l’Historique sur une ligne': oneLine(document.querySelector('#consumption-card .card-foot a')),
+        'analyse du mois : un lien en pied de carte': !!document.querySelector('#insight-card .card-foot a[href="#outils-analyse"]') && !document.querySelector('#insight-card .btn'),
+      };
+    });
+    for (const [what, ok] of Object.entries(gained)) check(ok, `#554 : Accueil (iPhone 13, DejaVu Sans) : ${what}, non`);
+    await dejavu.evaluate((s) => s.remove());
     const tiles = await page.locator('.home-tiles').innerText();
     check(/vs nov\. \d{4} au \d+/.test(tiles) && /vs attendu à météo comparable/.test(tiles), `#302 : tuile du mois sans ses deux références nommées (« ${tiles.replace(/\s+/g, ' ').slice(0, 200)} »)`);
     const verdictText = await page.locator('.verdict').innerText();
@@ -464,8 +486,7 @@ try {
   progress('historique');
   {
     await go(page, 'historique');
-    const [h, screenH] = await page.evaluate(() => [document.documentElement.scrollHeight, window.screen.height]);
-    check(h <= 4 * screenH, `#386 : l'Historique fait ${h} px, plus de 4 écrans (${4 * screenH} px)`);
+    await checkHeight(page, 'historique', 'iphone');
     const subs = await page.locator('#history-more a').evaluateAll((as) => as.map((a) => a.getAttribute('href')));
     check(subs.length >= 5, `#386 : « Pour aller plus loin » n'a que ${subs.length} sous-pages`);
     for (const route of ['historique', ...subs.map((s) => s.slice(1))]) {
@@ -513,7 +534,7 @@ try {
   // font (DejaVu Sans, A6): the iPhone check above left 304 px of margin while 360 px was over.
   progress('historique 360 px');
   {
-    const c = await browser.newContext({ viewport: { width: 360, height: 800 }, deviceScaleFactor: 1, hasTouch: true, serviceWorkers: 'block' });
+    const c = await browser.newContext({ ...displayOptions('360', devices), serviceWorkers: 'block' });
     const p = await c.newPage();
     p.on('pageerror', (e) => errors.push(`${BROWSER} historique 360: ${e.message}`));
     await p.goto(base);
@@ -521,9 +542,7 @@ try {
     await ready(p);
     await p.addStyleTag({ content: 'html, body, button, input, select, textarea { font-family: "DejaVu Sans", system-ui, sans-serif !important; }' });
     await go(p, 'historique');
-    const [h, screenH] = await p.evaluate(() => [document.documentElement.scrollHeight, window.innerHeight]);
-    progress(`historique 360 px : ${h} px (limite ${4 * screenH})`);
-    check(h <= 4 * screenH, `#426 : l'Historique fait ${h} px à 360 × 800 (DejaVu Sans), plus de 4 écrans (${4 * screenH} px)`);
+    await checkHeight(p, 'historique', '360');
     // #553: the margin won back: « Comparer » (what the winter card compares) holds on one line of
     // one touch target at 360 px, 100 % text; as a segment its three choices took three lines (142 px)
     const [cmpH, cmpChoices] = await p.evaluate(() => {
@@ -536,9 +555,7 @@ try {
     // #498: Air et confort, the longest page (12,8 screens before its explanations were folded):
     // a limit measured like the Historique's, to be lowered with the layout proposed in the PR
     await go(p, 'confort');
-    const [hc, screenC] = await p.evaluate(() => [document.documentElement.scrollHeight, window.innerHeight]);
-    progress(`confort 360 px : ${hc} px (limite ${11 * screenC})`);
-    check(hc <= 11 * screenC, `#498 : Air et confort fait ${hc} px à 360 × 800 (DejaVu Sans), plus de 11 écrans (${11 * screenC} px)`);
+    await checkHeight(p, 'confort', '360');
     await c.close();
   }
 

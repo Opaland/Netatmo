@@ -23,7 +23,7 @@ export function mountInsight(el: HTMLElement | null, summary = false) {
     el.removeAttribute('aria-busy');
     el.innerHTML = html`<div class="card-head"><h2>Analyse du mois</h2><span class="tag">rédigée par l'IA</span></div>
     <div class="md">${renderMarkdown(summaryOf(ins.markdown))}</div>
-    <a class="btn secondary" href="#outils-analyse">Lire l'analyse complète</a>`;
+    <p class="card-foot"><a class="link" href="#outils-analyse">Lire l'analyse complète</a></p>`;
     return;
   }
   const vote = loadVotes()[ins.period];

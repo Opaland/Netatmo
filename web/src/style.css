@@ -1873,7 +1873,6 @@ fieldset.secrets input,
   font-size: var(--font-sm);
 }
 #grid-card .grid-seen {
-  margin-top: 6px;
   font-size: var(--font-sm);
   text-decoration: underline;
 }
