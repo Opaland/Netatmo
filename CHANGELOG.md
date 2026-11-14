@@ -1,5 +1,39 @@
 # Historique des versions
 
+## v2.6 — novembre 2026 : accessibilité et gestes, en WebKit aussi (en cours)
+
+Lancée par le propriétaire le 13/11/2026 (« 2.4 2.5 2.6 2.7 2.8 2.9 3.0 »), cadrée sur deux sondes
+(WebKit sur les 46 routes, clavier seul sur 426 arrêts) et sur les réserves écrites des personas
+([cadrage](docs/bmad/revues/v2.6-cadrage.md)). Revue de fin de version par les **72 personas**, revue
+design des écrans changés et revue de code par agent :
+[`docs/bmad/revues/v2.6.md`](docs/bmad/revues/v2.6.md). Les formes retenues par les PR restent des
+propositions (revue, § 10 : D81 à D85) ; aucune donnée réelle lue ni réécrite.
+
+- **Au clavier seul** (#594, #607) : chaque route et chaque pièce sont parcourues au clavier en CI
+  (`npm run e2e:clavier`, Chromium et WebKit) : un anneau de focus à chaque arrêt, l'élément focalisé
+  jamais peint sous un autre. Un champ d'un tableau qui défile n'est plus caché sous sa colonne collante
+  (⚙ Sources → État des appareils), ni, dans WebKit, sous la barre d'onglets ; « Pièces affichées » se
+  ferme quand le focus le quitte.
+- **Toute attente par la règle unique** (#593, #601) : « chargement… » et « calcul… » passent par la
+  même ligne annoncée que « Chargement… » ; le résumé replié de l'audit détaillé est annoncé ; une zone
+  dessinée deux fois reste occupée jusqu'au dernier dessin.
+- **WebKit en CI** (#595, #596, #602, #608, #613) : le balayage et son explorateur de contrôles, les trous
+  d'un vrai compte et neuf parcours tournent aussi dans WebKit (moteur de Safari), dans un second job en
+  parallèle ; la liste de ce qui y tourne est écrite une fois et tenue par un test ; les hauteurs y sont
+  mesurées sans être jugées.
+- **Cinq défauts propres à WebKit**, trouvés par ces gardes et corrigés : une liste d'« Alerte froid
+  prolongé » renvoyait la page 900 px plus haut (#599) ; la bulle d'un graphique laissait un défilement en
+  largeur (#600) ; « Recharger l'application » vidait le cache des données chiffrées (#604) ; une carte
+  ouverte hors ligne ne revenait pas par « Réessayer » (#605) ; après « Recharger » du bandeau, la page
+  rechargée gardait une version « en activation » (#606). À revoir sur un vrai iPhone (revue, § 9).
+- **Plan de la maison** (#597, #603) : pendant un glisser, les noms s'écartent de la marque et suivent
+  leur pièce, par la même règle que le dessin posé, une fois par image.
+- **Revue de fin de version** (revue, § 6 et § 12) : un défaut bloquant ouvert au jalon, #614 : à 200 %, au
+  clavier, les listes d'un tableau de champs (Air et confort) restent sous la colonne collante (Chromium)
+  ou se peignent sur les noms (WebKit), sa forme attend la décision D81 ; un contrôle intermittent de la
+  démo (Trusted Types) corrigé, cause tenue ; captures de référence régénérées dans la police de la CI,
+  acceptées par la garde ; constats mineurs dans #615.
+
 ## v2.5 — novembre 2026 : ce que l'appli dit, exactement
 
 Lancée par le propriétaire le 13/11/2026 (« Lance une 2.4 2.5 2.6 2.7 2.8 2.9 3.0 »), cadrée sur les
