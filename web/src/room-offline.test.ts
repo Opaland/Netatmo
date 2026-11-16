@@ -22,6 +22,7 @@ import {
   runIn,
   STOP_REASONS,
   type StopReason,
+  stopShort,
   stoppedJson,
   stoppedOn,
   referenceUnmeasured,
@@ -277,5 +278,248 @@ describe('on the demo: the kitchen stove and the kids’ bedroom offline', () =>
     // the bedroom used about 2-4 kWh a day in early November; on its last setting, a little more
     expect(nov).toBeGreaterThan(4);
     expect(nov).toBeLessThan(40);
+  });
+});
+
+// #621: the survivors of the first mutation of room-offline.ts (docs/bmad/06-qa-strategy.md § 7).
+// Each case below was seen red on its mutant (npx stryker run --mutate src/room-offline.ts).
+describe('#621: what a mutant of the estimate or of the runs would change', () => {
+  // Two rooms offline, no weather (the usual other usages are a mean). b offline from D40, c from
+  // D42 (c still reads on D40 and D41). Reference: [D40 − 365, D40[.
+  const D = (i: number) => addDays('2025-01-01', i);
+  const start = D(40);
+  const refFrom = addDays(start, -365);
+  const records: DayRecord[] = [];
+  const linky = new Map<string, number>();
+  for (let i = 0; i < 40; i++) {
+    records.push(rec(D(i), 'a', 1), rec(D(i), 'b', 3), rec(D(i), 'c', 1));
+    linky.set(D(i), 1 + 3 + 1 + 2); // other usages: 2
+  }
+  // the first day of the reference counts (weight of c: 40 + 40), the day before does not
+  records.push(rec(refFrom, 'c', 40), rec(addDays(refFrom, -1), 'c', 1000));
+  linky.set(refFrom, 40 + 43); // its other usages: 43, the mean of the 41 points becomes 3
+  linky.set(addDays(refFrom, -1), 1000 + 500); // out of the reference: not a point
+  // D40, D41: c still reads, b alone offline; D42-D44: both; D45: no room reads; D46: no Linky
+  for (const i of [40, 41]) {
+    records.push(rec(D(i), 'a', 1), rec(D(i), 'c', 1));
+    linky.set(D(i), 2 + 3 + 3); // measured 2, other 3, gap 3
+  }
+  for (const i of [42, 43, 44, 46]) records.push(rec(D(i), 'a', 1));
+  for (const i of [42, 43, 44]) linky.set(D(i), 1 + 3 + 4); // measured 1, other 3, gap 4
+  linky.set(D(45), 50);
+  // D47: after the runs, measured: not a reference point (only the days before the first run are)
+  records.push(rec(D(47), 'a', 1));
+  linky.set(D(47), 1 + 100);
+  // listed with the later run first: the reference starts at the earliest run, not the first listed
+  const runs = [
+    { room: 'c', from: D(42), to: D(46), days: 5, ongoing: true },
+    { room: 'b', from: D(40), to: D(46), days: 7, ongoing: true },
+  ];
+
+  it('two rooms offline the same day share the gap by their consumption of the reference year', () => {
+    const est = estimateOffline(records, runs, linky, null);
+    // 41 points: 40 days at 2, the first day of the reference at 43 → mean 3
+    expect(est.baseline).toEqual({ a: 3, b: 0, days: 41 });
+    expect([...est.days.keys()].sort()).toEqual(['b', 'c']);
+    // weights: b 40 × 3 = 120, c 40 × 1 + 40 = 80 → 0.6 and 0.4 of a gap of 4
+    expect([...est.days.get('c')!]).toEqual([
+      [D(42), 1.6],
+      [D(43), 1.6],
+      [D(44), 1.6],
+    ]);
+    expect(est.days.get('b')!.get(D(40))).toBeCloseTo(3, 9); // alone that day: the whole gap
+    expect(est.days.get('b')!.get(D(42))).toBeCloseTo(2.4, 9);
+    expect(estimatedIn(est, 'b', D(40), D(46))).toBeCloseTo(3 + 3 + 3 * 2.4, 9);
+    // the parts of a day add up to its gap
+    expect(est.days.get('b')!.get(D(43))! + est.days.get('c')!.get(D(43))!).toBeCloseTo(4, 9);
+    // a day without any room's reading (D45) or without Linky (D46) has no estimate
+    expect(est.days.get('b')!.has(D(45))).toBe(false);
+    expect(est.days.get('b')!.has(D(46))).toBe(false);
+    // a window cuts the sum
+    expect(estimatedIn(est, 'b', D(41), D(42))).toBeCloseTo(3 + 2.4, 9);
+  });
+
+  it('the order of the runs does not change the estimate', () => {
+    const est = estimateOffline(records, runs, linky, null);
+    const rev = estimateOffline(records, [...runs].reverse(), linky, null);
+    expect(rev.baseline).toEqual(est.baseline);
+    expect([...rev.days.get('c')!]).toEqual([...est.days.get('c')!]);
+  });
+
+  it('rooms without consumption in the reference share the gap equally', () => {
+    const none = records.filter((r) => r.room === 'a');
+    const est = estimateOffline(none, runs, linky, null);
+    // without b and c, the reference points are Linky − a: 6 on 40 days (the first day of the
+    // reference has no reading left: not a point); gap of D42: 8 − 1 − 6 = 1, half each
+    expect(est.baseline).toEqual({ a: 6, b: 0, days: 40 });
+    expect(est.days.get('b')!.get(D(42))).toBeCloseTo(0.5, 9);
+    expect(est.days.get('c')!.get(D(42))).toBeCloseTo(0.5, 9);
+  });
+
+  it('a month of reference exactly is enough, a day less is not', () => {
+    const month = records.filter((r) => r.day >= D(10)); // 30 reference days with Linky: D10-D39
+    expect(estimateOffline(month, runs, linky, null).baseline?.days).toBe(30);
+    expect(estimateOffline(records.filter((r) => r.day >= D(11)), runs, linky, null).baseline).toBeNull();
+  });
+
+  it('with the weather: a day without it is neither a reference point nor estimated', () => {
+    const weather: Weather = new Map([...linky.keys()].map((d) => [d, [2, 8, 5]]));
+    const all = estimateOffline(records, runs, linky, weather);
+    weather.delete(D(5));
+    weather.delete(D(43));
+    const est = estimateOffline(records, runs, linky, weather);
+    expect(est.baseline?.days).toBe(all.baseline!.days - 1);
+    expect(est.days.get('b')!.has(D(43))).toBe(false);
+    expect(est.days.get('b')!.has(D(42))).toBe(true);
+  });
+
+  it('the estimate in display ids is the same object without a map', () => {
+    const est = estimateOffline(records, runs, linky, null);
+    expect(displayEstimate(est)).toBe(est);
+  });
+
+  it('a run of exactly 2 days counts; two rooms only are enough; runs sorted by day, then room', () => {
+    const two = [{ id: 'a', category: 'heating' }, { id: 'b', category: 'heating' }];
+    const rs = [
+      ...days('2026-01-01', 8).map((d) => rec(d, 'a')),
+      ...days('2026-01-01', 8).filter((d) => d !== '2026-01-03' && d !== '2026-01-04').map((d) => rec(d, 'b')),
+    ];
+    expect(offlineRuns(rs, two, '2026-01-08')).toEqual([{ room: 'b', from: '2026-01-03', to: '2026-01-04', days: 2, ongoing: false }]);
+    // records after `last` are not read; b and c offline from the same day come in room order
+    const three = [...two, { id: 'c', category: 'heating' }];
+    const later = [
+      ...days('2026-01-01', 10).map((d) => rec(d, 'a')),
+      ...days('2026-01-01', 10).filter((d) => d < '2026-01-05' || d > '2026-01-08').map((d) => rec(d, 'c')),
+      ...days('2026-01-01', 10).filter((d) => d < '2026-01-03' || d > '2026-01-08').map((d) => rec(d, 'b')),
+    ].reverse();
+    expect(offlineRuns(later, three, '2026-01-08').map((r) => [r.room, r.from, r.to, r.ongoing])).toEqual([
+      ['b', '2026-01-03', '2026-01-08', true],
+      ['c', '2026-01-05', '2026-01-08', true],
+    ]);
+    const same = [
+      ...days('2026-01-01', 6).map((d) => rec(d, 'a')),
+      ...days('2026-01-01', 6).filter((d) => d < '2026-01-04').flatMap((d) => [rec(d, 'c'), rec(d, 'b')]),
+    ];
+    expect(offlineRuns(same, three, '2026-01-06').map((r) => r.room)).toEqual(['b', 'c']);
+  });
+
+  it('a room declared stopped on the last day of a run, or after 2 days exactly offline', () => {
+    const run = { room: 'b', from: '2026-01-06', to: '2026-01-10', days: 5, ongoing: false };
+    const st = (from: string) => [{ room: 'b', from, reason: 'poele' as const, label: '' }];
+    // declared on the run's last day: 4 days offline, then 1 day stopped
+    expect(applyStopped([run], st('2026-01-10')).map((r) => [r.from, r.to, r.days, !!r.stopped])).toEqual([
+      ['2026-01-06', '2026-01-09', 4, false],
+      ['2026-01-10', '2026-01-10', 1, true],
+    ]);
+    // declared on the third day: the 2 days before stay offline
+    expect(applyStopped([run], st('2026-01-08')).map((r) => [r.from, r.to, r.days, !!r.stopped])).toEqual([
+      ['2026-01-06', '2026-01-07', 2, false],
+      ['2026-01-08', '2026-01-10', 3, true],
+    ]);
+  });
+
+  it('days and run of one room in a window: its own runs only, cut at both ends, the latest run', () => {
+    const runs = [
+      { room: 'b', from: '2026-01-05', to: '2026-01-10', days: 6, ongoing: false },
+      { room: 'b', from: '2026-01-20', to: '2026-01-25', days: 6, ongoing: false },
+      { room: 'c', from: '2026-01-01', to: '2026-01-31', days: 31, ongoing: false },
+    ];
+    expect(offlineDaysIn(runs, 'b', '2026-01-10', '2026-01-20')).toBe(2); // the last day of one, the first of the other
+    expect(offlineDaysIn(runs, 'b', '2026-01-07', '2026-01-22')).toBe(4 + 3);
+    expect(offlineDaysIn(runs, 'b', '2026-01-01', '2026-01-31')).toBe(12);
+    expect(runIn(runs, 'b', '2026-01-01', '2026-01-31')?.from).toBe('2026-01-20');
+    expect(runIn(runs, 'b', '2026-01-10', '2026-01-10')?.from).toBe('2026-01-05');
+    expect(runIn(runs, 'b', '2026-01-25', '2026-01-28')?.from).toBe('2026-01-20');
+    expect(runIn(runs, 'b', '2026-01-11', '2026-01-19')).toBeNull();
+  });
+
+  it('the stopped list: a null entry skipped, a 64-character room kept, sorted by day then room, no label = ""', () => {
+    const r64 = 'r'.repeat(64);
+    expect(
+      parseStopped([null, { room: 'z', from: '2026-01-02' }, { room: r64, from: '2026-01-02', reason: 'poele' }, { room: 'r'.repeat(65), from: '2026-01-01' }, { room: 'y', from: '2026-01-01' }]),
+    ).toEqual([
+      { room: 'y', from: '2026-01-01', reason: 'autre', label: '' },
+      { room: r64, from: '2026-01-02', reason: 'poele', label: '' },
+      { room: 'z', from: '2026-01-02', reason: 'autre', label: '' },
+    ]);
+  });
+
+  it('« non mesuré » holds a reading on the first or the last day of the window', () => {
+    const one = [rec('2026-01-10', 'a')];
+    expect(unmeasuredIn(one, '2026-01-10', '2026-01-20')).toBe(false);
+    expect(unmeasuredIn(one, '2026-01-01', '2026-01-10')).toBe(false);
+    expect(unmeasuredIn(one, '2026-01-11', '2026-01-20')).toBe(true);
+  });
+
+  it('a room read since the first day of the data is not « added », whatever the order of the records', () => {
+    // the data start on 1 March 2025; the window a year earlier starts before: a is missing, not added
+    const rs = days('2025-03-01', 340).map((d) => rec(d, 'a')).reverse();
+    expect([...unmeasuredReasons(rs, '2026-01-01', '2026-01-31', '2025-01-01', '2025-01-31')]).toEqual([['a', null]]);
+    // b added on 10 March, records unsorted: « added on 10 March », its first day, not its last
+    const rb = [...rs, ...days('2025-03-10', 331).map((d) => rec(d, 'b')).reverse()];
+    expect(unmeasuredReasons(rb, '2026-01-01', '2026-01-31', '2025-03-01', '2025-03-31').get('b')).toBe('2025-03-10');
+  });
+
+  it('the stopped list refuses a room or a day that is not a text, and sorts by day then room', () => {
+    expect(parseStopped([{ room: ['b'], from: '2026-01-01' }, { room: 'b', from: ['2026-01-01'] }])).toEqual([]);
+    const list = parseStopped(['d', 'c', 'b', 'a'].flatMap((room, i) => [{ room, from: '2026-01-02' }, { room: `${room}${i}`, from: `2026-01-0${4 - i}` }]));
+    expect(list.map((x) => `${x.from} ${x.room}`)).toEqual([
+      '2026-01-01 a3',
+      '2026-01-02 a',
+      '2026-01-02 b',
+      '2026-01-02 b2',
+      '2026-01-02 c',
+      '2026-01-02 d',
+      '2026-01-03 c1',
+      '2026-01-04 d0',
+    ]);
+    expect(stopShort({ reason: 'inconnue' as StopReason })).toBe('');
+  });
+
+  it('an ignored room is never offline; a room is followed from its earliest reading, whatever the order', () => {
+    const rooms = [...ROOMS, { id: 'x', category: 'ignore' }];
+    const rs = [
+      ...days('2026-01-01', 8).map((d) => rec(d, 'a')),
+      ...['2026-01-01', '2026-01-02'].map((d) => rec(d, 'x')), // would be offline 6 days if followed
+      // b: reads on the 1st and 2nd, offline on the 3rd and 4th, reads the 5th and 6th, offline after
+      ...['2026-01-01', '2026-01-02', '2026-01-05', '2026-01-06'].map((d) => rec(d, 'b')),
+    ].reverse();
+    expect(offlineRuns(rs, rooms, '2026-01-08').map((r) => [r.room, r.from, r.to])).toEqual([
+      ['b', '2026-01-03', '2026-01-04'],
+      ['b', '2026-01-07', '2026-01-08'],
+    ]);
+    // runs of several rooms come sorted by first day, then room (b, offline last, comes last)
+    const many = [
+      ...days('2026-01-01', 10).map((d) => rec(d, 'a')),
+      ...days('2026-01-01', 10).filter((d) => d < '2026-01-03').map((d) => rec(d, 'c')),
+      ...days('2026-01-01', 10).filter((d) => d < '2026-01-03').map((d) => rec(d, 'd')),
+      ...days('2026-01-01', 10).filter((d) => d < '2026-01-07').map((d) => rec(d, 'b')),
+    ];
+    const four = [...ROOMS, { id: 'c', category: 'heating' }, { id: 'd', category: 'heating' }];
+    expect(offlineRuns(many, four, '2026-01-10').map((r) => `${r.from} ${r.room}`)).toEqual(['2026-01-03 c', '2026-01-03 d', '2026-01-07 b']);
+  });
+
+  it('the run of a window: the latest one, even listed first; one starting on the last day of the window', () => {
+    const runs = [
+      { room: 'b', from: '2026-01-20', to: '2026-01-25', days: 6, ongoing: false },
+      { room: 'b', from: '2026-01-05', to: '2026-01-10', days: 6, ongoing: false },
+    ];
+    expect(runIn(runs, 'b', '2026-01-01', '2026-01-31')?.from).toBe('2026-01-20');
+    expect(runIn(runs, 'b', '2026-01-11', '2026-01-20')?.from).toBe('2026-01-20');
+  });
+
+  it('a run over two years names both years', () => {
+    expect(offlineText({ from: '2025-12-28', to: '2026-01-03', ongoing: false })).toBe('hors ligne du 28 déc. 2025 au 3 janv. 2026');
+  });
+
+  it('the wood and the order of the records do not change the reference years of a verdict', () => {
+    const rs = [
+      ...days('2024-01-01', 700).map((d) => rec(d, 'a')),
+      ...days('2025-01-01', 334).map((d) => rec(d, 'b')),
+    ];
+    const out = [...referenceUnmeasured(rs, '2025-11-01', '2025-11-30')];
+    expect(out).toEqual([['b', '2025-01-01']]);
+    expect([...referenceUnmeasured([...rs].reverse(), '2025-11-01', '2025-11-30')]).toEqual(out);
+    expect([...referenceUnmeasured([rec('2021-11-15', WOOD_ROOM), ...rs], '2025-11-01', '2025-11-30')]).toEqual(out);
   });
 });

@@ -136,6 +136,37 @@ lui-même les tests qui lisent hors de `web/` (`../../`) au lieu de les lister :
 la main avait vieilli (`dju.test.ts`, qui lit `collector/weather.py`, faisait échouer le premier
 passage de Stryker).
 
+**`room-offline.ts` (#621, 16/11/2026), jamais muté avant la v2.7.** `npx stryker run --mutate
+src/room-offline.ts` (53 à 98 s sur 4 cœurs, selon la charge) : **77,6 % → 95,8 %** (545 mutants dont
+27 ignorés ; 111 survivants et 5 non couverts → 22 survivants, tous équivalents, tableau ci-dessous) ;
+le fichier entre dans le `mutate` de `stryker.config.json`. Les tests sont dans
+`web/src/room-offline.test.ts` (« #621 »), vus rouges par la vague d'après (les 94 mutants qu'ils visent
+ont disparu), et à la main pour les deux qui changent un nombre affiché : `gap * share` → `gap / share`
+(deux tests rouges) et le tri des épisodes (`<` → `<=`, `>` retiré). Le principal trou : le test
+d'`estimateOffline` n'avait qu'une pièce hors ligne par jour (`share` = 1) ; deux pièces hors ligne le
+même jour se partagent maintenant l'écart Linky d'un exemple calculé à la main (0,6 et 0,4 de 4 kWh),
+bornes de l'année de référence comprises (premier jour compté, veille non), un jour sans relevé
+d'aucune pièce ou sans Linky jamais estimé, un mois de référence tout juste suffisant. Aussi : un
+épisode de 2 jours exactement, deux pièces suivies seulement, une pièce ignorée, des relevés dans le
+désordre, l'ordre des épisodes (jour, puis pièce), une pièce déclarée arrêtée le dernier jour d'un
+épisode, les bornes d'`offlineDaysIn` et `runIn`, un épisode sur deux années, les entrées non textuelles
+de `parseStopped`, le bois et l'ordre des relevés dans les années de référence d'un verdict.
+
+| `room-offline.ts` : ligne | Mutant | Raison de l'équivalence |
+|---|---|---|
+| 103 | `!stopped.length` → `false` | sans déclaration, la boucle recopie chaque épisode tel quel |
+| 113 | `r.from < st.from` → `<=`, → `true` | à égalité ou après, la partie d'avant compte 0 jour ou moins : jamais gardée (`>= minDays`) |
+| 117, 172, 173, 182 (col. 89), 269 | `>` → `>=`, `<` → `<=` | à égalité, les deux branches rendent la même date |
+| 137 | `byRoom.size < 2` → `false` | avec une seule pièce suivie, chaque jour de la liste est un des siens : aucun épisode |
+| 141, 265, 275, 292 (col. 74), 338 | `<` → `<=` dans un minimum | à égalité, le minimum est le même jour |
+| 148 | `d < first` → `<=` | le premier jour est un jour relevé : il ferme un épisode qui n'existe pas encore |
+| 156 | `ongoing = to === dernier jour` → `true` | un épisode encore ouvert à la fin de la boucle finit forcément au dernier jour de la liste |
+| 262, 292 (col. 99) | `''` → `"Stryker was here!"` | un jour `AAAA-…` est toujours avant une lettre : le minimum est le même |
+| 295 | `!out.has(room) \|\| why` → `true` | les fenêtres vont de l'année d'avant vers les plus anciennes : une pièce « ajoutée le … » dans une fenêtre l'est aussi (ou absente) dans les suivantes, jamais « manquante » ensuite |
+| 341 | `weather?.get` → `weather.get` | `deg` n'est appelé que si `weather` existe |
+| 347 | `d >= start` → `d > start` | le premier jour du premier épisode est un jour hors ligne, déjà écarté (`offDays`) |
+| 381 | `n++` → `n--` | seul `n !== 0` est lu |
+
 ### Survivants lus et laissés, avec leur raison
 
 | Fichier : ligne | Mutant | Classement | Raison |
