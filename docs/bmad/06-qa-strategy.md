@@ -136,6 +136,33 @@ lui-même les tests qui lisent hors de `web/` (`../../`) au lieu de les lister :
 la main avait vieilli (`dju.test.ts`, qui lit `collector/weather.py`, faisait échouer le premier
 passage de Stryker).
 
+**`data-quality.ts` entre dans la mutation (#623, 16/11/2026).** `npx stryker run --mutate
+src/data-quality.ts` : **66,1 % → 80,7 %** (1 851 mutants dont 23 ignorés ; 517 survivants et 103 non
+couverts → 293 et 59 ; 470 s → 399 s sur un poste à 4 cœurs partagé, chargé : le cadrage avait mesuré
+161 s). La vague vise les quatre fonctions de l'issue : leurs **261** survivants et non couverts
+tombent à **5**, tous écrits ci-dessous. Les tests sont dans `web/src/data-quality-mutation.test.ts`,
+vus rouges par la vague (les mutants visés ont disparu à la suivante) : `yearVerdicts` (98 %, juste
+sous 98 %, 90 %, juste sous 90 % ; une année sans radiateurs ou sans jour attendu ; trois trous au
+plus par source, ceux des autres sources à partir de 7 jours, 0 kWh, un trou sur deux années ; année
+basse et 5 jours suspects (pas 4) qui font « correcte », jamais une année « à vérifier » ; jours
+au-dessus du compteur, valeurs impossibles et jours × pièces au singulier et au pluriel ; pièce
+arrêtée à partir de son année ; « perdus chez Intuis » pour les radiateurs et le chauffe-eau seuls,
+pas pour un 0 kWh ni une autre source) ; `fineSource` (deux pièces sans relevé sur des périodes
+différentes, chacune nommée, une partie sans nom, un trou court épars, seul le trou du dernier jour
+« en cours », un même trou dans deux pièces dit une fois « pièces », la coupure qui n'explique que le
+relevé horaire, la note du rattrapage au-delà de 30 jours et pour les pièces seulement, les jours
+incomplets sous 20 heures et 40 demi-heures, la courbe récupérable jusqu'au premier jour gardé
+compris et la note des demi-heures d'avant à partir de 8 jours) ; `lowYears` (médiane de parts non
+triées, en nombre impair et pair ; 60 % tout juste non basse ; deux années suffisent ; novembre et
+mars comptent, octobre et avril non ; 30 jours au moins ; ni Linky nul ni jour incertain ; médiane
+nulle) ; l'ordre des trous (le plus long d'abord, puis le plus ancien). Aucun défaut trouvé, aucune
+règle changée. `data-quality.ts` entre dans le `mutate` de `stryker.config.json`.
+
+**Reste pour une vague suivante** (347 survivants et non couverts hors des quatre fonctions, dont 58
+textes) : `intuis` 111, `station` 60, `catchUpOf` et les aides des causes 45, `monthStatus`,
+`sourceVerdict`, `gapTreatment` 38, `aboveMeter`, `roomDays`, `qualityReport` 37, `linky` 23,
+`runs` et `coverParts` 21, `curveRecover` à `seenParts` 9, `tidy` 3.
+
 ### Survivants lus et laissés, avec leur raison
 
 | Fichier : ligne | Mutant | Classement | Raison |
@@ -160,6 +187,11 @@ passage de Stryker).
 | `reconstitute.ts:97` | `gap < best[0]` → `<=` | non tranché | ne change que l'égalité : un jour perdu à égale distance de deux saisons (une avant, une après) prend la première trouvée (`<`) ou la dernière (`<=`). Laquelle est la bonne est une question de modèle, pas de code ; non figée par un test |
 | `reconstitute.ts:131` | `k !== 0` → `true` | équivalent | le jour lui-même n'est jamais une référence : perdu (`rebuildLost`) ou bas, donc exclu (`suspectDays`) |
 | `reconstitute.ts:267` | `<` → `<=` dans le tri des années | équivalent | une année n'apparaît qu'une fois : jamais d'égalité |
+| `data-quality.ts:467` | `a.from < b.from` → `<=` dans l'ordre des trous | non tranché | ne joue que pour deux trous de même début et même longueur (deux pièces aux causes différentes, que `tidy` ne fond pas) : l'original rend 1 dans les deux sens, le mutant -1, aucun des deux ne définit leur ordre. Le figer (par nom de pièce ?) est un choix d'affichage |
+| `data-quality.ts:611` | `rooms = []` → `["Stryker was here"]` | équivalent | une chaîne n'a pas d'`id` : `name()` retombe sur l'identifiant, comme sans pièce |
+| `data-quality.ts:625` | `recover` de `linky30` `''` → texte | équivalent | jamais lu : `recoverOf` passe par `curveRecover` pour la courbe |
+| `data-quality.ts:720` | `l === undefined` → `false` | équivalent | `!(l > 0)` est vrai pour `undefined` : le jour est écarté quand même |
+| `data-quality.ts:728` | `shares.length < 2` → `false` | équivalent | avec une seule année, la médiane des autres (aucune) est `NaN` et `usual > 0` est faux : rien n'est rendu non plus |
 
 ## 8. Fuzz à graine fixe des entrées non sûres (#359)
 
