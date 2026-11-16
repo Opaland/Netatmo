@@ -731,3 +731,288 @@ def test_the_demo_audits_clean(tmp_path, where):
     assert sum(1 for k in hours if k >= "2026-10-01") > 500  # and the fire evenings of October
     counts = {code: sum(by.values()) for code, by in au.audit(store).counts().items()}
     assert {code: n for code, n in counts.items() if n} == DEMO_EXPECTED
+
+
+# ---------------------------------------------------------------- #624: the checks held to their numbers
+# Mutation of audit.py (scripts/mutation_collecteur.py, docs/bmad/06-qa-strategy.md § 7): each test
+# below was seen red on the mutants it was written for, then green.
+
+
+@pytest.mark.parametrize(
+    ("pairs", "r"),
+    [
+        ([(1, 2), (2, 4), (3, 6)], 1.0),  # perfect
+        ([(1, 3), (2, 2), (3, 1)], -1.0),  # perfect, negative
+        ([(1, 1), (2, -1), (3, -1), (4, 1)], 0.0),  # none
+        ([(1, 2), (2, 1), (3, 4), (4, 3)], 0.6),  # by hand: sxy 3, sxx 5, syy 5
+        ([(11, 12), (12, 11), (13, 14), (14, 13)], 0.6),  # the same, far from 0 (the means count)
+        ([(1, 1), (1, 2), (1, 3)], 0.0),  # x constant: no correlation, no division by zero
+        ([(1, 5), (2, 5), (3, 5)], 0.0),  # y constant
+    ],
+)
+def test_pearson_on_pairs_computed_by_hand(pairs, r):
+    assert au._pearson(pairs) == pytest.approx(r)
+
+
+@pytest.mark.parametrize(
+    ("values", "m"),
+    [
+        ([], None),
+        ([5.0], 5.0),
+        ([2.0, 1.0], 1.5),
+        ([3.0, 1.0, 2.0], 2.0),
+        ([4.0, 1.0, 3.0, 2.0], 2.5),
+        ([5.0, 1.0, 4.0, 2.0, 3.0], 3.0),
+        ([6.0, 1.0, 5.0, 2.0, 4.0, 3.0], 3.5),
+    ],
+)
+def test_median_odd_and_even(values, m):
+    assert au._median(values) == m
+
+
+def _hourly_docs(
+    early: set[str], aligned: set[str], until: date, by: int = 1, start: date = date(2024, 2, 27)
+) -> tuple[dict[str, dict], dict[str, float], list[str]]:
+    """Intuis hours and the Linky curve from the same irregular load; on the `early` days Intuis
+    stores at each hour the energy the meter shows `by` hours later (it runs `by` h early). The two
+    half hours of the meter differ (their sum is the hour), and a value that is not a number sits
+    outside the compared months on both sides (it must be skipped, not added)."""
+    keys: list[str] = []
+    d = start
+    while d <= until:
+        keys += au.day_slots(d.isoformat(), 60, TZ)
+        d += timedelta(days=1)
+    load = {k: float(200 + (i * 37) % 101 + 300 * (i % 24 in (7, 19)) + (i * 13) % 7 * 20) for i, k in enumerate(keys)}
+    curve: dict[str, float | None] = {}
+    for i, (k, v) in enumerate(load.items()):
+        half = (i * 29) % 17 * 5.0
+        curve[f"{k}:00"], curve[f"{k}:30"] = v / 2 + half, v / 2 - half
+    curve["2023-12-01T05:00"] = None
+    hourly: dict[str, float | None] = {"2023-12-01T05": None}
+    for i, k in enumerate(keys[: -abs(by)]):
+        if k[:10] in early and i + by >= 0:
+            hourly[k] = load[keys[i + by]]
+        elif k[:10] in aligned:
+            hourly[k] = load[k]
+    return {"2024.hourly": {"hourly": {A: hourly}}, "2024.linky30": {"curve": curve}}, load, keys
+
+
+def _days(month: int, first: int, last: int) -> set[str]:
+    return {date(2024, month, d).isoformat() for d in range(first, last + 1)}
+
+
+def test_hours_one_hour_early_on_the_linky_is_a_lag_an_aligned_month_is_not():
+    import statistics
+
+    docs, load, keys = _hourly_docs(_days(3, 1, 31), _days(4, 1, 30), date(2024, 5, 2))
+    a = au.Audit(docs, TZ, "2024-05-02", {}, None)
+    a.hours_vs_linky()
+    assert [(f.code, f.at) for f in a.findings] == [("decalage-fuseau", "2024-03")]
+    f = a.findings[0]
+    march = [i for i, k in enumerate(keys) if k[:7] == "2024-03"]
+    at_0 = statistics.correlation([load[keys[i + 1]] for i in march], [load[keys[i]] for i in march])
+    assert (f.value, f.other) == (1.0, round(at_0, 2)) and f.other < 0.5
+    assert f.text == (
+        "2024-03 : les heures d'Intuis suivent le Linky 1 h plus tôt "
+        f"(corrélation 1.00 décalée, {at_0:.2f} sans décalage)"
+    )
+    assert (f.doc, f.day, f.unit) == ("2024.hourly", "2024-03-01", None)
+
+
+def test_hours_one_hour_late_say_later():
+    docs, load, keys = _hourly_docs(set(), _days(3, 1, 31), date(2024, 4, 2))
+    hourly = docs["2024.hourly"]["hourly"][A]
+    for i, k in enumerate(keys):
+        if k in hourly:
+            hourly[k] = load[keys[i - 1]]
+    a = au.Audit(docs, TZ, "2024-04-02", {}, None)
+    a.hours_vs_linky()
+    assert [f.at for f in a.findings] == ["2024-03"] and "1 h plus tard" in a.findings[0].text
+
+
+@pytest.mark.parametrize("days", [6, 7])
+def test_a_month_under_min_days_is_not_judged(days):
+    """MIN_DAYS (7) days of hours or more: the month is compared; fewer: it is not."""
+    assert au.MIN_DAYS == 7
+    docs, _load, _keys = _hourly_docs(_days(4, 1, days), set(), date(2024, 4, 30))
+    a = au.Audit(docs, TZ, "2024-04-30", {}, None)
+    a.hours_vs_linky()
+    assert [f.at for f in a.findings] == (["2024-04"] if days >= 7 else [])
+
+
+def test_the_last_days_are_not_compared_for_the_lag():
+    """Days from `_recent()` on (HOURLY_DAYS_SYNC) are still arriving: not counted in a month."""
+    docs, _load, _keys = _hourly_docs(_days(4, 1, 30), set(), date(2024, 5, 2))
+    a = au.Audit(docs, TZ, "2024-04-10", {}, None)  # recent from 04-07: six days left
+    a.hours_vs_linky()
+    assert a.findings == []
+    a = au.Audit(docs, TZ, "2024-04-11", {}, None)  # from 04-08: seven days
+    a.hours_vs_linky()
+    assert [f.at for f in a.findings] == ["2024-04"]
+
+
+def _day_hours(store: Store, day: str, hours: list[float], total: float) -> None:
+    for h, v in zip(au.day_slots(day, 60, TZ), hours, strict=True):
+        store.put("2024.hourly", "hourly", A, h, v)
+    store.merge(A, day, total)
+    store.put(day[:4], "tariffs", A, day, [0.0, 0.6 * total, 0.4 * total])
+
+
+def test_day_sums_at_the_tolerance_beyond_it_and_twice(clean):
+    """A day of 2 400 Wh: tolerance 120 Wh (5 %). Hours 2 520: kept; 2 520.5: found; 4 800: twice."""
+    assert au.tolerance(2400.0) == 120.0
+    alternate = [50.0 if i % 2 else 150.0 for i in range(24)]  # 2 400, never frozen
+    _day_hours(clean, "2024-03-12", [*alternate[:-1], 50.0 + 120.0], 2400.0)
+    _day_hours(clean, "2024-03-13", [*alternate[:-1], 50.0 + 120.5], 2400.0)
+    _day_hours(clean, "2024-03-14", [2 * v for v in alternate], 2400.0)
+    f = found(save(clean))
+    assert set(f) == {"somme-jour"}
+    got = {(x.day, x.value, x.other, x.text) for x in f["somme-jour"]}
+    assert got == {
+        ("2024-03-13", 2520.5, 2400.0, "la somme des heures complètes du jour s'écarte du total du jour"),
+        ("2024-03-14", 4800.0, 2400.0, au.TWICE_TEXT),
+    }
+
+
+def test_impossible_values_at_zero_negative_and_the_cap():
+    cap = au.SUSPECT_WH
+    days = {
+        "2024-03-01": 0.0,
+        "2024-03-02": -0.5,
+        "2024-03-03": cap,
+        "2024-03-04": cap + 0.5,
+        "2024-03-05": "12",
+        "2024-03-06": None,
+    }
+    plug = {"2024-03-01": 0.0, "2024-03-02": cap + 1}  # a plug has no cap
+    a = au.Audit({"2024": {"daily": {A: days}}, "shelly": {"daily": {"p0": plug}}}, TZ, "2024-03-31", {}, None)
+    a.impossible()
+    got = sorted((f.doc, f.at, f.value, f.text) for f in a.findings if f.code == "valeur-impossible")
+    assert got == [
+        ("2024", "2024-03-02", -0.5, "énergie négative"),
+        ("2024", "2024-03-04", cap + 0.5, "plus de 80 kWh en un jour pour une pièce"),
+        ("2024", "2024-03-05", None, "pas un nombre"),
+    ]  # and a missing day (None) is not a value
+
+
+@pytest.mark.parametrize(("by", "said"), [(2, "2 h plus tôt"), (-2, "2 h plus tard"), (-1, "1 h plus tard")])
+def test_every_lag_tried_is_said_with_its_direction(by, said):
+    docs, _load, _keys = _hourly_docs(_days(3, 1, 31), set(), date(2024, 4, 2), by=by)
+    a = au.Audit(docs, TZ, "2024-04-02", {}, None)
+    a.hours_vs_linky()
+    assert [f.at for f in a.findings] == ["2024-03"] and said in a.findings[0].text
+    assert a.findings[0].value == 1.0
+
+
+def test_a_february_of_28_days_is_compared():
+    """The timeline of a month runs to the 1st of the next one, February of a common year included."""
+    feb = {date(2023, 2, d).isoformat() for d in range(1, 29)}
+    docs, _load, _keys = _hourly_docs(feb, set(), date(2023, 3, 8), start=date(2023, 1, 30))
+    a = au.Audit(docs, TZ, "2023-03-08", {}, None)
+    a.hours_vs_linky()
+    assert [f.at for f in a.findings] == ["2023-02"]
+
+
+def test_a_week_at_the_end_of_a_month_reads_the_next_day_of_the_meter():
+    """Exactly MIN_DAYS days at the end of April: the hour after the last one (1 May, 0 h) is on
+    the timeline, so the shifted pairs are all there (7 × 24)."""
+    docs, _load, _keys = _hourly_docs(_days(4, 24, 30), set(), date(2024, 5, 8))
+    a = au.Audit(docs, TZ, "2024-05-08", {}, None)
+    a.hours_vs_linky()
+    assert [f.at for f in a.findings] == ["2024-04"]
+
+
+def test_a_lag_compared_on_fewer_pairs_than_min_days_is_not_judged():
+    """Seven days of hours but one hour of the meter missing in them: every lag has 167 pairs."""
+    docs, _load, _keys = _hourly_docs(_days(3, 11, 17), set(), date(2024, 4, 5))
+    del docs["2024.linky30"]["curve"]["2024-03-14T10:00"], docs["2024.linky30"]["curve"]["2024-03-14T10:30"]
+    a = au.Audit(docs, TZ, "2024-04-05", {}, None)
+    a.hours_vs_linky()
+    assert a.findings == []
+
+
+def test_a_lag_found_without_the_lags_after_it():
+    """The meter missing the hour after the week: lags +1 and +2 lack a pair, -1 (the lag) and 0
+    are whole: the month is judged on what it has."""
+    docs, _load, _keys = _hourly_docs(_days(3, 11, 17), set(), date(2024, 4, 5), by=-1)
+    del docs["2024.linky30"]["curve"]["2024-03-18T00:00"], docs["2024.linky30"]["curve"]["2024-03-18T00:30"]
+    a = au.Audit(docs, TZ, "2024-04-05", {}, None)
+    a.hours_vs_linky()
+    assert [f.at for f in a.findings] == ["2024-03"] and "1 h plus tard" in a.findings[0].text
+
+
+@pytest.mark.parametrize(
+    ("corr", "found_"),
+    [([0.0, 0.0, 0.0, 0.1, 0.0], [(0.1, 0.0)]), ([0.0, 0.0, 0.123, 0.579, 0.0], [(0.58, 0.12)])],
+)
+def test_a_gain_of_exactly_gain_correlation_is_a_shift(clean, monkeypatch, corr, found_):
+    """Lags -2..2 in order; 0.1 above lag 0 is enough (not more), and both values are rounded."""
+    assert au.CORR_GAIN == 0.1
+    values = iter(corr * 10)
+    monkeypatch.setattr(au, "_pearson", lambda pairs: next(values))
+    a = au.Audit.of(clean, au.read_docs(clean.dir, PASSPHRASE))
+    a.hours_vs_linky()
+    assert {(f.value, f.other) for f in a.findings} == set(found_) and len(a.findings) == 2  # March, April
+
+
+def test_day_sums_skip_the_months_whose_hours_are_shifted(tmp_path):
+    """A month found `decalage-heures` has days whose hours do not make the day: its finding says it,
+    not one `somme-jour` per day (the water heater, not shifted the same way, still has some)."""
+    store = build(tmp_path, hour_key=lambda _t, local: (local + timedelta(days=1)).strftime("%Y-%m-%dT%H"))
+    f = found(store)
+    assert {x.at for x in f["decalage-heures"] if x.room == A} == {"2024-03", "2024-04"}
+    assert [x for x in f["somme-jour"] if (x.doc, x.room) == ("2024.hourly", A)] == []
+
+
+def test_day_sums_leave_the_last_days(clean):
+    """Days from `_recent()` on (the last 4) are still arriving: not compared."""
+    last = clean.doc("2024")["daily"][A]
+    assert max(last) == "2024-04-30"
+    hours = clean.doc("2024.hourly")["hourly"][A]
+    for day in ("2024-04-26", "2024-04-27"):  # the last day compared, the first one left
+        clean.put("2024.hourly", "hourly", A, f"{day}T10", hours[f"{day}T10"] + 2000)
+    f = found(save(clean))
+    assert [x.day for x in f["somme-jour"]] == ["2024-04-26"]
+
+
+def test_twice_the_day_at_the_tolerance_and_beyond_it(clean):
+    """2 × 2 400 = 4 800, tolerance 240: hours 5 040 are « deux fois », 5 040.5 are not; a day of
+    100 Wh (MONTH_GAP_WH) is never « deux fois » (too small to tell)."""
+    alternate = [50.0 if i % 2 else 150.0 for i in range(24)]
+    _day_hours(clean, "2024-03-12", [*[2 * v for v in alternate[:-1]], 100.0 + 240.0], 2400.0)
+    _day_hours(clean, "2024-03-13", [*[2 * v for v in alternate[:-1]], 100.0 + 240.5], 2400.0)
+    _day_hours(clean, "2024-03-14", [10.0] * 23 + [20.0], 100.0)  # 250 = 2.5 × 100
+    f = found(save(clean))
+    texts = {x.day: x.text for x in f["somme-jour"]}
+    assert texts["2024-03-12"] == au.TWICE_TEXT
+    assert texts["2024-03-13"] != au.TWICE_TEXT and texts["2024-03-14"] != au.TWICE_TEXT
+
+
+def test_day_sums_round_to_a_tenth(clean):
+    alternate = [50.0 if i % 2 else 150.0 for i in range(24)]
+    _day_hours(clean, "2024-03-13", [*alternate[:-1], 50.0 + 120.56], 2400.04)
+    f = found(save(clean))
+    assert [(x.value, x.other) for x in f["somme-jour"]] == [(2520.6, 2400.0)]
+
+
+def test_impossible_values_of_the_hours_and_the_curve():
+    days = {"2024-03-02": -1.0, "2024-02-30": -1.0}  # a date that does not exist is not judged here
+    a = au.Audit(
+        {
+            "2024": {"daily": {A: days}},
+            "2024.hourly": {"hourly": {A: {"2024-03-02T05": -2.0, "2024-03-02T06": 90_000.0}}},
+            "2024.linky30": {"curve": {"2024-03-02T05:30": -3.0}},
+            "2024.room30": {"rooms": {A: {"2024-03-02": -4.0}}},
+        },
+        TZ,
+        "2024-03-31",
+        {},
+        None,
+    )
+    a.impossible()
+    got = sorted((f.doc, f.day, f.at, f.value) for f in a.findings if f.code == "valeur-impossible")
+    assert got == [
+        ("2024", "2024-03-02", "2024-03-02", -1.0),
+        ("2024.hourly", "2024-03-02", "2024-03-02T05", -2.0),
+        ("2024.linky30", "2024-03-02", "2024-03-02T05:30", -3.0),
+    ]  # no cap on an hour; the 30-min rooms are not energies

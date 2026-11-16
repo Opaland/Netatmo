@@ -91,8 +91,11 @@ px ; il échoue sur une limite dépassée. Il tourne dans la CI (job e2e, une qu
 Ajouter ou relever une limite est une décision du propriétaire : à proposer dans la PR.
 
 Hors de la porte, à lancer à la main : `npm run mutation` (dans `web/`, tests de mutation des calculs,
-quelques minutes, rapport dans `web/reports/mutation/`) et `pytest -m reseau` (les sources publiques
-réelles : Open-Meteo, CRE, Tempo). Lecture des résultats : `docs/bmad/06-qa-strategy.md`.
+quelques minutes, rapport dans `web/reports/mutation/`), `python scripts/mutation_collecteur.py
+collector/audit.py` (la même chose pour un module du collecteur, bibliothèque standard seulement, toute
+la suite par défaut ou `[tests…]` pour aller plus vite, `--fonction` pour une fonction ; une vingtaine
+de minutes sur `audit.py`, sur une copie du dépôt sans `data/`) et `pytest -m reseau` (les sources
+publiques réelles : Open-Meteo, CRE, Tempo). Lecture des résultats : `docs/bmad/06-qa-strategy.md`.
 
 Dans les tests e2e, pas d'attente fixe (`waitForTimeout`) : attendre `#view[data-ready]` (helper
 `ready(page)`), posé par l'appli (`web/src/ready.ts`) quand la vue et ses cartes différées,
