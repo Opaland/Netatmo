@@ -12,6 +12,7 @@ import { argon2Folder } from './argon2-data.mjs';
 import { displayOptions, measureHeight } from './hauteurs-limites.mjs';
 import { chromium, devices, webkit } from 'playwright';
 import { capturesOut } from './captures.mjs';
+import { relay } from './relais.mjs';
 
 const BROWSER = process.env.E2E_BROWSER === 'webkit' ? 'webkit' : 'chromium';
 const PORT = Number(process.env.E2E_PORT ?? 4181);
@@ -285,7 +286,7 @@ try {
     await ctx.route('**/Netatmo/**', async (r) => {
       const rest = new URL(r.request().url()).pathname.slice('/Netatmo/'.length);
       const url = rest.startsWith('data/') ? `${base}demo/${rest.slice(5)}` : `${base}${rest}`;
-      await r.fulfill({ response: await r.fetch({ url }) });
+      await relay(r, url);
     });
     const page = await ctx.newPage();
     page.on('pageerror', (e) => errors.push(`${BROWSER} session: ${e.message}`));

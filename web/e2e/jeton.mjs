@@ -9,6 +9,7 @@
 import { chromium, webkit } from 'playwright';
 import { frames, openData, seriousAxe, startPreview } from './lib.mjs';
 import { capturesOut } from './captures.mjs';
+import { relay } from './relais.mjs';
 
 const BROWSER = process.env.E2E_BROWSER === 'webkit' ? 'webkit' : 'chromium';
 const OUT = capturesOut(); // #583: e2e/screenshots/ only in the CI's font
@@ -24,7 +25,7 @@ try {
   // the demo's files answer as the data of the site (made-up values, passphrase « demo »)
   await ctx.route(
     (url) => url.pathname.startsWith('/data/'),
-    async (r) => r.fulfill({ response: await r.fetch({ url: `${base}demo/${new URL(r.request().url()).pathname.slice('/data/'.length)}` }) }),
+    async (r) => relay(r, `${base}demo/${new URL(r.request().url()).pathname.slice('/data/'.length)}`),
   );
   await ctx.addInitScript(() => {
     try {
