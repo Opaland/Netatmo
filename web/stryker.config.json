@@ -4,7 +4,7 @@
   "testRunner": "vitest",
   "vitest": { "configFile": "vitest.mutation.config.mjs" },
   "tsconfigFile": "stryker-sans-tsconfig.json",
-  "mutate": ["src/money.ts", "src/pricing.ts", "src/periods.ts", "src/invoice.ts", "src/reconstitute.ts", "src/crypto.ts", "src/data-quality.ts"],
+  "mutate": ["src/money.ts", "src/pricing.ts", "src/periods.ts", "src/invoice.ts", "src/reconstitute.ts", "src/crypto.ts", "src/room-offline.ts", "src/data-quality.ts"],
   "coverageAnalysis": "perTest",
   "ignoreStatic": true,
   "reporters": ["html", "json", "clear-text", "progress"],
