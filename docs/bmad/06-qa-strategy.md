@@ -224,6 +224,70 @@ textes) : `intuis` 111, `station` 60, `catchUpOf` et les aides des causes 45, `m
 `sourceVerdict`, `gapTreatment` 38, `aboveMeter`, `roomDays`, `qualityReport` 37, `linky` 23,
 `runs` et `coverParts` 21, `curveRecover` à `seenParts` 9, `tidy` 3.
 
+**Le collecteur, sans dépendance (#624, 16/11/2026) : `collector/audit.py`.** Le collecteur n'avait
+aucun outil de mutation ; en adopter un (`mutmut`) serait une dépendance nouvelle, décision **D86** du
+propriétaire. En attendant, `scripts/mutation_collecteur.py` (bibliothèque standard seulement : `ast`,
+`sys.monitoring`, `subprocess`), **lancé à la main, jamais dans la CI ni la porte** :
+`python scripts/mutation_collecteur.py collector/audit.py [tests…] [--fonction f] [--json fichier]`.
+Il copie le dépôt (sans `data/` ni `.git`) dans un dossier temporaire, une copie par processus :
+l'arbre de travail et les données ne sont jamais écrits. Une première passe de **toute** la suite
+note, test par test, les lignes du module exécutées ; chaque mutant ne lance ensuite que les tests qui
+exécutent les lignes de son expression (les plus rapides d'abord, arrêt au premier rouge), et tous ceux
+qui atteignent le module pour une expression lue à l'import. Cinq opérateurs (ceux de la sonde du
+cadrage) : comparaison inversée ou élargie (`<` → `<=`, `<` → `>=`, `==` ↔ `!=`, `in` ↔ `not in`,
+`is` ↔ `is not`), `+ −` et `× ÷` échangés, `and` ↔ `or`, `not` retiré, entier + 1 ; chaque mutant est
+une retouche du texte à la place de l'opérateur (les numéros de ligne ne bougent pas). Les deux tests
+de `test_origine_dediee.py`, rouges sans mutant dans une copie sans `.git`, sont écartés et nommés.
+Limite : un test qui n'atteindrait le module que par un sous-processus (`python -m collector …`) n'est
+pas vu ; aucun ne le fait pour `audit.py`.
+
+| Mesure (toute la suite, 4 processus) | Mutants | Tués | Survivants + non couverts | Score | Durée |
+|---|---|---|---|---|---|
+| Sonde du cadrage (trois fichiers de tests) | 695 | 419 | 276 | 60,3 % | 1 945 s |
+| Avant, ce script | 780 | 491 | 286 + 3 | **62,9 %** | 1 214 s |
+| Après les tests de #624 | 780 | 547 | 230 + 3 | **70,1 %** | 1 049 s |
+
+(Les durées dépendent de la charge : sur la machine partagée par d'autres tâches, la même mesure
+avait passé 4 000 s aux deux tiers. La sonde comptait moins de mutants : ni `in`, ni `is`.)
+
+Les fonctions visées par #624, avant → après : `_pearson` 5/12 → 10/12, `_median` 3/8 → **8/8**,
+`hours_vs_linky` 43/82 → 68/82, `day_sums` 15/28 → 27/28, `impossible` 25/33 → 30/33 ; chacune ne
+garde que des survivants équivalents (tableau ci-dessous). Les tests sont dans `tests/test_audit.py`
+(« #624 »), vus rouges par la vague d'après (les mutants qu'ils visent ont disparu ; à la main aussi
+pour `day >= recent` → `>` et pour février d'une année commune) : corrélations calculées à la main
+(parfaite, nulle, négative, loin de 0, une série constante), médiane paire et impaire ; un mois d'heures
+d'Intuis 1 h ou 2 h en avance ou en retard sur le Linky (sens dit, deux corrélations : 1,00 décalée et
+celle sans décalage, recalculée par `statistics.correlation`), un mois aligné sans constat ; 6 jours
+non jugés et 7 jugés (`MIN_DAYS`), les derniers jours laissés (`_recent`), une semaine en fin de mois qui
+lit l'heure du lendemain, février de 28 jours, une heure du Linky manquante (167 paires : non jugé), un
+décalage trouvé sans les décalages suivants, un gain de corrélation de 0,1 exactement, les arrondis ; un
+jour à la tolérance exactement (non signalé), 0,5 Wh au-delà (signalé), deux fois le jour à sa propre
+tolérance et au-delà, un jour de 100 Wh jamais « deux fois », un mois décalé laissé à `decalage-heures`,
+le dernier jour comparé et le premier laissé ; une énergie à 0, négative, au plafond, au-dessus, une
+chaîne, un jour vide, une date qui n'existe pas, une heure et une demi-heure négatives sans plafond,
+les demi-heures par pièce (`room30`) jamais lues comme énergies. Aucun vrai défaut trouvé ; aucun
+calcul ni seuil changé.
+
+| `audit.py` : ligne | Mutant | Raison de l'équivalence |
+|---|---|---|
+| 966 | `not intuis or not meter` → `and` | avec un seul des deux vide, aucune paire n'a ses deux valeurs : aucune corrélation, aucun mois jugé |
+| 969, 979 | `k[:10] < recent` → `<=` (l. 969), `[:10]` → `[:11]` (l. 969 et 979) | l. 969 : un mois qui ne commence qu'au jour `recent` n'a aucune heure retenue par l. 979 ; `[:11]` ajoute « T », qui ne change la comparaison qu'à égalité, fausse dans les deux cas |
+| 973 | `+ timedelta(days=4)` → `5`, `.replace(day=1)` → `2` | du 28 au jour + 4 ou + 5, toujours le mois suivant ; un jour de plus en fin de frise ne sert à aucune paire (décalage de 2 h au plus) |
+| 974 | `first - timedelta(days=1)` → `2` | un jour de plus en tête de frise, même raison |
+| 977 | `day_slots(…, 60, …)` → `61` | pas de 61 min : `i // 60` donne les mêmes 24 heures (k + k // 60 pour k < 24) |
+| 980 | `MIN_DAYS * 24` → `/` | rattrapé l. 989 : une corrélation demande `MIN_DAYS * 24` paires, jamais plus que d'heures retenues |
+| 987 | bornes `0 <= i + lag < len(keys)` (4 mutants) | la frise déborde d'un jour de chaque côté du mois : `i ± lag` (2 h au plus) y est toujours |
+| 1007 | `lag > 0` → `>=` | un décalage nul n'est jamais un constat (l. 994) |
+| 1104 | `valid(k[:10], …)` → `[:11]` | `valid` ne lit que `key[:10]` pour un jour |
+| 1162 | `valid(k[:10], …)` → `[:11]` | même raison |
+| 1173 | `x < 0` → `<=`, `0` → `1` | atteint seulement au-dessus du plafond (une valeur de 0 à 1 Wh sous le plafond est sortie l. 1165) |
+| 1506 | `x - mx` → `x + mx`, `y - my` → `y + my` | `Σ(x + mx)(y − my) = Σx(y − my) + mx·Σ(y − my)` et `Σ(y − my) = 0` : la même covariance (de même pour l'autre facteur) |
+
+**Restent à lire** (une vague suivante, hors des fonctions visées par #624) : 213 survivants et
+3 non couverts, surtout `_shift_fit` (34, dont 3 non couverts l. 928 : le texte d'un `decalage-heures`
+de 1 ou 2 h, qu'aucun test n'atteint, seul le décalage d'un jour l'est), `linky_lag` (20), `_build_fine` (17), `units` (13), `two_sources`
+(11), `tariffs` (10), `valid` (9), `room30_hours` (8) ; la liste sort de `--json`.
+
 ### Survivants lus et laissés, avec leur raison
 
 | Fichier : ligne | Mutant | Classement | Raison |
