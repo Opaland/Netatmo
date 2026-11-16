@@ -1053,8 +1053,13 @@ try {
       }
     });
     if (raw !== 'TypeError') errors.push(`Trusted Types non appliqué : innerHTML brut ${raw}`);
-    const seen = await page.evaluate(() => window.__csp);
-    if (!seen.some((v) => v.startsWith('require-trusted-types-for'))) errors.push('Trusted Types : aucune violation signalée pour un innerHTML brut');
+    // The violation event comes in a LATER task (CSP « report a violation » queues it; measured in
+    // Chromium and WebKit: not there synchronously nor after a microtask, there after a task). Read
+    // in the next evaluate, it was missed once in four WebKit runs on a loaded machine: waited for.
+    const seen = await page
+      .waitForFunction(() => window.__csp.some((v) => v.startsWith('require-trusted-types-for')), null, { timeout: 5000 })
+      .then(() => true, () => false);
+    if (!seen) errors.push('Trusted Types : aucune violation signalée pour un innerHTML brut');
     const sodium = readdirSync('dist/assets').find((f) => f.startsWith('libsodium-wrappers-') && f.endsWith('.js'));
     const sealed = await page.evaluate(async (path) => {
       const { default: s } = await import(path);
