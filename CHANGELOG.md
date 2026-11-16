@@ -1,6 +1,6 @@
 # Historique des versions
 
-## v2.6 — novembre 2026 : accessibilité et gestes, en WebKit aussi (en cours)
+## v2.6 — novembre 2026 : accessibilité et gestes, en WebKit aussi
 
 Lancée par le propriétaire le 13/11/2026 (« 2.4 2.5 2.6 2.7 2.8 2.9 3.0 »), cadrée sur deux sondes
 (WebKit sur les 46 routes, clavier seul sur 426 arrêts) et sur les réserves écrites des personas
