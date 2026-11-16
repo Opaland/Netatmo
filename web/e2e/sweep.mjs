@@ -250,11 +250,14 @@ function pageChecks() {
     const boxes = [];
     // the view and the header (#397: « Maiso / n » in the name of the home); the tab bar and what
     // sticks are measured for broken words, not for overlaps (they ride over the page scrolled)
+    // #625: a chart drawn by ECharts (canvas, svg) is measured by charts.ts; one written in HTML
+    // rows (barRows, .chart[data-rows], #413) is text like any other — and `.chart` clips it
+    // (overflow: clip, #613), so a name or a value too wide would be cut without a scroll to see.
     const view = document.getElementById('app') ?? document.body;
     const walker = document.createTreeWalker(view, NodeFilter.SHOW_TEXT);
     for (let n = walker.nextNode(); n; n = walker.nextNode()) {
       const el = n.parentElement;
-      if (!el || !n.textContent.trim() || el.closest('.sr-only, .chart, svg, [data-overlap-ok]') || !visible(el) || hidden(el)) continue;
+      if (!el || !n.textContent.trim() || el.closest('.sr-only, .chart:not([data-rows]), svg, [data-overlap-ok]') || !visible(el) || hidden(el)) continue;
       const stuck = sticks(el);
       // the content of a closed <details> keeps its boxes in Chromium: not painted all the same
       if (el.checkVisibility ? !el.checkVisibility({ contentVisibilityAuto: true, opacityProperty: true, visibilityProperty: true }) : Number(style(el).opacity) === 0) continue;
@@ -322,7 +325,10 @@ function pageChecks() {
       const k = c.getBoundingClientRect();
       if (b.raw.right > k.right + 1 || b.raw.left < k.left - 1 || b.raw.bottom > k.bottom + 1) {
         cut++;
-        out.push({ kind: 'texte-coupe', detail: `« ${say(b)} »`, quiet: `${path(b.el)} dans ${path(c)}` });
+        // #625: the chart is named by its id (the app's own, never data) outside the quiet mode
+        const chart = b.el.closest('.chart[data-rows]');
+        const where = chart ? ` dans le graphique ${chart.id ? `#${chart.id}` : 'sans id'}` : '';
+        out.push({ kind: 'texte-coupe', detail: `« ${say(b)} »${where}`, quiet: `${path(b.el)} dans ${path(c)}` });
       }
     }
   }
@@ -835,6 +841,22 @@ async function selfTest(browser, run, display) {
       clip.append(Object.assign(document.createElement('span'), { textContent: 'secret-coupé-42 secret-coupé-42' }));
       clip.firstChild.style.whiteSpace = 'nowrap';
       view.append(clip);
+      // #625: and a value too wide for its column in a chart written in HTML rows (barRows,
+      // #413): `.chart` clips it (#613), so no scroll shows it; texte-coupe must name the chart
+      const rows = Object.assign(document.createElement('div'), { className: 'chart', id: 'auto-controle-lignes' });
+      rows.setAttribute('data-rows', '');
+      rows.style.height = 'auto';
+      const hbars = Object.assign(document.createElement('div'), { className: 'hbars' });
+      hbars.style.setProperty('--value-w', '4ch');
+      const row = Object.assign(document.createElement('div'), { className: 'hbar-row' });
+      row.append(Object.assign(document.createElement('span'), { className: 'hbar-label', textContent: 'secret-piece-45' }));
+      const bar = Object.assign(document.createElement('span'), { className: 'hbar-bar' });
+      bar.append(Object.assign(document.createElement('span'), { className: 'hbar-track' }));
+      bar.append(Object.assign(document.createElement('span'), { className: 'hbar-value', textContent: `${'secret-valeur-45 '.repeat(6)}kWh` }));
+      row.append(bar);
+      hbars.append(row);
+      rows.append(hbars);
+      view.append(rows);
       // and a short word squeezed in a column until it breaks in the middle (« Salo / n »)
       const narrow = Object.assign(document.createElement('p'), { textContent: 'Salon' });
       Object.assign(narrow.style, { width: '2ch', overflowWrap: 'anywhere' });
@@ -882,6 +904,8 @@ async function selfTest(browser, run, display) {
     const kinds = found.map((f) => f.kind);
     const missing = ['texte-interdit', 'carte-vide', 'defilement-horizontal', 'textes-recouverts', 'texte-coupe', 'mot-coupe', 'etiquettes-axe-en-double', 'etiquettes-axe-recouvertes', 'legende-coupee', 'colonne-cachee', 'titre-axe-coupe', 'texte-dessin-trop-petit', 'attente-restee'].filter((k) => !kinds.includes(k));
     if (kinds.filter((k) => k === 'mot-coupe').length < 2) missing.push('mot-coupe (césure par trait, #434)');
+    if (!found.some((f) => f.kind === 'texte-coupe' && /dans div\.chart$/.test(f.quiet ?? '') && f.detail.includes('#auto-controle-lignes')))
+      missing.push('texte-coupe (graphique en lignes HTML, #625)');
     if (found.some((f) => /recouver|coupe|attente/.test(f.kind) && /secret|Salon/i.test(f.quiet ?? ''))) throw new Error('auto-contrôle : le diagnostic discret d’un texte recouvert ou coupé cite un contenu');
     if (missing.length) throw new Error(`auto-contrôle : invariants muets (${missing.join(', ')})`);
     const quiet = found.find((f) => f.kind === 'defilement-horizontal').quiet ?? '';
@@ -965,7 +989,7 @@ try {
     const browser = await ENGINE.launch();
     try {
       await selfTest(browser, runs[0], displays[0]);
-      console.log('Auto-contrôle : les invariants voient un « NaN », une carte vide, un débordement, deux textes l’un sur l’autre, un texte coupé par sa carte, un mot coupé en son milieu ou par un trait de césure, un axe aux étiquettes en double, des noms d’axe l’un sur l’autre, une légende coupée, un mot trop petit dans un dessin et une zone restée « occupée » (aria-busy) ; le diagnostic discret ne cite aucun contenu.');
+      console.log('Auto-contrôle : les invariants voient un « NaN », une carte vide, un débordement, deux textes l’un sur l’autre, un texte coupé par sa carte ou par un graphique en lignes HTML, un mot coupé en son milieu ou par un trait de césure, un axe aux étiquettes en double, des noms d’axe l’un sur l’autre, une légende coupée, un mot trop petit dans un dessin et une zone restée « occupée » (aria-busy) ; le diagnostic discret ne cite aucun contenu.');
     } finally {
       await browser.close();
     }
