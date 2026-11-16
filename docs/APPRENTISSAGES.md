@@ -240,3 +240,14 @@ quand un outil la rend impossible à refaire.
   (`npm run e2e:trous`, et le balayage) ; une comparaison de deux périodes passe par la règle
   unique `unmeasuredRooms` (`room-offline.ts`) : un appareil sans aucun relevé d'un côté est
   laissé hors de la comparaison et nommé, jamais compté 0.
+
+### A23 · 16/11/2026 — Un mutant remis à la main dans la même seconde restait dans le cache Python (#624)
+
+- **Ce qui s'est passé** : pour voir un test rouge sur un mutant, `audit.py` a été modifié par
+  `sed` (`day=28` → `day=29`, même longueur), les tests lancés, puis le fichier remis par
+  `git checkout`, le tout dans la même seconde. Python valide son `.pyc` sur la date du source **à
+  la seconde** et sur sa taille : identiques, il a gardé le bytecode du mutant. La porte suivante
+  était rouge sur un code pourtant remis (`ValueError` de février dans un fichier sain).
+- **Conduite** : après avoir remis à la main un fichier Python modifié pour un essai, effacer les
+  `__pycache__` (ou lancer avec `PYTHONDONTWRITEBYTECODE=1`) avant de croire un résultat ;
+  `scripts/mutation_collecteur.py` le fait de lui-même (copie sans cache, bytecode jamais écrit).
