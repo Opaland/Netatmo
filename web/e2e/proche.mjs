@@ -11,6 +11,7 @@ import { spawn } from 'node:child_process';
 import AxeBuilder from '@axe-core/playwright';
 import { chromium, webkit } from 'playwright';
 import { BROWSER, SHOT, capturesOut } from './captures.mjs';
+import { relay } from './relais.mjs';
 
 const PORT = Number(process.env.E2E_PORT ?? 4184);
 const OUT = capturesOut(); // #583: e2e/screenshots/ only in the CI's font
@@ -128,7 +129,7 @@ try {
     const ctx = await browser.newContext(phone);
     await ctx.route('**/data/**', async (r) => {
       const rest = new URL(r.request().url()).pathname.replace(/^.*\/data\//, '');
-      await r.fulfill({ response: await r.fetch({ url: `${base}demo/${rest}` }) });
+      await relay(r, `${base}demo/${rest}`);
     });
     const p = await ctx.newPage();
     p.on('pageerror', (e) => errors.push(`proche : ${e.message}`));
@@ -170,7 +171,7 @@ try {
     const ctx = await browser.newContext(phone);
     await ctx.route('**/data/**', async (r) => {
       const rest = new URL(r.request().url()).pathname.replace(/^.*\/data\//, '');
-      await r.fulfill({ response: await r.fetch({ url: `${base}demo/${rest}` }) });
+      await relay(r, `${base}demo/${rest}`);
     });
     const p = await ctx.newPage();
     p.on('pageerror', (e) => errors.push(`gère : ${e.message}`));

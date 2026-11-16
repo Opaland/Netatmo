@@ -11,6 +11,7 @@
 import { chromium, webkit } from 'playwright';
 import { seriousAxe, startPreview } from './lib.mjs';
 import { capturesOut } from './captures.mjs';
+import { relay } from './relais.mjs';
 
 const BROWSER = process.env.E2E_BROWSER === 'webkit' ? 'webkit' : 'chromium';
 const OUT = capturesOut(); // #583: e2e/screenshots/ only in the CI's font
@@ -25,13 +26,13 @@ async function context() {
   const ctx = await browser.newContext({ viewport: { width: 360, height: 740 }, hasTouch: true, isMobile: BROWSER === 'chromium', serviceWorkers: 'block' });
   await ctx.route(
     (url) => url.pathname.startsWith('/data/') && url.hostname === 'localhost',
-    async (r) => r.fulfill({ response: await r.fetch({ url: `${base}demo/${new URL(r.request().url()).pathname.slice('/data/'.length)}` }) }),
+    async (r) => relay(r, `${base}demo/${new URL(r.request().url()).pathname.slice('/data/'.length)}`),
   );
   // http://nas.test/… is answered from the preview server (data/ from the demo's files)
   await ctx.route(`${NAS}**`, async (r) => {
     const path = new URL(r.request().url()).pathname.slice(1);
     const target = path.startsWith('data/') ? `${base}demo/${path.slice('data/'.length)}` : `${base}${path}`;
-    return r.fulfill({ response: await r.fetch({ url: target }) });
+    return relay(r, target);
   });
   return ctx;
 }
