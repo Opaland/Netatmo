@@ -6,16 +6,19 @@
 // seen (or leaves the page). At each stop, named invariants:
 //   - focus-sans-anneau (2.4.7): the focused element draws a ring (outline or box-shadow);
 //   - focus-masque (2.4.11): the focused element is PAINTED (document.elementFromPoint at the
-//     centre of at least one of its lines, getClientRects(): a link on two lines has its
-//     bounding-box centre between them), not under the tab bar, a pinned column, a sheet…;
+//     centre of the part on screen of at least one of its lines, getClientRects(): a link on two
+//     lines has its bounding-box centre between them, a chart taller than the screen its centre
+//     off it), not under the tab bar, a pinned column, a sheet…;
 //   - focus-coupe-tableau: in a scrolled table (.table-wrap), the focused field is painted at
-//     both its left and right edges: whole, beside the pinned first column, not under it.
+//     both its left and right edges: whole, beside the pinned first column, not under it;
+//   - focus-sur-colonne (#614): the focused field of such a table does not overlap the pinned
+//     cell of its row, even painted above it (WebKit): the name and the field must both read.
 // A self-check first: an element under another, one without a ring and a field half under a
 // pinned cell, slipped into the page, must each fail on its invariant.
 //
 // Run after `npm run build` (and the fixtures, python -m collector fixtures, generated when
 // missing): node e2e/clavier.mjs   E2E_PORT=4205  E2E_BROWSER=webkit|chromium
-//   CLAVIER_ROUTES=<regex>  CLAVIER_FIXTURES=demo,compte-charge
+//   CLAVIER_ROUTES=<regex>  CLAVIER_FIXTURES=demo,compte-charge  CLAVIER_TEXTE=100,200  CLAVIER_200=tout
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium, webkit } from 'playwright';
@@ -30,6 +33,16 @@ const RUNS = [
   { name: 'compte-charge', data: 'compte-charge', storage: RICH_STORAGE },
 ].filter((r) => !env.CLAVIER_FIXTURES || env.CLAVIER_FIXTURES.split(',').includes(r.name));
 const VIEWPORT = { width: 360, height: 800 };
+// #614: text at 200 % too (system text size, as the sweep's « texte-200 »), on the views holding a
+// table of fields (a field in a .table-wrap): there the pinned first column grows with the text
+// and the room left beside it for a focused field is the thing to keep (2.4.11, 1.4.4). The other
+// views are walked at 100 % only in the CI (the sweep measures them at 200 %); CLAVIER_200=tout
+// walks every view at 200 % (a review pass).
+const SIZES = [
+  { name: '100 %', big: false },
+  { name: '200 %', big: true },
+].filter((s) => !env.CLAVIER_TEXTE || env.CLAVIER_TEXTE.split(',').includes(s.name.replace(' %', '')));
+const FIELD_TABLE = '#view .table-wrap:has(td :is(input, select, textarea))';
 const MAX_STOPS = 400; // a page that would hold more stops is itself a finding (see below)
 
 // ------------------------------------------------------------------ in the page
@@ -65,7 +78,11 @@ function focusStop() {
     return !!hit && (hit === el || el.contains(hit));
   };
   const lines = [...el.getClientRects()].filter((r) => r.width > 0 && r.height > 0);
-  if (!lines.some((r) => paints(r.left + r.width / 2, r.top + r.height / 2))) kinds.push('focus-masque');
+  // the part of each line on screen (#614: a chart taller than the screen has its centre off it)
+  const shown = lines
+    .map((r) => ({ left: Math.max(r.left, 0), top: Math.max(r.top, 0), right: Math.min(r.right, innerWidth), bottom: Math.min(r.bottom, innerHeight) }))
+    .filter((r) => r.right > r.left && r.bottom > r.top);
+  if (!shown.some((r) => paints((r.left + r.right) / 2, (r.top + r.bottom) / 2))) kinds.push('focus-masque');
   const wrap = el.closest('.table-wrap');
   const notes = [];
   if (wrap && wrap !== el && lines.length) {
@@ -80,6 +97,12 @@ function focusStop() {
     const tooWide = r.width > visibleRight - pinnedRight;
     if (!paints(r.left + 2, y) || (!tooWide && !paints(r.right - 2, y))) kinds.push('focus-coupe-tableau');
     else if (tooWide) notes.push('plus-large-que-la-place');
+    // #614: painted, but over the pinned column (WebKit paints a list above a sticky cell): the
+    // field and the name beside it no longer read (1.4.10), though the focus is « visible »
+    if (first && first !== cell) {
+      const p = first.getBoundingClientRect();
+      if (r.left < p.right - 1 && r.right > p.left + 1 && r.top < p.bottom - 1 && r.bottom > p.top + 1) kinds.push('focus-sur-colonne');
+    }
   }
   return { what, kinds, notes };
 }
@@ -108,7 +131,7 @@ async function walk(page) {
   return stops;
 }
 
-async function openRun(browser, base, run) {
+async function openRun(browser, base, run, size = SIZES[0] ?? { big: false }) {
   const ctx = await browser.newContext({ viewport: VIEWPORT, serviceWorkers: 'block' });
   const storage = { ...(run.storage ?? {}) };
   if (run.data) {
@@ -123,7 +146,7 @@ async function openRun(browser, base, run) {
   if (run.data) await openData(page, base, 'demo');
   else await openDemo(page, base);
   // the CI's wide font everywhere (A6): a field pushed further right here is pushed there too
-  await page.addStyleTag({ content: 'html, body, button, input, select, textarea { font-family: "DejaVu Sans", system-ui, sans-serif !important; }' });
+  await page.addStyleTag({ content: `${size.big ? 'html { font-size: 200% !important; } ' : ''}html, body, button, input, select, textarea { font-family: "DejaVu Sans", system-ui, sans-serif !important; }` });
   return { ctx, page, errors };
 }
 
@@ -132,8 +155,9 @@ const notes = []; // not failures: what only a decision can settle (said in the 
 let stopsCount = 0;
 let pagesCount = 0;
 
-async function walkRun(browser, base, run) {
-  const { ctx, page, errors } = await openRun(browser, base, run);
+async function walkRun(browser, base, run, size) {
+  const { ctx, page, errors } = await openRun(browser, base, run, size);
+  const at = size.big ? ` (texte ${size.name})` : '';
   try {
     const rooms = await roomRoutes(page);
     const all = [...ROUTES.slice(0, 5), ...rooms, ...ROUTES.slice(5)].filter((r) => !ROUTE_FILTER || ROUTE_FILTER.test(r));
@@ -143,14 +167,15 @@ async function walkRun(browser, base, run) {
         await frames(page);
         await ready(page);
       }
+      if (size.big && env.CLAVIER_200 !== 'tout' && !(await page.locator(FIELD_TABLE).count())) continue;
       const stops = await walk(page);
       pagesCount++;
       stopsCount += stops.length;
-      for (const s of stops) for (const kind of s.kinds) failures.push({ run: run.name, route, kind, what: s.what });
-      for (const s of stops) for (const kind of s.notes ?? []) notes.push({ run: run.name, route, kind, what: s.what });
-      if (!stops.length) failures.push({ run: run.name, route, kind: 'aucun-arret', what: 'Tab n’atteint rien' });
+      for (const s of stops) for (const kind of s.kinds) failures.push({ run: run.name + at, route, kind, what: s.what });
+      for (const s of stops) for (const kind of s.notes ?? []) notes.push({ run: run.name + at, route, kind, what: s.what });
+      if (!stops.length) failures.push({ run: run.name + at, route, kind: 'aucun-arret', what: 'Tab n’atteint rien' });
     }
-    for (const e of errors) failures.push({ run: run.name, route: '-', kind: 'erreur-console', what: e });
+    for (const e of errors) failures.push({ run: run.name + at, route: '-', kind: 'erreur-console', what: e });
   } finally {
     await ctx.close();
   }
@@ -182,10 +207,19 @@ async function selfCheck(browser, base) {
       table.append(el('tbody'));
       table.firstChild.append(row);
       wrap.append(table);
-      view.append(hidden, cover, bare, wrap);
+      // a field painted over the pinned cell of its row (#614, as WebKit does at 200 %)
+      const over = Object.assign(document.createElement('div'), { className: 'table-wrap', tabIndex: 0 });
+      const overRow = el('tr');
+      overRow.append(el('td', { textContent: 'Pièce fictive' }), el('td'));
+      overRow.lastChild.append(el('input', { id: 'auto-controle-colonne', ariaLabel: 'w' }, 'position: relative; z-index: 3; margin-left: -60px'));
+      const overTable = el('table');
+      overTable.append(el('tbody'));
+      overTable.firstChild.append(overRow);
+      over.append(overTable);
+      view.append(hidden, cover, bare, wrap, over);
     });
     const kinds = (await walk(page)).filter((s) => s.what.includes('auto-controle')).flatMap((s) => s.kinds.map((k) => `${s.what.split(' ')[0]} ${k}`));
-    const want = ['button#auto-controle-masque focus-masque', 'button#auto-controle-sans-anneau focus-sans-anneau', 'input#auto-controle-tableau focus-coupe-tableau'];
+    const want = ['button#auto-controle-masque focus-masque', 'button#auto-controle-sans-anneau focus-sans-anneau', 'input#auto-controle-tableau focus-coupe-tableau', 'input#auto-controle-colonne focus-sur-colonne'];
     const missing = want.filter((w) => !kinds.includes(w));
     if (missing.length) throw new Error(`auto-contrôle : invariants muets (${missing.join(', ')}) ; vus : ${kinds.join(', ') || 'aucun'}`);
   } finally {
@@ -202,8 +236,8 @@ let crashed = null;
 try {
   if (RUNS.some((r) => r.data)) dataFixtures();
   await selfCheck(browser, base);
-  console.log(`Auto-contrôle (${BROWSER}) : un élément focalisé sous un autre, un focus sans anneau et un champ à moitié sous une colonne collante sont vus.`);
-  for (const run of RUNS) await walkRun(browser, base, run);
+  console.log(`Auto-contrôle (${BROWSER}) : un élément focalisé sous un autre, un focus sans anneau et un champ à moitié sous une colonne collante et un champ peint sur elle sont vus.`);
+  for (const size of SIZES) for (const run of RUNS) await walkRun(browser, base, run, size);
 } catch (err) {
   crashed = err;
 } finally {
@@ -212,7 +246,7 @@ try {
 }
 for (const f of notes) console.log(`note : ${f.run} · ${f.route} : ${f.kind} → ${f.what}`);
 for (const f of failures) console.log(`échec : ${f.run} · ${f.route} : ${f.kind} → ${f.what}`);
-console.log(`\nParcours au clavier (${BROWSER}, 360 × 800) : ${pagesCount} pages, ${stopsCount} arrêts en ${Math.round((Date.now() - t0) / 1000)} s : ${failures.length} échec(s).`);
+console.log(`\nParcours au clavier (${BROWSER}, 360 × 800, texte ${SIZES.map((z) => z.name).join(' et ')}) : ${pagesCount} pages, ${stopsCount} arrêts en ${Math.round((Date.now() - t0) / 1000)} s : ${failures.length} échec(s).`);
 if (crashed) {
   console.error(`Parcours interrompu : ${crashed}`);
   process.exit(1);

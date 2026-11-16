@@ -50,7 +50,8 @@ export function table(head: string[], rows: (string | number)[][], numericFrom =
  * - A table of `.table-wrap` scrolls sideways under its pinned first column (style.css), and the
  *   browser scrolls a focused field just enough to bring it to the edge of the scroller, which is
  *   under that column: the scroller is moved so that the field and its ring sit beside the pinned
- *   column (and under the pinned header row), and inside the right edge when there is room.
+ *   column (and under the pinned header row), and inside the right and bottom edges when there
+ *   is room.
  * - The page: WebKit does not scroll to a field that is partly on screen, and leaves it under the
  *   fixed tab bar (Objectifs, the solar tool…); the page is moved by what the bar covers, read
  *   from the `scroll-padding` of the page (style.css), the one place that says it.
@@ -87,11 +88,14 @@ function besidePinned(el: HTMLElement, ring: number) {
     if (r.left < start) wrap.scrollLeft -= start - r.left;
     else if (r.right > end) wrap.scrollLeft += Math.min(r.right - end, r.left - start); // never back under the column
   }
+  // and between the pinned header row (or the top) and the bottom of the scroller: WebKit does not
+  // scroll the table to a field below its bottom edge when the field is on screen (#614: at text
+  // 200 %, a row of ⚙ Sources is taller than half the table)
   const head = cell.closest('tbody') ? wrap.querySelector('thead') : null;
-  if (head) {
-    const top = head.getBoundingClientRect().bottom + ring;
-    if (r.top < top) wrap.scrollTop -= top - r.top;
-  }
+  const top = (head ? head.getBoundingClientRect().bottom : w.top + wrap.clientTop) + ring;
+  const bottom = w.top + wrap.clientTop + wrap.clientHeight - ring;
+  if (r.top < top) wrap.scrollTop -= top - r.top;
+  else if (r.bottom > bottom) wrap.scrollTop += Math.min(r.bottom - bottom, r.top - top); // never back under the header
 }
 
 /**

@@ -963,14 +963,15 @@ details.fold[open] > summary {
     hyphenate-limit-chars: 9 4 4;
   }
 }
-/* A name in a list (#384) and a label beside a switch (« Bibliothèque », #397) sit in a narrower
-   column: they are hyphenated when the SYSTEM text is large (17.5rem, like the titles above: from
-   about 120 %). Not in em: the simple view writes its text at 125 % of the system's, and at 100 %
+/* A name in a list (#384), a label beside a switch (« Bibliothèque », #397) and the pinned name of
+   a table of fields (#614) sit in a narrower column: they are hyphenated when the SYSTEM text is
+   large (17.5rem, like the titles above: from about 120 %). Not in em: the simple view writes its text at 125 % of the system's, and at 100 %
    it hyphenated « loge- / ment » (#442, FALC); its names have the width of the row instead (the
    query in em of .list, below). */
 @container (max-width: 17.5rem) {
   .row .t,
-  .switch > span {
+  .switch > span,
+  .table-wrap:has(td input, td select, td textarea) :is(th, td):first-child {
     hyphens: auto;
   }
   /* The subtitle of a row, only for its very long words (12 letters, 5 each side): at 200 %,
@@ -1148,16 +1149,23 @@ th {
   z-index: 2;
 }
 /* #594 (WCAG 2.4.11): in a table of fields (⚙ Sources, Air et confort), a field must fit whole
-   beside the pinned column, ring included (ui.ts keepFocusClear scrolls it there). At
-   360 px a pinned name of « Tableau électrique · canal 1 » left 90 px for a 244 px field: the
-   name wraps within 30vw (words whole: the sweep refuses a cut word, #384; a longer one widens
-   the column), the field stays within 32vw. The header keeps one line, as in every table: the
-   row heights of Air et confort do not move. Measured by e2e/clavier.mjs at 360 px, the CI's
-   font; the room left beside « Pièce (radiateurs) » is about 120 px. */
-.table-wrap:has(td input, td select, td textarea) td:first-child {
-  max-width: 30vw;
+   beside the pinned column, ring included (ui.ts keepFocusClear scrolls it there). At 360 px a
+   pinned name of « Tableau électrique · canal 1 » left 90 px for a 244 px field: the field stays
+   within 32vw, and the pinned column, its header included (#614), wraps between words:
+   - about 30vw wide (`width`: a whole word wider than that widens the column, #384);
+   - never more than 40vw: what is left (60vw, minus the gutters) holds the field, its padding and
+     its ring. A word wider than that breaks: with large text with a hyphen (the list of #434,
+     below), else anywhere (a name made of data, #372).
+   #614: the header kept one line (`th { nowrap }`): at text 200 % « Pièce (radiateurs) » made the
+   column 304 px wide in a table showing 294, and no scroll could bring a list beside it (Chromium:
+   never painted; WebKit: painted over the names). The cost, at 100 %: the header of Air et confort
+   on two lines (+21 px, inside its fold). Measured by e2e/clavier.mjs at 360 px, text 100 % and
+   200 %, the CI's font. */
+.table-wrap:has(td input, td select, td textarea) :is(th, td):first-child {
+  width: 30vw;
+  max-width: 40vw;
   white-space: normal;
-  overflow-wrap: normal;
+  overflow-wrap: break-word;
 }
 .table-wrap td :is(input, select, textarea) {
   max-width: 32vw;
