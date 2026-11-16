@@ -13,6 +13,7 @@ import { randomBytes } from 'node:crypto';
 import { chromium, webkit } from 'playwright';
 import { frames, openData, ready, seriousAxe, startPreview } from './lib.mjs';
 import { capturesOut } from './captures.mjs';
+import { relay } from './relais.mjs';
 
 const BROWSER = process.env.E2E_BROWSER === 'webkit' ? 'webkit' : 'chromium';
 const OUT = capturesOut(); // #583: e2e/screenshots/ only in the CI's font
@@ -85,7 +86,7 @@ try {
     const ctx = await newContext();
     await ctx.route(
       (url) => url.pathname.startsWith('/data/'),
-      async (r) => r.fulfill({ response: await r.fetch({ url: `${base}demo/${new URL(r.request().url()).pathname.slice('/data/'.length)}` }) }),
+      async (r) => relay(r, `${base}demo/${new URL(r.request().url()).pathname.slice('/data/'.length)}`),
     );
     await noFirstLaunch(ctx);
     const gh = fakeGitHub();

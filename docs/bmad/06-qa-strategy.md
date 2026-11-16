@@ -167,6 +167,63 @@ de `parseStopped`, le bois et l'ordre des relevés dans les années de référen
 | 347 | `d >= start` → `d > start` | le premier jour du premier épisode est un jour hors ligne, déjà écarté (`offDays`) |
 | 381 | `n++` → `n--` | seul `n !== 0` est lu |
 
+**`curve.ts` entre dans la mutation (#622, 16/11/2026).** `npx stryker run --mutate src/curve.ts` :
+**76,0 % → 93,5 %** (454 mutants, 78 survivants et 31 non couverts, 47 s → 433 mutants, 28 survivants,
+0 non couvert, 60 s, poste à 4 cœurs partagé). Les tests sont dans `web/src/curve-mutation.test.ts`,
+vus rouges par la vague (les 50 mutants qu'ils visent ont disparu à la suivante) : les 48 demi-heures
+de l'axe ; le premier instant d'un jour dont minuit n'existe pas (`localMidnight`, fuseau qui change
+d'heure à minuit) et la demi-heure doublée d'un changement d'heure de 30 min ; les demi-heures d'un
+seul jour, une courbe incomplète jamais « bonne », le 13/11 déjà « nouvelle lecture », 1 kWh et 40 Wh
+écrits ; `lastCurveDay` (jusque-là sans test, appelé par les vues Linky, Voiture électrique, Panneaux
+solaires et Répartition) ; le samedi et la fenêtre de la journée type ; la moyenne par jour de
+`typicalHourly` (deux jours de valeurs différentes, une pièce hors du choix, un jour sans relevé
+compté zéro, un jour après le dernier relevé écarté même rangé dans le désordre, le cache par
+fenêtre) ; l'interpolation du centile sur des valeurs non triées, en nombre pair et impair ; l'heure
+doublée de l'automne et les bornes de `measuredWatts` ; les bornes du talon et de la pointe, et la
+pointe qui garde **la première** demi-heure à égalité (comportement existant, figé : à changer seulement
+sur décision). `windowDays` de `curve.ts`, appelé nulle part (`grep -rn windowDays web/src` : seuls
+ceux de `lower.ts`, `money.ts` et `works.ts`, des paramètres homonymes), est **retiré** avec son
+`addDays` (21 mutants). Aucun défaut trouvé. `curve.ts` entre dans le `mutate` de `stryker.config.json`.
+
+**15 survivants « statiques » sont des faux survivants du lanceur**, pas des trous de test. Ils sont
+évalués au chargement du module (`SLOTS`, `HALF_HOUR`, `nextDay`, `dayGapExceeded`, les deux formats
+`Intl.NumberFormat`, `energy`, `CURVE_READING_SINCE`). L'analyse de couverture par test les attribue
+au **seul** test qui charge `curve.ts` à la demande (`data-years.test.ts`, « Linky curve: the same
+rule », par `loadCurve` et un `import()`), et Stryker ne rejoue que celui-là, qui ne lit aucune de ces
+valeurs ; les fichiers qui importent `curve.ts` en tête ne sont jamais rejoués pour eux. Appliqués à
+la main un par un (copie du mutant dans `curve.ts`, `npx vitest run src/curve*.test.ts`, source
+remise), **les 15 font rougir** les tests de la courbe (de 1 à 33 échecs ; `HALF_HOUR` divisé tourne
+sans fin). Le score qui compte ces 15 comme tués est **97,0 %** ; les 13 qui restent sont équivalents
+(tableau ci-dessous). À retenir pour les fichiers suivants : un survivant marqué `static: true` dans
+`reports/mutation/mutation.json` se vérifie à la main avant d'écrire un test.
+
+**`data-quality.ts` entre dans la mutation (#623, 16/11/2026).** `npx stryker run --mutate
+src/data-quality.ts` : **66,1 % → 80,7 %** (1 851 mutants dont 23 ignorés ; 517 survivants et 103 non
+couverts → 293 et 59 ; 470 s → 399 s sur un poste à 4 cœurs partagé, chargé : le cadrage avait mesuré
+161 s). La vague vise les quatre fonctions de l'issue : leurs **261** survivants et non couverts
+tombent à **5**, tous écrits ci-dessous. Les tests sont dans `web/src/data-quality-mutation.test.ts`,
+vus rouges par la vague (les mutants visés ont disparu à la suivante) : `yearVerdicts` (98 %, juste
+sous 98 %, 90 %, juste sous 90 % ; une année sans radiateurs ou sans jour attendu ; trois trous au
+plus par source, ceux des autres sources à partir de 7 jours, 0 kWh, un trou sur deux années ; année
+basse et 5 jours suspects (pas 4) qui font « correcte », jamais une année « à vérifier » ; jours
+au-dessus du compteur, valeurs impossibles et jours × pièces au singulier et au pluriel ; pièce
+arrêtée à partir de son année ; « perdus chez Intuis » pour les radiateurs et le chauffe-eau seuls,
+pas pour un 0 kWh ni une autre source) ; `fineSource` (deux pièces sans relevé sur des périodes
+différentes, chacune nommée, une partie sans nom, un trou court épars, seul le trou du dernier jour
+« en cours », un même trou dans deux pièces dit une fois « pièces », la coupure qui n'explique que le
+relevé horaire, la note du rattrapage au-delà de 30 jours et pour les pièces seulement, les jours
+incomplets sous 20 heures et 40 demi-heures, la courbe récupérable jusqu'au premier jour gardé
+compris et la note des demi-heures d'avant à partir de 8 jours) ; `lowYears` (médiane de parts non
+triées, en nombre impair et pair ; 60 % tout juste non basse ; deux années suffisent ; novembre et
+mars comptent, octobre et avril non ; 30 jours au moins ; ni Linky nul ni jour incertain ; médiane
+nulle) ; l'ordre des trous (le plus long d'abord, puis le plus ancien). Aucun défaut trouvé, aucune
+règle changée. `data-quality.ts` entre dans le `mutate` de `stryker.config.json`.
+
+**Reste pour une vague suivante** (347 survivants et non couverts hors des quatre fonctions, dont 58
+textes) : `intuis` 111, `station` 60, `catchUpOf` et les aides des causes 45, `monthStatus`,
+`sourceVerdict`, `gapTreatment` 38, `aboveMeter`, `roomDays`, `qualityReport` 37, `linky` 23,
+`runs` et `coverParts` 21, `curveRecover` à `seenParts` 9, `tidy` 3.
+
 **Le collecteur, sans dépendance (#624, 16/11/2026) : `collector/audit.py`.** Le collecteur n'avait
 aucun outil de mutation ; en adopter un (`mutmut`) serait une dépendance nouvelle, décision **D86** du
 propriétaire. En attendant, `scripts/mutation_collecteur.py` (bibliothèque standard seulement : `ast`,
@@ -255,6 +312,18 @@ de 1 ou 2 h, qu'aucun test n'atteint, seul le décalage d'un jour l'est), `linky
 | `reconstitute.ts:97` | `gap < best[0]` → `<=` | non tranché | ne change que l'égalité : un jour perdu à égale distance de deux saisons (une avant, une après) prend la première trouvée (`<`) ou la dernière (`<=`). Laquelle est la bonne est une question de modèle, pas de code ; non figée par un test |
 | `reconstitute.ts:131` | `k !== 0` → `true` | équivalent | le jour lui-même n'est jamais une référence : perdu (`rebuildLost`) ou bas, donc exclu (`suspectDays`) |
 | `reconstitute.ts:267` | `<` → `<=` dans le tri des années | équivalent | une année n'apparaît qu'une fois : jamais d'égalité |
+| `curve.ts:13, 14, 76, 106, 140, 141, 143, 153` | 15 mutants statiques (`SLOTS`, `HALF_HOUR`, `nextDay`, `dayGapExceeded`, formats, `energy`, `CURVE_READING_SINCE`) | faux survivant (lanceur) | rejoués par le seul test qui charge `curve.ts` par `import()` ; appliqués à la main, les 15 font rougir `curve*.test.ts` (paragraphe #622 ci-dessus) |
+| `curve.ts:21, 31, 85, 97` | cache des formats et des demi-heures par jour (`!f` → `true`, `.set` retiré, `has` → `false`) | équivalent | un cache : sans lui la même valeur est recalculée à chaque appel |
+| `curve.ts:60` | `o !== null` → `true` dans `isRecord` | équivalent | `null` passé à `mergeFlatYear` y est lu `o ?? {}` : vide, comme sans la garde |
+| `curve.ts:71` | ancre `^` ou `$` retirée de la date d'une marque | équivalent | le jeu des jours marqués ne sert qu'à `has(day)` avec un jour `AAAA-MM-JJ` : une clé plus longue n'y est jamais égale |
+| `curve.ts:133` | `dayKwh === undefined` retiré ou `\|\|` → `&&` | équivalent | `Number.isFinite(undefined)` est faux : la seconde condition rend déjà `null` |
+| `curve.ts:187, 232, 278` | `k > last`, `day > lastH`, `day > last` → `>=` | équivalent | à égalité la même valeur est réécrite (et les clés d'une `Map` sont uniques) |
+| `curve.ts:233` | `!days.has(day)` → `false` dans `typicalHourly` | équivalent | un jour hors de la courbe garde sa ligne dans `perDay`, mais seule la boucle sur `days` la lit |
+| `data-quality.ts:467` | `a.from < b.from` → `<=` dans l'ordre des trous | non tranché | ne joue que pour deux trous de même début et même longueur (deux pièces aux causes différentes, que `tidy` ne fond pas) : l'original rend 1 dans les deux sens, le mutant -1, aucun des deux ne définit leur ordre. Le figer (par nom de pièce ?) est un choix d'affichage |
+| `data-quality.ts:611` | `rooms = []` → `["Stryker was here"]` | équivalent | une chaîne n'a pas d'`id` : `name()` retombe sur l'identifiant, comme sans pièce |
+| `data-quality.ts:625` | `recover` de `linky30` `''` → texte | équivalent | jamais lu : `recoverOf` passe par `curveRecover` pour la courbe |
+| `data-quality.ts:720` | `l === undefined` → `false` | équivalent | `!(l > 0)` est vrai pour `undefined` : le jour est écarté quand même |
+| `data-quality.ts:728` | `shares.length < 2` → `false` | équivalent | avec une seule année, la médiane des autres (aucune) est `NaN` et `usual > 0` est faux : rien n'est rendu non plus |
 
 ## 8. Fuzz à graine fixe des entrées non sûres (#359)
 

@@ -180,7 +180,6 @@ const isWeekend = (day: string) => {
   const dow = new Date(`${day}T00:00:00Z`).getUTCDay();
   return dow === 0 || dow === 6;
 };
-const addDays = (day: string, n: number) => new Date(Date.parse(`${day}T00:00:00Z`) + n * DAY).toISOString().slice(0, 10);
 
 /** Last day with curve points. */
 export function lastCurveDay(curve: Curve): string | null {
@@ -324,17 +323,6 @@ export function peakHalfHour(curve: Curve, tz: string, from: string, to: string)
 export function dayCurve(curve: Curve, tz: string, day: string): { labels: string[]; values: (number | null)[] } {
   const labels = SLOTS;
   return { labels, values: labels.map((s) => (curve.has(`${day}T${s}`) ? watts(tz, `${day}T${s}`, curve.get(`${day}T${s}`)!) : null)) };
-}
-
-/** Days of the window [last-29, last] that have curve points. */
-export function windowDays(curve: Curve, last: string, n = 30): { from: string; days: Set<string> } {
-  const from = addDays(last, -(n - 1));
-  const days = new Set<string>();
-  for (const k of curve.keys()) {
-    const d = k.slice(0, 10);
-    if (d >= from && d <= last) days.add(d);
-  }
-  return { from, days };
 }
 
 // ------------------------------------------------------------------ memoised (#251)
