@@ -11,7 +11,7 @@ import { spawn } from 'node:child_process';
 import AxeBuilder from '@axe-core/playwright';
 import { chromium, webkit } from 'playwright';
 import { BROWSER, SHOT, capturesOut } from './captures.mjs';
-import { relay } from './relais.mjs';
+import { relay, unservedRequests } from './relais.mjs';
 
 const PORT = Number(process.env.E2E_PORT ?? 4184);
 const OUT = capturesOut(); // #583: e2e/screenshots/ only in the CI's font
@@ -307,6 +307,7 @@ try {
 } finally {
   server.kill();
 }
+errors.push(...unservedRequests());
 if (errors.length) {
   console.error(errors.join('\n'));
   process.exit(1);
