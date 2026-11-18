@@ -307,6 +307,20 @@ def _clear_pyc(copy: Path) -> None:
         shutil.rmtree(d, ignore_errors=True)
 
 
+def classify(returncode: int) -> str:
+    """What pytest's exit code says of a mutant (#640). 1: a test failed and 2: the run stopped (a
+    collection error, e.g. the mutant broke the import) kill it; 0: all green, it survives. 3 (an
+    internal error, e.g. of a plugin), 4 (a usage error) and 5 (no test ran) say nothing of the mutant:
+    a tool error, left out of the score. A negative code is pytest killed by a signal (a crash or
+    memory run out under the mutant, like a timeout): killed. Any other code is unknown and counts as
+    an error, so that a broken tool can never raise the score."""
+    if returncode in (1, 2):
+        return "tué"
+    if returncode < 0:
+        return "tué (signal)"
+    return "survivant" if returncode == 0 else "erreur"
+
+
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     p.add_argument("module", help="le module à muter, par ex. collector/audit.py")
@@ -393,10 +407,7 @@ def main(argv: list[str] | None = None) -> int:
                 mutated = src[: m.start] + m.replacement.encode("utf-8") + src[m.end :]
                 (c / module).write_bytes(mutated)
                 try:
-                    res = _pytest(c, m.tests, timeout)
-                    # 0: all green; 4/5: pytest could not run the selection (a tool error, not a kill).
-                    codes = {0: "survivant", 4: "erreur", 5: "erreur"}
-                    m.status = codes.get(res.returncode, "tué")
+                    m.status = classify(_pytest(c, m.tests, timeout).returncode)
                 except subprocess.TimeoutExpired:
                     m.status = "tué (délai)"
                 (c / module).write_bytes(src)
