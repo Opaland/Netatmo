@@ -26,32 +26,9 @@ import {
 import vector from './__fixtures__/kdf-vector.json';
 import pbkdf2 from './__fixtures__/python-vector.json';
 
-const fsName = 'node:fs';
-const { readFileSync } = (await import(/* @vite-ignore */ fsName)) as { readFileSync: (u: URL, enc: 'utf8') => string };
-
 const info = vector.keyinfo as Argon2Info;
 const env = vector.envelope as Envelope;
 const hex = (b: Uint8Array) => Array.from(b, (x) => x.toString(16).padStart(2, '0')).join('');
-
-describe('#139 bornes de dérivation : une seule règle (collector/kdf.json)', () => {
-  it('l’appli accepte exactement les bornes que lit la collecte, et son minimum est ce qu’elle écrit', () => {
-    const shared = JSON.parse(readFileSync(new URL('../../collector/kdf.json', import.meta.url), 'utf8'));
-    expect({ min: MIN_ITERATIONS, max: MAX_ITERATIONS, written: MIN_ITERATIONS }).toEqual({
-      min: shared.pbkdf2.min_iter,
-      max: shared.pbkdf2.max_iter,
-      written: shared.pbkdf2.iter,
-    });
-    expect({ ...ARGON2_MIN, max_m: ARGON2_MAX.m, max_t: ARGON2_MAX.t }).toEqual({
-      m: shared.argon2id.min_m,
-      t: shared.argon2id.min_t,
-      p: shared.argon2id.p,
-      max_m: shared.argon2id.max_m,
-      max_t: shared.argon2id.max_t,
-    });
-    expect({ m: shared.argon2id.m, t: shared.argon2id.t }).toEqual({ m: ARGON2_MIN.m, t: ARGON2_MIN.t });
-    expect(() => checkKeyInfo({ salt: 'AAAA', iter: MAX_ITERATIONS + 1 })).toThrow(/maximum/);
-  });
-});
 
 describe('#139 Argon2id', () => {
   it('dérive la même clé que la collecte (vecteur partagé), avec les paramètres par défaut', async () => {
@@ -110,5 +87,47 @@ describe('#524 page en HTTP hors localhost : WebCrypto absent', () => {
     const err = await decryptEnvelope(pbkdf2 as Envelope, key).catch((e: unknown) => e);
     expect(err).toBeInstanceOf(InsecureContext);
     expect(err).not.toBeInstanceOf(WrongPassphrase);
+  });
+});
+
+// #637: each bound seen from both sides, on fictitious keyinfo.json files (no derivation runs:
+// checkKeyInfo and checkEnvelope refuse before any key work). The values come from crypto.ts,
+// itself held to collector/kdf.json by crypto-kdf.test.ts.
+describe('#637 bornes vues des deux côtés, keyinfo.json contrôlé', () => {
+  const salt = 'AAAA';
+  const pbkdf = (iter: unknown) => ({ salt, iter }) as KeyInfo;
+  const argon = (o: Record<string, unknown>) => ({ v: 2, kdf: 'Argon2id', salt, ...ARGON2_MIN, ...o }) as KeyInfo;
+
+  it('PBKDF2 : le minimum et le maximum passent, un de moins ou de plus est refusé avec son message', () => {
+    expect(() => checkKeyInfo(pbkdf(MIN_ITERATIONS))).not.toThrow();
+    expect(() => checkKeyInfo(pbkdf(MAX_ITERATIONS))).not.toThrow();
+    expect(() => checkKeyInfo(pbkdf(MIN_ITERATIONS - 1))).toThrow(/trop faible \(599999 itérations, minimum 600/);
+    expect(() => checkKeyInfo(pbkdf(MAX_ITERATIONS + 1))).toThrow(/refusée \(2000001 itérations, maximum 2/);
+    // a fraction or a string is not a number of iterations, even inside the bounds
+    expect(() => checkKeyInfo(pbkdf(MIN_ITERATIONS + 0.5))).toThrow(/trop faible/);
+    expect(() => checkKeyInfo(pbkdf(String(MIN_ITERATIONS)))).toThrow(/trop faible/);
+    const e = pbkdf2 as Envelope;
+    expect(() => checkEnvelope({ ...e, iter: MAX_ITERATIONS })).not.toThrow();
+    expect(() => checkEnvelope({ ...e, iter: MAX_ITERATIONS + 1 })).toThrow(/maximum/);
+  });
+
+  it('Argon2id : mémoire et passes aux bornes passent, au-delà refusées ; une seule voie', () => {
+    for (const ok of [{}, { m: ARGON2_MAX.m }, { t: ARGON2_MAX.t }, { m: ARGON2_MAX.m, t: ARGON2_MAX.t }])
+      expect(() => checkKeyInfo(argon(ok))).not.toThrow();
+    for (const bad of [{ m: ARGON2_MIN.m - 1 }, { m: ARGON2_MAX.m + 1 }, { t: ARGON2_MIN.t - 1 }, { t: ARGON2_MAX.t + 1 }, { p: 0 }, { p: 2 }]) {
+      expect(() => checkKeyInfo(argon(bad))).toThrow(/Paramètres Argon2id refusés/);
+      expect(() => checkEnvelope({ ...env, ...bad } as Envelope)).toThrow(/Paramètres Argon2id refusés/);
+    }
+  });
+
+  it('un keyinfo.json sans sel, de version 3 ou au kdf inconnu est refusé, et la sauvegarde ne le recopie pas', () => {
+    expect(() => checkKeyInfo({ iter: MIN_ITERATIONS } as unknown as KeyInfo)).toThrow(/keyinfo\.json illisible/);
+    expect(() => checkKeyInfo({ ...info, salt: 42 } as unknown as KeyInfo)).toThrow(/keyinfo\.json illisible/);
+    expect(() => checkKeyInfo(null as unknown as KeyInfo)).toThrow(/keyinfo\.json illisible/);
+    expect(() => checkKeyInfo({ ...info, v: 3 } as unknown as KeyInfo)).toThrow(/version inconnue/);
+    expect(() => checkKeyInfo({ ...info, kdf: 'scrypt' } as unknown as KeyInfo)).toThrow(/version inconnue \(2\)/);
+    expect(() => keyInfoFields(pbkdf(MIN_ITERATIONS - 1))).toThrow(BadEnvelope);
+    expect(() => keyInfoFields(argon({ p: 2 }))).toThrow(BadEnvelope);
+    expect(keyInfoFields(pbkdf(MIN_ITERATIONS))).toEqual({ salt, iter: MIN_ITERATIONS });
   });
 });

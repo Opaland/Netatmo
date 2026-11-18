@@ -49,7 +49,7 @@ function subtle(): SubtleCrypto {
 export const ENVELOPE_VERSION = 1;
 export const KDF = 'PBKDF2-SHA256';
 export const ARGON2 = 'Argon2id';
-// #139: the same values as collector/kdf.json, which the collector reads (crypto.test.ts checks
+// #139: the same values as collector/kdf.json, which the collector reads (crypto-kdf.test.ts checks
 // that they agree: one rule on both sides). The minimum is what the collector writes: fewer would
 // make the passphrase cheaper to guess (rekey error, tampering); the maximum keeps a keyinfo.json
 // from freezing the phone. One Argon2id lane only: the key must be the collector's.

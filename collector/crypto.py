@@ -31,7 +31,7 @@ from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 
 # #139: what is written and the bounds accepted on read live in collector/kdf.json, read here and
-# checked against web/src/crypto.ts by web/src/crypto.test.ts: one rule on both sides (AGENTS.md §5).
+# checked against web/src/crypto.ts by web/src/crypto-kdf.test.ts: one rule on both sides (AGENTS.md §5).
 # S-1.16 #271: an envelope read from outside (an artifact) must not choose its own cost: too low
 # is a downgrade, too high blocks the collection (or freezes the phone).
 #
