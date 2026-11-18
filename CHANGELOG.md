@@ -1,5 +1,32 @@
 # Historique des versions
 
+## v2.7 — novembre 2026 : robustesse des tests, la mutation là où elle n'est jamais passée (en cours)
+
+Lancée par le propriétaire le 13/11/2026 (« 2.4 2.5 2.6 2.7 2.8 2.9 3.0 »), cadrée sur une mesure de la
+mutation fichier par fichier ([cadrage](docs/bmad/revues/v2.7-cadrage.md)). Revue de fin de version par
+les **72 personas**, revue design (aucun écran changé, vérifié) et revue de code par agent :
+[`docs/bmad/revues/v2.7.md`](docs/bmad/revues/v2.7.md). Aucun écran, aucun calcul, aucune donnée réelle
+ne change ; les formes retenues par les PR restent des propositions (revue, § 10 : D86 à D89).
+
+- **Calculs tenus par leurs tests** (#621 à #623, #627, #628, #630) : l'estimation d'une pièce hors ligne
+  (`room-offline.ts`, 77,6 % → 95,8 %, dont le partage de l'écart Linky entre deux pièces hors ligne le
+  même jour), la journée type, le talon et la pointe de la courbe Linky (`curve.ts`, 76,0 % → 93,5 %),
+  le verdict de chaque année et les trous d'État des données (`data-quality.ts`, 66,1 % → 80,7 %) ;
+  chaque test vu rouge sur ses mutants, les survivants restants écrits avec leur raison. Le code mort
+  `windowDays` de `curve.ts` est retiré.
+- **Mutation du collecteur sans dépendance** (#624, #632) : `scripts/mutation_collecteur.py`
+  (bibliothèque standard, à la main, jamais en CI, sur une copie sans `data/`) ; les contrôles de
+  l'audit (`audit.py`, 62,9 % → 70,1 %), dont la corrélation du décalage de fuseau qui survivait à toute
+  la suite. Le choix de l'outil reste au propriétaire (D86).
+- **Balayage** (#625, #629) : un texte coupé dans un graphique en lignes HTML est vu (`texte-coupe`),
+  avec son auto-contrôle.
+- **e2e** (#631) : une requête relayée à la prévisualisation résiste à une connexion coupée
+  (`ECONNRESET`), par une seule fonction tenue par un test.
+- **Revue de fin de version** (revue, § 6 et § 12) : mesure complète de la mutation (neuf fichiers,
+  87,7 %) ; elle trouve `crypto.ts` redescendu à 77,6 % depuis Argon2id (#633) ; aucun défaut bloquant ;
+  constats mineurs dans #634 ; captures de référence régénérées dans la police de la CI, acceptées par
+  la garde.
+
 ## v2.6 — novembre 2026 : accessibilité et gestes, en WebKit aussi
 
 Lancée par le propriétaire le 13/11/2026 (« 2.4 2.5 2.6 2.7 2.8 2.9 3.0 »), cadrée sur deux sondes
