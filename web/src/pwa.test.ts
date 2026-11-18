@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { type SwContainer, type SwRegistration, cachesToClear, createUpdater, reloadApp } from './pwa';
+import { type SwContainer, type SwRegistration, announceUpdate, cachesToClear, createUpdater, reloadApp } from './pwa';
 import { IOS_GESTURE, installState } from './install';
 import { MANIFEST, SHORTCUTS, THEME_COLOR } from './manifest';
 import { parseRoute } from './router';
@@ -218,6 +218,79 @@ describe('« Recharger l’application » ne touche qu’au code (#357)', () => 
     expect(h).toMatch(/notes chiffrées/);
     expect(h).toMatch(/données chiffrées gardées pour le hors connexion/);
     expect(h).toMatch(/réseau nécessaire/);
+  });
+});
+
+describe('#639 « Recharger l’application » rend toujours la main', () => {
+  const scope = 'https://opaland.github.io/Netatmo/';
+  /** The fakes of reloadSteps, with the browser's answers given by the test. */
+  function stub(steps: string[], registers: (() => Promise<unknown>)[]) {
+    const reg = { scope, unregister: async () => (steps.push('unregister'), true) };
+    vi.stubGlobal('navigator', {
+      onLine: true,
+      serviceWorker: {
+        getRegistration: async () => reg,
+        register: async (url: string) => {
+          steps.push(`register ${url}`);
+          const next = registers.shift();
+          if (!next) throw new Error('register de trop');
+          return next();
+        },
+      },
+    });
+    vi.stubGlobal('caches', { keys: async () => [], delete: async () => true });
+    vi.stubGlobal('window', globalThis);
+    vi.stubGlobal('location', { reload: () => steps.push('reload') });
+  }
+  const activated = () => Object.assign(new EventTarget(), { state: 'activated' });
+
+  it('un register() qui lève après unregister() : réinscription tentée avant le message, le bandeau revient', async () => {
+    const steps: string[] = [];
+    const again = { installing: activated(), waiting: null };
+    stub(steps, [async () => Promise.reject(new TypeError('réseau coupé')), async () => again]);
+    try {
+      expect(await reloadApp()).toBe('Rechargement impossible : réseau coupé');
+    } finally {
+      vi.unstubAllGlobals();
+    }
+    expect(steps).toEqual(['unregister', 'register sw.js', 'register sw.js']);
+    const shown: string[] = [];
+    announceUpdate('waiting', () => {}, (k) => shown.push(k));
+    expect(shown).toEqual(['waiting']);
+  });
+
+  it('la réinscription échoue aussi : le message quand même, et le bandeau n’est plus bloqué', async () => {
+    const steps: string[] = [];
+    const down = async () => Promise.reject(new TypeError('réseau coupé'));
+    stub(steps, [down, down]);
+    try {
+      expect(await reloadApp()).toBe('Rechargement impossible : réseau coupé');
+    } finally {
+      vi.unstubAllGlobals();
+    }
+    expect(steps).toEqual(['unregister', 'register sw.js', 'register sw.js']);
+    const shown: string[] = [];
+    announceUpdate('elsewhere', () => {}, (k) => shown.push(k));
+    expect(shown).toEqual(['elsewhere']);
+  });
+
+  it('une inscription ressuscitée (Chromium) qui garde une version en attente : retirée, rechargée sans attendre son activation', async () => {
+    const steps: string[] = [];
+    const waiting = Object.assign(new EventTarget(), { state: 'installed' }); // never activated: nothing sends SKIP_WAITING
+    const revived = { active: activated(), installing: null, waiting, unregister: async () => (steps.push('unregister'), true) };
+    stub(steps, [async () => revived]);
+    try {
+      const done = reloadApp();
+      const first = await Promise.race([done, new Promise((r) => setTimeout(() => r('attente'), 200))]);
+      expect(first).toBeNull();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+    expect(steps).toEqual(['unregister', 'register sw.js', 'unregister', 'reload']);
+    // while the page reloads, the worker reloadApp leaves claims it: no banner for that one
+    const shown: string[] = [];
+    announceUpdate('elsewhere', () => {}, (k) => shown.push(k));
+    expect(shown).toEqual([]);
   });
 });
 
