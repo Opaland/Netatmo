@@ -13,7 +13,7 @@ import { randomBytes } from 'node:crypto';
 import { chromium, webkit } from 'playwright';
 import { frames, openData, ready, seriousAxe, startPreview } from './lib.mjs';
 import { capturesOut } from './captures.mjs';
-import { relay } from './relais.mjs';
+import { relay, unservedRequests } from './relais.mjs';
 
 const BROWSER = process.env.E2E_BROWSER === 'webkit' ? 'webkit' : 'chromium';
 const OUT = capturesOut(); // #583: e2e/screenshots/ only in the CI's font
@@ -264,6 +264,7 @@ try {
   stop();
 }
 
+errors.push(...unservedRequests());
 if (errors.length) {
   console.error(errors.join('\n'));
   process.exit(1);
