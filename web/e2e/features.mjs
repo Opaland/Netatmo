@@ -12,7 +12,7 @@ import { argon2Folder } from './argon2-data.mjs';
 import { displayOptions, measureHeight } from './hauteurs-limites.mjs';
 import { chromium, devices, webkit } from 'playwright';
 import { capturesOut } from './captures.mjs';
-import { relay } from './relais.mjs';
+import { relay, unservedRequests } from './relais.mjs';
 
 const BROWSER = process.env.E2E_BROWSER === 'webkit' ? 'webkit' : 'chromium';
 const PORT = Number(process.env.E2E_PORT ?? 4181);
@@ -755,6 +755,7 @@ try {
 } finally {
   server.kill();
 }
+errors.push(...unservedRequests());
 if (errors.length) console.error(errors.join('\n'));
 console.log(errors.length ? `E2E ${BROWSER} : ÉCHEC` : `E2E ${BROWSER} : OK (captures dans ${OUT})`);
 process.exit(errors.length ? 1 : 0);
