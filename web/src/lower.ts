@@ -11,10 +11,10 @@
 //   the radiators are collected;
 // - a probe in an unheated space (garage, technical room), when there is one, is used as well:
 //   its gap to the outside says how much warmer the space is kept.
-import { addDays, seasonOf } from './aggregate';
+import { ratioChange, seasonOf } from './aggregate';
 import { type Weather, dju } from './analysis';
 import { isDay } from './invoice';
-import { HEATING_DAY_BELOW, MIN_SIDE_DAYS } from './works';
+import { HEATING_DAY_BELOW, MIN_SIDE_DAYS, markerWindow } from './works';
 import { median } from './sun';
 
 export type LowerKind = 'joints' | 'rideau' | 'porte' | 'isolation' | 'autre';
@@ -172,15 +172,12 @@ export interface LowerBeforeAfter {
   nightChange: number | null;
 }
 
-const pctOf = (a: number | null, b: number | null) => (a !== null && b !== null && b > 0 ? (a / b - 1) * 100 : null);
-
 /** Before / after a marker: `windowDays` days on each side (the marker day is « after »), clipped. */
 export function lowerBeforeAfter(all: LowerDay[], cut: number | null, marker: string, first: string, last: string, windowDays = 365): LowerBeforeAfter {
-  const bFrom = addDays(marker, -windowDays) < first ? first : addDays(marker, -windowDays);
-  const aTo = addDays(marker, windowDays - 1) > last ? last : addDays(marker, windowDays - 1);
-  const before = lowerSide(all, cut, bFrom, addDays(marker, -1));
-  const after = lowerSide(all, cut, marker, aTo);
-  return { marker, before, after, change: pctOf(after.perDju, before.perDju), nightChange: pctOf(after.nightPerDju, before.nightPerDju) };
+  const w = markerWindow(marker, first, last, windowDays);
+  const before = lowerSide(all, cut, ...w.before);
+  const after = lowerSide(all, cut, ...w.after);
+  return { marker, before, after, change: ratioChange(after.perDju, before.perDju), nightChange: ratioChange(after.nightPerDju, before.nightPerDju) };
 }
 
 /** One heating season (« 2025-2026 ») of the lower level, for the trend from winter to winter. */

@@ -3,10 +3,9 @@
 // current season (September to the last day) per degree day, against the same days a year
 // earlier: a colder winter asks for more kWh and gives more degree days, so the ratio stays fair.
 // Pure functions, no DOM (goal.test.ts); the card is in views/piece.ts.
-import { type DayRecord, addDays, minusYears, seasonOf } from './aggregate';
+import { type DayRecord, addDays, minusYears, perDjuChange, seasonOf } from './aggregate';
 import { type Weather, dju } from './analysis';
 import { ADEME_PER_DEGREE } from './checks';
-import { MIN_DJU_SPAN } from './dju';
 import { signedPct } from './glossary';
 
 /** The goals offered (% of kWh per degree day less than last winter). */
@@ -82,8 +81,8 @@ export function goalProgress(records: DayRecord[], room: string, weather: Weathe
     if (r.day >= from && r.day <= last) now.kwh += r.kwh;
     else if (r.day >= refFrom && r.day <= refTo) ref.kwh += r.kwh;
   }
-  if (now.dju <= MIN_DJU_SPAN || ref.dju <= MIN_DJU_SPAN || ref.kwh <= 0) return null;
-  const change = ((now.kwh / now.dju / (ref.kwh / ref.dju)) - 1) * 100;
+  const change = perDjuChange(now.kwh, now.dju, ref.kwh, ref.dju);
+  if (change === null) return null;
   return { goal, from, to: last, refFrom, refTo, days: kept.size / 2, now, ref, change, share: Math.max(0, -change / goal) };
 }
 

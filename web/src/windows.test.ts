@@ -17,7 +17,7 @@ import {
   offloadDays,
   signatureEffect,
   totals,
-  windowDays,
+  openWindowDays,
   absenceDays,
   bedroomGrouping,
   coldReasons,
@@ -71,8 +71,8 @@ describe('room states (E13)', () => {
   });
 
   it('days with a window open more than 2 h', () => {
-    expect([...windowDays(rs)]).toEqual(['2025-01-15']);
-    expect([...windowDays(rs, 1)].sort()).toEqual(['2025-01-15', '2025-02-01']);
+    expect([...openWindowDays(rs)]).toEqual(['2025-01-15']);
+    expect([...openWindowDays(rs, 1)].sort()).toEqual(['2025-01-15', '2025-02-01']);
   });
 
   it('cold rooms explained by an open window', () => {

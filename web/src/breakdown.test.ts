@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { breakdown, kwhPerYear, parseDeclared, plugsFrom, windowDays } from './breakdown';
+import { breakdown, kwhPerYear, parseDeclared, plugsFrom } from './breakdown';
 
 const days = Array.from({ length: 10 }, (_, i) => `2025-01-${String(i + 1).padStart(2, '0')}`);
 const constant = (v: number) => new Map(days.map((d) => [d, v]));
@@ -20,13 +20,6 @@ describe('plugsFrom', () => {
   });
   it('accepts no document', () => {
     expect(plugsFrom(null)).toEqual({ plugs: [], unusable: [] });
-  });
-});
-
-describe('windowDays', () => {
-  it('takes the last n Linky days up to the last radiator day', () => {
-    const linky = new Map([...days.map((d) => [d, 10] as [string, number]), ['2025-02-01', 3]]);
-    expect(windowDays(linky, '2025-01-10', 3)).toEqual(['2025-01-08', '2025-01-09', '2025-01-10']);
   });
 });
 
