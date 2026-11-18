@@ -6,6 +6,7 @@
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { gzipSync } from 'node:zlib';
+import { deferredViewProblems } from './vues-differees.mjs';
 
 // Entry chunk measured at 244.5 kB gzip (zlib level 9) when the budget was introduced (S-7.10), + 15 %.
 const BUDGET_KB = 281;
@@ -13,7 +14,7 @@ const BUDGET_KB = 281;
 const TARGET = 0.8;
 // #555: views that the first screen does not show, each in a chunk of its own loaded on demand
 // (src/views/lazy-views.ts). The chunk is named after its module; it must exist (a view merged
-// into a preloaded chunk has none of its own) and must not be preloaded.
+// into a preloaded chunk has none of its own) and must not be preloaded (scripts/vues-differees.mjs).
 const DEFERRED_VIEWS = ['analyse', 'compare'];
 
 const dist = new URL('../dist/', import.meta.url).pathname;
@@ -47,11 +48,11 @@ if (missing.length) {
   console.error(`size-budget : ${missing.join(', ')} absent(s) de dist/assets.`);
   process.exit(1);
 }
-const deferredWrong = DEFERRED_VIEWS.flatMap((name) => {
-  const own = sizes.filter((s) => new RegExp(`^assets/${name}-[\\w-]{8}\\.js$`).test(s.file));
-  if (!own.length) return [`${name} : pas de morceau à part (fusionné dans un autre, importé en statique ?)`];
-  return own.filter((s) => first.has(s.file)).map((s) => `${name} : ${s.file} est préchargé par le premier écran`);
-});
+const deferredWrong = deferredViewProblems(
+  sizes.map((s) => s.file),
+  first,
+  DEFERRED_VIEWS,
+);
 if (deferredWrong.length) {
   console.error(`size-budget (#555) : une vue chargée à la demande est revenue dans le premier écran.\n  ${deferredWrong.join('\n  ')}\nLa charger par import() (src/views/lazy-views.ts).`);
   process.exit(1);
