@@ -19,6 +19,9 @@
 // WebKit empties every cache of the origin when the page reloads with no worker registration
 // left) and #606 (reloaded at the controller change, mid-activation, the tab saw its new worker
 // « activating » for 40 s and more: « Recharger » now waits for « activated »).
+// #639: « Recharger l'application » always hands back: a register() that fails after the
+// unregistration leaves a registration, the data cache and the update banner (seen red: none, in
+// both engines); with a version waiting, Chromium reloads at once (seen red: 15 s).
 import { createServer } from 'node:http';
 import { readFileSync, existsSync, statSync } from 'node:fs';
 import { extname, join, normalize } from 'node:path';
@@ -236,6 +239,79 @@ try {
     await Promise.all([page2.waitForEvent('load', { timeout: 30000 }), page2.click('#update-reload')]);
     await ready(page2);
     check((await page2.locator('#update-banner').count()) === 0, 'onglet 2 : bandeau encore là après « Recharger »');
+    await ctx.close();
+  }
+
+  // ---------------------------------------------------------------- #639: « Recharger l'application » always hands back
+  /** A fresh installation, unlocked (remembered key), on the « À propos » card, a marker in the data cache. */
+  async function aboutUnlocked(where) {
+    const ctx = await browser.newContext({ viewport: { width: 360, height: 780 }, hasTouch: true });
+    const page = await ctx.newPage();
+    watch(page, where);
+    await page.goto(base);
+    check(await controlled(page), `${where} : la page n’est pas contrôlée par le service worker`);
+    await page.fill('#pass', 'demo');
+    await page.click('#unlock button.primary');
+    await ready(page);
+    await go(page, 'parametres-apropos');
+    await page.waitForSelector('#app-card #reload-app');
+    await page.evaluate(async () => {
+      const data = (await caches.keys()).find((n) => n.startsWith('energy-data'));
+      await (await caches.open(data)).put(new URL('data/e2e-marqueur.json', location.href).href, new Response('{}'));
+      window.__avant = 1;
+    });
+    return { ctx, page, before: await kept(page) };
+  }
+  {
+    progress('#639 Recharger l’application : réinscription refusée après la désinscription');
+    const { ctx, page, before } = await aboutUnlocked('#639 échec');
+    // the network drops between unregister() and register(): the next register() fails once, in
+    // the real life cycle of this engine (the unregistration itself is real)
+    await page.evaluate(() => {
+      const sw = navigator.serviceWorker;
+      const register = sw.register.bind(sw);
+      let first = true;
+      sw.register = (...a) => (first ? ((first = false), Promise.reject(new TypeError('réseau coupé (e2e)'))) : register(...a));
+    });
+    const clicked = Date.now();
+    await page.click('#reload-app');
+    await page.waitForFunction(() => /Rechargement impossible/.test(document.getElementById('app-card')?.textContent ?? ''), null, { timeout: 30000 }).catch(() => errors.push('#639 échec : pas de message'));
+    progress(`#639 échec : message en ${Date.now() - clicked} ms`);
+    check(await page.evaluate(() => window.__avant === 1), '#639 échec : page rechargée malgré l’échec');
+    const registered = await page.evaluate(async () => !!(await navigator.serviceWorker.getRegistration()));
+    check(registered, '#639 échec : plus aucune inscription (WebKit viderait les caches au prochain chargement, #604)');
+    const after = await kept(page);
+    check(after.marker && after.dataEntries >= before.dataEntries, `#639 échec : cache des données ${before.dataEntries} → ${after.dataEntries} entrées`);
+    check(JSON.stringify(after.ls) === JSON.stringify(before.ls) && JSON.stringify(after.keys) === JSON.stringify(before.keys), '#639 échec : notes ou clé mémorisée changées');
+    const stray = await page.locator('#update-banner').allTextContents();
+    check(stray.length === 0, `#639 échec : bandeau inattendu « ${stray.join(' ')} »`);
+
+    progress('#639 : le bandeau de nouvelle version revient après l’échec');
+    version += 1;
+    await page.evaluate(async () => (await navigator.serviceWorker.getRegistration())?.update());
+    await page.waitForSelector('#update-banner #update-reload', { timeout: 30000 }).catch(() => errors.push('#639 échec : bandeau « nouvelle version » absent ensuite'));
+    check(/Nouvelle version disponible/.test((await page.textContent('#update-banner').catch(() => '')) ?? ''), '#639 échec : texte du bandeau ensuite');
+    await ctx.close();
+  }
+  {
+    progress('#639 Recharger l’application avec une version en attente : sans attendre 15 s');
+    const { ctx, page, before } = await aboutUnlocked('#639 en attente');
+    version += 1;
+    await page.evaluate(async () => (await navigator.serviceWorker.getRegistration()).update());
+    await page.waitForSelector('#update-banner #update-reload', { timeout: 30000 }).catch(() => errors.push('#639 en attente : bandeau « nouvelle version » absent'));
+    check(await page.evaluate(async () => !!(await navigator.serviceWorker.getRegistration()).waiting), '#639 en attente : la nouvelle version n’attend pas');
+    const t = Date.now();
+    await Promise.all([page.waitForEvent('load', { timeout: 30000 }), page.click('#reload-app')]);
+    const ms = Date.now() - t;
+    // the defect waited 15 s (settled) for an activation nothing asks for; a reload takes ~1 s
+    check(ms < 12000, `#639 en attente : rechargé en ${ms} ms (attente de l’activation)`);
+    await ready(page);
+    check(!(await page.evaluate(() => window.__avant)), '#639 en attente : la page n’a pas été rechargée');
+    check((await page.locator('#pass').count()) === 0, '#639 en attente : la phrase de passe est redemandée');
+    check(await controlled(page), '#639 en attente : pas de service worker après');
+    const after = await kept(page);
+    check(after.marker && after.dataEntries >= before.dataEntries, `#639 en attente : cache des données ${before.dataEntries} → ${after.dataEntries} entrées`);
+    check(JSON.stringify(after.ls) === JSON.stringify(before.ls), '#639 en attente : notes changées');
     await ctx.close();
   }
 
