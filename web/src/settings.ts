@@ -155,7 +155,7 @@ export const APP_SECRETS = new Set(['HOME_LOCATION_JSON', 'STOPPED_ROOMS_JSON', 
 /**
  * #459: the household settings of ⚙ Mon logement (#497: and the shared contract, the cold alert),
  * sealed like HOME_LOCATION_JSON and never written in clear (they used to be repository
- * variables). Same list as the collector (collector/__main__.py HOUSEHOLD_SETTINGS, held in
+ * variables). Same list as the collector (collector/reglages.py HOUSEHOLD_SETTINGS, held in
  * agreement by tests/test_reglages_foyer.py).
  */
 export const HOUSEHOLD_SECRETS = new Set(['STOPPED_ROOMS_JSON', 'WOOD_JSON', 'CONTRACT_JSON', 'COLD_ALERT_JSON']);
