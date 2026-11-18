@@ -1,5 +1,5 @@
 // Printable annual report ("Rapport annuel").
-import { type Category, type DayRecord, MONTHS_SHORT, monthlyByYear, pctChange } from '../aggregate';
+import { type Category, type DayRecord, MONTHS_SHORT, monthlyByYear, pctChange, perDjuChange } from '../aggregate';
 import { djuBetween, fitSeason, roomDeltas, signaturePoints } from '../analysis';
 import { djuMethodText } from '../dju';
 import { ds, setState, state } from '../app';
@@ -68,6 +68,9 @@ export function renderReport(view: HTMLElement) {
   const cost = costOf(all, covFrom, end, true);
   const w = ds!.weather ? djuBetween(ds!.weather, cmpFrom, cmpTo) : null;
   const wPrev = ds!.weather && win ? djuBetween(ds!.weather, win.prevFrom, win.prevTo) : null;
+  // #638: « à climat égal » by the one rule of Année par année and the anonymised report (null:
+  // too mild a span, or no heating the year before: the line is left out, never « +∞ % »)
+  const climate = w && wPrev ? perDjuChange(sum(cmp, 'heating'), w.dju, sum(prev, 'heating'), wPrev.dju) : null;
   const deltas = roomDeltas(all, cmpFrom, cmpTo);
   const ranked = roomDeltas(all, from, end);
   const roomsSorted = activeRooms()
@@ -119,7 +122,7 @@ export function renderReport(view: HTMLElement) {
       <li>Empreinte carbone : <strong>≈ ${fmtCo2(tot * co2Factor())}</strong> (${fmtKwh(tot)} × ${fmtFactor(co2Factor())}, ${co2Factor() === CO2_DEFAULT ? esc(CO2_SOURCE) : 'facteur choisi par le foyer'}).</li>
       ${peak.d ? `<li>Jour le plus consommateur : <strong>${longDate(peak.d)}</strong> (${fmtKwh(peak.v)}).</li>` : ''}
       ${roomsSorted[0] ? `<li>Pièce la plus consommatrice : <strong>${esc(roomsSorted[0].name)}</strong> (${fmtKwh(ranked.get(roomsSorted[0].id)?.now ?? 0)}).</li>` : ''}
-      ${w && wPrev && sum(prev) > 0 ? `<li>À climat égal, le chauffage a évolué de <strong>${pct(((sum(cmp, 'heating') / Math.max(w.dju, 1)) / (sum(prev, 'heating') / Math.max(wPrev.dju, 1)) - 1) * 100)}</strong> par degré-jour par rapport à ${year - 1}${caveat ? ` (${esc(caveat)})` : ''}.</li>` : ''}
+      ${climate !== null ? `<li>À climat égal, le chauffage a évolué de <strong>${pct(climate)}</strong> par degré-jour par rapport à ${year - 1}${caveat ? ` (${esc(caveat)})` : ''}.</li>` : ''}
       ${fit ? `<li>Signature de la saison ${year - 1}–${year} : <strong>${(-fit.slope).toFixed(2).replace('.', ',')} kWh</strong> de plus par jour pour chaque degré en moins dehors.</li>` : ''}
       ${[...ds!.estimated].some((k) => k.slice(-10).startsWith(String(year))) ? `<li class="muted">Certains jours de ${year} ont été reconstitués à partir des totaux mensuels du serveur (jours estimés).</li>` : ''}
     </ul>

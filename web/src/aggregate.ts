@@ -310,6 +310,27 @@ export function pctChange(now: number, before: number): number | null {
   return before > 0 ? ((now - before) / before) * 100 : null;
 }
 
+/** Under this many degree days, a span is too mild for a heating per degree day (#464; #152). */
+export const MIN_DJU_SPAN = 50;
+
+/**
+ * #638: the change of a ratio, after vs before, in % (pctChange), or null when either side is
+ * unknown or the before is zero: a screen never writes « +∞ % » nor « NaN % ».
+ */
+export const ratioChange = (after: number | null, before: number | null): number | null => (after === null || before === null ? null : pctChange(after, before));
+
+/**
+ * #638: « à climat égal » — the change of heating kWh per degree day between two spans, in %. The
+ * one rule of every screen that writes it (Année par année, rapport annuel and anonymised, the
+ * goal of a room, Questions types): null when either span has `minDju` degree days or fewer (too
+ * mild to divide by, MIN_DJU_SPAN by default; a month passes its own, smaller threshold) or when
+ * the before has no heating.
+ */
+export function perDjuChange(now: number, nowDju: number, before: number, beforeDju: number, minDju = MIN_DJU_SPAN): number | null {
+  if (!(nowDju > minDju && beforeDju > minDju)) return null; // no heating before: null by ratioChange
+  return ratioChange(now / nowDju, before / beforeDju);
+}
+
 // ------------------------------------------------------------------ CSV
 export function toCsv(records: DayRecord[], rooms: Room[]): string {
   const name = new Map(rooms.map((r) => [r.id, r.name]));

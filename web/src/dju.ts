@@ -1,6 +1,6 @@
 // #464: what a degree-day total is made of — base, method, source — and whether its span is
 // complete, said on every screen that shows a total (Historique → Année par année, Rapport).
-import { addDays } from './aggregate';
+import { MIN_DJU_SPAN, addDays } from './aggregate';
 import { DJU_BASE, type Weather, djuBetween } from './analysis';
 
 const nf0 = new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 0 });
@@ -28,9 +28,6 @@ export function djuSpan(weather: Weather, from: string, to: string): { dju: numb
   for (let d = from; d <= to; d = addDays(d, 1)) expected++;
   return { dju, days, missing: expected - days };
 }
-
-/** Under this many degree days, a span is too mild for a heating per degree day (#464; #152). */
-export const MIN_DJU_SPAN = 50;
 
 export interface YearCold {
   /** The total for the table: a number when complete, « 1 930 * » when days are missing. */
