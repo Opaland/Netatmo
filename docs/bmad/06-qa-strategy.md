@@ -299,6 +299,27 @@ leur dernière vague, le fichier ayant changé sans que la mutation repasse : **
 de version (cadrage v2.7, § 6) qui les a vus : à refaire à chaque revue de fin, proposé (D87). `audit.py` (`scripts/mutation_collecteur.py`, toute la
 suite, 4 processus) : **70,1 %**, 547 tués sur 780, 1 057 s, le même score que la mesure de #632.
 
+**`crypto.ts` et `missingText` tenus (#637, 18/11/2026).** Cause du recul à 77,6 % : `crypto.test.ts`
+lisait `collector/kdf.json` (`../../`), donc `vitest.mutation.config.mjs` l'écartait **en entier** du
+bac à sable depuis #509 (Argon2id, partie de #139) — tous les tests du chiffrement avec lui, pas seulement l'accord avec la
+collecte. Ce test d'accord passe dans son propre fichier (`crypto-kdf.test.ts`, seul écarté) :
+`crypto.test.ts` revient dans la mutation. Puis des tests « #637 » : chaque borne vue des deux côtés
+(PBKDF2 au minimum et au maximum acceptés, un de moins ou de plus refusé avec son message ; mémoire et
+passes d'Argon2id aux bornes, parallélisme 0 et 2 refusés ; une fraction ou une chaîne d'itérations),
+`keyinfo.json` sans sel, au sel non textuel, nul, de version 3 ou au `kdf` inconnu, `keyInfoFields` qui
+refuse ce que `checkKeyInfo` refuse ; et dans `crypto-key.test.ts`, la dérivation Argon2id remplacée
+(`vi.mock`) par des octets fictifs pour voir **le tampon même** : remis à zéro quand l'import réussit et
+quand il échoue (clé de 31 octets), clé non exportable, aucune dérivation commencée hors contexte sûr.
+`npx stryker run --mutate src/crypto.ts` (51 s avant comme après, 4 cœurs partagés) : **77,6 % → 98,0 %**
+(118 tués, 32 survivants, 2 non couverts → 149 tués, 3 survivants, tous équivalents, tableau
+ci-dessous ; 11 mutants statiques ignorés par `ignoreStatic`, comptés maintenant que `crypto.test.ts`
+charge le module). Vus rouges par la vague d'après (les mutants visés ont disparu), et à la main :
+`raw.fill(0)` retiré, `extractable` à `true` et `iter >= MAX_ITERATIONS` font rougir trois tests.
+`periods.ts` : `missingText` testé (1, 2, 45 et 0 jour), **91,6 % → 94,4 %** (35 s) : les 13 survivants
+et 3 non couverts restants sont ceux déjà lus équivalents par #495 (`isLeap`, bornes de
+`bucketMarks` et de `yoyWindow`, `?? []` de `yoyCaveat`), lignes décalées par `missingText`. Aucun défaut
+trouvé, aucune borne ni aucun calcul changé.
+
 ### Survivants lus et laissés, avec leur raison
 
 | Fichier : ligne | Mutant | Classement | Raison |
@@ -309,14 +330,16 @@ suite, 4 processus) : **70,1 %**, 547 tués sur 780, 1 057 s, le même score que
 | `money.ts:111` | `<` → `<=` dans le tri | équivalent | ne change l'ordre que de deux grilles de même date de début |
 | `pricing.ts:51` | `'0000-01-01'` → `''` | équivalent | la ligne de prix manuelle est rendue pour tout jour ; sa date n'est jamais lue |
 | `periods.ts:25` | `isLeap` (12 mutants, dont 3 non couverts) | équivalent | n'est appelé que pour un début au 29 février de l'année d'avant : l'année comparée suit une bissextile et ne l'est jamais (toute variante qui rend « non bissextile » pour elle donne le même 1er mars) |
-| `periods.ts:69-70` | `a > from` → `>=`, `b < to` → `<=` | équivalent | à égalité les deux branches donnent la même borne |
-| `periods.ts:102-103, 106` | bornes de `yoyWindow` (4 mutants) | équivalent | rattrapés par le contrôle `from > to`, ou à égalité la tranche `slice(5)` donne `01-01` et `to` la même borne dans les deux cas |
-| `periods.ts:144` | `?? []` → `?? ["Stryker was here"]` | équivalent | sans `cuts`, la chaîne ajoutée n'est pas une date : elle ne tombe jamais entre deux jours `AAAA-MM-JJ` (`d <= t` est faux) |
+| `periods.ts:78-79` | `a > from` → `>=`, `b < to` → `<=` | équivalent | à égalité les deux branches donnent la même borne |
+| `periods.ts:111-112, 115` | bornes de `yoyWindow` (4 mutants) | équivalent | rattrapés par le contrôle `from > to`, ou à égalité la tranche `slice(5)` donne `01-01` et `to` la même borne dans les deux cas |
+| `periods.ts:153` | `?? []` → `?? ["Stryker was here"]` | équivalent | sans `cuts`, la chaîne ajoutée n'est pas une date : elle ne tombe jamais entre deux jours `AAAA-MM-JJ` (`d <= t` est faux) |
 | `invoice.ts:27, 31, 35, 37` | contrôles de type de `validInvoice` (8 mutants) | équivalent | `isDay` compare à la chaîne d'origine (`===`) et `Number.isFinite` ne convertit pas : un tableau ou une chaîne ne passent pas |
 | `invoice.ts:127, 157` | `subDays--`, `subDays === 0` → `false` | équivalent | seul `subDays === 0` est lu, et sans jour de prix `avgPrice` est déjà nul |
 | `invoice.ts:194-200, 227` | `diff > 0` → `>= 0`, `residual >= 0` → `> 0` | équivalent | branches atteintes seulement pour `|diff| ≥ 1` et `|reste| > tolérance ≥ 2 €` : jamais à zéro |
 | `invoice.ts:229` | `heatCost !== null` → `true` | équivalent | ne vaut `null` que sans prix moyen, cas déjà sorti en « no-price » |
-| `crypto.ts:31` | `typeof iter !== 'number'` retiré | équivalent | `Number.isInteger` refuse déjà tout ce qui n'est pas un nombre |
+| `crypto.ts:64` | `typeof iter !== 'number'` retiré | équivalent | `Number.isInteger` refuse déjà tout ce qui n'est pas un nombre |
+| `crypto.ts:74` | `typeof n === 'number'` → `true` dans `intIn` | équivalent | même raison : `Number.isInteger` refuse déjà une chaîne (`'65536'`, testé) |
+| `crypto.ts:95` | `typeof info !== 'object'` → `false` | équivalent | une valeur JSON qui n'est pas un objet (nombre, chaîne, booléen) n'a pas de `salt` textuel : la condition suivante la refuse avec le même message |
 | `reconstitute.ts:24` | `d <= dernier jour` → `<` | équivalent | le dernier jour d'une pièce a toujours un relevé : la boucle le saute (`continue`) dans les deux cas |
 | `reconstitute.ts:79` | `[]` → `["Stryker was here"]` | équivalent | le point parasite (une chaîne) est rejeté par `fitSeason` (`t < 15` est faux pour une lettre) |
 | `reconstitute.ts:93` | `fits.has(s)` → `false` | équivalent | la boucle de la saison la plus proche retrouve la même saison, seule à l'écart 0 (une saison par année de début) |

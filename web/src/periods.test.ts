@@ -3,7 +3,7 @@ import { type DayRecord, addDays, bucketKeys, cumulativeByYear, dayOfYear, leapD
 import { projectYear, verdict } from './analysis';
 import { coldWinterDays } from './comfort';
 import { budgetStatus } from './money';
-import { bucketMarks, daysBetween, monthKeys, monthsCovered, windowSuffix, yoyCaveat, yoyWindow } from './periods';
+import { bucketMarks, daysBetween, missingText, monthKeys, monthsCovered, windowSuffix, yoyCaveat, yoyWindow } from './periods';
 import { summarize } from './summary';
 
 // Intl fr-FR groups thousands with a narrow no-break space: compare on plain spaces.
@@ -223,5 +223,14 @@ describe('#294 one definition of a cold day', () => {
     expect(coldWinterDays(means, 2025, 19)).toEqual({ under: 3, n: 4 });
     expect(coldWinterDays(means, 2026, 19)).toEqual({ under: 1, n: 1 });
     expect(coldWinterDays([], 2025, 19)).toBeNull();
+  });
+});
+
+describe('#637 missingText : le nombre de jours manquants, accordé comme plural', () => {
+  it('« 1 jour manquant », « 2 jours manquants », et zéro au singulier', () => {
+    expect(missingText(1)).toBe('1 jour manquant');
+    expect(missingText(2)).toBe('2 jours manquants');
+    expect(missingText(45)).toBe('45 jours manquants');
+    expect(missingText(0)).toBe('0 jour manquant');
   });
 });
