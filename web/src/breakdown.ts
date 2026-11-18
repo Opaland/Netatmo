@@ -75,14 +75,6 @@ export function plugsFrom(doc: ShellyDoc | null | undefined, prefs: ShellyPrefs 
   return { plugs, unusable };
 }
 
-/** Last `n` days with a Linky value, up to `last` (the last day of the radiator data). */
-export function windowDays(linky: Map<string, number>, last: string, n = 30): string[] {
-  return [...linky.keys()]
-    .filter((d) => d <= last)
-    .sort()
-    .slice(-n);
-}
-
 function steady(values: number[]): boolean {
   if (values.length < 5 || values.some((v) => v <= 0)) return false;
   const mean = values.reduce((s, v) => s + v, 0) / values.length;

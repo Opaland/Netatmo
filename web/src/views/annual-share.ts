@@ -2,7 +2,7 @@
 // the entry chunk):
 // - S-6.3: offer comparator and maximum power (Linky) of the report year;
 // - S-6.4: anonymised report for a third party (pseudonyms, no names, ids, hourly data or station).
-import { type DayRecord, MONTHS_SHORT, minusYears, monthlyByYear } from '../aggregate';
+import { type DayRecord, MONTHS_SHORT, minusYears, monthlyByYear, perDjuChange } from '../aggregate';
 import { type AnonReport, anonReportHtml, leaks } from '../anon';
 import { daySplits, djuBetween, offPeakShares, roomDeltas } from '../analysis';
 import { activeRooms, ds } from '../app';
@@ -86,8 +86,7 @@ function anonData(choice: number | 'lease'): AnonReport {
     cost: costOf(all, from, to, true),
     dju: w && w.days ? w.dju : null,
     djuPrev: wPrev && wPrev.days ? wPrev.dju : null,
-    climateChange:
-      w && wPrev && w.dju > 50 && wPrev.dju > 50 && heatPrev > 0 ? ((heatNow / w.dju) / (heatPrev / wPrev.dju) - 1) * 100 : null,
+    climateChange: w && wPrev ? perDjuChange(heatNow, w.dju, heatPrev, wPrev.dju) : null,
     peak,
     rooms: activeRooms()
       .filter((r) => deltas.has(r.id))

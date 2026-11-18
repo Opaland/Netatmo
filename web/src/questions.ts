@@ -1,11 +1,14 @@
 // S-5.9: canned questions answered by code, without AI. Pure functions: every number
 // comes from the records, the verdict (analysis.verdict), the room waterfall
 // (analysis.roomDeltas) and the degree days (analysis.djuBetween).
-import { type DayRecord, MONTHS_LONG, minusYears, pctChange } from './aggregate';
+import { type DayRecord, MONTHS_LONG, minusYears, pctChange, perDjuChange } from './aggregate';
 import { type Weather, djuBetween, roomDeltas, verdict } from './analysis';
 import { type Drops, type RoomState, coldReasons, coverage } from './windows';
 import { referenceUnmeasured, unmeasuredPhrase, unmeasuredReasons } from './room-offline';
 
+
+/** #638: under this many degree days, a month is too mild to compare its heating « à climat égal ». */
+const MONTH_MIN_DJU = 5;
 export type QuestionId = 'why' | 'normal' | 'room' | 'priciest' | 'cold';
 
 export const QUESTIONS: { id: QuestionId; label: string }[] = [
@@ -138,8 +141,8 @@ function why(month: string, first: string, end: string, input: QuestionInput): A
     lines.push(`Météo : ${nf0.format(dNow.dju)} degrés-jours contre ${nf0.format(dPrev.dju)} (${pct(climate)}) : il a fait ${r > 0 ? 'plus froid' : r < 0 ? 'plus doux' : 'aussi froid'}.`);
     const hNow = sum(records, first, end, 'heating');
     const hPrev = sum(records, pf, pe, 'heating');
-    if (hPrev > 0 && dNow.dju > 5 && dPrev.dju > 5) {
-      const usage = ((hNow / dNow.dju) / (hPrev / dPrev.dju) - 1) * 100;
+    const usage = perDjuChange(hNow, dNow.dju, hPrev, dPrev.dju, MONTH_MIN_DJU);
+    if (usage !== null) {
       lines.push(`À climat égal, le chauffage par degré-jour a évolué de ${pct(usage)}.`);
       lines.push(Math.abs(climate) >= Math.abs(usage) ? 'L’écart vient surtout de la météo.' : 'L’écart vient surtout des usages (réglages, présence, aération).');
     } else {

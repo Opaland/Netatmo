@@ -148,7 +148,7 @@ export function monthlyOpen(rs: RoomState, groupOf: (room: string) => string = (
 }
 
 /** Days when at least one room had its window open more than `hours` (S-13.3, signature option). */
-export function windowDays(rs: RoomState, hours = 2, rooms?: Set<string>): Set<string> {
+export function openWindowDays(rs: RoomState, hours = 2, rooms?: Set<string>): Set<string> {
   const out = new Set<string>();
   for (const [room, cells] of Object.entries(rs.rooms ?? {})) {
     if (rooms && !rooms.has(room)) continue;
@@ -169,7 +169,7 @@ export interface SignatureEffect {
  * when a window stayed open more than `hours` (S-13.3). Null when the season cannot be fitted.
  */
 export function signatureEffect(records: DayRecord[], weather: Weather, rs: RoomState, hours = 2): SignatureEffect | null {
-  const excluded = windowDays(rs, hours);
+  const excluded = openWindowDays(rs, hours);
   const covered = new Set(Object.keys(rs.seen ?? {}));
   const seasons = [...signaturePoints(records, weather).entries()]
     .filter(([, pts]) => pts.some(([, , d]) => covered.has(d)))

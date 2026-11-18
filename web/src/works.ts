@@ -1,7 +1,7 @@
 // S-6.2: room surfaces and dated "works" markers (insulation, windows, new radiator…),
 // to compare before / after. Pure functions (no DOM, no app state): views/works.ts reads
 // and saves them (encrypted on this device) and draws the cards.
-import { type DayRecord, addDays, bucketKey } from './aggregate';
+import { type DayRecord, addDays, bucketKey, ratioChange } from './aggregate';
 import { type Fit, type Weather, dju, fitSeason } from './analysis';
 import { withWood } from './isolation';
 
@@ -124,6 +124,17 @@ function side(heat: Map<string, number>, weather: Weather, from: string, to: str
 }
 
 /**
+ * #638: the two spans around a marker: `windowDays` days on each side, the day of the marker
+ * belonging to « after », clipped to the data [first, last]. One rule for the works and the
+ * lower level (lower.ts).
+ */
+export function markerWindow(marker: string, first: string, last: string, windowDays = 365): { before: [string, string]; after: [string, string] } {
+  const from = addDays(marker, -windowDays);
+  const to = addDays(marker, windowDays - 1);
+  return { before: [from < first ? first : from, addDays(marker, -1)], after: [marker, to > last ? last : to] };
+}
+
+/**
  * Heating before and after a marker: `windowDays` days on each side (the day of the marker
  * belongs to "after"), clipped to the data. Each side gets its own signature line.
  */
@@ -136,11 +147,11 @@ export function beforeAfter(
   m2: number | null,
   windowDays = 365,
 ): BeforeAfter {
-  const bFrom = addDays(marker, -windowDays) < first ? first : addDays(marker, -windowDays);
-  const aTo = addDays(marker, windowDays - 1) > last ? last : addDays(marker, windowDays - 1);
-  const before = side(heat, weather, bFrom, addDays(marker, -1), m2);
-  const after = side(heat, weather, marker, aTo, m2);
-  const change = before?.perDjuM2 && after?.perDjuM2 ? (after.perDjuM2 / before.perDjuM2 - 1) * 100 : null;
+  const w = markerWindow(marker, first, last, windowDays);
+  const before = side(heat, weather, ...w.before, m2);
+  const after = side(heat, weather, ...w.after, m2);
+  // a side without heating (0 kWh per DJU) is no reference for a change, on either side
+  const change = before?.perDjuM2 && after?.perDjuM2 ? ratioChange(after.perDjuM2, before.perDjuM2) : null;
   return { marker, before, after, change };
 }
 

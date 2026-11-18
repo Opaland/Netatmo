@@ -3,7 +3,7 @@
 // figures, this module only ever receives pseudonyms, never names nor identifiers.
 // Left out on purpose: home name, ids, room names, hourly data, the weather station
 // (a bedroom module tells when people sleep), room temperatures.
-import type { Category } from './aggregate';
+import { type Category, ratioChange } from './aggregate';
 import { DJU_BASE } from './analysis';
 
 export interface AnonRoomInput {
@@ -58,7 +58,10 @@ const pct = (p: number) => {
   const r = Math.round(p);
   return `${r > 0 ? '+' : r < 0 ? '−' : ''}${nf0.format(Math.abs(r))} %`;
 };
-const change = (now: number, before: number) => (before > 0 ? pct((now / before - 1) * 100) : '—');
+const change = (now: number, before: number) => {
+  const c = ratioChange(now, before);
+  return c === null ? '—' : pct(c);
+};
 const daysBetween = (a: string, b: string) => Math.round((Date.parse(`${b}T00:00:00Z`) - Date.parse(`${a}T00:00:00Z`)) / 86400000) + 1;
 
 export function anonReportHtml(r: AnonReport): string {
