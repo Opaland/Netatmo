@@ -288,6 +288,17 @@ calcul ni seuil changé.
 de 1 ou 2 h, qu'aucun test n'atteint, seul le décalage d'un jour l'est), `linky_lag` (20), `_build_fine` (17), `units` (13), `two_sources`
 (11), `tariffs` (10), `valid` (9), `room30_hours` (8) ; la liste sort de `--json`.
 
+**Mesure complète de fin de v2.7 (18/11/2026, [revue](revues/v2.7.md) § 6).** `cd web && npm run
+mutation`, les neuf fichiers, 6 min 14 s sur 4 cœurs : **87,7 %** (4 012 mutants ; 423 survivants,
+72 non couverts). `room-offline.ts` 95,4 % (24 restants : deux de plus que la mesure de #621, l. 341
+`weather?.get` et l. 381 `n++`, à lire), `curve.ts` 93,5 %, `data-quality.ts` 80,7 %, `money.ts`
+94,8 %, `pricing.ts` 97,9 %, `invoice.ts` 93,8 %, `reconstitute.ts` 98,0 % ; deux **reculs** depuis
+leur dernière vague, le fichier ayant changé sans que la mutation repasse : **`crypto.ts` 96,6 % →
+77,6 %** (code d'Argon2id, du contexte non sécurisé et de `keyinfo.json` ; #633) et `periods.ts`
+94,2 % → 91,6 % (`missingText`, sans test : 8 non couverts). C'est la mesure complète de la revue de fin
+de version (cadrage v2.7, § 6) qui les a vus : à refaire à chaque revue de fin, proposé (D87). `audit.py` (`scripts/mutation_collecteur.py`, toute la
+suite, 4 processus) : **70,1 %**, 547 tués sur 780, 1 057 s, le même score que la mesure de #632.
+
 ### Survivants lus et laissés, avec leur raison
 
 | Fichier : ligne | Mutant | Classement | Raison |
