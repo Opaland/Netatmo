@@ -1,6 +1,6 @@
 # Historique des versions
 
-## v2.7 — novembre 2026 : robustesse des tests, la mutation là où elle n'est jamais passée (en cours)
+## v2.7 — novembre 2026 : robustesse des tests, la mutation là où elle n'est jamais passée
 
 Lancée par le propriétaire le 13/11/2026 (« 2.4 2.5 2.6 2.7 2.8 2.9 3.0 »), cadrée sur une mesure de la
 mutation fichier par fichier ([cadrage](docs/bmad/revues/v2.7-cadrage.md)). Revue de fin de version par
