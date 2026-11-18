@@ -145,6 +145,14 @@ const SW_SCOPE = './';
 /** Set by reloadApp: the worker it installs claims this page, which is no other tab's update. */
 let appReloading = false;
 
+/** startPwa's onUpdate: the banner, except while reloadApp replaces this page's worker. */
+export function announceUpdate(kind: UpdateKind, apply: () => void, show: (kind: UpdateKind, apply: () => void) => void = showUpdateBanner) {
+  if (!appReloading) show(kind, apply);
+}
+
+/** Set by startPwa: watches a registration reloadApp had to make again (#639). */
+let rewatch: ((reg: ServiceWorkerRegistration) => void) | null = null;
+
 /** Resolve once `worker` is activated (or redundant), at the latest after `ms`. */
 function settled(worker: ServiceWorker | null, ms: number): Promise<void> {
   return new Promise((done) => {
@@ -169,9 +177,13 @@ function settled(worker: ServiceWorker | null, ms: number): Promise<void> {
  * registration was removed (seen in Playwright's WebKit: 17 → 0 entries; Chromium keeps them).
  * Registered again first, the origin never has none, and the data cache stays (where the browser
  * revives the old registration instead, it is removed again: that browser keeps the caches).
+ *
+ * #639: it always hands back. A failure after the unregistration (network lost) registers the
+ * worker again before the message, and the update banner is no longer held back.
  */
 export async function reloadApp(): Promise<string | null> {
   if (!navigator.onLine) return 'Hors connexion : l’application ne peut pas être retéléchargée. Réessayez une fois en ligne.';
+  let unregistered = false;
   try {
     const reg = 'serviceWorker' in navigator ? await navigator.serviceWorker.getRegistration() : undefined;
     const scope = reg?.scope ?? new URL('.', document.baseURI).href;
@@ -179,20 +191,42 @@ export async function reloadApp(): Promise<string | null> {
     if (reg) {
       appReloading = true;
       await reg.unregister();
+      unregistered = true;
       const next = await navigator.serviceWorker.register(SW_URL, { scope: SW_SCOPE });
-      const fresh = next.installing ?? next.waiting;
       // A new registration (WebKit): its worker downloads the app again; reloaded before it is
       // activated, the page would load uncontrolled. Chromium instead revives the registration
-      // being removed (same worker, nothing installing): removed again, as before #604, the
-      // reload installs the current version, and Chromium keeps the caches.
+      // being removed (its worker still active): removed again, as before #604, the reload
+      // installs the current version, and Chromium keeps the caches. #639: a revived registration
+      // can hold a version waiting (the update banner was shown): it would never activate
+      // (nothing sends SKIP_WAITING), so it is never waited for (seen 15 s in Chromium, e2e/pwa.mjs).
+      const fresh = newWorker(next);
       if (fresh) await settled(fresh, 15_000);
       else await next.unregister();
     }
   } catch (err) {
+    // #639: the page stays open: registered again (without one, WebKit empties every cache of
+    // the origin at the next load, #604) and its update banner back
+    if (unregistered) await registerAgain();
+    appReloading = false;
     return `Rechargement impossible : ${err instanceof Error ? err.message : String(err)}`;
   }
   location.reload();
   return null;
+}
+
+/** The worker of a registration just made, or none when the browser revived an active one. */
+const newWorker = (reg: ServiceWorkerRegistration) => (reg.active ? null : (reg.installing ?? reg.waiting));
+
+/** #639: after a failed reloadApp, the worker registered again, once it is activated (it claims
+ * this page: still reloadApp's own worker, not another tab's version), and watched for updates. */
+async function registerAgain() {
+  try {
+    const reg = await navigator.serviceWorker.register(SW_URL, { scope: SW_SCOPE });
+    await settled(newWorker(reg), 15_000);
+    rewatch?.(reg);
+  } catch {
+    // still no network: the next load registers it (startPwa)
+  }
 }
 
 /** Whether this page is served by the worker (the app opens offline once it is). */
@@ -207,14 +241,20 @@ export function startPwa() {
   const updater = createUpdater({
     sw: sw as unknown as SwContainer,
     // the worker reloadApp installs claims this page: not « activated in another tab »
-    onUpdate: (kind) => appReloading || showUpdateBanner(kind, () => void updater.apply()),
+    onUpdate: (kind) => announceUpdate(kind, () => void updater.apply()),
     reload: () => location.reload(),
   });
+  const watched = new WeakSet<ServiceWorkerRegistration>();
+  rewatch = (reg) => {
+    if (watched.has(reg)) return; // Chromium revives the same registration: watched already
+    watched.add(reg);
+    updater.watch(reg as unknown as SwRegistration);
+  };
   sw.register(SW_URL, { scope: SW_SCOPE }).then(
     (reg) => {
       // Playwright with service workers blocked resolves to undefined (a browser never does)
       if (!reg) return;
-      updater.watch(reg as unknown as SwRegistration);
+      rewatch?.(reg);
       // #334: an installed app is resumed, not reopened: look for a new version on coming back
       document.addEventListener('visibilitychange', () => {
         if (document.visibilityState !== 'visible' || Date.now() - lastCheck < 60_000) return;
