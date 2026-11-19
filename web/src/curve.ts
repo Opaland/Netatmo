@@ -99,7 +99,7 @@ export function halfHourCounts(tz: string, day: string): Map<string, number> | n
 }
 
 // #568: the gap allowed between the half hours of a day and the day's total, the audit's
-// (collector/audit.py `tolerance`, THRESHOLDS ecart_absolu / ecart_relatif): both test suites
+// (collector/audit_catalogue.py `tolerance`, THRESHOLDS ecart_absolu / ecart_relatif): both test suites
 // read __fixtures__/somme-jour.json, so that the two cannot drift apart.
 export const DAY_GAP_WH = 100;
 export const DAY_GAP_SHARE = 0.05;

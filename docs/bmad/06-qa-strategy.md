@@ -283,6 +283,10 @@ calcul ni seuil changé.
 | 1173 | `x < 0` → `<=`, `0` → `1` | atteint seulement au-dessus du plafond (une valeur de 0 à 1 Wh sous le plafond est sortie l. 1165) |
 | 1506 | `x - mx` → `x + mx`, `y - my` → `y + my` | `Σ(x + mx)(y − my) = Σx(y − my) + mx·Σ(y − my)` et `Σ(y − my) = 0` : la même covariance (de même pour l'autre facteur) |
 
+(Numéros de ligne d'avant #656 : le catalogue est sorti dans `collector/audit_catalogue.py`, retirer 243
+pour les lire dans `audit.py` d'aujourd'hui. Ses 19 mutants : 17 tués ; l. 259 `* 100` → `* 101`
+équivalent, l. 270 `part_decalee / 100` → `/ 101` à tester, `docs/etudes/decoupage-audit-charts.md`.)
+
 **Restent à lire** (une vague suivante, hors des fonctions visées par #624) : 213 survivants et
 3 non couverts, surtout `_shift_fit` (34, dont 3 non couverts l. 928 : le texte d'un `decalage-heures`
 de 1 ou 2 h, qu'aucun test n'atteint, seul le décalage d'un jour l'est), `linky_lag` (20), `_build_fine` (17), `units` (13), `two_sources`
