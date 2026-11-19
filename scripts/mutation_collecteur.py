@@ -8,8 +8,10 @@ Run by hand only (like `npm run mutation` for the app), never by the CI or the g
 minutes. Decision D86 (keep this script, adopt `mutmut`, or nothing) belongs to the owner.
 
 How it works:
-- the repository's files (tracked and untracked, ignored ones and `data/` left out) are copied into a
-  temporary folder, once per process: the working tree and `data/` are never written;
+- the repository's TRACKED files (`data/` left out), plus the mutated module and the test files named
+  on the command line when they are not tracked yet, are copied into a temporary folder, once per
+  process: the working tree and `data/` are never written, and an untracked file (an export, a draft)
+  never leaves the tree (#655);
 - a first run of the tests records, with `sys.monitoring`, which lines of the module each test
   executes (tests that fail without any mutant are set aside and named);
 - five operators, as in the probe of the v2.7 scoping: comparison inverted or widened (`<` → `<=`,
@@ -273,11 +275,21 @@ def mutants_of(path: Path, functions: set[str] | None = None) -> list[Mutant]:
     return out
 
 
-def _files_to_copy() -> list[str]:
-    out = subprocess.run(
-        ["git", "ls-files", "-co", "--exclude-standard"], cwd=ROOT, capture_output=True, text=True, check=True
-    ).stdout.splitlines()
-    return [f for f in out if f.split("/", 1)[0] not in EXCLUDED_TOP and (ROOT / f).is_file()]
+def _files_to_copy(extra: list[str] | tuple[str, ...] = (), root: Path = ROOT) -> list[str]:
+    """The files copied (#655, #634 n° 4): the TRACKED ones only, plus `extra` (the mutated module and
+    the test files named on the command line) when they exist, even if not tracked yet. An untracked
+    file of the tree (an export put at the root, a draft) is never copied out of it."""
+    out = subprocess.run(["git", "ls-files", "-c"], cwd=root, capture_output=True, text=True, check=True).stdout
+    files = dict.fromkeys(out.splitlines())
+    for f in extra:
+        p = Path(f)
+        if p.is_absolute():
+            try:
+                p = p.resolve().relative_to(root.resolve())
+            except ValueError:
+                continue  # outside the repository: never copied
+        files.setdefault(p.as_posix())
+    return [f for f in files if f.split("/", 1)[0] not in EXCLUDED_TOP and (root / f).is_file()]
 
 
 def _make_copy(dest: Path, files: list[str]) -> None:
@@ -325,7 +337,10 @@ def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     p.add_argument("module", help="le module à muter, par ex. collector/audit.py")
     p.add_argument(
-        "tests", nargs="*", help="limiter aux tests de ces fichiers (plus rapide ; par défaut toute la suite)"
+        "tests",
+        nargs="*",
+        help="limiter aux tests de ces fichiers (plus rapide ; par défaut toute la suite). Seuls les fichiers "
+        "suivis par git sont copiés, plus le module et ces fichiers de tests s'ils ne le sont pas encore",
     )
     p.add_argument("--fonction", action="append", default=[], help="ne muter que cette fonction (répétable)")
     p.add_argument("--processus", type=int, default=os.cpu_count() or 2)
@@ -344,7 +359,7 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     t0 = time.monotonic()
-    files = _files_to_copy()
+    files = _files_to_copy([a.module, *(t.split("::", 1)[0] for t in a.tests)])
     work = Path(tempfile.mkdtemp(prefix="mutation-collecteur-"))
     try:
         base = work / "w0"
