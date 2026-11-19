@@ -18,8 +18,18 @@ const { tmpdir } = (await import(/* @vite-ignore */ osName)) as {
 };
 
 type Where = { dir: string; why: string | null };
+type Run = (
+  command: string,
+  args: string[],
+  env: Record<string, string | undefined>,
+) => string | null;
+type Host = { platform: string; run: Run };
 const { capturesDir, REFERENCE, WORKSTATION, FONT_CONF } = await load<{
-  capturesDir: (env: Record<string, string | undefined>, cwd?: string) => Where;
+  capturesDir: (
+    env: Record<string, string | undefined>,
+    cwd?: string,
+    host?: Host,
+  ) => Where;
   REFERENCE: string;
   WORKSTATION: string;
   FONT_CONF: string;
@@ -76,6 +86,74 @@ describe("#583 : les captures de référence, seulement dans la police de la CI"
       dir: "/tmp/x/ailleurs",
       why: null,
     });
+  });
+
+  // #655 (#590 n° 2): the advice is the one of the workstation's case. fontconfig is simulated by
+  // an injected function, not by a fake command in PATH (A11). Seen red with the old single advice
+  // (each of the three expects its own sentence) and, for macOS, with the platform not looked at.
+  /** A workstation: what fc-match answers for the app's families (null: no fc-match), and
+   * whether fc-list knows DejaVu Sans. */
+  const host = (
+    font: string | null,
+    dejavu: boolean,
+    platform = "linux",
+  ): Host => ({
+    platform,
+    run: (command, args) => {
+      if (font === null) return null;
+      if (command === "fc-match") return font;
+      if (command === "fc-list")
+        return args[0] === "DejaVu Sans" && dejavu
+          ? "DejaVu Sans\nDejaVu Sans\n"
+          : "";
+      return null;
+    },
+  });
+  const ref = env({});
+
+  it("#655 : DejaVu Sans absente du poste, le conseil dit de l'installer (le fichier du dépôt ne fait que la préférer)", () => {
+    const w = capturesDir(ref, undefined, host("WenQuanYi Zen Hei", false));
+    expect(w.dir).toBe(WORKSTATION);
+    expect(w.why).toContain("sans-serif → WenQuanYi Zen Hei");
+    expect(w.why).toContain("n'est pas installée");
+    expect(w.why).toContain("fonts-dejavu-core");
+  });
+
+  it("#655 : DejaVu Sans installée mais pas choisie, le conseil reste le fichier du dépôt", () => {
+    const w = capturesDir(ref, undefined, host("Inter", true));
+    expect(w.dir).toBe(WORKSTATION);
+    expect(w.why).toContain(`FONTCONFIG_FILE="${FONT_CONF}"`);
+    expect(w.why).not.toContain("fonts-dejavu-core");
+  });
+
+  it("#655 : sans fc-match, le conseil renvoie à la CI (artefact captures-demo) ou à Linux, pas à fc-match", () => {
+    const w = capturesDir(ref, undefined, host(null, false));
+    expect(w.dir).toBe(WORKSTATION);
+    expect(w.why).toContain("fc-match absent");
+    expect(w.why).toContain("captures-demo");
+    expect(w.why).not.toContain("FONTCONFIG_FILE");
+  });
+
+  it("#655 : sur macOS, jamais dans les références, même si fontconfig répond DejaVu Sans (Chromium y dessine avec CoreText)", () => {
+    const w = capturesDir(ref, undefined, host("DejaVu Sans", true, "darwin"));
+    expect(w.dir).toBe(WORKSTATION);
+    expect(w.why).toContain("CoreText");
+    expect(w.why).toContain("captures-demo");
+  });
+
+  it("#655 : un poste Linux où tout répond DejaVu Sans garde le dossier des références", () => {
+    expect(capturesDir(ref, undefined, host("DejaVu Sans", true))).toEqual({
+      dir: REFERENCE,
+      why: null,
+    });
+  });
+
+  it("le nom de l'artefact cité dans le conseil est celui que la CI publie", () => {
+    const ci = fs.readFileSync(
+      new URL("../../.github/workflows/ci.yml", import.meta.url),
+      "utf8",
+    );
+    expect(ci).toContain("name: captures-demo");
   });
 
   it("un seul endroit : aucun script e2e ne choisit lui-même son dossier de captures", () => {

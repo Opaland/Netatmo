@@ -51,8 +51,13 @@ où `fc-match sans-serif` ou `fc-match system-ui` ne donne pas DejaVu Sans (ou s
 e2e écrivent leurs captures dans `web/e2e/screenshots-poste/` (jamais commité) et le disent (#583,
 `docs/APPRENTISSAGES.md` A15, A19). Pour régénérer les références sur un poste Linux :
 `FONTCONFIG_FILE="$PWD/e2e/polices-ci.conf"` (dans `web/`, chemin absolu), qui inclut la
-configuration du système et écarte Inter ; y écarter aussi la police que préfère le poste. `E2E_OUT`
-choisit un autre dossier.
+configuration du système et écarte Inter ; y écarter aussi la police que préfère le poste. Ce fichier
+ne fait que **préférer** DejaVu Sans : si elle n'est pas installée (`fc-list` ne la connaît pas),
+l'installer d'abord (paquet `fonts-dejavu-core`). Sans `fc-match` (Windows), et toujours sur macOS
+(Chromium y dessine avec CoreText, non avec fontconfig), les captures vont dans
+`screenshots-poste/` et les références se régénèrent par la CI (artefact `captures-demo`) ou sous
+Linux ; le message du script dit lequel de ces cas est le vôtre (#655). `E2E_OUT` choisit un autre
+dossier.
 
 **WebKit** (moteur de Safari, l'iPhone) n'est pas dans la porte locale : le job `e2e-webkit` de la CI
 le lance. Sur un poste, `npx playwright install webkit` une fois (Linux : `--with-deps`), puis
