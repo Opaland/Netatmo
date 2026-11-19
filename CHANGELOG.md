@@ -1,5 +1,34 @@
 # Historique des versions
 
+## v2.8 — novembre 2026 (en cours) : dette de code, une règle à un endroit
+
+Lancée par le propriétaire le 13/11/2026 (« 2.4 2.5 2.6 2.7 2.8 2.9 3.0 »), cadrée sur la taille des
+fichiers, les règles écrites en double et la mesure complète de la mutation de la v2.7
+([cadrage](docs/bmad/revues/v2.8-cadrage.md)). Revue de fin de version par les **72 personas**, revue
+design (un écran, le rapport annuel, dans des cas limites ; rien ne bouge sur la démo) et revue de code
+par agent : [`docs/bmad/revues/v2.8.md`](docs/bmad/revues/v2.8.md). Aucune donnée réelle lue ni réécrite ;
+les formes retenues par les PR restent des propositions (revue, § 10 : D90 à D93).
+
+- **Chiffrement tenu par ses tests** (#637, #644) : `crypto.ts` 77,6 % → 98,0 % (plafonds d'itérations,
+  bornes d'Argon2id, `keyinfo.json`, clé non exportable et effacée) ; la cause du recul était un fichier
+  de tests sorti en entier de la mutation parce qu'il lisait `collector/kdf.json`. `missingText` testé
+  (`periods.ts` 94,4 %).
+- **« À climat égal », une seule règle** (#638, #646) : `perDjuChange` et `ratioChange` (`aggregate.ts`)
+  pour sept écrans, `markerWindow` pour les travaux et le niveau du bas ; le rapport annuel n'écrit plus
+  « +∞ % », « NaN % » ni un pourcentage sur une année trop douce (même règle que la carte annuelle) ;
+  `windowDays` mort de `breakdown.ts` retiré.
+- **« Recharger l'application » rend toujours la main** (#639, #647) : après un échec, le worker est
+  réinscrit et le bandeau de mise à jour revient ; une version en attente ne fait plus attendre 15 s
+  (Chromium). Données chiffrées, notes et clé gardées.
+- **Gardes qui comptent ce qu'elles écartent** (#640, #643) : une requête relayée non servie rend le
+  script e2e rouge ; la garde du relais voit toute écriture ; l'outil de mutation du collecteur ne compte
+  plus une erreur de pytest comme un mutant tué ; le message de la garde de taille nomme la vraie cause.
+- **`collector/__main__.py` découpé** (#641, #645) : 1 234 → 898 lignes ; les réglages du foyer dans
+  `reglages.py`, le résumé du job dans `resume.py`, déplacés sans changement.
+- **Revue de fin de version** (revue, § 6 et § 12) : mesure complète de la mutation (88,6 %, aucun recul) ;
+  premier écran 128,65 kB (+ 0,24 kB, D91) ; aucun défaut bloquant ; constats mineurs dans #649 ;
+  captures de référence régénérées dans la police de la CI, acceptées par la garde.
+
 ## v2.7 — novembre 2026 : robustesse des tests, la mutation là où elle n'est jamais passée
 
 Lancée par le propriétaire le 13/11/2026 (« 2.4 2.5 2.6 2.7 2.8 2.9 3.0 »), cadrée sur une mesure de la

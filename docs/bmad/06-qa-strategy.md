@@ -320,6 +320,16 @@ et 3 non couverts restants sont ceux déjà lus équivalents par #495 (`isLeap`,
 `bucketMarks` et de `yoyWindow`, `?? []` de `yoyCaveat`), lignes décalées par `missingText`. Aucun défaut
 trouvé, aucune borne ni aucun calcul changé.
 
+**Mesure complète de fin de v2.8 (19/11/2026, [revue](revues/v2.8.md) § 6).** `cd web && npm run
+mutation`, les neuf fichiers, 6 min 13 s sur 4 cœurs : **88,6 %** (4 012 mutants ; 394 survivants,
+62 non couverts). **Aucun fichier ne recule** : `crypto.ts` 98,0 % et `periods.ts` 94,4 % comme les
+mesures de #637 ; les sept autres identiques à la fin de v2.7 au dixième (`room-offline.ts` 95,4 %,
+`curve.ts` 93,5 %, `data-quality.ts` 80,7 %, `money.ts` 94,8 %, `pricing.ts` 97,9 %, `invoice.ts` 93,8 %,
+`reconstitute.ts` 98,0 %). `audit.py` ne change pas en v2.8 : non remesuré (70,1 %, fin de v2.7). Reste
+la cause du recul de `crypto.ts` : `vitest.mutation.config.mjs` écarte **en silence** tout fichier de
+tests qui contient `../../` (dix aujourd'hui, aucun d'un module muté) ; une garde est proposée (revue
+v2.8, § 12 n° 4).
+
 ### Survivants lus et laissés, avec leur raison
 
 | Fichier : ligne | Mutant | Classement | Raison |
