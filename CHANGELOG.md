@@ -1,6 +1,6 @@
 # Historique des versions
 
-## v2.8 — novembre 2026 (en cours) : dette de code, une règle à un endroit
+## v2.8 — novembre 2026 : dette de code, une règle à un endroit
 
 Lancée par le propriétaire le 13/11/2026 (« 2.4 2.5 2.6 2.7 2.8 2.9 3.0 »), cadrée sur la taille des
 fichiers, les règles écrites en double et la mesure complète de la mutation de la v2.7
