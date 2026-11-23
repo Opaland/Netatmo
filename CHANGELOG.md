@@ -1,5 +1,34 @@
 # Historique des versions
 
+## v3.0 — novembre 2026 : consolidation (en cours)
+
+Lancée par le propriétaire le 13/11/2026 (« 2.4 2.5 2.6 2.7 2.8 2.9 3.0 »), la dernière version demandée,
+cadrée sur des constats mesurés et sans aucune fonction nouvelle ([cadrage](docs/bmad/revues/v3.0-cadrage.md)).
+Revue de fin de version par les **72 personas**, revue design de **toutes les vues** (mobile et bureau,
+clair, sombre, contraste élevé, couleurs forcées, texte à 200 %, Chromium et WebKit), mesures de fin
+écrites comme référence : [`docs/bmad/revues/v3.0.md`](docs/bmad/revues/v3.0.md) ; revue de code
+complète à part. Aucune donnée réelle lue ni réécrite ; aucune décision tranchée (revue, § 10 : D98 à
+D104, dans le [tableau des décisions](docs/bmad/decisions.md)).
+
+- **Année par année dit juste quand deux usages manquent** (#676, #682) : « sans le chauffage ni le
+  chauffe-eau (non mesurés) », et plus de « pour le » suivi de rien ; la phrase réelle d'aujourd'hui ne
+  change pas.
+- **« Écart en % » par une seule règle** (#677, #686) : six écritures à la main passent par `pctChange` ;
+  la garde voit les deux formes ; aucun chiffre affiché ne change (texte de toutes les routes comparé).
+- **Les calculs tenus par la mutation** (#678, #685 ; #679, #687) : `analysis.ts` 58,2 % → 98,5 %,
+  `aggregate.ts` 71,7 % → 97,0 %, `offpeak.ts` 80,9 % → 95,1 %, `wood.ts` 83,8 % → 94,5 %, dans la mesure
+  complète désormais ; les lecteurs par source d'État des données (`data-quality.ts` 80,7 % → 91,0 %).
+- **Heures creuses datées** (#684, #688, trouvé par la mutation) : une demi-heure à 80 % tout juste
+  d'heures pleines est « clairement pleine », comme 80 % d'heures creuses est « clairement creuse » ;
+  aucun chiffre de la démo ne bouge (D98).
+- **Un seul tableau des décisions du propriétaire** (#680, #683) : D1 à D104, par sujet, avec leur état
+  et ce que chacune débloque, tenu d'accord avec les revues par un test.
+- **Revue de fin de version** (revue, § 5 et § 6) : aucun défaut bloquant ; aucune violation d'axe sur
+  424 pages en Chromium, en AAA en contraste élevé ; une ponctuation ou un nombre seul en début de ligne
+  sur 37 pages (D99) et un titre d'onglet qui ne suit pas la vue (D100), tracés ; premier écran
+  128,79 kB (+ 0,14 kB pour la version) ; installations de WebKit de 20 à 44 s depuis le cache de #672 ;
+  captures de référence régénérées dans la police de la CI, acceptées par la garde.
+
 ## v2.9 — novembre 2026 : documentation et reprise
 
 Lancée par le propriétaire le 13/11/2026 (« 2.4 2.5 2.6 2.7 2.8 2.9 3.0 »), cadrée sur ce qu'un repreneur

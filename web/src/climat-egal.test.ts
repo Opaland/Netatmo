@@ -46,7 +46,13 @@ describe('à climat égal et écart en % : une seule règle (#638, #677)', () =>
     expect(seen('((a - b) / c) * 100')).toBe(0); // not a change: the denominator is not b
   });
 
-  it('aucun « ((a − b) / b) * 100 » écrit à la main hors de pctChange', () => {
+  // Revue de fin de v3.0: in the sandbox of `npm run mutation`, Stryker rewrites aggregate.ts with
+  // its own markers (stryMutAct_…), so pctChange's text is no longer there and this guard of the
+  // SOURCE failed the dry run: the whole mutation measure stopped before its first mutant. The
+  // guard reads text, it kills no mutant; it is skipped there, and only there (the files carry
+  // Stryker's markers). Every other run (vitest, the gate, the CI) reads the real sources.
+  const mutating = sources().some(([, text]) => text.includes('stryMutAct_'));
+  it.skipIf(mutating)('aucun « ((a − b) / b) * 100 » écrit à la main hors de pctChange', () => {
     const found = sources().flatMap(([f, text]) => (text.match(handWrittenChange) ?? []).map((m) => `${f}: ${m}`));
     expect(found).toEqual(['aggregate.ts: ((now - before) / before) * 100']);
     const rule = /export function pctChange\(now: number, before: number\): number \| null \{\n\s*return before > 0 \? \(\(now - before\) \/ before\) \* 100 : null;/;

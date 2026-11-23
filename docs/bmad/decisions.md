@@ -1,18 +1,19 @@
-# Les décisions du propriétaire, D1 à D97, en un seul tableau
+# Les décisions du propriétaire, D1 à D104, en un seul tableau
 
 *Tenu depuis la v3.0 (#680, story 5 du [cadrage de la v3.0](revues/v3.0-cadrage.md)). Relevé le
-23/11/2026 sur `main` `0bde668` (clôture de la v2.9). Ce document **ne tranche rien** : il rassemble
+23/11/2026 sur `main` `0bde668` (clôture de la v2.9), complété par la [revue de fin de la v3.0](revues/v3.0.md)
+(D98 à D104, dont quatre de sa revue de code complète, et la ligne de D95). Ce document **ne tranche rien** : il rassemble
 les décisions que les revues de fin de version ont posées dans leur § 10, pour que le propriétaire
-puisse répondre en une fois, sans ouvrir douze fichiers.*
+puisse répondre en une fois, sans ouvrir treize fichiers.*
 
 ## Comment lire ce tableau
 
 **D'où viennent les décisions.** Chaque revue de fin de version, de la [v1.8](revues/v1.8.md) à la
-[v2.9](revues/v2.9.md), a un § 10, « Décisions du propriétaire » : un choix de produit, de design,
+[v3.0](revues/v3.0.md), a un § 10, « Décisions du propriétaire » : un choix de produit, de design,
 d'architecture ou de rangement qu'un agent a rencontré et n'avait pas à faire seul (AGENTS.md §1).
-**97 numéros** (D1 à D97) et **trois sous-décisions** (D36 bis, D37 bis, D37 ter), dans douze revues :
+**104 numéros** (D1 à D104) et **trois sous-décisions** (D36 bis, D37 bis, D37 ter), dans treize revues :
 v1.8 : 16, v1.9 : 18, v2.0 : 9 (et les trois sous-décisions), v2.1 : 10, v2.2 : 9, v2.3 : 7, v2.4 : 8,
-v2.5 : 3, v2.6 : 5, v2.7 : 4, v2.8 : 4, v2.9 : 4. Chaque ligne ci-dessous renvoie à sa revue, qui garde le
+v2.5 : 3, v2.6 : 5, v2.7 : 4, v2.8 : 4, v2.9 : 4, v3.0 : 7. Chaque ligne ci-dessous renvoie à sa revue, qui garde le
 détail (et la PR qui l'a posée).
 
 **Ce que veut dire l'état** (dernière colonne), lu dans les revues et les issues, jamais supposé :
@@ -114,6 +115,11 @@ précédentes par plages (« D1 à D9 et D11 à D15 »).
 | D88 | La **pointe de la courbe à égalité** : première ou dernière demi-heure ? | la première, figée par un test (#628) | garder ; la dernière ; dire les deux ; ne pas figer | [v2.7](revues/v2.7.md) · PR #628 | en place, à confirmer |
 | D89 | L'**ordre de deux trous identiques** (même début, même longueur, deux pièces) | non défini, non figé | par nom de pièce ; par cause ; les fondre en une ligne | [v2.7](revues/v2.7.md) · PR #630 | ouverte |
 | D90 | Combien de **degrés-jours** pour dire « à climat égal » ? | 5 DJU pour un mois ; 50 pour une année ou une saison | garder ; un seuil proportionnel à la durée ; un seul seuil ; une phrase « trop peu de froid pour comparer » là où le calcul se tait | [v2.8](revues/v2.8.md) · PR #646 | en place, à confirmer |
+| D98 | La **borne des heures creuses datées** : une demi-heure à 80 % tout juste dans une colonne est-elle « clairement » de cette colonne, des deux côtés ? | oui, des deux côtés, depuis #688 (avant : 80 % HP tout juste restait indécis, `1 - 0,8` = 0,19999…) | garder (la règle qu'écrivait le commentaire de #441 ; aucun chiffre de la démo ne bouge) ; borne exclue des deux côtés ; revenir à l'avant et corriger le commentaire | [v3.0](revues/v3.0.md) · #684, PR #688 | en place, à confirmer |
+| D101 | Le **coût du mois envoyé à l'analyse IA** : quelle part d'heures creuses pour un jour sans détail tarifaire ? | le collecteur prend la part de la seule année civile du mois, l'appli celle de toutes les années chargées : 96,61 € contre 113,26 € sur un cas fictif ; aucun test ne tient l'accord | aligner le collecteur sur l'appli (un vecteur partagé lu des deux côtés, tenu par un test) ; l'inverse ; garder et le dire dans le texte de l'analyse | [v3.0](revues/v3.0.md) · revue de code, PR #691, n° 1 ; #689 | ouverte |
+| D102 | Le **seuil « à climat égal » d'un mois**, écrit une seule fois ? | 5 DJU dans l'appli (« Questions types »), 20 DJU dans les faits envoyés à l'IA, avec sa formule et son arrondi | un seuil unique lu des deux côtés et tenu par un test ; sa valeur : 5, 20 ou autre (voir D90) | [v3.0](revues/v3.0.md) · revue de code, PR #691, n° 7 ; #690 n° 7 | ouverte |
+| D103 | Le **prorata de l'abonnement saisi à la main** | 365,25 jours (120,25 € pour 2024 entière) quand l'abonnement réglementé suit la longueur réelle de l'année (120 €) | une seule règle (`dayShareOfYear` partout, ou 365,25 partout) : quelques centimes changent ; garder | [v3.0](revues/v3.0.md) · revue de code, PR #691, n° 8 ; #690 n° 8 | ouverte |
+| D104 | Une **coupure qui traverse le passage à l'heure d'été** | comptée deux fois (`hourRuns` enchaîne des heures locales en ajoutant une heure UTC) | avancer d'une heure dans le fuseau du logement : le nombre d'incidents affichés change ; garder | [v3.0](revues/v3.0.md) · revue de code, PR #691, n° 9 ; #690 n° 9 | ouverte |
 
 ## 4. Écrans et design
 
@@ -144,6 +150,8 @@ précédentes par plages (« D1 à D9 et D11 à D15 »).
 | D82 | « **Pièces affichées** » se ferme quand le focus le quitte par Tab | fermé au départ du focus | le laisser ouvert et le déplacer hors du graphique ; le fermer seulement à Échap | [v2.6](revues/v2.6.md) · PR #607 | en place, à confirmer |
 | D83 | Une attente annoncée (`role="status"`) **dans un résumé replié** | dans le résumé | sortir l'attente du résumé (la mise en page change) ; l'annoncer ailleurs | [v2.6](revues/v2.6.md) · PR #601 | en place, à confirmer |
 | D97 | Le **bandeau hors ligne** recréé vide à chaque rendu, puis rempli | recréé à chaque vue ; peut clignoter et être réannoncé | garder ; garder le dernier texte d'un rendu à l'autre : plus de clignotement, une annonce seulement quand le texte change. Ferme #664 | [v2.9](revues/v2.9.md) · #664, PR #665 | en place, à confirmer |
+| D99 | La **typographie française** : une espace fine insécable avant `?`, `!`, `:`, `;`, `%`, `»`, après `«` et dans les milliers écrits à la main ? | espaces ordinaires dans les textes écrits à la main : une ponctuation ou un nombre seul en début de ligne sur 37 des 53 pages (52 coupures à 360 px, 108 à 200 %) | une fonction au rendu des textes, tenue par un test qui compte les coupures ; corriger les textes sources et une garde qui refuse l'espace ordinaire ; ne corriger que les nombres (« 1 / 000 ppm ») ; garder | [v3.0](revues/v3.0.md) · § 5, D-1 | ouverte |
+| D100 | Le **titre de l'onglet** (`document.title`) suit-il la vue ? | « Historique énergie » sur toutes les vues | le nom de la vue ; le nom de la vue sans celui d'une pièce (le nom d'une pièce se lirait dans l'historique du navigateur, le sélecteur d'onglets, un partage d'écran) ; garder | [v3.0](revues/v3.0.md) · § 5, D-3 | ouverte |
 
 ## 5. Installation, copie locale, pont et IA
 
@@ -167,7 +175,7 @@ précédentes par plages (« D1 à D9 et D11 à D15 »).
 | D91 | Le **premier écran a pris 0,24 kB** en v2.8 (128,65 kB, 46 %) | rien de retiré | l'accepter comme référence ; charger `reloadApp` à la demande ; écrire « le total de la version » dans les cadrages (fait depuis le cadrage v2.9) | [v2.8](revues/v2.8.md) · PR #646 | en place, à confirmer |
 | D92 | L'outil de mutation du collecteur compte-t-il un **code de sortie négatif** (signal) comme « tué » ? | « tué (signal) », dans le score | garder ; le compter « erreur » (un signal peut venir de la machine) ; le relancer une fois. Débloque #634 n° 3 | [v2.8](revues/v2.8.md) · PR #643 (persona 70) | en place, à confirmer |
 | D94 | La **forme du découpage** d'`audit.py` et de `charts.ts` | le catalogue sorti (#661), rien d'autre | 1) `audit.py`, étape 2 : oui (proposé) / non ; 2) la classe `Audit` : ne pas la découper (proposé) / par familles / mixins ; 3) `charts.ts` : déplacements purs (proposé) / formes à la demande / rien ([étude](../etudes/decoupage-audit-charts.md)) | [v2.9](revues/v2.9.md) · PR #661 | en place, à confirmer |
-| D95 | **Rééquilibrer les jobs e2e** de la CI, et leurs bornes | rien déplacé ; installations bornées à 10 min | garder ; le balayage et le clavier dans un sixième job (≈ 7 min de moins sur `e2e`, non exigé tant que le propriétaire ne l'ajoute pas) ; borne à 20 min. À revoir une fois l'effet du cache de #672 mesuré (revue de fin v3.0) | [v2.9](revues/v2.9.md) · PR #663 (#673 n° 2 et 3) | en place, à confirmer |
+| D95 | **Rééquilibrer les jobs e2e** de la CI, et leurs bornes | rien déplacé ; installations bornées à 10 min | garder ; le balayage et le clavier dans un sixième job (≈ 7 min de moins sur `e2e`, non exigé tant que le propriétaire ne l'ajoute pas) ; borne à 20 min. **Effet du cache de #672 mesuré** (revue v3.0 § 6.1) : 16 installations de WebKit relues du cache, 20 à 44 s (avant : jusqu'à 8 min 31 s, trois coupées par la borne) ; aucun run de `ci.yml` rouge depuis ; reste la durée du job `e2e` (11 min 31 s à 14 min 58 s) | [v2.9](revues/v2.9.md) · PR #663 (#673 n° 2 et 3) | en place, à confirmer |
 | D96 | Sur **macOS**, les captures ne vont jamais dans les références | toujours `screenshots-poste/` (#659) | garder (le cas sûr) ; revenir à l'avant | [v2.9](revues/v2.9.md) · PR #659 | en place, à confirmer |
 
 ## 7. Rangement des jalons
@@ -190,18 +198,18 @@ D1 à D16 : [revue v1.8](revues/v1.8.md) ; D17 à D34 : [v1.9](revues/v1.9.md) ;
 D37 bis, D37 ter) : [v2.0](revues/v2.0.md) ; D44 à D53 : [v2.1](revues/v2.1.md) ; D54 à D62 :
 [v2.2](revues/v2.2.md) ; D63 à D69 : [v2.3](revues/v2.3.md) ; D70 à D77 : [v2.4](revues/v2.4.md) ; D78 à
 D80 : [v2.5](revues/v2.5.md) ; D81 à D85 : [v2.6](revues/v2.6.md) ; D86 à D89 : [v2.7](revues/v2.7.md) ;
-D90 à D93 : [v2.8](revues/v2.8.md) ; D94 à D97 : [v2.9](revues/v2.9.md).
+D90 à D93 : [v2.8](revues/v2.8.md) ; D94 à D97 : [v2.9](revues/v2.9.md) ; D98 à D104 : [v3.0](revues/v3.0.md).
 
 | Sujet | Numéros |
 |---|---|
 | 1. Sécurité, confidentialité, compte GitHub | D9, D10, D11, D17, D18, D19, D20, D30, D32, D33, D35, D36, D36 bis, D39, D42, D76, D77, D85, D93 |
 | 2. Données | D37, D37 bis, D37 ter, D54, D55, D56, D60, D61, D67, D68, D70, D71, D78 |
-| 3. Calculs | D4, D5, D6, D7, D8, D12, D13, D14, D15, D21, D22, D23, D24, D26, D27, D28, D72, D73, D75, D88, D89, D90 |
-| 4. Écrans et design | D1, D2, D3, D25, D29, D44, D45, D46, D47, D48, D49, D50, D52, D57, D58, D59, D63, D65, D66, D74, D79, D81, D82, D83, D97 |
+| 3. Calculs | D4, D5, D6, D7, D8, D12, D13, D14, D15, D21, D22, D23, D24, D26, D27, D28, D72, D73, D75, D88, D89, D90, D98, D101, D102, D103, D104 |
+| 4. Écrans et design | D1, D2, D3, D25, D29, D44, D45, D46, D47, D48, D49, D50, D52, D57, D58, D59, D63, D65, D66, D74, D79, D81, D82, D83, D97, D99, D100 |
 | 5. Installation, pont, IA | D38, D40, D41, D51 |
 | 6. Tests, CI, outils | D31, D64, D80, D84, D86, D87, D91, D92, D94, D95, D96 |
 | 7. Rangement des jalons | D16, D34, D43, D53, D62, D69 |
 
-**Bilan au relevé** (100 lignes : les 97 numéros et les trois sous-décisions) : ouvertes 27 ; en place,
-à confirmer 66 ; appliquées 5 ; remplacées 1 ; sans objet 1 ; tranchées par le propriétaire 0 (la
+**Bilan au relevé** (107 lignes : les 104 numéros et les trois sous-décisions) : ouvertes 33 ; en place,
+à confirmer 67 ; appliquées 5 ; remplacées 1 ; sans objet 1 ; tranchées par le propriétaire 0 (la
 destination de D39 mise à part). Ces chiffres sont recomptés par `web/src/decisions.test.ts`.
