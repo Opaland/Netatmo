@@ -2,6 +2,7 @@
 // cost more or less than the same month a year earlier. One sentence first, then the parts of
 // the change drawn from 0 (no zoomed axis), the rooms, the rooms offline (#346), and how it is
 // computed. Loaded on demand (pages.ts); the computations are in explain.ts.
+import { pctChange } from '../aggregate';
 import { activeRooms, ds } from '../app';
 import { alert, howDetails, list, countedText } from '../components';
 import { type Explanation, STEP_LABEL, type Step, explainMonth, explainWood, explainSentence, explainableMonths, kwhSigned, stepNote } from '../explain';
@@ -199,7 +200,7 @@ function woodCard(e: Explanation, { now, ref }: ReturnType<typeof explainWood>, 
         {
           title: 'Chauffage électricité + bois',
           sub: `${fmtKwh(allNow)}${eur(now, heatNow)} contre ${fmtKwh(allRef)}${eur(ref, heatRef)}`,
-          value: allRef > 0 ? signedPct(((allNow - allRef) / allRef) * 100) : '—',
+          value: pctOrDash(allNow, allRef),
           color: '--usage-heating',
         },
       ],
@@ -230,11 +231,19 @@ function roomsCard(e: Explanation): string {
   </section>`;
 }
 
+/** #677: a change in %, signed, or « — » when there is nothing to compare with (pctChange). */
+function pctOrDash(now: number, before: number): string {
+  const p = pctChange(now, before);
+  return p === null ? '—' : signedPct(p);
+}
+
 function howText(e: Explanation): string {
   const w = e.weather;
+  // #677: the degree days of the reference are above 5 when `weather` is set (explain.ts)
+  const wPct = w ? pctChange(w.now, w.ref) : null;
   return `<ul class="hint">
     <li><strong>${STEP_LABEL.meteo}</strong> : le chauffage de ${esc(monthLong(e.refFrom))} multiplié par le rapport des degrés-jours (base 18 °C)${
-      w ? `, ${Math.round(w.now)} contre ${Math.round(w.ref)} (${esc(signedPct(((w.now - w.ref) / w.ref) * 100))})` : ' ; météo inconnue sur l’une des périodes : pas de correction'
+      w && wPct !== null ? `, ${Math.round(w.now)} contre ${Math.round(w.ref)} (${esc(signedPct(wPct))})` : ' ; météo inconnue sur l’une des périodes : pas de correction'
     }.</li>
     <li><strong>${STEP_LABEL.consignes}</strong> : l’écart de température demandée aux radiateurs, pièce par pièce (moyenne du jour, absences et plannings compris), compté environ 7 % du chauffage par degré (règle de l’ADEME).</li>
     <li><strong>${STEP_LABEL.mode}</strong> : une pièce dont le radiateur est arrêté volontairement (⚙ Mon logement, par exemple chauffée par un poêle) : tout son écart, sans météo ni température demandée.</li>
