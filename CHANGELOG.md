@@ -1,6 +1,6 @@
 # Historique des versions
 
-## v2.9 — novembre 2026 (en cours) : documentation et reprise
+## v2.9 — novembre 2026 : documentation et reprise
 
 Lancée par le propriétaire le 13/11/2026 (« 2.4 2.5 2.6 2.7 2.8 2.9 3.0 »), cadrée sur ce qu'un repreneur
 ne pouvait pas faire depuis le dépôt seul ([cadrage](docs/bmad/revues/v2.9-cadrage.md)). Revue de fin de
