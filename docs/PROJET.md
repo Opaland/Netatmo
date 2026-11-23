@@ -69,6 +69,10 @@ qui travaillent sur le dépôt.
   du persona ; les autres sont notées « non retenu » avec la raison.
 - Une revue de **cadrage** a lieu en début de version (`docs/bmad/revues/vX.Y-cadrage.md`) pour remplir
   le backlog ; la revue de **fin de version** (`vX.Y.md`) juge ce qui a été livré.
+- Les **décisions du propriétaire** qu'une revue de fin pose (son § 10, numérotées D1, D2…) ont aussi
+  une ligne chacune dans [`docs/bmad/decisions.md`](bmad/decisions.md), le tableau unique où il les
+  tranche ; la revue y met à jour l'état des décisions qu'elle touche au lieu de renvoyer aux revues
+  précédentes par plages (#680, tenu par `web/src/decisions.test.ts`).
 - Une étude (`docs/etudes/`) **mesure le besoin avant de construire** : si le besoin n'est pas avéré,
   on ne construit pas, et on l'écrit.
 
