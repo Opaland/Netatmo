@@ -9,7 +9,7 @@
 // missing, and a residual (taxes rounded by the supplier, subscription billed in advance
 // by month, another price than the regulated one). Heating and water heater are only a
 // part of the invoice: their share is given apart.
-import { addDays } from './aggregate';
+import { addDays, dayShareOfYear } from './aggregate';
 import type { PriceAt } from './analysis';
 
 export interface Invoice {
@@ -123,7 +123,7 @@ export function reconcile(inv: Invoice, d: InvoiceData): Reconciliation {
     heatKwh += d.heat.get(day) ?? 0;
     waterKwh += d.water.get(day) ?? 0;
     if (p) {
-      subscription += p.fixedYear / (Number(day.slice(0, 4)) % 4 === 0 ? 366 : 365);
+      subscription += dayShareOfYear(p.fixedYear, day);
       subDays++;
     }
     if (k === undefined) continue;

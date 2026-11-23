@@ -88,11 +88,16 @@ export function checkEnvelope(env: Envelope) {
   checkIterations(env.iter);
 }
 
+const B64 = /^[A-Za-z0-9+/]*={0,2}$/;
+
 const isArgon2Info = (info: KeyInfo): info is Argon2Info => (info as { v?: unknown }).v === 2;
 
 /** #139: a keyinfo.json, checked (version, derivation, bounds) before any derivation. */
 export function checkKeyInfo(info: KeyInfo) {
-  if (!info || typeof info !== 'object' || typeof info.salt !== 'string') throw new BadEnvelope('keyinfo.json illisible.');
+  // Revue de code v3.0: the salt is strict base64, as the collector reads it (crypto.py
+  // parse_keyinfo, validate=True); else atob threw a raw « not correctly encoded » at the derivation.
+  if (!info || typeof info !== 'object' || typeof info.salt !== 'string' || !B64.test(info.salt) || info.salt.length % 4)
+    throw new BadEnvelope('keyinfo.json illisible.');
   const v = (info as { v?: unknown }).v;
   if (v === undefined) return checkIterations((info as { iter?: unknown }).iter);
   if (v !== 2 || (info as { kdf?: unknown }).kdf !== ARGON2)
@@ -149,7 +154,16 @@ export async function decryptEnvelope<T>(env: Envelope, key: CryptoKey): Promise
   }
 }
 
-const toB64 = (b: Uint8Array) => btoa(String.fromCharCode(...b));
+/**
+ * Base64 of bytes, by slices: `String.fromCharCode(...b)` passes every byte as an argument, and an
+ * engine refuses past its argument limit (65 536 in WebKit, about 150 000 here in V8): a sealed note
+ * that large (an audit report, an imported PVGIS profile) could not be saved (revue de code v3.0).
+ */
+export function toB64(b: Uint8Array): string {
+  let s = '';
+  for (let i = 0; i < b.length; i += 0x8000) s += String.fromCharCode(...b.subarray(i, i + 0x8000));
+  return btoa(s);
+}
 
 /** Small private JSON kept on this device (localStorage), encrypted with the data key. */
 export async function sealLocal(value: unknown, key: CryptoKey): Promise<{ iv: string; ct: string }> {

@@ -2,7 +2,7 @@
 // comparisons and the report. A chart bucket (week, month, year…) is « partial » when the
 // period shown or the data only covers part of it; it is « uncertain » when it contains
 // estimated or lost days. Both are said in the tooltip and on the bar, at every granularity.
-import { type Granularity, addDays, bucketKey, minusYears } from './aggregate';
+import { type Granularity, addDays, bucketKey, isLeapYear, minusYears } from './aggregate';
 import { andList, dayShort, plural } from './glossary';
 
 /** #394: the cause of a cut (incidents.ts). */
@@ -22,7 +22,6 @@ export const daysBetween = (from: string, to: string) => Math.round((Date.parse(
 /** Average length of a month, to turn a number of days into months (365.25 / 12). */
 export const MONTH_DAYS = 30.4375;
 
-const isLeap = (y: number) => (y % 4 === 0 && y % 100 !== 0) || y % 400 === 0;
 const lastOfMonth = (ym: string) => new Date(Date.UTC(Number(ym.slice(0, 4)), Number(ym.slice(5, 7)), 0)).toISOString().slice(0, 10);
 
 /** « 1er nov. », « 8 nov. » (with the year when asked): glossary.ts (#299). */
@@ -129,7 +128,7 @@ export interface YoyWindow {
 export function yoyWindow(year: number, first: string, last: string): YoyWindow | null {
   if (first > `${year - 1}-12-31` || last < `${year}-01-01`) return null;
   let start = first > `${year - 1}-01-01` ? first.slice(5) : '01-01';
-  if (start === '02-29' && !isLeap(year)) start = '03-01';
+  if (start === '02-29' && !isLeapYear(year)) start = '03-01';
   const from = `${year}-${start}`;
   const to = last < `${year}-12-31` ? last : `${year}-12-31`;
   if (from > to) return null;
