@@ -10,7 +10,7 @@
 //   autres usages the meter minus heating and hot water (cooking, lights, appliances).
 // With the Linky meter the total is the whole home; without it, radiators and water heater only.
 // Pure functions, no DOM (explain.test.ts).
-import { type DayRecord, addDays, minusYears } from './aggregate';
+import { type DayRecord, addDays, minusYears, pctChange } from './aggregate';
 import { type Weather, dju } from './analysis';
 import { ADEME_PER_DEGREE } from './checks';
 import { MONTHS_LONG, monthLong, signedPct } from './glossary';
@@ -248,7 +248,8 @@ export function explainMonth(i: ExplainInput): Explanation | null {
   const basis = lNow !== null && lRef !== null ? 'linky' : 'intuis';
   const now = basis === 'linky' ? lNow! : H('now') + water.now;
   const ref = basis === 'linky' ? lRef! : H('ref') + water.ref;
-  if (ref <= 0) return null;
+  const pct = pctChange(now, ref); // #677: null exactly when ref <= 0, as before
+  if (pct === null) return null;
   const other = basis === 'linky' ? { now: now - H('now') - water.now, ref: ref - H('ref') - water.ref } : null;
   const meteo = rooms.filter((r) => !r.stopped).reduce((s, r) => s + r.ref * (wf - 1), 0);
   const changed = rooms.filter((r) => r.stopped);
@@ -283,7 +284,7 @@ export function explainMonth(i: ExplainInput): Explanation | null {
     now,
     ref,
     delta: now - ref,
-    pct: ((now - ref) / ref) * 100,
+    pct,
     steps,
     rooms: rooms.sort((a, b) => Math.abs(b.rest) - Math.abs(a.rest)),
     weather,
