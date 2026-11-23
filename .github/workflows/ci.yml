@@ -42,6 +42,9 @@ jobs:
 
   e2e:
     runs-on: ubuntu-latest
+    # #653 : 40 min, au-dessus du plus long run relevé (37 min 25 s, dont 29 min 36 s d'installation,
+    # PR #645 ; e2e au plus 16 min 07 s sur cinq runs de main). Relevé : node scripts/durees-ci.mjs.
+    timeout-minutes: 40
     defaults:
       run:
         working-directory: web
@@ -53,7 +56,11 @@ jobs:
           cache: npm
           cache-dependency-path: web/package-lock.json
       - run: npm ci
+      # #653 : borne à 10 min, plus de deux fois la plus longue installation normale relevée (24 sur
+      # 8 runs : 16 s à 1 min 34 s, une fois 3 min 45 s) ; une fois 29 min 36 s (WebKit, PR #645). Sans
+      # borne, une installation pendue tenait le job 6 h. Échoue en le disant, aucun nouvel essai.
       - run: npx playwright install --with-deps chromium
+        timeout-minutes: 10
       - run: npm run build
       - run: npm run e2e
       - run: npm run e2e:features # v1.4: facture, travaux, export recherche, clé effacée
@@ -97,6 +104,9 @@ jobs:
   # portée réduite (#595) ; les autres parcours WebKit sont dans e2e-webkit-parcours (#596).
   e2e-webkit:
     runs-on: ubuntu-latest
+    # #653 : 40 min, au-dessus du plus long run relevé (37 min 25 s, dont 29 min 36 s d'installation,
+    # PR #645 ; e2e au plus 16 min 07 s sur cinq runs de main). Relevé : node scripts/durees-ci.mjs.
+    timeout-minutes: 40
     defaults:
       run:
         working-directory: web
@@ -108,7 +118,11 @@ jobs:
           cache: npm
           cache-dependency-path: web/package-lock.json
       - run: npm ci
+      # #653 : borne à 10 min, plus de deux fois la plus longue installation normale relevée (24 sur
+      # 8 runs : 16 s à 1 min 34 s, une fois 3 min 45 s) ; une fois 29 min 36 s (WebKit, PR #645). Sans
+      # borne, une installation pendue tenait le job 6 h. Échoue en le disant, aucun nouvel essai.
       - run: npx playwright install --with-deps webkit
+        timeout-minutes: 10
       - run: npm run build
       - run: npm run e2e:features
         env:
@@ -164,6 +178,9 @@ jobs:
   # à la suite, le job e2e-webkit durait 16 min 28 s, plus que le job e2e (12 min 02 s, CI de 68d20e8).
   e2e-webkit-parcours:
     runs-on: ubuntu-latest
+    # #653 : 40 min, au-dessus du plus long run relevé (37 min 25 s, dont 29 min 36 s d'installation,
+    # PR #645 ; e2e au plus 16 min 07 s sur cinq runs de main). Relevé : node scripts/durees-ci.mjs.
+    timeout-minutes: 40
     defaults:
       run:
         working-directory: web
@@ -175,7 +192,11 @@ jobs:
           cache: npm
           cache-dependency-path: web/package-lock.json
       - run: npm ci
+      # #653 : borne à 10 min, plus de deux fois la plus longue installation normale relevée (24 sur
+      # 8 runs : 16 s à 1 min 34 s, une fois 3 min 45 s) ; une fois 29 min 36 s (WebKit, PR #645). Sans
+      # borne, une installation pendue tenait le job 6 h. Échoue en le disant, aucun nouvel essai.
       - run: npx playwright install --with-deps webkit
+        timeout-minutes: 10
       - run: npm run build
       # Un test refuse un script qui lit E2E_BROWSER sans être lancé par un job e2e-webkit*
       # (src/e2e-webkit.test.ts) ; ce que le WebKit de Playwright ne permet pas est dit en tête du

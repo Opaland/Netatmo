@@ -68,6 +68,15 @@ mesurée, et un échec propre à WebKit encore ouvert s'y compte comme **connu**
 (`knownFailures`, `web/e2e/lib.mjs`) : écrit, sans faire échouer, et signalé quand il disparaît. En
 WebKit, les captures s'écrivent `webkit-<nom>.png` ; `e2e:hauteurs` y mesure sans juger les limites.
 
+**Durées de la CI** (#653) : `node scripts/durees-ci.mjs <run>` imprime la durée de chaque job d'un
+run (chaque tentative) et de ses étapes longues (≥ 60 s, `--seuil`), installations des navigateurs
+toujours comprises ; `--main 5` prend les cinq derniers runs verts de `ci.yml` sur `main` et résume,
+par job, la plus courte et la plus longue durée et l'étape la plus longue (le tableau des revues,
+§ « Durées de la CI »). Lecture seule de l'API publique des runs par `gh api` (la connexion de `gh`,
+aucun secret du dépôt) ; rien n'est lancé. Les installations des navigateurs et les jobs e2e de
+`ci.yml` sont bornés (`timeout-minutes`, raison et chiffres écrits au-dessus ; tenu par
+`web/src/durees-ci.test.ts`).
+
 `npm run e2e:trous` (après `python -m collector fixtures -o web/dist/demo-fixtures`, dans la porte)
 ouvre la démo sur `trous-reels`, la forme des trous d'un vrai compte (#570) : jamais 0 pour un trou,
 « incomplet », comparaisons sans l'appareil non mesuré.
@@ -89,6 +98,40 @@ Les **limites de hauteur** des pages (l'Accueil en 3 écrans d'iPhone 13, l'Hist
 tableau des revues à 360 px et à 200 %, et pour chaque limite la hauteur, la limite et la marge en
 px ; il échoue sur une limite dépassée. Il tourne dans la CI (job e2e, une quinzaine de secondes).
 Ajouter ou relever une limite est une décision du propriétaire : à proposer dans la PR.
+
+**Les scripts e2e** (dans `web/`, un par ligne de `package.json`), ce qu'ils vérifient et les jobs de
+`ci.yml` qui les lancent : `e2e` en Chromium (et la porte locale), `e2e-webkit` et
+`e2e-webkit-parcours` en WebKit (`E2E_BROWSER=webkit`). Pour en relancer un seul : `npm run build`,
+puis `npm run e2e:<nom>` (et les fixtures d'abord quand la colonne le dit). Ce tableau est tenu
+d'accord avec `ci.yml` et `package.json` par `web/src/contributing-e2e.test.ts` (#652).
+
+| Script | Ce qu'il vérifie | Jobs de `ci.yml` | Avant |
+|---|---|---|---|
+| `e2e` | parcours de la démo (`e2e/demo.mjs`) : les vues, les captures de référence, le hors-ligne par le service worker (Chromium seulement, en-tête du script) | `e2e`, `e2e-webkit-parcours` | build |
+| `e2e:features` | facture, travaux, export recherche, clé effacée (v1.4), et la garde des limites de hauteur | `e2e`, `e2e-webkit` | build |
+| `e2e:hauteurs` | hauteur de chaque écran des revues (360 px, 200 %, DejaVu Sans), limites et marges ; en WebKit, mesure sans juger | `e2e`, `e2e-webkit-parcours` | build |
+| `e2e:composants` | page de démonstration des composants (axe, 200 %, cibles de 44 px), servie par `vite` lui-même | `e2e`, `e2e-webkit-parcours` | — |
+| `e2e:compteur` | onglet Compteur (période, « Compté : », 360 px à 200 %, axe en clair, sombre et contraste élevé) | `e2e`, `e2e-webkit-parcours` | build |
+| `e2e:proche` | premier lancement et vue Proche | `e2e`, `e2e-webkit-parcours` | build |
+| `e2e:piece` | liste Pièces et page Pièce (axe, 200 %, vue foyer) | `e2e`, `e2e-webkit` | build |
+| `e2e:expliquer` | « Expliquer un mois », pièce hors ligne (axe, 360 px à 200 %) | `e2e`, `e2e-webkit-parcours` | build |
+| `e2e:retours` | module « Cave » liable à une chambre, télétravail de 0 à 5 jours | `e2e`, `e2e-webkit-parcours` | build |
+| `e2e:plannings` | plannings et heures creuses, absences reconstituées (axe, 200 %) | `e2e`, `e2e-webkit-parcours` | build |
+| `e2e:pwa` | nouvelle version en attente et son bandeau, deux onglets, « Recharger l'application », Installer, hors ligne | `e2e`, `e2e-webkit-parcours` | build |
+| `e2e:reglages` | feuille « Réglages du graphique » (axe, 360 px à 200 %, focus, réglages gardés) | `e2e`, `e2e-webkit` | build |
+| `e2e:logement` | saisies gardées dans ⚙ Mon logement (localisation, bois, surfaces) | `e2e`, `e2e-webkit` | build |
+| `e2e:jeton` | erreur du jeton nommée, effacée à chaque essai, « Réessayer » | `e2e`, `e2e-webkit` | build |
+| `e2e:assistant` | assistant de premier lancement (GitHub simulé, démo, écran sans données) | `e2e`, `e2e-webkit` | build |
+| `e2e:http` | ouverte en HTTP hors `localhost`, l'écran de déverrouillage le dit | `e2e`, `e2e-webkit` | build |
+| `e2e:plan` | plan de la maison (lecture, tableau, vue foyer, 200 %, axe) | `e2e`, `e2e-webkit` | build |
+| `e2e:plan-edition` | éditeur du plan (glisser au doigt, champs, brouillon scellé, 200 %, axe) | `e2e`, `e2e-webkit` | build |
+| `e2e:trous` | la démo sur `trous-reels`, la forme des trous d'un vrai compte : jamais 0, « incomplet », comparaisons sans le trou | `e2e`, `e2e-webkit` | build, fixtures |
+| `e2e:sweep` | le balayage (chaque route, fixtures, affichages, invariants), l'explorateur de contrôles, puis `e2e:clavier` ; portée réduite en WebKit | `e2e`, `e2e-webkit` | build, fixtures |
+| `e2e:clavier` | le parcours au clavier seul (anneau de focus, élément peint), à 100 % et à 200 % ; lancé par `e2e:sweep` | `e2e`, `e2e-webkit` | build, fixtures |
+| `e2e:en-ligne` | le site publié, dans la démo : `build.json` au commit attendu, manifeste, `sw.js`, aucune erreur ni fichier en 4xx ; lancé par `deploy.yml` (job `site-en-ligne`, `SITE_URL`, `EXPECTED_COMMIT`) après chaque publication | — | un site publié |
+
+« Fixtures » : `python -m collector fixtures -o web/dist/demo-fixtures` (depuis la racine, après le
+build).
 
 Hors de la porte, à lancer à la main : `npm run mutation` (dans `web/`, tests de mutation des calculs,
 quelques minutes, rapport dans `web/reports/mutation/`), `python scripts/mutation_collecteur.py
