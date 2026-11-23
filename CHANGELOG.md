@@ -1,6 +1,6 @@
 # Historique des versions
 
-## v3.0 — novembre 2026 : consolidation (en cours)
+## v3.0 — novembre 2026 : consolidation
 
 Lancée par le propriétaire le 13/11/2026 (« 2.4 2.5 2.6 2.7 2.8 2.9 3.0 »), la dernière version demandée,
 cadrée sur des constats mesurés et sans aucune fonction nouvelle ([cadrage](docs/bmad/revues/v3.0-cadrage.md)).
