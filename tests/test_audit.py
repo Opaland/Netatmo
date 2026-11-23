@@ -649,6 +649,21 @@ def test_a_plug_equal_to_a_room_half_the_days_is_not_the_same_energy(tmp_path):
     assert "deux-sources" not in found(save(store))
 
 
+@pytest.mark.parametrize(("same", "flagged"), [(100, False), (101, True)])
+def test_part_decalee_holds_on_both_sides(same, flagged):
+    """#662: the share `part_decalee` (80 %) on both sides. Over 126 common days, 100 equal days are
+    79.4 % (nothing said) and 101 are 80.2 % (a finding). So many days because the gap between 80 %
+    and a threshold moved by a hair (80/101 = 79.2 %) only holds a whole day from 126 days on."""
+    first, n = date(2024, 1, 1), 126
+    days = [(first + timedelta(days=i)).isoformat() for i in range(n)]
+    room = {d: 1000.0 for d in days}
+    plug = {d: 1000.0 if i < same else 3000.0 for i, d in enumerate(days)}
+    docs = {"2024": {"daily": {A: room}}, "shelly": {"daily": {"p0": plug}}}
+    a = au.Audit(docs=docs, tz=TZ, last=None)
+    a.two_sources()
+    assert [(f.code, f.value, f.other) for f in a.findings] == ([("deux-sources", 101.0, 126.0)] if flagged else [])
+
+
 # ---------------------------------------------------------------- robustness
 def test_an_unexpected_structure_or_file_does_not_stop_the_report(tmp_path, monkeypatch, capsys):
     data = tmp_path / "data"
