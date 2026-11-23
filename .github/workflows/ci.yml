@@ -118,11 +118,34 @@ jobs:
           cache: npm
           cache-dependency-path: web/package-lock.json
       - run: npm ci
+      # #671 : les archives .deb des dépendances de WebKit (140 Mo) gardées dans le cache d'Actions,
+      # clé = image du runner + version de Playwright (scripts/apt-archives.mjs). Sur 40 runs, leur
+      # téléchargement depuis le miroir Ubuntu a pris de 3 s à 18 min 19 s (deux fois coupé par la
+      # borne de 10 min) ; le navigateur lui-même, de 2 s à 6 s. apt vérifie chaque archive comme avant.
+      - name: Clé du cache apt (#671)
+        id: apt-cle
+        run: node ../scripts/apt-archives.mjs cle
+      - uses: actions/cache/restore@v6
+        id: apt-cache
+        with:
+          path: ~/apt-archives
+          key: ${{ steps.apt-cle.outputs.key }}
+          restore-keys: ${{ steps.apt-cle.outputs.prefix }}
+      - name: Archives apt reprises du cache (#671)
+        run: node ../scripts/apt-archives.mjs avant
       # #653 : borne à 10 min, plus de deux fois la plus longue installation normale relevée (24 sur
       # 8 runs : 16 s à 1 min 34 s, une fois 3 min 45 s) ; une fois 29 min 36 s (WebKit, PR #645). Sans
       # borne, une installation pendue tenait le job 6 h. Échoue en le disant, aucun nouvel essai.
       - run: npx playwright install --with-deps webkit
         timeout-minutes: 10
+      - name: Archives apt gardées pour le cache (#671)
+        if: steps.apt-cache.outputs.cache-hit != 'true'
+        run: node ../scripts/apt-archives.mjs apres
+      - uses: actions/cache/save@v6
+        if: steps.apt-cache.outputs.cache-hit != 'true'
+        with:
+          path: ~/apt-archives
+          key: ${{ steps.apt-cle.outputs.key }}
       - run: npm run build
       - run: npm run e2e:features
         env:
@@ -192,11 +215,34 @@ jobs:
           cache: npm
           cache-dependency-path: web/package-lock.json
       - run: npm ci
+      # #671 : les archives .deb des dépendances de WebKit (140 Mo) gardées dans le cache d'Actions,
+      # clé = image du runner + version de Playwright (scripts/apt-archives.mjs). Sur 40 runs, leur
+      # téléchargement depuis le miroir Ubuntu a pris de 3 s à 18 min 19 s (deux fois coupé par la
+      # borne de 10 min) ; le navigateur lui-même, de 2 s à 6 s. apt vérifie chaque archive comme avant.
+      - name: Clé du cache apt (#671)
+        id: apt-cle
+        run: node ../scripts/apt-archives.mjs cle
+      - uses: actions/cache/restore@v6
+        id: apt-cache
+        with:
+          path: ~/apt-archives
+          key: ${{ steps.apt-cle.outputs.key }}
+          restore-keys: ${{ steps.apt-cle.outputs.prefix }}
+      - name: Archives apt reprises du cache (#671)
+        run: node ../scripts/apt-archives.mjs avant
       # #653 : borne à 10 min, plus de deux fois la plus longue installation normale relevée (24 sur
       # 8 runs : 16 s à 1 min 34 s, une fois 3 min 45 s) ; une fois 29 min 36 s (WebKit, PR #645). Sans
       # borne, une installation pendue tenait le job 6 h. Échoue en le disant, aucun nouvel essai.
       - run: npx playwright install --with-deps webkit
         timeout-minutes: 10
+      - name: Archives apt gardées pour le cache (#671)
+        if: steps.apt-cache.outputs.cache-hit != 'true'
+        run: node ../scripts/apt-archives.mjs apres
+      - uses: actions/cache/save@v6
+        if: steps.apt-cache.outputs.cache-hit != 'true'
+        with:
+          path: ~/apt-archives
+          key: ${{ steps.apt-cle.outputs.key }}
       - run: npm run build
       # Un test refuse un script qui lit E2E_BROWSER sans être lancé par un job e2e-webkit*
       # (src/e2e-webkit.test.ts) ; ce que le WebKit de Playwright ne permet pas est dit en tête du

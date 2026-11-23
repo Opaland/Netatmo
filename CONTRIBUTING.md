@@ -80,7 +80,11 @@ par job, la plus courte et la plus longue durée et l'étape la plus longue (le 
 § « Durées de la CI »). Lecture seule de l'API publique des runs par `gh api` (la connexion de `gh`,
 aucun secret du dépôt) ; rien n'est lancé. Les installations des navigateurs et les jobs e2e de
 `ci.yml` sont bornés (`timeout-minutes`, raison et chiffres écrits au-dessus ; tenu par
-`web/src/durees-ci.test.ts`).
+`web/src/durees-ci.test.ts`). Les deux jobs WebKit gardent les archives `.deb` des dépendances de
+WebKit dans le cache d'Actions (#671, `scripts/apt-archives.mjs` ; clé : image du runner et version
+de Playwright) : leur téléchargement depuis le miroir Ubuntu variait de quelques secondes à plus de
+dix minutes. apt vérifie chaque archive contre son index comme avant ; l'ordre des étapes est tenu
+par `web/src/apt-archives.test.ts`. La porte locale ne lance pas ces jobs.
 
 `npm run e2e:trous` (après `python -m collector fixtures -o web/dist/demo-fixtures`, dans la porte)
 ouvre la démo sur `trous-reels`, la forme des trous d'un vrai compte (#570) : jamais 0 pour un trou,
