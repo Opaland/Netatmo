@@ -73,6 +73,15 @@ mesurée, et un échec propre à WebKit encore ouvert s'y compte comme **connu**
 (`knownFailures`, `web/e2e/lib.mjs`) : écrit, sans faire échouer, et signalé quand il disparaît. En
 WebKit, les captures s'écrivent `webkit-<nom>.png` ; `e2e:hauteurs` y mesure sans juger les limites.
 
+**Durées de la CI** (#653) : `node scripts/durees-ci.mjs <run>` imprime la durée de chaque job d'un
+run (chaque tentative) et de ses étapes longues (≥ 60 s, `--seuil`), installations des navigateurs
+toujours comprises ; `--main 5` prend les cinq derniers runs verts de `ci.yml` sur `main` et résume,
+par job, la plus courte et la plus longue durée et l'étape la plus longue (le tableau des revues,
+§ « Durées de la CI »). Lecture seule de l'API publique des runs par `gh api` (la connexion de `gh`,
+aucun secret du dépôt) ; rien n'est lancé. Les installations des navigateurs et les jobs e2e de
+`ci.yml` sont bornés (`timeout-minutes`, raison et chiffres écrits au-dessus ; tenu par
+`web/src/durees-ci.test.ts`).
+
 `npm run e2e:trous` (après `python -m collector fixtures -o web/dist/demo-fixtures`, dans la porte)
 ouvre la démo sur `trous-reels`, la forme des trous d'un vrai compte (#570) : jamais 0 pour un trou,
 « incomplet », comparaisons sans l'appareil non mesuré.
