@@ -1,6 +1,6 @@
 // Pure analysis helpers: cost, degree days, energy signature, projection, verdict, profiles.
 
-import { type DayRecord, addDays, dayOfYear, minusYears, pctChange, rawRecords, seasonOf } from './aggregate';
+import { type DayRecord, addDays, dayOfYear, dayShareOfYear, minusYears, pctChange, rawRecords, seasonOf } from './aggregate';
 
 // ------------------------------------------------------------------ cost
 export interface Prices {
@@ -402,7 +402,7 @@ export function subscriptionTrve(rowsOrPrice: TrveRow[] | PriceAt, kva: number, 
   let s = 0;
   for (let d = from; d <= to; d = addDays(d, 1)) {
     const p = priceAt(d);
-    if (p) s += p.fixedYear / (Number(d.slice(0, 4)) % 4 === 0 ? 366 : 365);
+    if (p) s += dayShareOfYear(p.fixedYear, d);
   }
   return s;
 }
@@ -506,7 +506,6 @@ export function compareOffers(
   };
   for (const s of splits) {
     const kva = kvaAt(s.day);
-    const yearDays = Number(s.day.slice(0, 4)) % 4 === 0 ? 366 : 365;
     const b = rowAt(base, kva, s.day);
     const h = rowAt(hphc, kva, s.day);
     const t = rowAt(tempo, kva, s.day);
@@ -514,12 +513,12 @@ export function compareOffers(
     // Only days where all three offers can be priced, so totals stay comparable.
     if (!b || !h || !t || !colour) continue;
     out.base.energy += (s.hc + s.hp) * b.hp;
-    out.base.subscription += b.fixedYear / yearDays;
+    out.base.subscription += dayShareOfYear(b.fixedYear, s.day);
     out.hphc.energy += s.hc * h.hc + s.hp * h.hp;
-    out.hphc.subscription += h.fixedYear / yearDays;
+    out.hphc.subscription += dayShareOfYear(h.fixedYear, s.day);
     const [thc, thp] = t.prices[colour];
     out.tempo.energy += s.hc * thc + s.hp * thp;
-    out.tempo.subscription += t.fixedYear / yearDays;
+    out.tempo.subscription += dayShareOfYear(t.fixedYear, s.day);
     out.base.days++, out.hphc.days++, out.tempo.days++;
   }
   return out;

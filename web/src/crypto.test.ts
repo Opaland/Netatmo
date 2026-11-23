@@ -22,6 +22,9 @@ import {
   deriveKey,
   envelopeFields,
   keyInfoFields,
+  openLocal,
+  sealLocal,
+  toB64,
 } from './crypto';
 import vector from './__fixtures__/kdf-vector.json';
 import pbkdf2 from './__fixtures__/python-vector.json';
@@ -129,5 +132,31 @@ describe('#637 bornes vues des deux côtés, keyinfo.json contrôlé', () => {
     expect(() => keyInfoFields(pbkdf(MIN_ITERATIONS - 1))).toThrow(BadEnvelope);
     expect(() => keyInfoFields(argon({ p: 2 }))).toThrow(BadEnvelope);
     expect(keyInfoFields(pbkdf(MIN_ITERATIONS))).toEqual({ salt, iter: MIN_ITERATIONS });
+  });
+});
+
+describe('revue de code v3.0 : le sel de keyinfo.json, base64 strict comme au collecteur', () => {
+  const pbkdf = (salt: string) => ({ salt, iter: MIN_ITERATIONS }) as KeyInfo;
+  it('un sel qui n’est pas du base64 est refusé avant toute dérivation, avec le message de keyinfo.json', async () => {
+    for (const salt of ['!!!!', 'AAA', 'AA AA', 'AAAA====', 'A=AA']) expect(() => checkKeyInfo(pbkdf(salt)), salt).toThrow('keyinfo.json illisible.');
+    await expect(deriveKey('phrase fictive', pbkdf('!!!!'))).rejects.toThrow(BadEnvelope);
+  });
+  it('le sel que le collecteur écrit passe', () => {
+    for (const salt of ['AAAA', 'c2Vs', 'c2U=', 'cw==', pbkdf2.salt]) expect(() => checkKeyInfo(pbkdf(salt)), salt).not.toThrow();
+  });
+});
+
+describe('revue de code v3.0 : une note scellée de grande taille', () => {
+  it('toB64 rend le base64 standard, par tranches comme d’un seul tenant', () => {
+    const bytes = Uint8Array.from({ length: 70_001 }, (_, i) => (i * 37) % 256);
+    expect(toB64(bytes)).toBe(btoa(Array.from(bytes, (b) => String.fromCharCode(b)).join(''))); // one char at a time: no argument limit
+    expect(toB64(new Uint8Array())).toBe('');
+  });
+
+  it('une note de 300 Ko se scelle et se rouvre (au-delà de la limite d’arguments des moteurs)', async () => {
+    const key = await crypto.subtle.generateKey({ name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']);
+    const value = { hours: 'x'.repeat(300_000) }; // fictitious, as large as an audit report can be
+    const sealed = await sealLocal(value, key);
+    expect(await openLocal(sealed, key)).toEqual(value);
   });
 });

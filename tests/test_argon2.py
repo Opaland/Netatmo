@@ -81,6 +81,12 @@ def test_keyinfo_of_an_unknown_version_is_refused():
             parse_keyinfo(bad)
     with pytest.raises(DecryptError):  # version 2 is Argon2id only
         parse_keyinfo({"v": 2, "kdf": "PBKDF2-SHA256", "salt": "AAAA", "iter": 600_000})
+    # revue de code v3.0: version 1 has no "v" (keyinfo_doc); the app refuses an explicit one
+    # (web/src/crypto.ts checkKeyInfo), `true` included, which Python compared equal to 1
+    for v in (1, True):
+        with pytest.raises(DecryptError, match="version inconnue"):
+            parse_keyinfo({"v": v, "salt": "AAAA", "iter": 600_000})
+    assert parse_keyinfo({"salt": "AAAA", "iter": 600_000})[1] == Kdf.pbkdf2(600_000)
 
 
 def _folder(path: Path) -> Store:
