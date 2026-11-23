@@ -224,6 +224,42 @@ textes) : `intuis` 111, `station` 60, `catchUpOf` et les aides des causes 45, `m
 `sourceVerdict`, `gapTreatment` 38, `aboveMeter`, `roomDays`, `qualityReport` 37, `linky` 23,
 `runs` et `coverParts` 21, `curveRecover` à `seenParts` 9, `tidy` 3.
 
+**La couverture par source (#679, 23/11/2026) : `intuis`, `station`, `linky`.** `npx stryker run --mutate
+src/data-quality.ts` (3 processus, 4 min avant, 3 min 37 s après) : **80,7 % → 91,0 %** (1 851 mutants dont 23
+ignorés ; 293 survivants et 59 non couverts → 149 et 16). Les trois lecteurs par source, ceux qui disent
+pour chaque source les jours attendus, reçus et les trous d'État des données : **194 → 12** survivants et
+non couverts (`intuis` 111 → 6, `station` 60 → 5 avec `absentWithin`, `linky` 23 → 1), tous équivalents
+(tableau ci-dessous). Les tests sont dans `web/src/data-quality-sources.test.ts` (« #679 »), vus rouges par
+la vague d'après (les mutants visés ont disparu ; deux vagues) : chaque trou comparé **en entier** (libellé,
+qui, `all`, `ongoing`, `link`, `same`, cause et « Récupérable ? » au mot près), trois jours qui font un trou
+et deux épars (toutes les pièces, une pièce, Linky, station, un module), le Linky qui a 80 % des jours (8 sur
+10, pas 7), le redémarrage de la passerelle la veille ou le dernier jour (pas l'avant-veille ni le
+lendemain), « 1 nuit » de collecte en échec pour les trois sources, une coupure ou un redémarrage qui
+gardent leur cause malgré des nuits en échec, le chauffe-eau remis en service à 30 jours de la fin du trou
+(pas 31) et jamais pour les radiateurs, injoignable « ce jour-là », un trou à moitié dans celui des
+radiateurs (« même trou », pas « le même »), le trou d'une seule pièce qui n'en est pas un, un logement sans
+radiateurs, 0 kWh 14 jours (pas 13, jamais un radiateur, rangés, en cours), une pièce hors ligne un jour ou
+deux, le module injoignable de **cette** pièce, la phrase de chaque pièce arrêtée et le jour où une pièce
+arrêtée n'est « présente » que si une autre pièce des radiateurs l'est (pas le chauffe-eau), les jours
+estimés d'une autre source, au singulier et sur deux années ; Linky lu dans le désordre, la limite des
+3 ans elle-même encore chez Enedis, la note du dernier relevé à plus de 3 jours ; la station qui ne parle
+d'un trou du Linky qu'entre son premier et son dernier jour (lus dans le désordre), une station sans relevé,
+un nom ou une liste de modules absents, deux modules muets les mêmes jours, un trou en cours d'un jour, la
+pile sous 15 % (pas 15, pas `null`) dans les 10 jours d'avant ou pendant le trou, le signal nul. Aucun
+défaut trouvé, aucun calcul changé. Le reste de `data-quality.ts` (`catchUpOf` et les aides des causes,
+`monthStatus`, `sourceVerdict`, `gapTreatment`, `aboveMeter`, `roomDays`, `qualityReport`, `runs`,
+`coverParts`…) n’était pas visé : 153 survivants et non couverts, à lire dans une vague suivante.
+
+| #679 : `data-quality.ts` : ligne | Mutant | Raison de l'équivalence |
+|---|---|---|
+| 344 | `r.room !== room` → `true` | la pièce arrêtée n'a pas de relevé les jours où elle est arrêtée : ses propres jours sont déjà dans son ensemble |
+| 347, 350 | `rooms.find(…)?.name` → `.name` | `byRoom` ne garde que les pièces de `rooms` (`ids`) : la pièce est toujours trouvée |
+| 366 | `'heating'` → `''` ; `?? []` → `["Stryker was here"]` | `intuis(…, '')` lit les radiateurs comme `'heating'` et rend les mêmes trous (seule leur cause diffère, que `heatingLost` ne lit pas) ; un ensemble vide et un ensemble d'une chaîne qui n'est pas un jour sont tous deux vrais et ne contiennent aucun jour |
+| 411 | `offlineNow ?? []` → `["Stryker was here"]` | une chaîne n'a pas de `room` : aucun module trouvé, comme sans liste |
+| 489 | nom de la partie `'linky'` → `''` | une seule partie : son nom n'est qu'une clé |
+| 531, 532, 534 | `<` → `<=`, `>` → `>=` (bornes d'`absentWithin`) | à égalité la même borne ; le premier et le dernier jour de la source sont des jours présents, jamais absents |
+| 545 | `b > a` → `>=` | à égalité le même jour |
+
 **Le collecteur, sans dépendance (#624, 16/11/2026) : `collector/audit.py`.** Le collecteur n'avait
 aucun outil de mutation ; en adopter un (`mutmut`) serait une dépendance nouvelle, décision **D86** du
 propriétaire. En attendant, `scripts/mutation_collecteur.py` (bibliothèque standard seulement : `ast`,
