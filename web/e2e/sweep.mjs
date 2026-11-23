@@ -40,6 +40,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium, webkit } from 'playwright';
 import { RICH_STORAGE, dataFixtures, frames, goto, openData, openDemo, ready, registryRoutes, roomRoutes, seedStorage, seriousAxe, serveFixtureAsData, startPreview } from './lib.mjs';
+import { openingReport, watchOpening } from './ouverture.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const WEB = join(HERE, '..');
@@ -470,8 +471,8 @@ function dataDisplays() {
 
 // ------------------------------------------------------------------ one browser context
 class Session {
-  constructor(browser, run, display, report) {
-    Object.assign(this, { browser, run, display, report });
+  constructor(browser, run, display, report, { refuse = null, timeout = null } = {}) {
+    Object.assign(this, { browser, run, display, report, refuse, timeout });
     this.errors = [];
   }
   async open(hash = '') {
@@ -480,8 +481,12 @@ class Session {
     const storage = { ...(this.run.storage ?? {}) };
     if (SOURCE === 'data' || this.run.asData) storage.state ??= '{}'; // a device already used: no first launch
     if (this.run.asData) await serveFixtureAsData(this.ctx, base, join(WEB, 'dist/demo-fixtures', this.run.data));
+    // self-test of the opening diagnosis only (#654): files of the app refused with a 404
+    if (this.refuse) await this.ctx.route((url) => this.refuse.test(url.pathname), (route) => route.fulfill({ status: 404, body: '' }));
     await seedStorage(this.ctx, storage);
     this.page = await this.ctx.newPage();
+    if (this.timeout) this.page.setDefaultTimeout(this.timeout);
+    this.seen = watchOpening(this.page); // #654: what the opening loaded, said if it fails
     this.page.on('pageerror', () => this.errors.push('erreur-js'));
     this.page.on('pageerror', (e) => QUIET || this.errorDetails.push(e.message));
     this.page.on('console', (m) => {
@@ -505,6 +510,15 @@ class Session {
   }
   async close() {
     await this.ctx?.close();
+  }
+  /**
+   * #654: the report of an opening that failed: the exception, then the document status, the
+   * requests that failed or answered ≥ 400 (path only) and the console and page errors already
+   * gathered. Quiet (real data): neither the exception nor an error text, the kinds only.
+   */
+  openingFailure(err) {
+    const report = openingReport(this.seen ?? { document: null, bad: [] }, QUIET ? [...new Set(this.errors)] : this.errorDetails ?? [], QUIET);
+    return QUIET ? { kind: 'exception', detail: '', quiet: report } : { kind: 'exception', detail: `${String(err).split('\n')[0].slice(0, 200)} · ${report}` };
   }
   /** Rooms of the list (« piece-<id> »), in their order. */
   rooms() {
@@ -546,7 +560,7 @@ async function sweepJob(browser, job) {
       await s.check(where(route), { axe: job.axe });
     }
   } catch (err) {
-    record(where('(ouverture)'), [{ kind: 'exception', detail: String(err).slice(0, 300) }]);
+    record(where('(ouverture)'), [s.openingFailure(err)]);
   } finally {
     await s.close();
   }
@@ -777,7 +791,7 @@ async function exploreJob(browser, job) {
       }
     }
   } catch (err) {
-    record({ fixture: job.run.name, display: job.display, route: '(ouverture)' }, [{ kind: 'exception', detail: String(err).slice(0, 300) }]);
+    record({ fixture: job.run.name, display: job.display, route: '(ouverture)' }, [s.openingFailure(err)]);
   } finally {
     await s.close();
   }
@@ -916,6 +930,29 @@ async function selfTest(browser, run, display) {
   }
 }
 
+/**
+ * #654: an opening that fails says why. The entry script of the app is refused with a 404 (what a
+ * deployment not yet propagated would serve): the opening must fail, and its report must name the
+ * file and its status — not only « Timeout » as on runs 43311237189 and 44532457570. A short
+ * timeout keeps this to a few seconds.
+ */
+async function selfTestOpening(browser, run, display) {
+  const refuse = /\/assets\/index-[\w-]+\.js$/;
+  const s = new Session(browser, run, display, () => {}, { refuse, timeout: 4000 });
+  let report = null;
+  try {
+    await s.open();
+  } catch (err) {
+    const f = s.openingFailure(err);
+    report = f.quiet ?? f.detail;
+  } finally {
+    await s.close();
+  }
+  if (report === null) throw new Error('auto-contrôle : l’ouverture a réussi sans le script de l’application');
+  if (!/\/assets\/index-[\w-]+\.js \(404\)/.test(report) || !/document \d{3}/.test(report))
+    throw new Error(`auto-contrôle : l’échec d’ouverture ne nomme pas le fichier refusé et son statut (${QUIET ? 'masqué' : report})`);
+}
+
 // ------------------------------------------------------------------ report
 const failures = [];
 const roomNames = {};
@@ -989,7 +1026,8 @@ try {
     const browser = await ENGINE.launch();
     try {
       await selfTest(browser, runs[0], displays[0]);
-      console.log('Auto-contrôle : les invariants voient un « NaN », une carte vide, un débordement, deux textes l’un sur l’autre, un texte coupé par sa carte ou par un graphique en lignes HTML, un mot coupé en son milieu ou par un trait de césure, un axe aux étiquettes en double, des noms d’axe l’un sur l’autre, une légende coupée, un mot trop petit dans un dessin et une zone restée « occupée » (aria-busy) ; le diagnostic discret ne cite aucun contenu.');
+      await selfTestOpening(browser, runs[0], displays[0]);
+      console.log('Auto-contrôle : les invariants voient un « NaN », une carte vide, un débordement, deux textes l’un sur l’autre, un texte coupé par sa carte ou par un graphique en lignes HTML, un mot coupé en son milieu ou par un trait de césure, un axe aux étiquettes en double, des noms d’axe l’un sur l’autre, une légende coupée, un mot trop petit dans un dessin et une zone restée « occupée » (aria-busy) ; le diagnostic discret ne cite aucun contenu ; un échec d’ouverture nomme le fichier non servi et son statut.');
     } finally {
       await browser.close();
     }
