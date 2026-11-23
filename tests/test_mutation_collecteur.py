@@ -79,5 +79,9 @@ def test_un_chemin_hors_du_depot_n_est_pas_copie(tmp_path):
     outside.write_text("")
     try:
         assert mc._files_to_copy([str(outside)], root=tmp_path) == []
+        # Revue v2.9: the same file named by a relative path that climbs out (`../`) is not copied
+        # either (it was: `dest / "../x.py"` would have written outside the temporary copy).
+        assert mc._files_to_copy([f"../{outside.name}"], root=tmp_path) == []
+        assert mc._files_to_copy([f"collector/../../{outside.name}"], root=tmp_path) == []
     finally:
         outside.unlink()

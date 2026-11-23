@@ -284,8 +284,14 @@ calcul ni seuil changé.
 | 1506 | `x - mx` → `x + mx`, `y - my` → `y + my` | `Σ(x + mx)(y − my) = Σx(y − my) + mx·Σ(y − my)` et `Σ(y − my) = 0` : la même covariance (de même pour l'autre facteur) |
 
 (Numéros de ligne d'avant #656 : le catalogue est sorti dans `collector/audit_catalogue.py`, retirer 243
-pour les lire dans `audit.py` d'aujourd'hui. Ses 19 mutants : 17 tués ; l. 259 `* 100` → `* 101`
-équivalent, l. 270 `part_decalee / 100` → `/ 101` à tester, `docs/etudes/decoupage-audit-charts.md`.)
+pour les lire dans `audit.py` d'aujourd'hui. Ses 19 mutants : 17 tués à la PR #661 (89,5 %), **18
+après #666** (94,7 % : la l. 270, `part_decalee / 100` → `/ 101`, tenue par
+`test_part_decalee_holds_on_both_sides`, 79,4 % et 80,2 % sur 126 jours) ; le survivant restant, l. 259,
+est équivalent : tableau ci-dessous et `docs/etudes/decoupage-audit-charts.md`.)
+
+| `audit_catalogue.py` : ligne | Mutant | Raison de l'équivalence |
+|---|---|---|
+| 259 | `round((CROSS_RATIO - 1) * 100)` → `* 101` (seuil `depassement_linky`) | avec `CROSS_RATIO` = 1,10 (`quality.py`), `round(10,0)` et `round(10,1)` valent tous deux 10 : la valeur affichée au catalogue ne change pas, et le contrôle lui-même lit `CROSS_RATIO` dans `quality.py`, jamais cette valeur (`grep -rn depassement_linky` : le catalogue seul). **Limite** : l'équivalence tient à la valeur de `CROSS_RATIO` ; calculé pour chaque rapport à deux décimales de 1,01 à 1,99, les deux formes donnent le même entier jusqu'à 1,50 (50 et 50,5, arrondi au pair : 50) et se séparent dès 1,51 (51 et 52). Revérifié par la revue de fin de v2.9 |
 
 **Restent à lire** (une vague suivante, hors des fonctions visées par #624) : 213 survivants et
 3 non couverts, surtout `_shift_fit` (34, dont 3 non couverts l. 928 : le texte d'un `decalage-heures`
@@ -333,6 +339,14 @@ mesures de #637 ; les sept autres identiques à la fin de v2.7 au dixième (`roo
 la cause du recul de `crypto.ts` : `vitest.mutation.config.mjs` écarte **en silence** tout fichier de
 tests qui contient `../../` (dix aujourd'hui, aucun d'un module muté) ; une garde est proposée (revue
 v2.8, § 12 n° 4).
+
+**Fin de v2.9 (23/11/2026, [revue](revues/v2.9.md) § 6).** Aucun des neuf fichiers de
+`stryker.config.json` ne change en v2.9 (`curve.ts` : un commentaire) : la mesure complète n'a pas été
+refaite (88,6 %, fin de v2.8). Le collecteur : le catalogue de l'audit sorti dans
+`collector/audit_catalogue.py` (#661) a ses 19 mutants mesurés à part (**94,7 %** après #666, le
+survivant restant équivalent, tableau ci-dessus) ; le reste d'`audit.py` n'est pas remesuré (ses
+définitions sont celles de la v2.8 au caractère près). Pour toute preuve « vu rouge » du collecteur :
+`PYTHONDONTWRITEBYTECODE=1` dès le départ (`docs/APPRENTISSAGES.md` A23, A24).
 
 ### Survivants lus et laissés, avec leur raison
 

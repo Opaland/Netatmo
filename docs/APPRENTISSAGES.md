@@ -251,3 +251,16 @@ quand un outil la rend impossible à refaire.
 - **Conduite** : après avoir remis à la main un fichier Python modifié pour un essai, effacer les
   `__pycache__` (ou lancer avec `PYTHONDONTWRITEBYTECODE=1`) avant de croire un résultat ;
   `scripts/mutation_collecteur.py` le fait de lui-même (copie sans cache, bytecode jamais écrit).
+
+### A24 · 23/11/2026 — Le même `.pyc` périmé, une seconde fois : la conduite d'A23 venait après coup (#662, PR #666)
+
+- **Ce qui s'est passé** : pour voir rouge le test du seuil `part_decalee`, `audit_catalogue.py` a
+  été modifié (`/ 100` → `/ 101`, même taille), les tests lancés, puis le fichier remis par
+  `git checkout` dans la même seconde. Le `__pycache__` gardait la version mutée (date à la seconde
+  et taille identiques, A23) : la porte suivante a vu le test **rouge sur un arbre propre**, et la
+  preuve « vu rouge » a d'abord paru fausse. A23 disait d'effacer le cache **après** avoir remis un
+  fichier : une conduite qu'il faut penser à tenir au moment où l'on croit avoir fini.
+- **Conduite** : toute preuve « vu rouge » du collecteur se lance **dès le départ** avec
+  `PYTHONDONTWRITEBYTECODE=1` (ou `python -B`) : aucun bytecode du mutant n'est jamais écrit, il n'y
+  a rien à effacer ensuite. Si l'essai a déjà été lancé sans, vider les `__pycache__` avant de
+  croire la porte suivante. `scripts/mutation_collecteur.py` le fait de lui-même (A23).

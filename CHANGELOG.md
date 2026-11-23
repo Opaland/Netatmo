@@ -1,5 +1,35 @@
 # Historique des versions
 
+## v2.9 — novembre 2026 (en cours) : documentation et reprise
+
+Lancée par le propriétaire le 13/11/2026 (« 2.4 2.5 2.6 2.7 2.8 2.9 3.0 »), cadrée sur ce qu'un repreneur
+ne pouvait pas faire depuis le dépôt seul ([cadrage](docs/bmad/revues/v2.9-cadrage.md)). Revue de fin de
+version par les **72 personas**, revue design (aucun écran changé, `dist/` identique, vérifié) et revue de
+code par agent : [`docs/bmad/revues/v2.9.md`](docs/bmad/revues/v2.9.md). Aucune donnée réelle lue ni
+réécrite ; les formes retenues par les PR restent des propositions (revue, § 10 : D94 à D97).
+
+- **CONTRIBUTING cite chaque script e2e** (#652, #658) : les 22 scripts de `web/package.json`, avec les
+  jobs de `ci.yml` qui les lancent, tenus d'accord par un test.
+- **La CI bornée et ses durées relevées par une commande** (#653, #663) : chaque installation de
+  navigateur à 10 min, chaque job e2e à 40 min ; `node scripts/durees-ci.mjs` relève les durées d'un run
+  ou des derniers runs de `main`. Le contrôle de la page publiée aussi (#669, #670) : chaque lecture
+  réseau, l'attente du service worker et le job `site-en-ligne` (20 min) ; plus de collecte tenue 6 h.
+- **Le balayage dit pourquoi une ouverture échoue** (#654, #660, #648) : statut du document, fichiers non
+  servis (chemin seul ; rien de `data/` sur les vraies données) et erreurs de console, avec un
+  auto-contrôle ; aucun nouvel essai.
+- **Les outils du contributeur disent ce qui est vrai sur son poste** (#655, #659) : le conseil des
+  captures selon le cas (macOS, `fc-match` absent, DejaVu Sans absente) ; l'outil de mutation du
+  collecteur ne copie que les fichiers suivis (et, depuis la revue, aucun chemin en `../`).
+- **`collector/audit.py` commence à se découper** (#656, #661) : un plan pour `audit.py` et `charts.ts`
+  ([étude](docs/etudes/decoupage-audit-charts.md)) ; le catalogue des contrôles et des seuils dans
+  `audit_catalogue.py`, déplacé sans un caractère changé (1 623 → 1 380 lignes) ; le seuil
+  `part_decalee` tenu des deux côtés par un test (#662, #666 ; mutation du catalogue 94,7 %).
+- **e2e** (#665) : le bandeau hors ligne se lit une fois rempli ; le clignotement de l'application reste
+  à décider (#664).
+- **Revue de fin de version** (revue, § 6 et § 12) : aucun défaut bloquant ; premier écran 128,65 kB,
+  inchangé ; constats mineurs regroupés dans #673 ; captures de référence régénérées dans la police
+  de la CI, acceptées par la garde. L'installation de WebKit lente (#671) est traitée à part.
+
 ## v2.8 — novembre 2026 : dette de code, une règle à un endroit
 
 Lancée par le propriétaire le 13/11/2026 (« 2.4 2.5 2.6 2.7 2.8 2.9 3.0 »), cadrée sur la taille des
