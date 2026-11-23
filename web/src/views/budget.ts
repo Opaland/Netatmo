@@ -1,7 +1,7 @@
 // Accueil and ⚙ Objectifs, loaded on demand (S-7.10): annual budget (S-2.12), CO₂ footprint (S-2.13)
 // and the effect of a new regulated tariff (S-2.11). Filled into placeholders left by
 // views/home.ts; every figure carries its method.
-import { addDays, dayOfYear, minusYears, total } from '../aggregate';
+import { addDays, dayOfYear, daysInYear, minusYears, total } from '../aggregate';
 import { energyCostTrve, offPeakShares, projectYear } from '../analysis';
 import { ds, rerender } from '../app';
 import { periodAt } from '../offers';
@@ -48,7 +48,7 @@ function yearBudget() {
   const spent = costOf(all, from, last);
   if (spent === null) return null;
   const p = projectYear(all, last);
-  const days = year % 4 === 0 ? 366 : 365;
+  const days = daysInYear(last);
   return { year, ...budgetStatus(budget, spent, total(all, from, last), p ? p.projected : null, dayOfYear(last) + 1, days) }; // #244: the last day is paid, so it counts
 }
 

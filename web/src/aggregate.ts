@@ -262,10 +262,17 @@ export function monthlyBySeason(records: DayRecord[]): Map<string, (number | nul
  * year, so that the same date lines up across leap and non-leap years.
  */
 export function leapDayIndex(day: string): number {
-  const y = Number(day.slice(0, 4));
-  const leap = (y % 4 === 0 && y % 100 !== 0) || y % 400 === 0;
-  return dayOfYear(day) + (!leap && day.slice(5) >= '03-01' ? 1 : 0);
+  return dayOfYear(day) + (!isLeapYear(Number(day.slice(0, 4))) && day.slice(5) >= '03-01' ? 1 : 0);
 }
+
+/** The Gregorian rule (revue de code v3.0: one rule, written once; `% 4` alone was wrong in 2100). */
+export const isLeapYear = (y: number): boolean => (y % 4 === 0 && y % 100 !== 0) || y % 400 === 0;
+
+/** Days of the calendar year of `day` (365 or 366). */
+export const daysInYear = (day: string): number => (isLeapYear(Number(day.slice(0, 4))) ? 366 : 365);
+
+/** One day's share of a yearly amount (a subscription in € per year), by the length of that day's year. */
+export const dayShareOfYear = (perYear: number, day: string): number => perYear / daysInYear(day);
 
 /**
  * Running total per day on a leap-year axis (index 0 = 1 Jan, 59 = 29 Feb, 365 = 31 Dec);

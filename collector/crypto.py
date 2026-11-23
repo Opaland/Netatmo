@@ -206,6 +206,10 @@ def parse_keyinfo(info: object) -> tuple[bytes, Kdf]:
     if not isinstance(info, dict) or "salt" not in info:
         raise DecryptError("keyinfo.json illisible")
     version = info.get("v", 1)
+    # Revue de code v3.0: version 1 is written WITHOUT "v" (keyinfo_doc); an explicit "v" is 2 or
+    # nothing, as the app reads it (web/src/crypto.ts checkKeyInfo): `True` and `1` passed here as 1.
+    if "v" in info and (isinstance(version, bool) or version != KEYINFO_V2):
+        raise DecryptError(f"keyinfo.json de version inconnue ({version!r})")
     if version == 1 and "kdf" in info:
         raise DecryptError("keyinfo.json illisible")
     if version not in (1, KEYINFO_V2) or (version == KEYINFO_V2 and info.get("kdf") != ARGON2):
