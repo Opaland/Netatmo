@@ -246,6 +246,27 @@ describe('#441 heures creuses datées : la date du changement lue dans les relev
     expect(changesFromR30(r, START, lastOf(40))).toEqual([]);
   });
 
+  it('#684 : « clairement » à 80 % tout juste des deux côtés, en heures creuses comme en heures pleines', () => {
+    /** Ten days where half hour 12 (06:00) has `before` Wh HC out of 300, then five where it has `after`; the rest all HP. */
+    const slot12 = (before: number, after: number): Room30 => {
+      const days = new Map<string, Day30>();
+      for (let k = 0; k < 10 + STABLE_DAYS; k++) {
+        const hc = new Array<number>(48).fill(0);
+        hc[12] = k < 10 ? before : after;
+        days.set(addDays(START, k), [hc.map((v) => 300 - v), hc, 20, 19] as Day30);
+      }
+      return new Map([['a', days]]);
+    };
+    const last = lastOf(10 + STABLE_DAYS);
+    const change = [addDays(START, 10)];
+    // 20 % HC exactly (80 % HP) is clearly peak: all HC afterwards is a change; 21 % is undecided
+    expect(changesFromR30(slot12(60, 300), START, last)).toEqual(change);
+    expect(changesFromR30(slot12(63, 300), START, last)).toEqual([]);
+    // the same bound on the off-peak side: 80 % HC exactly is clearly off-peak, 79 % undecided
+    expect(changesFromR30(slot12(240, 0), START, last)).toEqual(change);
+    expect(changesFromR30(slot12(237, 0), START, last)).toEqual([]);
+  });
+
   it('un changement trop récent pour être sûr n’est pas encore vu', () => {
     const r = history([...times(30, OLD), ...times(STABLE_DAYS - 1, NEW)]);
     expect(changesFromR30(r, START, lastOf(30 + STABLE_DAYS - 1))).toEqual([]);

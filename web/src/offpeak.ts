@@ -156,8 +156,9 @@ function tri(a: Acc): Tri {
   return a.hp.map((p, i) => {
     const e = p + a.hc[i];
     if (!(e > 0)) return null;
-    const s = a.hc[i] / e;
-    return s >= CLEAR ? 1 : s <= 1 - CLEAR ? 0 : null;
+    // #684: each column's own share against CLEAR, the same expression on both sides (`1 - CLEAR`
+    // is 0.19999999999999996 in floating point: 80 % HP exactly would not have been clear)
+    return a.hc[i] / e >= CLEAR ? 1 : p / e >= CLEAR ? 0 : null;
   });
 }
 /** Whether a clear half hour of `day` contradicts `ref`. */
