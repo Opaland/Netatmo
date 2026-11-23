@@ -51,7 +51,8 @@ version ne le prend tant que la condition n'est pas levée) :
   image de fond (D48, D49, #202) ; clé IA (D41, #14) ; « Comparer » et sa maquette (D65, #564 n° 3) ;
   objectif de la garde de taille (D64) ; données : D70 à D75, dont la reprise de la courbe (D71) ;
   réglages en secrets et anciens journaux (D76, D77) ; formes de la v2.5 : courbe, Année par année, captures hors de la police en CI (D78 à D80) ; formes de la v2.6 : tableaux de champs, « Pièces affichées », attente dans un résumé, hauteurs et parcours WebKit (D81 à D85) ; outil de mutation du collecteur, vague suivante, pointe à égalité, ordre de deux trous (D86 à D89) ; degrés-jours de « à climat égal » (D90) ; premier écran + 0,24 kB, code négatif de l'outil de mutation, repli vers un second hôte d'Intuis (D91 à D93) ; forme du découpage d'`audit.py` et de `charts.ts`, rééquilibrage des jobs e2e (D94, D95) ; origine dédiée (D39, #229) ; signalement privé
-  (D11, #364) ; les décisions plus anciennes listées par les revues (D1 à D69).
+  (D11, #364) ; les décisions plus anciennes listées par les revues (D1 à D69). **Toutes** sont
+  rassemblées, avec leur état et ce que chaque option débloque, dans le [tableau des décisions](decisions.md).
 - **Gestes sur son compte** : bilan, inventaire, rattrapage, second bilan, profondeur d'historique
   (revue v2.4 § 9) ; leurs résultats peuvent ouvrir des issues qui passent avant le thème prévu.
 - **Matériel ou pont** : le jalon « Matériel (attend le propriétaire) » (volets #200, #24, #26 ; pont
@@ -71,6 +72,8 @@ Demandée par le propriétaire le 12/11/2026.
 2. Leurs **défauts bloquants sont corrigés avant la clôture**.
 3. La version suivante **démarre sans attendre une validation explicite** du propriétaire.
 4. Le propriétaire reste **décideur** des choix de produit, de design et d'architecture. La revue les
-   liste avec leurs pistes ; ils ne bloquent pas l'enchaînement.
+   liste avec leurs pistes ; ils ne bloquent pas l'enchaînement. Depuis la v3.0 (#680), chaque décision
+   nouvelle a aussi sa ligne dans le [tableau des décisions](decisions.md), et la revue y met à jour
+   l'état de celles qu'elle touche, au lieu de renvoyer aux revues précédentes par plages.
 
 Les critères d'une version livrée restent ceux de [`PROJET.md`](../PROJET.md) § 4 et § 6.
