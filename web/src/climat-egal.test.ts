@@ -21,7 +21,7 @@ function sources(): [string, string][] {
   return out;
 }
 
-describe('à climat égal : une seule règle (#638)', () => {
+describe('à climat égal et écart en % : une seule règle (#638, #677)', () => {
   it('aucun rapport « a / b − 1 » écrit à la main (ratioChange, perDjuChange)', () => {
     // `(x / y - 1) * 100`, whatever x and y are (a ratio of ratios included)
     const handWritten = /\/[^;\n]*-\s*1\)\s*\*\s*100/;
@@ -29,6 +29,28 @@ describe('à climat égal : une seule règle (#638)', () => {
       .filter(([, text]) => handWritten.test(text))
       .map(([f]) => f);
     expect(found).toEqual([]);
+  });
+
+  // #677: the other way to write a change in %, `((a - b) / b) * 100`, is pctChange's own rule:
+  // nowhere else. Whatever a and b are, as long as the denominator is the number subtracted.
+  const handWrittenChange = /\(\(\s*[^()]+?\s-\s*([\w.]+)\s*\)\s*\/\s*\1\s*\)\s*\*\s*100/g;
+  it('la garde voit « ((a − b) / b) * 100 », et pas une largeur ni une part', () => {
+    const seen = (code: string) => (code.match(handWrittenChange) ?? []).length;
+    expect(seen('pct: ((now - ref) / ref) * 100,')).toBe(1);
+    expect(seen('signedPct(((w.now - w.ref) / w.ref) * 100)')).toBe(1);
+    expect(seen('signedPct(((end - opts.start) / opts.start) * 100)')).toBe(1);
+    expect(seen('const p = ((actual - expected)/expected)*100;')).toBe(1);
+    expect(seen('width:${pctW(((b - a) / 24) * 100)}')).toBe(0); // a width in % of a day
+    expect(seen('nf0.format((sum(yr, "heating") / Math.max(tot, 1)) * 100)')).toBe(0); // a share
+    expect(seen('((Number(d.slice(8, 10)) - 1) / n) * 100')).toBe(0); // a position
+    expect(seen('((a - b) / c) * 100')).toBe(0); // not a change: the denominator is not b
+  });
+
+  it('aucun « ((a − b) / b) * 100 » écrit à la main hors de pctChange', () => {
+    const found = sources().flatMap(([f, text]) => (text.match(handWrittenChange) ?? []).map((m) => `${f}: ${m}`));
+    expect(found).toEqual(['aggregate.ts: ((now - before) / before) * 100']);
+    const rule = /export function pctChange\(now: number, before: number\): number \| null \{\n\s*return before > 0 \? \(\(now - before\) \/ before\) \* 100 : null;/;
+    expect(sources().find(([f]) => f === 'aggregate.ts')?.[1]).toMatch(rule);
   });
 
   it('aucune fenêtre « marker ± windowDays » recopiée hors de markerWindow', () => {

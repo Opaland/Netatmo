@@ -2,7 +2,7 @@
 // Rules: sentences of 15 words at most, no unexplained acronym, rounded figures, and a
 // glossary: touching a term (kWh, heures creuses, degrés-jours) shows a one-sentence
 // definition, also announced to screen readers. Pure text builders, tested in plain.test.ts.
-import { MONTHS_LONG } from './aggregate';
+import { MONTHS_LONG, pctChange } from './aggregate';
 import { escapeHtml as esc } from './charts';
 import { countedWhat } from './home';
 
@@ -113,8 +113,7 @@ export function leftSentence(name: string, since: string | null): string {
 // ------------------------------------------------------------------ key figures
 /** Comparison with the same dates one year earlier, in words. */
 export function comparedToLastYear(now: number, before: number | null): string {
-  if (before === null || before <= 0) return "Pas de comparaison possible avec l'an dernier.";
-  return comparedPct(((now - before) / before) * 100);
+  return comparedPct(before === null ? null : pctChange(now, before)); // #677: null when before <= 0
 }
 
 /** #400: the same, from the change computed by the Accueil (null: no year before). */
