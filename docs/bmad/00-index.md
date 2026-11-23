@@ -23,6 +23,7 @@ Ce dossier ajoute une revue par 72 personas pour mesurer les besoins avant de co
 | 04 | [04-architecture.md](04-architecture.md) | Architect | Architecture actuelle, modèle de données chiffré, couche IA, pont local, ADR |
 | 05 | [05-epics-stories.md](05-epics-stories.md) | PO / SM | Épopées, récits utilisateur, critères d'acceptation, taille, priorité, statut |
 | 06 | [06-qa-strategy.md](06-qa-strategy.md) | QA | Stratégie de test, matrice de risques, définition de « terminé » |
+| — | [decisions.md](decisions.md) | PO | Les décisions du propriétaire D1 à D97 (§ 10 des revues de fin) en un seul tableau, par sujet, avec leur état, pour trancher en une fois (#680) |
 | — | [feuille-de-route.md](feuille-de-route.md) | PM / PO | Versions v1.8 à v3.0, ce qui pourrait suivre (à décider par le propriétaire), jalon « Matériel », règle de passage d'une version à la suivante (12/11/2026) |
 
 Documents antérieurs, toujours valables : [README](../../README.md), [notes API](../api-notes.md),
