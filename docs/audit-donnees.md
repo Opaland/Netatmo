@@ -345,7 +345,7 @@ consommation varie peu autour de minuit ; c'est pourquoi `decalage-fuseau` compa
 
 ### Les seuils
 
-Chaque seuil qui change ce qui est signalé est nommé une fois (`THRESHOLDS`, `collector/audit.py`),
+Chaque seuil qui change ce qui est signalé est nommé une fois (`THRESHOLDS`, `collector/audit_catalogue.py`),
 avec sa raison ; le rapport les porte et l'appli les affiche (« Seuils utilisés »). Ceux qui ne
 viennent pas d'une mesure ou d'une règle sont marqués **hypothèse** : à confirmer sur le premier
 rapport réel.
