@@ -351,11 +351,11 @@ définitions sont celles de la v2.8 au caractère près). Pour toute preuve « v
 **Les quatre modules de calcul jamais mutés (#678, 23/11/2026).** `analysis.ts`, `aggregate.ts`,
 `offpeak.ts` et `wood.ts` entrent dans le `mutate` de `stryker.config.json`. `npx stryker run --mutate
 src/analysis.ts,src/aggregate.ts,src/offpeak.ts,src/wood.ts` (3 processus, poste à 4 cœurs partagé) :
-**72,0 % → 96,5 %** (10 min avant, 6 min 47 s après).
+**72,0 % → 96,5 %** (10 min avant, 6 min 47 s après). Lignes d'`analysis.ts` du tableau : après #677 (`verdict` passe par `pctChange`, trois lignes de plus), remesuré seul : 98,4 %.
 
 | Fichier | Mutants (ignorés) | Avant | Après | Restants (tous lus, tableau ci-dessous) |
 |---|---|---|---|---|
-| `analysis.ts` | 804 (0) | 58,2 % (264 survivants, 72 non couverts) | **98,5 %** | 12 |
+| `analysis.ts` | 804 (0) | 58,2 % (264 survivants, 72 non couverts) | **98,5 %** ; 98,4 % après #677 (remesuré seul) | 12 ; 13 après #677 |
 | `aggregate.ts` | 368 (0) | 71,7 % (63, 41) | **97,0 %** | 11 |
 | `offpeak.ts` | 473 (17 → 0) | 80,9 % (82, 5) | **95,1 %** | 23 |
 | `wood.ts` | 640 (30 → 0) | 83,8 % (87, 12) | **94,5 %** | 35 |
@@ -399,11 +399,12 @@ de calcul : au propriétaire. Aucun autre défaut ; aucun calcul ni seuil chang�
 | `analysis.ts:34` | `!p.sub` → `false` | un abonnement nul ou absent donne 0 € dans les deux cas (`null × …` vaut 0) |
 | `analysis.ts:154` | `r.day < a` → `<=` ; `''` → texte | à égalité le même jour ; une chaîne de départ non vide reste après tout jour `AAAA-…` (un chiffre est avant une lettre), et sans relevé la projection et le verdict rendent `null` dans les deux cas |
 | `analysis.ts:175` | `y < year` → `<=` | `y === year` est déjà pris par la branche d'avant |
-| `analysis.ts:335, 436` | `a.from < b.from` → `<=` (tri des fichiers de la CRE) | ne change que l'ordre de deux lignes de même début, qui diffèrent par la puissance : `trveAt` et `rowAt` filtrent la puissance d'abord |
-| `analysis.ts:383` | `p === undefined` → `true` | un cache : le prix du jour est recalculé, le même |
-| `analysis.ts:548` | `> 2 * sigma` → `>=`, `> 3` → `>=` | égalité exacte d'un résidu de droite ajustée en virgule flottante, jamais atteinte |
-| `analysis.ts:551` | `a.day < b.day` → `<=` (tri des anomalies) | un jour n'a qu'un point (signature par jour) : jamais d'égalité |
-| `analysis.ts:580` | filtre `d >= first` retiré ou `true` | les jours d'avant le premier dépassement sont sous la puissance déclarée + tolérance, donc sous le pic : le maximum ne change pas |
+| `analysis.ts:251` | `p === null` → `false` (ajouté par #677) | `expected` est positif à cet endroit (chaque référence a un total positif) : `pctChange` ne rend jamais `null` ici |
+| `analysis.ts:338, 439` | `a.from < b.from` → `<=` (tri des fichiers de la CRE) | ne change que l'ordre de deux lignes de même début, qui diffèrent par la puissance : `trveAt` et `rowAt` filtrent la puissance d'abord |
+| `analysis.ts:386` | `p === undefined` → `true` | un cache : le prix du jour est recalculé, le même |
+| `analysis.ts:551` | `> 2 * sigma` → `>=`, `> 3` → `>=` | égalité exacte d'un résidu de droite ajustée en virgule flottante, jamais atteinte |
+| `analysis.ts:554` | `a.day < b.day` → `<=` (tri des anomalies) | un jour n'a qu'un point (signature par jour) : jamais d'égalité |
+| `analysis.ts:583` | filtre `d >= first` retiré ou `true` | les jours d'avant le premier dépassement sont sous la puissance déclarée + tolérance, donc sous le pic : le maximum ne change pas |
 | `aggregate.ts:108, wood.ts:123` | `a.day > b.day` (4 mutants chacun : `true`, `false`, `>=`, `<=`) | non tuables sous V8 (le lanceur) : son tri ne lit que le signe négatif du comparateur, et des jours dans le désordre restent bien rangés (testé). Le comparateur d'origine est correct ; un autre moteur pourrait lire le mutant autrement |
 | `aggregate.ts:200` | `i === undefined` → `false` | `bucketKeys` donne une clé à chaque jour de `[from, to]` |
 | `aggregate.ts:206` | `new Array(n)` → `new Array()` pour `seen` | `seen` n'est lu que par `measuredValues`, en valeur de vérité : `undefined` et `false` s'y valent |
