@@ -264,3 +264,19 @@ quand un outil la rend impossible à refaire.
   `PYTHONDONTWRITEBYTECODE=1` (ou `python -B`) : aucun bytecode du mutant n'est jamais écrit, il n'y
   a rien à effacer ensuite. Si l'essai a déjà été lancé sans, vider les `__pycache__` avant de
   croire la porte suivante. `scripts/mutation_collecteur.py` le fait de lui-même (A23).
+
+### A25 · 23/11/2026 — Une garde qui lit les sources a cassé la mesure de mutation entière (PR #686, revue de fin de v3.0)
+
+- **Ce qui s'est passé** : #677 (PR #686) a élargi la garde de `climat-egal.test.ts`, qui lit le
+  **texte** des sources et vérifie que `pctChange` est écrite dans `aggregate.ts`. Dans le bac à
+  sable de `npm run mutation`, Stryker réécrit `aggregate.ts` avec ses marques (`stryMutAct_…`) : la
+  garde ne trouvait plus la règle et faisait échouer la passe initiale. **Toute la mesure** de
+  l'application s'arrêtait avant son premier mutant, et personne ne l'a vu : la mutation ne se lance
+  qu'à la main, et les PR suivantes l'ont lancée sur d'autres fichiers seulement (`--mutate
+  src/data-quality.ts`, `src/offpeak.ts` : `aggregate.ts` n'y est pas réécrit) ou mesurée avant
+  d'avoir fusionné `main` (#685). La revue de fin l'a trouvé en lançant la mesure
+  complète.
+- **Conduite** : une garde qui lit le texte d'un module muté (`stryker.config.json`, `mutate`) se
+  saute quand les sources portent les marques de Stryker (`it.skipIf`, comme `climat-egal.test.ts`) ;
+  une PR qui ajoute une telle garde lance la passe initiale de `npm run mutation` (une minute : la
+  ligne « Initial test run succeeded » suffit).

@@ -384,6 +384,15 @@ survivant restant équivalent, tableau ci-dessus) ; le reste d'`audit.py` n'est 
 définitions sont celles de la v2.8 au caractère près). Pour toute preuve « vu rouge » du collecteur :
 `PYTHONDONTWRITEBYTECODE=1` dès le départ (`docs/APPRENTISSAGES.md` A23, A24).
 
+**Mesure complète de fin de v3.0 (23/11/2026, [revue](revues/v3.0.md) § 6.1).** `cd web && npm run
+mutation`, les **treize** fichiers, 22 min 31 s sur 2 processus : **94,5 %** (6 321 mutants mesurés ;
+331 survivants, 19 non couverts). Aucun fichier ne recule depuis la dernière PR qui l'a mesuré ; le
+tableau par fichier est dans la revue. Cette mesure n'était **plus possible depuis #686** : la garde de
+`climat-egal.test.ts` lisait le texte d'`aggregate.ts`, que Stryker réécrit dans son bac à sable, et
+faisait échouer la passe initiale ; elle s'y saute désormais (A25). `audit.py` (toute la suite,
+2 processus) : **69,6 %**, 530 tués sur 761, 2 295 s ; avec les 18 tués sur 19 du catalogue (94,7 %),
+les 547 sur 780 de la fin v2.7 à un près : aucun recul.
+
 **Les quatre modules de calcul jamais mutés (#678, 23/11/2026).** `analysis.ts`, `aggregate.ts`,
 `offpeak.ts` et `wood.ts` entrent dans le `mutate` de `stryker.config.json`. `npx stryker run --mutate
 src/analysis.ts,src/aggregate.ts,src/offpeak.ts,src/wood.ts` (3 processus, poste à 4 cœurs partagé) :
