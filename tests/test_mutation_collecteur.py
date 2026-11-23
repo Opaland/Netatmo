@@ -37,3 +37,47 @@ def test_code_de_sortie(code, status):
 def test_une_erreur_ne_compte_pas_dans_le_score():
     # The score counts what starts with « tué » as killed (main): an error must not.
     assert not mc.classify(3).startswith("tué")
+
+
+def _git(root: Path, *args: str) -> None:
+    import subprocess
+
+    subprocess.run(
+        ["git", "-c", "user.name=t", "-c", "user.email=t@example.invalid", *args],
+        cwd=root,
+        check=True,
+        capture_output=True,
+    )
+
+
+def test_la_copie_ne_prend_que_les_fichiers_suivis(tmp_path):
+    """#655 (#634 n° 4): an untracked, non-ignored file of the tree (an export put at the root) is not
+    copied; the mutated module and a test file named on the command line are, even untracked; `data/`
+    never. Seen red on the old `git ls-files -co --exclude-standard` (the export was copied)."""
+    _git(tmp_path, "init", "-q")
+    (tmp_path / "collector").mkdir()
+    (tmp_path / "collector" / "suivi.py").write_text("X = 1\n")
+    (tmp_path / "data").mkdir()
+    (tmp_path / "data" / "jour.json").write_text("{}\n")
+    _git(tmp_path, "add", "-f", "collector/suivi.py", "data/jour.json")
+    _git(tmp_path, "commit", "-q", "-m", "init")
+    (tmp_path / "export-perso.csv").write_text("fictif\n")  # untracked, not ignored
+    (tmp_path / "collector" / "neuf.py").write_text("Y = 2\n")  # the module, not tracked yet
+    (tmp_path / "tests").mkdir()
+    (tmp_path / "tests" / "test_neuf.py").write_text("")
+
+    files = mc._files_to_copy(["collector/neuf.py", "tests/test_neuf.py"], root=tmp_path)
+
+    assert "export-perso.csv" not in files
+    assert "data/jour.json" not in files
+    assert sorted(files) == ["collector/neuf.py", "collector/suivi.py", "tests/test_neuf.py"]
+
+
+def test_un_chemin_hors_du_depot_n_est_pas_copie(tmp_path):
+    _git(tmp_path, "init", "-q")
+    outside = tmp_path.parent / f"{tmp_path.name}-dehors.py"
+    outside.write_text("")
+    try:
+        assert mc._files_to_copy([str(outside)], root=tmp_path) == []
+    finally:
+        outside.unlink()
