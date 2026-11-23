@@ -863,8 +863,21 @@ try {
     await openDemo(page).catch(async (e) => {
       throw new Error(`hors-ligne : la démo ne s'ouvre pas (${(await page.textContent('#app'))?.slice(0, 200)}) ${e.message.split('\n')[0]}`);
     });
-    await page.waitForSelector('#net-status:not([hidden])', { timeout: 5000 });
-    const banner = await page.textContent('#net-status');
+    // The shell is redrawn with an empty, hidden banner on each render and filled once the cache
+    // has been read: wait for the filled banner (one read could catch a fresh, empty one), and
+    // report the last text seen if it never comes.
+    const banner = await page
+      .waitForFunction(
+        () => {
+          const el = document.getElementById('net-status');
+          const text = el && !el.hidden ? el.textContent ?? '' : '';
+          return /Hors ligne/.test(text) && /profil horaire compris/.test(text) ? text : false;
+        },
+        null,
+        { timeout: 10000, polling: 50 },
+      )
+      .then((h) => h.jsonValue())
+      .catch(async () => (await page.textContent('#net-status')) ?? '');
     check(/Hors ligne/.test(banner) && /profil horaire compris/.test(banner), `hors-ligne : bandeau inattendu « ${banner} »`);
     await go(page, 'compteur-journee');
     await page.waitForSelector('#hour-grid canvas', { timeout: 20000 }).catch(() => errors.push('hors-ligne : profil horaire absent'));

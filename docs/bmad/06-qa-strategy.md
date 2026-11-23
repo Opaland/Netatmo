@@ -229,7 +229,7 @@ aucun outil de mutation ; en adopter un (`mutmut`) serait une dépendance nouvel
 propriétaire. En attendant, `scripts/mutation_collecteur.py` (bibliothèque standard seulement : `ast`,
 `sys.monitoring`, `subprocess`), **lancé à la main, jamais dans la CI ni la porte** :
 `python scripts/mutation_collecteur.py collector/audit.py [tests…] [--fonction f] [--json fichier]`.
-Il copie le dépôt (sans `data/` ni `.git`) dans un dossier temporaire, une copie par processus :
+Il copie les fichiers **suivis** du dépôt (sans `data/`), plus le module et les tests nommés s'ils ne le sont pas encore (#655 : un fichier non suivi ne sort pas de l'arbre), dans un dossier temporaire, une copie par processus :
 l'arbre de travail et les données ne sont jamais écrits. Une première passe de **toute** la suite
 note, test par test, les lignes du module exécutées ; chaque mutant ne lance ensuite que les tests qui
 exécutent les lignes de son expression (les plus rapides d'abord, arrêt au premier rouge), et tous ceux
