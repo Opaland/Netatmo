@@ -106,6 +106,10 @@ jobs:
   site-en-ligne:
     needs: [build, deploy]
     runs-on: ubuntu-latest
+    # 21/11 (run 44905406199): without a bound, a stalled probe held the job 6 h until GitHub cancelled
+    # it. A normal run takes about 3 min (install, probe, sweep): 20 min leaves room for a slow
+    # browser install without letting a hang last.
+    timeout-minutes: 20
     permissions:
       contents: read
     defaults:

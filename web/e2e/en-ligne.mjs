@@ -20,13 +20,17 @@ const base = SITE.endsWith('/') ? SITE : `${SITE}/`;
 const want = process.env.EXPECTED_COMMIT ?? '';
 const errors = [];
 const check = (ok, msg) => ok || errors.push(msg);
+// 21/11 run 44905406199: the job hung 6 h on this script. Every network read is bounded, so that a
+// stalled connection fails the probe with its name instead of holding the job until GitHub cancels it.
+const FETCH_MS = 20_000;
+const get = (url) => fetch(url, { cache: 'no-store', signal: AbortSignal.timeout(FETCH_MS) });
 
 // ---------------------------------------------------------------- build.json → the deployed commit
 const until = Date.now() + 120_000;
 let commit = '';
 for (;;) {
   try {
-    const r = await fetch(`${base}build.json?t=${Date.now()}`, { cache: 'no-store' });
+    const r = await get(`${base}build.json?t=${Date.now()}`);
     if (r.ok) commit = (await r.json()).commit ?? '';
   } catch {}
   if (!want || commit === want || Date.now() > until) break;
@@ -37,17 +41,17 @@ if (want) check(commit === want, `build.json : ${commit.slice(0, 12)} servi au l
 
 // ---------------------------------------------------------------- manifest and its icons
 try {
-  const r = await fetch(`${base}manifest.webmanifest`, { cache: 'no-store' });
+  const r = await get(`${base}manifest.webmanifest`);
   check(r.ok, `manifeste : ${r.status}`);
   const m = await r.json();
   check(typeof m.id === 'string' && m.id.length > 0, 'manifeste : id absent');
   check(Array.isArray(m.shortcuts) && m.shortcuts.length >= 3, 'manifeste : moins de 3 raccourcis');
   check(m.icons?.some((i) => i.purpose === 'maskable'), 'manifeste : icône maskable absente');
   for (const i of m.icons ?? []) {
-    const ir = await fetch(new URL(i.src, `${base}manifest.webmanifest`), { cache: 'no-store' });
+    const ir = await get(new URL(i.src, `${base}manifest.webmanifest`));
     check(ir.ok, `manifeste : icône ${i.src} → ${ir.status}`);
   }
-  const sw = await fetch(`${base}sw.js`, { cache: 'no-store' });
+  const sw = await get(`${base}sw.js`);
   check(sw.ok && /precacheAndRoute/.test(await sw.text()), `sw.js : ${sw.status}`);
 } catch (e) {
   errors.push(`manifeste : ${e.message}`);
@@ -68,7 +72,9 @@ try {
   await page.goto(base, { waitUntil: 'load' });
   const controlled = await page.evaluate(async () => {
     if (!('serviceWorker' in navigator)) return false;
-    await navigator.serviceWorker.ready;
+    // `ready` never settles when no worker registers: bounded like the rest
+    const ready = await Promise.race([navigator.serviceWorker.ready.then(() => true), new Promise((r) => setTimeout(() => r(false), 30000))]);
+    if (!ready) return false;
     if (navigator.serviceWorker.controller) return true;
     await new Promise((r) => {
       navigator.serviceWorker.addEventListener('controllerchange', r, { once: true });
@@ -99,6 +105,9 @@ try {
     check(next === 'origin-traces', '#229 : pas d’avertissement à côté de « Rester connecté » malgré la trace d’un autre site');
   }
   await other.close();
+} catch (e) {
+  // a page that never loads (Playwright's own timeouts) is reported like any other failure
+  errors.push(`page : ${String(e.message ?? e).split('\n')[0]}`);
 } finally {
   await browser.close();
 }
