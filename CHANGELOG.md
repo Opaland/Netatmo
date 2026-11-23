@@ -28,7 +28,7 @@ réécrite ; les formes retenues par les PR restent des propositions (revue, § 
   à décider (#664).
 - **Revue de fin de version** (revue, § 6 et § 12) : aucun défaut bloquant ; premier écran 128,65 kB,
   inchangé ; constats mineurs regroupés dans #673 ; captures de référence régénérées dans la police
-  de la CI, acceptées par la garde. L'installation de WebKit lente (#671) est traitée à part.
+  de la CI, acceptées par la garde. L'installation de WebKit lente (#671) : les archives apt de WebKit gardées dans le cache d'Actions (#672).
 
 ## v2.8 — novembre 2026 : dette de code, une règle à un endroit
 
