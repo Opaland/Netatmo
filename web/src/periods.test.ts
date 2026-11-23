@@ -3,7 +3,7 @@ import { type DayRecord, addDays, bucketKeys, cumulativeByYear, dayOfYear, leapD
 import { projectYear, verdict } from './analysis';
 import { coldWinterDays } from './comfort';
 import { budgetStatus } from './money';
-import { bucketMarks, daysBetween, missingText, monthKeys, monthsCovered, windowSuffix, yoyCaveat, yoyWindow } from './periods';
+import { bucketMarks, daysBetween, incompleteText, missingText, monthKeys, monthsCovered, windowSuffix, yoyCaveat, yoyWindow } from './periods';
 import { summarize } from './summary';
 
 // Intl fr-FR groups thousands with a narrow no-break space: compare on plain spaces.
@@ -232,5 +232,25 @@ describe('#637 missingText : le nombre de jours manquants, accordé comme plural
     expect(missingText(2)).toBe('2 jours manquants');
     expect(missingText(45)).toBe('45 jours manquants');
     expect(missingText(0)).toBe('0 jour manquant');
+  });
+});
+
+describe('#590 n° 3 incompleteText : un total incomplet, accordé', () => {
+  const W = 'non mesuré';
+  it('un usage non mesuré, des jours manquants pour l’autre (le cas des trous réels, e2e:trous)', () => {
+    expect(incompleteText(['chauffe-eau'], 45, ['chauffage'], W)).toBe('sans le chauffe-eau (non mesuré), et 45 jours manquants pour le chauffage');
+    expect(incompleteText(['chauffe-eau'], 1, ['chauffage'], W)).toBe('sans le chauffe-eau (non mesuré), et 1 jour manquant pour le chauffage');
+  });
+  it('deux usages non mesurés la même année : « ni », et le pluriel', () => {
+    expect(incompleteText(['chauffage', 'chauffe-eau'], 0, [], W)).toBe('sans le chauffage ni le chauffe-eau (non mesurés)');
+    expect(incompleteText(['a', 'b', 'c'], 0, [], W)).toBe('sans le a, le b ni le c (non mesurés)');
+  });
+  it('aucun usage mesuré : pas de jours qui ne seraient à personne', () => {
+    expect(incompleteText(['chauffage', 'chauffe-eau'], 366, [], W)).toBe('sans le chauffage ni le chauffe-eau (non mesurés)');
+  });
+  it('rien de non mesuré : les jours seuls ; deux usages mesurés, chacun son article', () => {
+    expect(incompleteText([], 12, ['chauffage', 'chauffe-eau'], W)).toBe('12 jours manquants');
+    expect(incompleteText(['x'], 3, ['chauffage', 'chauffe-eau'], W)).toBe('sans le x (non mesuré), et 3 jours manquants pour le chauffage et le chauffe-eau');
+    expect(incompleteText([], 0, ['chauffage'], W)).toBe('');
   });
 });

@@ -18,13 +18,13 @@ Ce dossier ajoute une revue par 72 personas pour mesurer les besoins avant de co
 |---|---|---|---|
 | 01 | [01-project-brief.md](01-project-brief.md) | Analyst | Problème, utilisateurs, objectifs, KPI, contraintes, risques |
 | 02 | [02-revue-50-personas.md](02-revue-50-personas.md) | Analyst / UX | 50 personas, verdicts, propositions, synthèse des 15 besoins, mesure du besoin domotique et IA ; § 12 : personas 51 à 62 ajoutés ; § 13 : personas 63 à 72 (fin de v1.6) |
-| — | [revues/](revues/) | Analyst / PO | Revue de cadrage et de fin de chaque version (v1.2 à v2.9) |
+| — | [revues/](revues/) | Analyst / PO | Revue de cadrage et de fin de chaque version (v1.2 à v3.0) |
 | 03 | [03-prd.md](03-prd.md) | PM | Vision, personas retenus, exigences FR / NFR, hors périmètre, plan de versions |
 | 04 | [04-architecture.md](04-architecture.md) | Architect | Architecture actuelle, modèle de données chiffré, couche IA, pont local, ADR |
 | 05 | [05-epics-stories.md](05-epics-stories.md) | PO / SM | Épopées, récits utilisateur, critères d'acceptation, taille, priorité, statut |
 | 06 | [06-qa-strategy.md](06-qa-strategy.md) | QA | Stratégie de test, matrice de risques, définition de « terminé » |
 | — | [decisions.md](decisions.md) | PO | Les décisions du propriétaire D1 à D97 (§ 10 des revues de fin) en un seul tableau, par sujet, avec leur état, pour trancher en une fois (#680) |
-| — | [feuille-de-route.md](feuille-de-route.md) | PM / PO | Versions v1.8 à v2.9, thème proposé de la v3.0, jalon « Matériel », règle de passage d'une version à la suivante (12/11/2026) |
+| — | [feuille-de-route.md](feuille-de-route.md) | PM / PO | Versions v1.8 à v3.0, ce qui pourrait suivre (à décider par le propriétaire), jalon « Matériel », règle de passage d'une version à la suivante (12/11/2026) |
 
 Documents antérieurs, toujours valables : [README](../../README.md), [notes API](../api-notes.md),
 [étude de marché](../etude-marche.md), [feuille de route et revue à 6 personas](../feuille-de-route.md).
@@ -56,7 +56,8 @@ Documents antérieurs, toujours valables : [README](../../README.md), [notes API
 | v2.7 : robustesse des tests, la mutation là où elle n'est jamais passée (estimation d'une pièce hors ligne, courbe Linky, verdicts et trous d'État des données, audit du collecteur sans dépendance, texte coupé dans un graphique en lignes HTML vu par le balayage) | Livrée et close ([cadrage](revues/v2.7-cadrage.md), [revue de fin](revues/v2.7.md), 55 👍 / 16 ➖ / 1 👎 ; revue de code § 12, PR #635 ; aucun défaut bloquant ; mesure complète de la mutation 87,7 %, `crypto.ts` à 77,6 % : #633) ; restent les preuves des revues v2.4 à v2.6 (§ 9) et les décisions D86 à D89 (§ 10) |
 | v2.8 : dette de code, une règle à un endroit (code de chiffrement tenu par ses tests, « à climat égal » en une règle, « Recharger l'application » qui rend toujours la main, gardes qui comptent ce qu'elles écartent, `collector/__main__.py` découpé) | Livrée et close ([cadrage](revues/v2.8-cadrage.md), [revue de fin](revues/v2.8.md), 55 👍 / 16 ➖ / 1 👎, réserve du persona 28 levée ; revue de code § 12 ; aucun défaut bloquant ; mesure complète de la mutation 88,6 %, `crypto.ts` 98,0 % ; premier écran + 0,24 kB, D91) ; restent les preuves des revues v2.4 à v2.8 (§ 9) et les décisions D90 à D93 (§ 10) |
 | v2.9 : documentation et reprise (les 20 scripts e2e de la CI dans CONTRIBUTING, la CI bornée et ses durées relevées par une commande, le balayage qui dit pourquoi une ouverture échoue, les outils du contributeur, un plan pour découper `audit.py` et `charts.ts`) | Livrée et close ([cadrage](revues/v2.9-cadrage.md), [revue de fin](revues/v2.9.md), 55 👍 / 16 ➖ / 1 👎, inchangés ; revue de code § 12 ; aucun défaut bloquant ; aucun écran changé, `dist/` identique ; `audit.py` 1 623 → 1 380 lignes  ; #671 fait par #672) ; restent les preuves des revues v2.4 à v2.9 (§ 9) et les décisions D94 à D97 (§ 10) |
-| Après la v2.9, jalon « Matériel » | [Feuille de route](feuille-de-route.md) |
+| v3.0 : consolidation, aucune fonction nouvelle (un total incomplet d'Année par année accordé, « écart en % » par la seule règle, la mutation des quatre modules de calcul jamais mutés et de la couverture par source d'État des données, un seul tableau des décisions D1 à D97 ; revue de fin **complète** : tout le code, tous les écrans, mesures de fin comme référence) | En cours ([cadrage](revues/v3.0-cadrage.md), jalon v3.0 : #676 à #680) |
+| Après la v3.0 (aucune version demandée : [cadrage](revues/v3.0-cadrage.md) § 7), jalon « Matériel » | [Feuille de route](feuille-de-route.md) |
 
 ## Conventions
 

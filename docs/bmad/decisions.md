@@ -1,6 +1,6 @@
 # Les décisions du propriétaire, D1 à D97, en un seul tableau
 
-*Tenu depuis la v3.0 (#680, story 5 du cadrage de la v3.0, PR #681). Relevé le
+*Tenu depuis la v3.0 (#680, story 5 du [cadrage de la v3.0](revues/v3.0-cadrage.md)). Relevé le
 23/11/2026 sur `main` `0bde668` (clôture de la v2.9). Ce document **ne tranche rien** : il rassemble
 les décisions que les revues de fin de version ont posées dans leur § 10, pour que le propriétaire
 puisse répondre en une fois, sans ouvrir douze fichiers.*
@@ -139,7 +139,7 @@ précédentes par plages (« D1 à D9 et D11 à D15 »).
 | D65 | « **Comparer** » en liste plutôt qu'en segment (Historique) | liste | garder le segment (marge 19 px) ; libellés plus courts ; si la liste est retenue : mettre à jour la maquette (#564 n° 3) | [v2.3](revues/v2.3.md) · PR #559 | en place, à confirmer |
 | D66 | Plan à 200 %, étage : un **nom retiré** quand il n'a plus la place à côté d'une marque | nom retiré (la valeur reste) | déplacer la marque (elle ne dirait plus où est l'appareil) ; réduire la marque | [v2.3](revues/v2.3.md) · PR #560 | en place, à confirmer |
 | D74 | La phrase des **pièces retirées** dans le verdict de l'Accueil | phrase complète dans la ligne | un renvoi court (« hors 2 appareils ») et la phrase dans « Comment c'est calculé » | [v2.4](revues/v2.4.md) · PR #574, choix 3 | en place, à confirmer |
-| D79 | La **note d'un total incomplet** d'Année par année | l'usage non mesuré nommé ; les jours dits « pour » l'usage qui les manque | dire ce que compte « 366 jours manquants » ; compter l'usage non mesuré à part. #676 (v3.0) corrige l'accord de ce texte quand deux usages manquent, sans trancher | [v2.5](revues/v2.5.md) · PR #589 | en place, à confirmer |
+| D79 | La **note d'un total incomplet** d'Année par année | l'usage non mesuré nommé ; les jours dits « pour » l'usage qui les manque | dire ce que compte « 366 jours manquants » ; compter l'usage non mesuré à part. #676 (v3.0, PR #682) a corrigé l'accord de ce texte quand deux usages manquent, sans trancher | [v2.5](revues/v2.5.md) · PR #589 | en place, à confirmer |
 | D81 | Les **tableaux de champs** (⚙ Sources, Air et confort) : colonne collante ou cartes ? | colonne collante ; listes longues tronquées dans leur boîte | des cartes (`cardTable`, rien de tronqué, plus haut : Air et confort a 38 px) ; laisser l'en-tête passer à la ligne ; ne plus coller quand la colonne prend plus de la moitié (persona 21) | [v2.6](revues/v2.6.md) · PR #607, #614 | en place, à confirmer (#614 corrigée en gardant la colonne collante, sans trancher : revue v2.6 § 13) |
 | D82 | « **Pièces affichées** » se ferme quand le focus le quitte par Tab | fermé au départ du focus | le laisser ouvert et le déplacer hors du graphique ; le fermer seulement à Échap | [v2.6](revues/v2.6.md) · PR #607 | en place, à confirmer |
 | D83 | Une attente annoncée (`role="status"`) **dans un résumé replié** | dans le résumé | sortir l'attente du résumé (la mise en page change) ; l'annoncer ailleurs | [v2.6](revues/v2.6.md) · PR #601 | en place, à confirmer |
