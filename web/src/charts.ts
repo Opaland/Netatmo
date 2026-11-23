@@ -22,6 +22,7 @@ import {
   wrapText,
   zeroBased,
 } from './chart-theme';
+import { pctChange } from './aggregate';
 import { dayLong, signedPct, withUnit } from './glossary';
 import { type Measure, changeSummary, daysSummary, gridSummary, rankSummary, slopeSummary, summarize } from './summary';
 import { html, node } from './trusted';
@@ -1304,7 +1305,8 @@ export function waterfallChart(
   const chart = instance(el);
   const muted = cssVar('--text-muted');
   const end = opts.start + opts.steps.reduce((a, s) => a + s.delta, 0);
-  const pctTxt = opts.start > 0 ? ` (${signedPct(((end - opts.start) / opts.start) * 100)})` : '';
+  const change = pctChange(end, opts.start); // #677: null when start <= 0, as before
+  const pctTxt = change === null ? '' : ` (${signedPct(change)})`;
   chartCaption(el, `${opts.startLabel} : ${fmtKwh(opts.start)} → ${opts.endLabel} : ${fmtKwh(end)}${pctTxt}`);
   label(el, 'Évolution par pièce', changeSummary({ label: opts.startLabel, value: opts.start }, { label: opts.endLabel, value: end }, opts.steps));
   const steps = opts.steps.slice().sort((a, b) => a.delta - b.delta);
