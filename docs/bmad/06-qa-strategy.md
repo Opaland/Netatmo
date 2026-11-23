@@ -393,7 +393,7 @@ src/analysis.ts,src/aggregate.ts,src/offpeak.ts,src/wood.ts` (3 processus, poste
 |---|---|---|---|---|
 | `analysis.ts` | 804 (0) | 58,2 % (264 survivants, 72 non couverts) | **98,5 %** ; 98,4 % après #677 (remesuré seul) | 12 ; 13 après #677 |
 | `aggregate.ts` | 368 (0) | 71,7 % (63, 41) | **97,0 %** | 11 |
-| `offpeak.ts` | 473 (17 → 0) | 80,9 % (82, 5) | **95,1 %** | 23 |
+| `offpeak.ts` | 473 (17 → 0) | 80,9 % (82, 5) | **95,1 %** ; 95,4 % après #684 (remesuré seul) | 23 ; 22 après #684 |
 | `wood.ts` | 640 (30 → 0) | 83,8 % (87, 12) | **94,5 %** | 35 |
 
 Les tests sont dans `web/src/analysis-mutation.test.ts`, `aggregate-mutation.test.ts`,
@@ -424,11 +424,12 @@ Stryker ne les rejoue qu'avec les tests qui les atteignent pendant leur exécuti
 `import()`) : les 47 mutants « ignorés » d'`offpeak.ts` et de `wood.ts` sont maintenant mesurés, et
 tués sauf les équivalents ci-dessous.
 
-**Un défaut trouvé, non corrigé ici : #684.** Dans `offpeak.ts`, `tri()`, `1 - CLEAR` vaut
-`0.19999999999999996` : une demi-heure à 20 % tout juste en heures creuses n'est pas « clairement
-pleine », alors qu'à 80 % tout juste elle est « clairement creuse » (le mutant `s <= 1 - CLEAR` →
-`s < 1 - CLEAR` survit pour cette raison ; le test s'arrête à 19 %). La correction change une règle
-de calcul : au propriétaire. Aucun autre défaut ; aucun calcul ni seuil changé.
+**Un défaut trouvé, corrigé par #684.** Dans `offpeak.ts`, `tri()`, `1 - CLEAR` valait
+`0.19999999999999996` : une demi-heure à 20 % tout juste en heures creuses n'était pas « clairement
+pleine », alors qu'à 80 % tout juste elle était « clairement creuse » (le mutant `s <= 1 - CLEAR` →
+`s < 1 - CLEAR` survivait pour cette raison). La règle écrite de #441 (« at least this share of its
+energy went to that column ») tranche la borne : chaque colonne compare maintenant sa propre part à
+`CLEAR` (PR de #684, test aux deux côtés de la borne, chiffres de la démo inchangés). Aucun autre défaut ; aucun calcul ni seuil changé.
 
 | #678 : fichier : ligne | Mutant | Raison |
 |---|---|---|
@@ -453,12 +454,11 @@ de calcul : au propriétaire. Aucun autre défaut ; aucun calcul ni seuil chang�
 | `offpeak.ts:106, 108, 109` | départ du tour de la journée, `k < SLOTS`, `start - k` | chaque demi-heure est visitée une fois dans tous les cas (la demi-heure de départ, pleine, n'ouvre jamais de plage), puis les plages sont rangées |
 | `offpeak.ts:153` | `i <= SLOTS` dans `addTo` | ajoute une 49ᵉ case `NaN`, lue « indécise » : elle ne contredit rien |
 | `offpeak.ts:158` | `e > 0` (3 mutants) | sans énergie, `0 / 0` donne `NaN`, ni creux ni plein : `null` dans les deux cas |
-| `offpeak.ts:160` | `s <= 1 - CLEAR` → `<` | **le défaut #684** : à 20 % tout juste la comparaison est déjà fausse |
-| `offpeak.ts:241` | ancre `^` ou `$` retirée (date « à compter du ») | `Date.parse` de la date suivie de `T00:00:00Z` refuse ce que l'ancre laisserait passer |
-| `offpeak.ts:263` | `typeof x !== 'object'` → `false` | une chaîne ou un nombre n'a pas de `from` propre : la plage est écartée de même |
-| `offpeak.ts:286` | `a === b`, `b === null`, `a < b` → `<=` | les clés d'une `Map` sont uniques ; `'AAAA…' < null` est faux, la même réponse que `b === null` |
-| `offpeak.ts:296` | `p.since === null` → `false` | la période sans date est toujours la première (relevés, saisies, repli) : elle est déjà la valeur de départ |
-| `offpeak.ts:304` | `some` → `every` | `resolveOffPeak` reçoit des plages ou des périodes, jamais les deux mêlées |
+| `offpeak.ts:242` | ancre `^` ou `$` retirée (date « à compter du ») | `Date.parse` de la date suivie de `T00:00:00Z` refuse ce que l'ancre laisserait passer |
+| `offpeak.ts:264` | `typeof x !== 'object'` → `false` | une chaîne ou un nombre n'a pas de `from` propre : la plage est écartée de même |
+| `offpeak.ts:287` | `a === b`, `b === null`, `a < b` → `<=` | les clés d'une `Map` sont uniques ; `'AAAA…' < null` est faux, la même réponse que `b === null` |
+| `offpeak.ts:297` | `p.since === null` → `false` | la période sans date est toujours la première (relevés, saisies, repli) : elle est déjà la valeur de départ |
+| `offpeak.ts:305` | `some` → `every` | `resolveOffPeak` reçoit des plages ou des périodes, jamais les deux mêlées |
 | `wood.ts:90` | `typeof v === 'number'` → `true`, `&&` → `\|\|` | `Number.isFinite` ne convertit pas : une chaîne échoue ; `NaN` et `Infinity` échouent aux bornes |
 | `wood.ts:99, 114` | `[]` → `["Stryker was here"]` | une chaîne parcourue donne des lettres, sans saison ni jour : écartées |
 | `wood.ts:100, 112, 115, 116, 124` | contrôles `typeof … === 'object'` / `'string'` → `true` | une chaîne, un nombre ou un tableau n'a pas les champs voulus (`Object.hasOwn`), et `realDay` refuse un jour qui n'est pas la chaîne même |
