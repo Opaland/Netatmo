@@ -94,7 +94,7 @@ describe('#678 : la date d’un changement de placement', () => {
     const ref = place(range(0, 11), range(12, 23));
     // half hour 12 (06:00) goes from HP to 80 % HC
     expect(changesFromR30(r30(seq([...times(3, ref), ...times(5, { ...ref, 12: 0.8 })])), D0, addDays(D0, 7))).toEqual([addDays(D0, 3)]);
-    // half hour 12 at 19 % HC, then all HC (at 20 % exactly it is undecided: #684)
+    // half hour 12 at 19 % HC, then all HC (20 % exactly is clearly peak too since #684: offpeak.test.ts)
     const low = { ...ref, 12: 0.19 };
     expect(changesFromR30(r30(seq([...times(3, low), ...times(5, { ...ref, 12: 1 })])), D0, addDays(D0, 7))).toEqual([addDays(D0, 3)]);
   });
