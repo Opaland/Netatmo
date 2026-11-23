@@ -3,7 +3,7 @@
 // period shown or the data only covers part of it; it is « uncertain » when it contains
 // estimated or lost days. Both are said in the tooltip and on the bar, at every granularity.
 import { type Granularity, addDays, bucketKey, minusYears } from './aggregate';
-import { dayShort, plural } from './glossary';
+import { andList, dayShort, plural } from './glossary';
 
 /** #394: the cause of a cut (incidents.ts). */
 export type CutKind = 'power' | 'internet';
@@ -53,6 +53,25 @@ export const uncertainText = (n: number) => `${plural(n, 'jour')} estimé${n > 1
  */
 export const INCOMPLETE = 'incomplet';
 export const missingText = (n: number) => `${plural(n, 'jour')} manquant${n > 1 ? 's' : ''}`;
+
+/**
+ * #590 n° 3: why a total of Année par année is « incomplet », in words. First the usages without
+ * any reading that year, each with its article and joined by « ni » (« sans le chauffage ni le
+ * chauffe-eau (non mesurés) »), the word `unmeasured` agreed with their number; then the days
+ * missing of the usages still measured (`measured`, « et 45 jours manquants pour le chauffage »).
+ * Labels in lower case. With no usage left measured, no days are said: they would belong to none.
+ * #580: one count of missing days per year; the usage whose cell says « non mesuré » is named, its
+ * days are not counted again. Left aside: counting every device (366 days for a year without the
+ * water heater, next to the 45 of the change), or the unmeasured usage apart (« 366 jours sans
+ * chauffe-eau »).
+ */
+export function incompleteText(unmeasured: string[], days: number, measured: string[], word: string): string {
+  const the = (l: string) => `le ${l}`;
+  const without = unmeasured.length ? `sans ${unmeasured.map(the).join(', ').replace(/, ([^,]*)$/, ' ni $1')} (${word}${unmeasured.length > 1 ? 's' : ''})` : '';
+  if (!days || (unmeasured.length && !measured.length)) return without;
+  const missing = missingText(days);
+  return without ? `${without}, et ${missing} pour ${andList(measured.map(the))}` : missing;
+}
 
 export interface BucketMark {
   /** Days of the bucket inside the period shown and the data (0: none). */
