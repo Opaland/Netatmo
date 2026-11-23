@@ -384,6 +384,94 @@ survivant restant équivalent, tableau ci-dessus) ; le reste d'`audit.py` n'est 
 définitions sont celles de la v2.8 au caractère près). Pour toute preuve « vu rouge » du collecteur :
 `PYTHONDONTWRITEBYTECODE=1` dès le départ (`docs/APPRENTISSAGES.md` A23, A24).
 
+**Les quatre modules de calcul jamais mutés (#678, 23/11/2026).** `analysis.ts`, `aggregate.ts`,
+`offpeak.ts` et `wood.ts` entrent dans le `mutate` de `stryker.config.json`. `npx stryker run --mutate
+src/analysis.ts,src/aggregate.ts,src/offpeak.ts,src/wood.ts` (3 processus, poste à 4 cœurs partagé) :
+**72,0 % → 96,5 %** (10 min avant, 6 min 47 s après). Lignes d'`analysis.ts` du tableau : après #677 (`verdict` passe par `pctChange`, trois lignes de plus), remesuré seul : 98,4 %.
+
+| Fichier | Mutants (ignorés) | Avant | Après | Restants (tous lus, tableau ci-dessous) |
+|---|---|---|---|---|
+| `analysis.ts` | 804 (0) | 58,2 % (264 survivants, 72 non couverts) | **98,5 %** ; 98,4 % après #677 (remesuré seul) | 12 ; 13 après #677 |
+| `aggregate.ts` | 368 (0) | 71,7 % (63, 41) | **97,0 %** | 11 |
+| `offpeak.ts` | 473 (17 → 0) | 80,9 % (82, 5) | **95,1 %** | 23 |
+| `wood.ts` | 640 (30 → 0) | 83,8 % (87, 12) | **94,5 %** | 35 |
+
+Les tests sont dans `web/src/analysis-mutation.test.ts`, `aggregate-mutation.test.ts`,
+`offpeak-mutation.test.ts` et `wood-mutation.test.ts` (« #678 »), vus rouges par la vague d'après (les
+mutants visés ont disparu ; trois vagues). Ce qui manquait : le coût aux colonnes du tarif (une colonne
+seule connue, l'autre au prix de base ; un jour dont les colonnes ne font pas le total), `monthlyDju`,
+`weekHourGrid` et `dayProfile` (jamais appelés par un test), le r² et l'équilibre de la droite
+(consommation constante, pente positive), les jours doux ou sans chauffage hors de l'ajustement et des
+anomalies, |résidu| au-delà de 2 σ **et** de 3 kWh (chacun seul ne suffit pas), le verdict (référence
+vide, ± 10 % tout juste, références à 5 DJ exactement, pas de froid cette fois), les lecteurs des
+fichiers de la CRE et de Tempo (fins de ligne LF, ligne vide en tête, prix unique en première colonne,
+lignes incomplètes laissées, rangement par date), le tarif réglementé (jour de fin compris, colonne 1
+creuse, colonne 0 au prix plein, bissextile), le comparateur d'offres (jours que les trois offres ne
+tarifent pas, Linky sans relevé des radiateurs), la puissance déduite du Linky (jours rangés, pas
+standard) ; dans `aggregate.ts`, les filtres, les étiquettes des périodes, `totalsBy`, 1900 et 2100
+non bissextiles ; dans `offpeak.ts`, les plages lues sur une fenêtre bornée, une demi-heure à moitié
+creuse, la date d'un changement de placement (bornes de 80 %, demi-heure coupée par une borne, ce que
+la série et le retour à l'ancien placement apportent à la référence), les périodes toutes datées ; dans
+`wood.ts`, la répartition sur les jours (saison complète entière, saison en cours au prorata d'une
+saison moyenne, météo commencée en cours de saison, bois gratuit, saison qui ne brûle rien), la pièce
+trop chaude (saison de mars et de septembre), les textes au singulier et au pluriel.
+
+**Mutants « statiques ».** Une bonne part des survivants d'avant étaient évalués au chargement du
+module (listes des mois, `KVA_STEPS`, `FALLBACK_RANGES`, `SOURCE_TEXT`, les fonctions fléchées de
+premier niveau) ou dans le corps d'un `describe` (`parseTrveCsv`, `woodDaily` des tests existants) :
+Stryker ne les rejoue qu'avec les tests qui les atteignent pendant leur exécution (comme pour
+`curve.ts`, #622). Les tests qui les visent rechargent le module (`vi.resetModules()` puis
+`import()`) : les 47 mutants « ignorés » d'`offpeak.ts` et de `wood.ts` sont maintenant mesurés, et
+tués sauf les équivalents ci-dessous.
+
+**Un défaut trouvé, non corrigé ici : #684.** Dans `offpeak.ts`, `tri()`, `1 - CLEAR` vaut
+`0.19999999999999996` : une demi-heure à 20 % tout juste en heures creuses n'est pas « clairement
+pleine », alors qu'à 80 % tout juste elle est « clairement creuse » (le mutant `s <= 1 - CLEAR` →
+`s < 1 - CLEAR` survit pour cette raison ; le test s'arrête à 19 %). La correction change une règle
+de calcul : au propriétaire. Aucun autre défaut ; aucun calcul ni seuil changé.
+
+| #678 : fichier : ligne | Mutant | Raison |
+|---|---|---|
+| `analysis.ts:34` | `!p.sub` → `false` | un abonnement nul ou absent donne 0 € dans les deux cas (`null × …` vaut 0) |
+| `analysis.ts:154` | `r.day < a` → `<=` ; `''` → texte | à égalité le même jour ; une chaîne de départ non vide reste après tout jour `AAAA-…` (un chiffre est avant une lettre), et sans relevé la projection et le verdict rendent `null` dans les deux cas |
+| `analysis.ts:175` | `y < year` → `<=` | `y === year` est déjà pris par la branche d'avant |
+| `analysis.ts:251` | `p === null` → `false` (ajouté par #677) | `expected` est positif à cet endroit (chaque référence a un total positif) : `pctChange` ne rend jamais `null` ici |
+| `analysis.ts:338, 439` | `a.from < b.from` → `<=` (tri des fichiers de la CRE) | ne change que l'ordre de deux lignes de même début, qui diffèrent par la puissance : `trveAt` et `rowAt` filtrent la puissance d'abord |
+| `analysis.ts:386` | `p === undefined` → `true` | un cache : le prix du jour est recalculé, le même |
+| `analysis.ts:551` | `> 2 * sigma` → `>=`, `> 3` → `>=` | égalité exacte d'un résidu de droite ajustée en virgule flottante, jamais atteinte |
+| `analysis.ts:554` | `a.day < b.day` → `<=` (tri des anomalies) | un jour n'a qu'un point (signature par jour) : jamais d'égalité |
+| `analysis.ts:583` | filtre `d >= first` retiré ou `true` | les jours d'avant le premier dépassement sont sous la puissance déclarée + tolérance, donc sous le pic : le maximum ne change pas |
+| `aggregate.ts:108, wood.ts:123` | `a.day > b.day` (4 mutants chacun : `true`, `false`, `>=`, `<=`) | non tuables sous V8 (le lanceur) : son tri ne lit que le signe négatif du comparateur, et des jours dans le désordre restent bien rangés (testé). Le comparateur d'origine est correct ; un autre moteur pourrait lire le mutant autrement |
+| `aggregate.ts:200` | `i === undefined` → `false` | `bucketKeys` donne une clé à chaque jour de `[from, to]` |
+| `aggregate.ts:206` | `new Array(n)` → `new Array()` pour `seen` | `seen` n'est lu que par `measuredValues`, en valeur de vérité : `undefined` et `false` s'y valent |
+| `aggregate.ts:214` | `seen.get(id)?.[i]` → `seen.get(id)[i]` | `seen` a toujours le groupe que `groups` a |
+| `aggregate.ts:277, 283, 286` | `''` → texte, `r.day < first` → `<=`, `breaks ?? []` → `["Stryker was here"]` | comme `analysis.ts:154` ; une chaîne qui n'est pas un jour donne une année `NaN`, qui n'est celle d'aucun relevé |
+| `aggregate.ts:320` | `before === null` → `false` | `pctChange(after, null)` rend déjà `null` (`null > 0` est faux) |
+| `offpeak.ts:61, 73` | tableau des minutes sans taille, `m <= DAY` | une minute absente vaut `undefined`, lue comme non creuse ; la minute 1440 n'existe pas |
+| `offpeak.ts:100` | `v > 0` → `true`, `>= 0` | sans énergie, `0 / 0` donne `NaN`, que `>= 0.5` et `> 0` lisent comme 0 |
+| `offpeak.ts:103` | `!n \|\| n === SLOTS` (3 mutants) | sans demi-heure creuse ou sans demi-heure pleine, aucune n'ouvre une plage : la boucle ne rend rien, `null` |
+| `offpeak.ts:106, 108, 109` | départ du tour de la journée, `k < SLOTS`, `start - k` | chaque demi-heure est visitée une fois dans tous les cas (la demi-heure de départ, pleine, n'ouvre jamais de plage), puis les plages sont rangées |
+| `offpeak.ts:153` | `i <= SLOTS` dans `addTo` | ajoute une 49ᵉ case `NaN`, lue « indécise » : elle ne contredit rien |
+| `offpeak.ts:158` | `e > 0` (3 mutants) | sans énergie, `0 / 0` donne `NaN`, ni creux ni plein : `null` dans les deux cas |
+| `offpeak.ts:160` | `s <= 1 - CLEAR` → `<` | **le défaut #684** : à 20 % tout juste la comparaison est déjà fausse |
+| `offpeak.ts:241` | ancre `^` ou `$` retirée (date « à compter du ») | `Date.parse` de la date suivie de `T00:00:00Z` refuse ce que l'ancre laisserait passer |
+| `offpeak.ts:263` | `typeof x !== 'object'` → `false` | une chaîne ou un nombre n'a pas de `from` propre : la plage est écartée de même |
+| `offpeak.ts:286` | `a === b`, `b === null`, `a < b` → `<=` | les clés d'une `Map` sont uniques ; `'AAAA…' < null` est faux, la même réponse que `b === null` |
+| `offpeak.ts:296` | `p.since === null` → `false` | la période sans date est toujours la première (relevés, saisies, repli) : elle est déjà la valeur de départ |
+| `offpeak.ts:304` | `some` → `every` | `resolveOffPeak` reçoit des plages ou des périodes, jamais les deux mêlées |
+| `wood.ts:90` | `typeof v === 'number'` → `true`, `&&` → `\|\|` | `Number.isFinite` ne convertit pas : une chaîne échoue ; `NaN` et `Infinity` échouent aux bornes |
+| `wood.ts:99, 114` | `[]` → `["Stryker was here"]` | une chaîne parcourue donne des lettres, sans saison ni jour : écartées |
+| `wood.ts:100, 112, 115, 116, 124` | contrôles `typeof … === 'object'` / `'string'` → `true` | une chaîne, un nombre ou un tableau n'a pas les champs voulus (`Object.hasOwn`), et `realDay` refuse un jour qui n'est pas la chaîne même |
+| `wood.ts:104` | `season === null` → `false` | `Number.isInteger(null)` est faux : écartée de même |
+| `wood.ts:196` | `!s.purchases.length` → `false` | sans achat, `Math.min()` vaut `Infinity` : la boucle ne tourne pas |
+| `wood.ts:222, 229, 232, 423, 427-429` | `> 1e-9` → `>=`, `<= 1e-9` → `<` | égalité exacte à 1e-9 stère, jamais atteinte (des stères saisis au dixième) |
+| `wood.ts:245, 261` | `<` → `<=`, `<=` → `<` sur le 31 août | à égalité, la même date ; une saison qui finit le dernier jour connu n'est suivie d'aucune saison en cours, la seule qui lit la saison moyenne |
+| `wood.ts:256, 271` (col. 9) | `!last`, `from > last` | une saison qui commence après le dernier jour n'a aucun jour : rien à répartir |
+| `wood.ts:271` (col. 39) | `w.eur <= 0` → `true` | du bois brûlé a toujours de la chaleur (rendement ≥ 10 %) : `kwh <= 0` suffit |
+| `wood.ts:281, 285` | `denom <= 0`, `sum <= 0` → `false`, `<` | sans degré-jour, tous les poids sont nuls : `if (!x) continue` saute chaque jour |
+| `wood.ts:371` | `typeof t === 'number'` → `true` | `Number.isFinite` refuse déjà `null` et `undefined` |
+| `wood.ts:413` | `p.species === 'resineux'` → `false`, `'resineux'` → `''` | la branche générale écrit aussi « de résineux » (`SPECIES` en minuscules) |
+
 ### Survivants lus et laissés, avec leur raison
 
 | Fichier : ligne | Mutant | Classement | Raison |
