@@ -19,7 +19,7 @@ import { djuMethodText, yearCold } from '../dju';
 import { woodYear } from '../isolation';
 import { type State, ds, setState, state } from '../app';
 import { type Series, barChart, chartCaption, cssVar, lineChart } from '../charts';
-import { SEASON_DEFINITION, andList, dayLong, dayShort, monthLong, monthShort, plural, seasonLabel, signedPct } from '../glossary';
+import { SEASON_DEFINITION, dayLong, dayShort, monthLong, monthShort, plural, seasonLabel, signedPct } from '../glossary';
 import { yearLine, yearsLine } from '../history';
 import { countedWhat } from '../home';
 import { term } from '../plain';
@@ -27,7 +27,7 @@ import { routeKey } from '../router';
 import { uncertainDays } from '../checks';
 import { cutDays } from './quality';
 import { WITH_SUBSCRIPTION } from '../synthese';
-import { INCOMPLETE, bucketMarks, countIn, missingText, monthKeys, shortDate, uncertainText, yoyCaveat, yoyWindow } from '../periods';
+import { INCOMPLETE, bucketMarks, countIn, incompleteText, monthKeys, shortDate, uncertainText, yoyCaveat, yoyWindow } from '../periods';
 import { measuredOnBoth } from './offline-rooms';
 import { incompleteParts } from '../room-offline';
 import {
@@ -350,7 +350,8 @@ function yearsCard(records: DayRecord[], first: string, last: string, uncertain:
       const end = isCurrent ? last : `${y}-12-31`;
       const inc = incompleteParts(records, `${y}-01-01`, end, cats);
       const lost = inc.days > 0 || inc.unmeasured.length > 0;
-      if (lost) caveats.push(`Total de ${y} ${INCOMPLETE} : ${incompleteText(inc, cats)}`);
+      const low = (c: Category) => CATEGORY_LABEL[c].toLowerCase();
+      if (lost) caveats.push(`Total de ${y} ${INCOMPLETE} : ${incompleteText(inc.unmeasured.map(low), inc.days, cats.filter((c) => !inc.unmeasured.includes(c)).map(low), UNMEASURED)}`);
       const usage = (c: Category, kwh: number) => (inc.unmeasured.includes(c) ? UNMEASURED_CELL : kwh);
       const since = y === firstYear && first > `${y}-01-01` ? ` <small class="muted">depuis le ${shortDate(first)}</small>` : '';
       const cost = costOf(records, `${y}-01-01`, end, true);
@@ -395,23 +396,6 @@ function yearsCard(records: DayRecord[], first: string, last: string, uncertain:
     <p class="hint muted">L'évolution de l'année en cours compare la même période des deux années : du 1er janvier au ${dayLong(last, false)}. Quand l'année précédente a commencé en cours d'année (début de la collecte), l'évolution porte sur la même période des deux années.</p>
     ${countedHtml()}
   </section>`;
-}
-
-/**
- * #580: the note of an « incomplet » total of Année par année, one count of missing days per year:
- * « sans le chauffe-eau (non mesuré), et 45 jours manquants pour le chauffage ». The usage whose
- * cell says « non mesuré » is named, its days are not counted again; the days say whose they are
- * when a usage is left out. Left aside (written in the PR): counting every device (366 days for a
- * year without the water heater, next to the 45 of the change), or counting the unmeasured usage
- * apart (« 366 jours sans chauffe-eau »).
- */
-function incompleteText(inc: { unmeasured: Category[]; days: number }, cats: Category[]): string {
-  const low = (c: Category) => CATEGORY_LABEL[c].toLowerCase();
-  const out = inc.unmeasured.length ? `sans le ${andList(inc.unmeasured.map(low))} (${UNMEASURED})` : '';
-  if (!inc.days) return out;
-  const rest = cats.filter((c) => !inc.unmeasured.includes(c));
-  const days = missingText(inc.days);
-  return out ? `${out}, et ${days} pour le ${andList(rest.map(low))}` : days;
 }
 
 /**
