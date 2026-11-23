@@ -1,6 +1,6 @@
 // Pure analysis helpers: cost, degree days, energy signature, projection, verdict, profiles.
 
-import { type DayRecord, addDays, dayOfYear, minusYears, rawRecords, seasonOf } from './aggregate';
+import { type DayRecord, addDays, dayOfYear, minusYears, pctChange, rawRecords, seasonOf } from './aggregate';
 
 // ------------------------------------------------------------------ cost
 export interface Prices {
@@ -245,7 +245,10 @@ export function verdict(
       climate = true;
     }
   }
-  const p = ((actual - expected) / expected) * 100;
+  // #677: the one rule of a change in % (pctChange). `expected` is positive here (each reference
+  // has a positive total, and its heating is part of that total): the null branch never shows.
+  const p = pctChange(actual, expected);
+  if (p === null) return null;
   return { level: p > 10 ? 'high' : p < -10 ? 'low' : 'normal', pct: p, actual, expected, climate };
 }
 
