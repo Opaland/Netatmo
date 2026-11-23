@@ -26,7 +26,7 @@ D104, dans le [tableau des décisions](docs/bmad/decisions.md)).
 - **Revue de fin de version** (revue, § 5 et § 6) : aucun défaut bloquant ; aucune violation d'axe sur
   424 pages en Chromium, en AAA en contraste élevé ; une ponctuation ou un nombre seul en début de ligne
   sur 37 pages (D99) et un titre d'onglet qui ne suit pas la vue (D100), tracés ; premier écran
-  128,79 kB (+ 0,14 kB pour la version) ; installations de WebKit de 20 à 44 s depuis le cache de #672 ;
+  128,84 kB (+ 0,19 kB pour la version, revue de code comprise) ; installations de WebKit de 20 à 44 s depuis le cache de #672 ;
   captures de référence régénérées dans la police de la CI, acceptées par la garde.
 
 ## v2.9 — novembre 2026 : documentation et reprise
