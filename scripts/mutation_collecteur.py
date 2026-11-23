@@ -283,11 +283,12 @@ def _files_to_copy(extra: list[str] | tuple[str, ...] = (), root: Path = ROOT) -
     files = dict.fromkeys(out.splitlines())
     for f in extra:
         p = Path(f)
-        if p.is_absolute():
-            try:
-                p = p.resolve().relative_to(root.resolve())
-            except ValueError:
-                continue  # outside the repository: never copied
+        # Relative paths are read from the repository's root; absolute or relative, a path that ends
+        # outside it (`../x.py` too: revue v2.9) is never copied.
+        try:
+            p = (p if p.is_absolute() else root / p).resolve().relative_to(root.resolve())
+        except ValueError:
+            continue  # outside the repository: never copied
         files.setdefault(p.as_posix())
     return [f for f in files if f.split("/", 1)[0] not in EXCLUDED_TOP and (root / f).is_file()]
 
