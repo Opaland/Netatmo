@@ -393,6 +393,16 @@ faisait échouer la passe initiale ; elle s'y saute désormais (A25). `audit.py`
 2 processus) : **69,6 %**, 530 tués sur 761, 2 295 s ; avec les 18 tués sur 19 du catalogue (94,7 %),
 les 547 sur 780 de la fin v2.7 à un près : aucun recul.
 
+**L'exclusion dite (#649 n° 4, 25/11/2026).** Les fichiers de tests qui lisent hors de `web/`
+(`../../`) restent écartés du bac à sable, mais plus en silence (`web/mutation-exclusion.mjs`) :
+`npm run mutation` écrit d'abord leur liste, avec les modules mutés que chacun teste aussi (ce jour,
+15 fichiers, dont `crypto-kdf.test.ts` et `export.test.ts` pour `crypto.ts`, `dju.test.ts` pour
+`analysis.ts` et `aggregate.ts`) ; et `vitest.mutation.config.mjs` échoue, sous Stryker aussi, quand
+un module du `mutate` n'a plus aucun fichier de tests (vu : un module sans test ajouté au `mutate`
+arrête Stryker en le nommant). Un `npx stryker run --mutate …` lancé à la main n'affiche pas la
+liste (le lanceur de Vitest de Stryker tait ce que la configuration écrit) : `node
+mutation-exclusion.mjs` la donne.
+
 **Les quatre modules de calcul jamais mutés (#678, 23/11/2026).** `analysis.ts`, `aggregate.ts`,
 `offpeak.ts` et `wood.ts` entrent dans le `mutate` de `stryker.config.json`. `npx stryker run --mutate
 src/analysis.ts,src/aggregate.ts,src/offpeak.ts,src/wood.ts` (3 processus, poste à 4 cœurs partagé) :
