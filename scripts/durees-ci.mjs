@@ -6,6 +6,8 @@
 //   node scripts/durees-ci.mjs <run> [<run>…]   each job of these runs (every attempt), and its long steps
 //   node scripts/durees-ci.mjs --main 5         the last 5 green runs of ci.yml on main, then per job
 //                                               its shortest and longest duration and its longest step
+//   --rouges                                    with --main: the red runs too (#673: a run cut by a
+//                                               timeout-minutes is the duration one wants to follow)
 //   --seuil 60                                  a step is « long » from this many seconds (default 60);
 //                                               the browser installations are always printed
 //
@@ -53,10 +55,31 @@ export function jobDurations(jobs, threshold = 60) {
   }));
 }
 
+/**
+ * The jobs that really ran. After « Re-run failed jobs », the API gives the jobs not re-run a second
+ * time under the new attempt, with the same start and end (#673, run 45232533937): such a copy of an
+ * earlier attempt is dropped, so that a job is not printed as if it had run twice.
+ */
+export function ranJobs(jobs) {
+  const key = (j) => `${j.name}\u0000${j.started_at}\u0000${j.completed_at}`;
+  const first = new Map();
+  for (const j of jobs) {
+    const k = key(j);
+    if (!first.has(k) || (j.run_attempt ?? 1) < (first.get(k).run_attempt ?? 1)) first.set(k, j);
+  }
+  return jobs.filter((j) => first.get(key(j)) === j);
+}
+
+/** The path of the API that lists the last `n` runs of ci.yml pushed on main: green ones, or all
+ * the completed ones with `withRed` (a red one included, a cancelled one too). */
+export function mainRunsPath(repo, n, withRed = false) {
+  return `repos/${repo}/actions/workflows/ci.yml/runs?branch=main&event=push&status=${withRed ? 'completed' : 'success'}&per_page=${n}`;
+}
+
 /** The lines printed for one run. */
 export function runLines(id, jobs, threshold = 60) {
   const out = [`Run ${id} :`];
-  for (const j of jobDurations(jobs, threshold)) {
+  for (const j of jobDurations(ranJobs(jobs), threshold)) {
     out.push(`  ${j.name}${j.attempt > 1 ? ` (tentative ${j.attempt})` : ''} : ${formatDuration(j.duration)} (${j.conclusion})`);
     for (const s of j.steps) out.push(`    ${formatDuration(s.duration).padStart(13)}  ${s.name}`);
   }
@@ -112,14 +135,15 @@ function main(argv) {
   };
   const threshold = opt('--seuil', 60);
   const onMain = opt('--main', 0);
+  const withRed = argv.includes('--rouges');
   const ids = argv.filter((a) => /^\d+$/.test(a));
   if (!onMain && !ids.length) {
-    console.error('Usage : node scripts/durees-ci.mjs <run> [<run>…] | --main <n>  [--seuil <s>]');
+    console.error('Usage : node scripts/durees-ci.mjs <run> [<run>…] | --main <n> [--rouges]  [--seuil <s>]');
     process.exit(2);
   }
   const repo = repository();
   if (onMain) {
-    const { workflow_runs } = api(`repos/${repo}/actions/workflows/ci.yml/runs?branch=main&event=push&status=success&per_page=${onMain}`);
+    const { workflow_runs } = api(mainRunsPath(repo, onMain, withRed));
     ids.push(...workflow_runs.map((r) => String(r.id)));
   }
   const runs = ids.map((id) => ({ id, jobs: api(`repos/${repo}/actions/runs/${id}/jobs?filter=all&per_page=100`).jobs }));
