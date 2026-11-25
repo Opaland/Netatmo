@@ -33,7 +33,7 @@
     "size": "node scripts/size-budget.mjs",
     "porte": "node ../scripts/porte.mjs",
     "porte:rapide": "node ../scripts/porte.mjs --rapide",
-    "mutation": "npm i --no-save --no-audit --no-fund @stryker-mutator/core@10.1.1 @stryker-mutator/vitest-runner@10.1.1 && stryker run"
+    "mutation": "npm i --no-save --no-audit --no-fund @stryker-mutator/core@10.1.1 @stryker-mutator/vitest-runner@10.1.1 && node mutation-exclusion.mjs && stryker run"
   },
   "dependencies": {
     "echarts": "^6.1.0",
