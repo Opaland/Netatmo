@@ -101,14 +101,17 @@ jobs:
         uses: actions/deploy-pages@v5
 
   # #357 (part of #353): the published site, in the demo only: build.json reaches the deployed
-  # commit, manifest (id, shortcuts, maskable icon) and sw.js served, the worker controls the
-  # page, the demo opens without a JavaScript error nor a file in 4xx. No capture, no artefact.
+  # commit, then (#648) every published file the page loads answers 200 within 5 min (a wait
+  # before checking, not a retry: e2e/publies.mjs), manifest (id, shortcuts, maskable icon) and
+  # sw.js served, the worker controls the page, the demo opens without a JavaScript error nor a
+  # file in 4xx. No capture, no artefact.
   site-en-ligne:
     needs: [build, deploy]
     runs-on: ubuntu-latest
     # 21/11 (run 44905406199): without a bound, a stalled probe held the job 6 h until GitHub cancelled
     # it. A normal run takes about 3 min (install, probe, sweep): 20 min leaves room for a slow
-    # browser install without letting a hang last.
+    # browser install without letting a hang last. #648: the wait for the published files (at most
+    # 5 min, after the 2 min of build.json) still fits.
     timeout-minutes: 20
     permissions:
       contents: read

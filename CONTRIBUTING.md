@@ -140,7 +140,7 @@ tableau est tenu d'accord avec les workflows et `package.json` par `web/src/cont
 | `e2e:trous` | la démo sur `trous-reels`, la forme des trous d'un vrai compte : jamais 0, « incomplet », comparaisons sans le trou | `e2e`, `e2e-webkit` | — | build, fixtures |
 | `e2e:sweep` | le balayage (chaque route, fixtures, affichages, invariants), l'explorateur de contrôles, puis `e2e:clavier` ; portée réduite en WebKit | `e2e`, `e2e-webkit` | `deploy.yml`, `e2e-complet.yml`, `smoke-reel.yml` | build, fixtures |
 | `e2e:clavier` | le parcours au clavier seul (anneau de focus, élément peint), à 100 % et à 200 % ; lancé par `e2e:sweep` | `e2e`, `e2e-webkit` | `e2e-complet.yml` | build, fixtures |
-| `e2e:en-ligne` | le site publié, dans la démo : `build.json` au commit attendu, manifeste, `sw.js`, aucune erreur ni fichier en 4xx ; lancé par `deploy.yml` (job `site-en-ligne`, `SITE_URL`, `EXPECTED_COMMIT`) après chaque publication | — | `deploy.yml` | un site publié |
+| `e2e:en-ligne` | le site publié, dans la démo : `build.json` au commit attendu, puis chaque fichier publié que la page charge (précache de `sw.js`, `demo/*`, tarifs, icônes ; jamais `data/`) en 200 dans les 5 min (#648 : une attente avant de vérifier, pas un nouvel essai ; au-delà, chaque fichier non servi est nommé avec son statut), manifeste, `sw.js`, aucune erreur ni fichier en 4xx ; lancé par `deploy.yml` (job `site-en-ligne`, `SITE_URL`, `EXPECTED_COMMIT`) après chaque publication | — | `deploy.yml` | un site publié |
 
 « Fixtures » : `python -m collector fixtures -o web/dist/demo-fixtures` (depuis la racine, après le
 build).

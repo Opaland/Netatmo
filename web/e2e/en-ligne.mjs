@@ -2,6 +2,8 @@
 // Pages deployment, in the DEMO only (fictive data; the real data are never opened here, no
 // capture, no artefact: the repository is public).
 // - build.json reaches the deployed commit within 2 minutes (Pages may serve the previous one);
+// - #648: then every published file the page will load (precache of sw.js, demo/*, tariffs, icons;
+//   never data/) answers 200 within 5 min (e2e/publies.mjs: a wait before checking, not a retry);
 // - manifest.webmanifest: id, ≥ 3 shortcuts, a maskable icon, each icon served;
 // - sw.js served, registered, and controlling the page;
 // - the demo opens; no JavaScript error, no file of the site answering 4xx / 5xx;
@@ -10,6 +12,7 @@
 // Run: SITE_URL=https://<compte>.github.io/<dépôt>/ EXPECTED_COMMIT=<sha> node e2e/en-ligne.mjs
 // Without SITE_URL: skipped (exit 0) with the reason.
 import { chromium } from 'playwright';
+import { publishedReport, waitPublished, WAIT_MS } from './publies.mjs';
 
 const SITE = process.env.SITE_URL;
 if (!SITE) {
@@ -23,7 +26,7 @@ const check = (ok, msg) => ok || errors.push(msg);
 // 21/11 run 44905406199: the job hung 6 h on this script. Every network read is bounded, so that a
 // stalled connection fails the probe with its name instead of holding the job until GitHub cancels it.
 const FETCH_MS = 20_000;
-const get = (url) => fetch(url, { cache: 'no-store', signal: AbortSignal.timeout(FETCH_MS) });
+const get = (url, ms = FETCH_MS) => fetch(url, { cache: 'no-store', signal: AbortSignal.timeout(ms) });
 
 // ---------------------------------------------------------------- build.json → the deployed commit
 const until = Date.now() + 120_000;
@@ -38,6 +41,17 @@ for (;;) {
 }
 check(/^[0-9a-f]{40}$/.test(commit), `build.json : commit illisible (${commit || 'absent'})`);
 if (want) check(commit === want, `build.json : ${commit.slice(0, 12)} servi au lieu de ${want.slice(0, 12)} après 2 min`);
+
+// ---------------------------------------------------------------- #648: the files of that version served
+// 25/11 (run 45634648539): build.json at the commit, « 503 /Netatmo/demo/weather.enc.json » on opening.
+// Wait (bounded) until each published file answers 200; at the bound, fail naming each one and its
+// status, and open nothing (the page would only repeat it). The sweep (deploy.yml) runs after this.
+const served = await waitPublished(base, { get, fetchMs: FETCH_MS });
+if (served.missing.length) {
+  console.error([...errors, ...publishedReport(served.missing, WAIT_MS)].join('\n'));
+  process.exit(1);
+}
+console.log(`Fichiers publiés : ${served.files} servis en 200 (attente ${Math.round(served.waitedMs / 1000)} s)`);
 
 // ---------------------------------------------------------------- manifest and its icons
 try {
